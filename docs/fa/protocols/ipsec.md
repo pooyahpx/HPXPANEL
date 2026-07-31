@@ -1,4 +1,5 @@
 ---
+dir: rtl
 title: L2TP و IKEv2 / IPsec
 ---
 

@@ -125,6 +125,7 @@ export default defineConfig({
       label: 'English',
       lang: 'en',
       link: '/en/',
+      dir: 'ltr',
       themeConfig: {
         nav: [
           { text: 'Introduction', link: '/en/introduction' },

@@ -1,4 +1,5 @@
 ---
+dir: rtl
 title: استک Xray
 ---
 

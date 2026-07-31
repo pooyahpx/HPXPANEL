@@ -4,10 +4,12 @@ import { useData, inBrowser } from 'vitepress'
 import './custom.css'
 import type { Theme } from 'vitepress'
 
-function applyRtl(isRtl: boolean) {
+function applyDir(isRtl: boolean, lang: string) {
   const html = document.documentElement
+  html.lang = lang
   html.dir = isRtl ? 'rtl' : 'ltr'
   html.classList.toggle('fa-rtl', isRtl)
+  html.classList.toggle('is-ltr', !isRtl)
   document.body?.classList.toggle('fa-rtl', isRtl)
 }
 
@@ -17,17 +19,12 @@ const theme: Theme = {
     const { lang, dir } = useData()
     watchEffect(async () => {
       if (!inBrowser) return
-      const isRtl = dir.value === 'rtl' || lang.value === 'fa'
-      applyRtl(isRtl)
-      htmlLang(lang.value)
+      const isRtl = lang.value === 'fa' || dir.value === 'rtl'
+      applyDir(isRtl, lang.value)
       await nextTick()
-      applyRtl(isRtl)
+      applyDir(isRtl, lang.value)
     })
   },
-}
-
-function htmlLang(lang: string) {
-  document.documentElement.lang = lang
 }
 
 export default theme

@@ -26,51 +26,51 @@
 ## Why this exists
 
 Most panels stop at “create user → copy link.”  
-**HPXPANEL** is built for operators who run real fleets: hundreds of accounts, multi-node edges, mixed cores, and clients that need **native VPN protocols** — not only Xray URLs.
+**HPXPANEL** is built for operators who run real fleets on **[Xray-core](https://github.com/XTLS/Xray-core)** — with modern tunnels and native VPN in the same console.
 
 Python / FastAPI backend. React command-deck UI. One place for users, nodes, cores, and subscriptions.
 
 ---
 
-## What’s actually new (and loud)
+## Protocol powerhouse
 
-### L2TP / IPsec & IKEv2 — native VPN in the panel
+### Xray-core — the daily driver
 
-This is not a checkbox on a settings page. HPXPANEL wires **real IPsec stacks** into the same user / core workflow you already use:
+This is where serious fleets live. HPXPANEL gives you full Xray ops without drowning in JSON:
+
+| Protocol | Why it hits |
+| --- | --- |
+| **VLESS** | Lightweight, flexible — pairs hard with **REALITY** / TLS under censorship |
+| **VMess** | Classic Xray family, enormous client ecosystem |
+| **Trojan** | TLS-shaped traffic that blends into normal HTTPS |
+| **Shadowsocks** | Simple, proven, everywhere — first-class, not a side quest |
+
+Add **TLS** and **REALITY**, multi-inbound layouts, multi-protocol users, editable Xray cores, and subscriptions that v2rayN / Clash / ClashMeta already understand.
+
+### WireGuard & Hysteria2
+
+When you need a different speed / transport profile next to Xray:
+
+- **WireGuard** — clean crypto, low overhead, excellent throughput  
+- **Hysteria2** — aggressive performance on lossy or high-latency paths  
+
+### L2TP / IPsec & IKEv2 — native VPN when the OS is the client
+
+Not every user will install an Xray app. HPXPANEL also wires **real IPsec** into the same user/core workflow:
 
 | Protocol | Why it matters |
 | --- | --- |
-| **L2TP/IPsec** | Classic, battle-tested tunnel. UDP `500` / `4500` / `1701`. PSK + shared credentials. Works where “another Xray client” is a non-starter. |
-| **IKEv2/IPsec** | Modern, certificate-friendly IPsec. Native on Windows, iOS, macOS, Android. Rock-solid reconnects on mobile networks. |
+| **L2TP/IPsec** | Classic tunnel. UDP `500` / `4500` / `1701`. PSK + shared credentials. |
+| **IKEv2/IPsec** | Modern, mobile-friendly IPsec. Native on Windows, iOS, macOS, Android. |
 
-One shared **IPsec username / password** for both L2TP and IKEv2. Core editors for server crypto, PSK, and network — not dump-and-pray JSON.
+One shared **IPsec username / password** for both. Core editors for crypto, PSK, and network.
 
-> If your users live on stock OS VPN settings, this stack is the difference between “install an app” and “just connect.”
+### Operator extras that actually matter
 
-### IP Limiter
-
-Cap concurrent unique client IPs per user. Abuse control without babysitting every session.
-
-### Operator UX that doesn’t waste your night
-
-- **Multi-step create-user wizard** — identity → access → limits → advanced, with a live draft rail
-- **Subscription page** — usage gauge, metrics rail, traffic chart, protocol links, QR
-- **Command-deck UI** — cobalt accents, pixel borders, readable density for long ops sessions
-- **Multi-node** + core editors for Xray / WireGuard / IPsec
-
----
-
-## Protocol coverage
-
-**Proxy / tunnel stack**
-
-- VMess · VLESS · Trojan · Shadowsocks · WireGuard · Hysteria2  
-- **L2TP/IPsec · IKEv2/IPsec**  
-- TLS · REALITY · multi-protocol per user
-
-**Control plane**
-
-- Full REST API · Telegram bot · CLI · multi-admin RBAC · HWID limits · traffic / expiry / periodic reset · Clash / ClashMeta / V2ray subscription formats
+- **IP Limiter** — cap concurrent unique client IPs  
+- **Multi-step create-user wizard** — identity → access → limits → advanced  
+- **Subscription page** — usage gauge, metrics rail, traffic chart, QR  
+- **Command-deck UI** — cobalt, pixel borders, multi-node + core editors  
 
 ---
 
@@ -103,14 +103,12 @@ sudo bash -c "$(curl -fsSL https://github.com/PasarGuard/scripts/raw/main/pasarg
 | Data | `/var/lib/pasarguard` |
 | Dashboard | `https://YOUR_DOMAIN:8000/dashboard/` |
 
-SSL is required for production. For a quick local smoke test without a domain:
+SSL is required for production. Smoke test without a domain:
 
 ```bash
 ssh -L 8000:localhost:8000 user@serverip
 # → http://localhost:8000/dashboard/
 ```
-
-Bootstrap the owner account:
 
 ```bash
 pasarguard cli generate-temp-key
@@ -119,7 +117,7 @@ pasarguard --help
 
 ---
 
-## Install from source (this repo)
+## Install from source
 
 ```bash
 git clone https://github.com/pooyahpx/HPXPANEL.git
@@ -129,7 +127,6 @@ uv sync
 uv run alembic upgrade head
 uv run main.py
 
-# another terminal
 cd dashboard && bun install && bun run dev
 ```
 
@@ -138,8 +135,6 @@ Dashboard: `http://127.0.0.1:5173/dashboard/`
 ---
 
 ## Docs
-
-Full documentation (EN / FA / RU):
 
 **https://pooyahpx.github.io/HPXPANEL/**
 
@@ -151,7 +146,7 @@ cd docs && bun install && bun run dev
 
 - Backend: Python, FastAPI, SQLAlchemy, Alembic  
 - Frontend: React, Vite, Tailwind  
-- Engines: Xray-core · WireGuard · IPsec (IKEv2 / L2TP)
+- Engines: **Xray-core** · WireGuard · Hysteria2 · IPsec (IKEv2 / L2TP)  
 - Docs: VitePress
 
 ---

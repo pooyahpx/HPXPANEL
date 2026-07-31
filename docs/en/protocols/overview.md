@@ -1,35 +1,50 @@
 ---
 title: Protocols overview
-description: Proxy and native VPN protocols supported by HPXPANEL
+description: Xray, WireGuard, Hysteria2, and native IPsec in HPXPANEL
 ---
 
 # Protocols overview
 
-HPXPANEL spans two worlds: **proxy/tunnel apps** and **native OS VPN**.
+HPXPANEL is **Xray-first**, then expands into modern tunnels and native OS VPN — all from one panel.
 
-## Proxy / advanced tunnels
+## Xray family (main stack)
 
-| Protocol | Notes |
+Powered by **[Xray-core](https://github.com/XTLS/Xray-core)** — the backbone of most serious proxy fleets.
+
+| Protocol | Why operators love it |
 | --- | --- |
-| VMess | Classic Xray family |
-| VLESS | Lightweight Xray |
-| Trojan | TLS-friendly |
-| Shadowsocks | Broad client support |
-| WireGuard | Fast modern VPN |
-| Hysteria2 | High-performance UDP-oriented |
+| **VLESS** | Lightweight, flexible, pairs beautifully with REALITY / TLS |
+| **VMess** | Classic Xray family — huge client ecosystem |
+| **Trojan** | TLS-shaped traffic that blends into normal HTTPS |
+| **Shadowsocks** | Simple, battle-tested, broad client support |
 
-Plus **TLS** and **REALITY** where the core supports them.
+**Security layers:** TLS · **REALITY** · multi-inbound / multi-protocol per user
+
+→ Deep dive: [Xray stack](/en/protocols/xray)
+
+## Modern tunnels
+
+| Protocol | Why it matters |
+| --- | --- |
+| **WireGuard** | Clean crypto, low overhead, excellent throughput |
+| **Hysteria2** | Aggressive performance on lossy / high-latency paths |
 
 ## Native VPN (IPsec)
 
 | Protocol | Ports (typical) | Auth model |
 | --- | --- | --- |
-| **L2TP/IPsec** | UDP `500`, `4500`, `1701` | PSK + shared username/password |
-| **IKEv2/IPsec** | UDP `500`, `4500` | Certificate-friendly + shared credentials |
+| L2TP/IPsec | UDP `500`, `4500`, `1701` | PSK + shared username/password |
+| IKEv2/IPsec | UDP `500`, `4500` | Certificate-friendly + shared credentials |
 
-→ Full guide: [L2TP & IKEv2 / IPsec](/en/protocols/ipsec)
+→ [L2TP & IKEv2 / IPsec](/en/protocols/ipsec)
 
-## Why both?
+## How to pick
 
-Proxy stacks win on flexibility and censorship resistance.  
-Native IPsec wins when the client must use **built-in VPN settings** on Windows / iOS / Android / macOS — “just Connect.”
+| Need | Reach for |
+| --- | --- |
+| Censorship resistance, flexible clients, REALITY | **Xray** (VLESS / VMess / Trojan / SS) |
+| Raw speed / simple modern VPN | **WireGuard** |
+| Harsh networks, UDP-oriented speed | **Hysteria2** |
+| Stock OS VPN settings, no extra app | **L2TP / IKEv2** |
+
+You can mix them on one user — that’s the point of a multi-protocol panel.

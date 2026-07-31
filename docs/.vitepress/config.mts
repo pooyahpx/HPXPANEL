@@ -21,6 +21,7 @@ const enSidebar = [
     text: 'Protocols',
     items: [
       { text: 'Overview', link: '/en/protocols/overview' },
+      { text: 'Xray stack', link: '/en/protocols/xray' },
       { text: 'L2TP & IKEv2 / IPsec', link: '/en/protocols/ipsec' },
     ],
   },
@@ -47,6 +48,7 @@ const faSidebar = [
     text: 'پروتکل‌ها',
     items: [
       { text: 'نمای کلی', link: '/fa/protocols/overview' },
+      { text: 'استک Xray', link: '/fa/protocols/xray' },
       { text: 'L2TP و IKEv2 / IPsec', link: '/fa/protocols/ipsec' },
     ],
   },
@@ -73,6 +75,7 @@ const ruSidebar = [
     text: 'Протоколы',
     items: [
       { text: 'Обзор', link: '/ru/protocols/overview' },
+      { text: 'Стек Xray', link: '/ru/protocols/xray' },
       { text: 'L2TP и IKEv2 / IPsec', link: '/ru/protocols/ipsec' },
     ],
   },
@@ -110,7 +113,7 @@ export default defineConfig({
         nav: [
           { text: 'Introduction', link: '/en/introduction' },
           { text: 'Install', link: '/en/installation' },
-          { text: 'IPsec', link: '/en/protocols/ipsec' },
+          { text: 'Xray', link: '/en/protocols/xray' },
           { text: 'GitHub', link: 'https://github.com/pooyahpx/HPXPANEL' },
         ],
         sidebar: {
@@ -129,7 +132,7 @@ export default defineConfig({
         nav: [
           { text: 'مقدمه', link: '/fa/introduction' },
           { text: 'نصب', link: '/fa/installation' },
-          { text: 'IPsec', link: '/fa/protocols/ipsec' },
+          { text: 'Xray', link: '/fa/protocols/xray' },
           { text: 'GitHub', link: 'https://github.com/pooyahpx/HPXPANEL' },
         ],
         sidebar: { '/fa/': faSidebar },
@@ -148,7 +151,7 @@ export default defineConfig({
         nav: [
           { text: 'Введение', link: '/ru/introduction' },
           { text: 'Установка', link: '/ru/installation' },
-          { text: 'IPsec', link: '/ru/protocols/ipsec' },
+          { text: 'Xray', link: '/ru/protocols/xray' },
           { text: 'GitHub', link: 'https://github.com/pooyahpx/HPXPANEL' },
         ],
         sidebar: { '/ru/': ruSidebar },

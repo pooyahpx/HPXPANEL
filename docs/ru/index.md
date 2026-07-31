@@ -3,7 +3,7 @@ layout: home
 hero:
   name: HPXPANEL
   text: Docs
-  tagline: Консоль управления прокси — пользователи, ноды, ядра и нативный IPsec.
+  tagline: Консоль на Xray — VLESS, REALITY, WireGuard, Hysteria2 и нативный IPsec при необходимости.
   image:
     src: /hpx-logo.png
     alt: HPX
@@ -12,16 +12,16 @@ hero:
       text: Введение
       link: /ru/introduction
     - theme: alt
-      text: Установка Linux
-      link: /ru/installation
+      text: Стек Xray
+      link: /ru/protocols/xray
     - theme: alt
-      text: GitHub
-      link: https://github.com/pooyahpx/HPXPANEL
+      text: Установка
+      link: /ru/installation
 features:
-  - title: L2TP / IPsec
-    details: Классический нативный VPN с PSK — встроенный клиент ОС, без лишнего Xray-приложения.
-  - title: IKEv2 / IPsec
-    details: Современный IPsec с хорошими реконнектами на мобильных сетях.
-  - title: UX оператора
-    details: Пошаговый wizard, IP Limiter, gauge подписки, multi-node.
+  - title: Xray-core
+    details: VMess, VLESS, Trojan, Shadowsocks с TLS и REALITY — основной ежедневный стек.
+  - title: WireGuard и Hysteria2
+    details: Современные быстрые туннели рядом со стеком Xray.
+  - title: Нативный IPsec
+    details: L2TP / IKEv2 для встроенного VPN ОС — та же панель, те же пользователи.
 ---

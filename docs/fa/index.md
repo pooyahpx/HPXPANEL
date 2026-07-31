@@ -3,7 +3,7 @@ layout: home
 hero:
   name: HPXPANEL
   text: مستندات
-  tagline: کنسول عملیات پروکسی — یوزر، نود، کور و IPsec نیتیو.
+  tagline: کنسول مبتنی بر Xray — VLESS، REALITY، WireGuard، Hysteria2 و در صورت نیاز IPsec نیتیو.
   image:
     src: /hpx-logo.png
     alt: HPX
@@ -12,16 +12,16 @@ hero:
       text: مقدمه
       link: /fa/introduction
     - theme: alt
-      text: نصب لینوکس
-      link: /fa/installation
+      text: استک Xray
+      link: /fa/protocols/xray
     - theme: alt
-      text: GitHub
-      link: https://github.com/pooyahpx/HPXPANEL
+      text: نصب
+      link: /fa/installation
 features:
-  - title: L2TP / IPsec
-    details: تانل VPN کلاسیک با PSK — کلاینت خود سیستم‌عامل، بدون اپ Xray اضافه.
-  - title: IKEv2 / IPsec
-    details: IPsec مدرن، دوست‌دار گواهی، ریکانکت قوی روی موبایل.
-  - title: UX اپراتور
-    details: ویزارد چندمرحله‌ای، IP Limiter، گیج سابسکریپشن، مولتی‌نود.
+  - title: Xray-core
+    details: VMess، VLESS، Trojan، Shadowsocks با TLS و REALITY — ران روزانه فلیت‌های جدی.
+  - title: WireGuard و Hysteria2
+    details: تانل‌های مدرن و سریع کنار استک Xray.
+  - title: IPsec نیتیو
+    details: L2TP / IKEv2 برای VPN خودِ سیستم‌عامل — همان پنل، همان یوزرها.
 ---

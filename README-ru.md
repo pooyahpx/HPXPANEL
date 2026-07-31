@@ -26,51 +26,51 @@
 ## Зачем это нужно
 
 Большинство панелей заканчиваются на «создай юзера → скопируй ссылку».  
-**HPXPANEL** — для операторов с реальным флотом: сотни аккаунтов, несколько нод, разные ядра и клиенты, которым нужен **нативный VPN ОС**, а не только Xray-URL.
+**HPXPANEL** — для операторов, которые крутят реальный флот на **[Xray-core](https://github.com/XTLS/Xray-core)** — с современными туннелями и нативным VPN в той же консоли.
 
 Бэкенд Python / FastAPI. React UI в стиле command deck. Один контур для пользователей, нод, ядер и подписок.
 
 ---
 
-## Что реально новое (и об этом стоит говорить громко)
+## Сила протоколов
 
-### L2TP / IPsec и IKEv2 — настоящий VPN внутри панели
+### Xray-core — ежедневный драйвер флота
 
-Это не галочка в настройках. HPXPANEL встраивает **живой IPsec-стек** в тот же user / core workflow:
+Здесь живут серьёзные деплои. HPXPANEL даёт полный Xray-ops без утопления в JSON:
+
+| Протокол | Почему мощно |
+| --- | --- |
+| **VLESS** | лёгкий и гибкий — жёстко сочетается с **REALITY** / TLS под цензурой |
+| **VMess** | классика Xray, огромная экосистема клиентов |
+| **Trojan** | трафик похож на обычный HTTPS |
+| **Shadowsocks** | простой, проверенный, вездесущий — first-class |
+
+Плюс **TLS** и **REALITY**, multi-inbound, multi-protocol users, редакторы Xray core и подписки для v2rayN / Clash / ClashMeta.
+
+### WireGuard и Hysteria2
+
+Когда рядом с Xray нужен другой профиль скорости / транспорта:
+
+- **WireGuard** — чистая крипта, низкий overhead, отличный throughput  
+- **Hysteria2** — агрессивная производительность на плохих/latency-путях  
+
+### L2TP / IPsec и IKEv2 — нативный VPN, когда клиент = ОС
+
+Не каждый пользователь поставит Xray-клиент. HPXPANEL также встраивает **живой IPsec** в тот же user/core workflow:
 
 | Протокол | Почему важно |
 | --- | --- |
-| **L2TP/IPsec** | Классический, проверенный туннель. UDP `500` / `4500` / `1701`. PSK + общие credentials. Там, где «поставь ещё один Xray-клиент» не вариант. |
-| **IKEv2/IPsec** | Современный IPsec с сертификатами. Нативно на Windows, iOS, macOS, Android. Стабильные реконнекты в мобильных сетях. |
+| **L2TP/IPsec** | классический туннель. UDP `500` / `4500` / `1701`. PSK + общие credentials. |
+| **IKEv2/IPsec** | современный mobile-friendly IPsec. Нативно на Windows, iOS, macOS, Android. |
 
-Один общий **IPsec username / password** для L2TP и IKEv2. Редакторы ядра для crypto, PSK и сети — без «кинь JSON и молись».
+Один общий **IPsec username / password**. Редакторы ядра для crypto, PSK и сети.
 
-> Если пользователи подключаются через встроенный VPN системы — это путь от «ставь приложение» к «просто Connect».
+### Операторские плюсы
 
-### IP Limiter
-
-Лимит одновременных уникальных IP на пользователя. Контроль абьюза без ручного мониторинга каждой сессии.
-
-### UX оператора, который не сжигает ночь
-
-- **Пошаговый wizard создания пользователя** — identity → access → limits → advanced с live-черновиком
-- **Страница подписки** — gauge расхода, метрики, график трафика, ссылки протоколов, QR
-- **Command-deck UI** — cobalt, pixel-бордеры, читаемая плотность для длинных смен
-- **Multi-node** + редакторы ядер Xray / WireGuard / IPsec
-
----
-
-## Покрытие протоколов
-
-**Прокси / туннели**
-
-- VMess · VLESS · Trojan · Shadowsocks · WireGuard · Hysteria2  
-- **L2TP/IPsec · IKEv2/IPsec**  
-- TLS · REALITY · несколько протоколов на одного пользователя
-
-**Control plane**
-
-- Полный REST API · Telegram-бот · CLI · multi-admin RBAC · HWID · трафик / expiry / периодический сброс · подписки Clash / ClashMeta / V2ray
+- **IP Limiter** — лимит одновременных уникальных IP  
+- **Пошаговый wizard** создания пользователя  
+- **Страница подписки** — gauge, метрики, график, QR  
+- **Command-deck UI** — cobalt, pixel-бордеры, multi-node + редакторы ядер  
 
 ---
 
@@ -149,7 +149,7 @@ cd docs && bun install && bun run dev
 
 - Backend: Python, FastAPI, SQLAlchemy, Alembic  
 - Frontend: React, Vite, Tailwind  
-- Engines: Xray-core · WireGuard · IPsec (IKEv2 / L2TP)
+- Engines: **Xray-core** · WireGuard · Hysteria2 · IPsec (IKEv2 / L2TP)
 - Docs: VitePress
 
 ---

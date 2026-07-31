@@ -137,11 +137,20 @@ cd dashboard && bun install && bun run dev
 
 ---
 
+## Документация
+
+**https://pooyahpx.github.io/HPXPANEL/ru/**
+
+```bash
+cd docs && bun install && bun run dev
+```
+
 ## Стек
 
 - Backend: Python, FastAPI, SQLAlchemy, Alembic  
 - Frontend: React, Vite, Tailwind  
 - Engines: Xray-core · WireGuard · IPsec (IKEv2 / L2TP)
+- Docs: VitePress
 
 ---
 

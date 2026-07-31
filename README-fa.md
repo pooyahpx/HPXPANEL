@@ -137,11 +137,20 @@ cd dashboard && bun install && bun run dev
 
 ---
 
+## مستندات
+
+**https://pooyahpx.github.io/HPXPANEL/fa/**
+
+```bash
+cd docs && bun install && bun run dev
+```
+
 ## استک
 
 - بک‌اند: Python، FastAPI، SQLAlchemy، Alembic  
 - فرانت: React، Vite، Tailwind  
 - انجین‌ها: Xray-core · WireGuard · IPsec (IKEv2 / L2TP)
+- Docs: VitePress
 
 ---
 

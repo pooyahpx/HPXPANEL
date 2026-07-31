@@ -1192,12 +1192,25 @@ install_hpxpanel() {
     local panel_version=$1
     local major_version=$2
     local database_type=$3
+    local existing_db_password=""
+    local existing_db_user=""
+    local existing_db_name=""
 
     FILES_URL_PREFIX="https://raw.githubusercontent.com/pooyahpx/HPXPANEL"
     COMPOSE_FILES_URL_PREFIX="https://raw.githubusercontent.com/pooyahpx/HPXPANEL/main/scripts/docker-compose"
 
     mkdir -p "$DATA_DIR"
     mkdir -p "$APP_DIR"
+
+    # Preserve DB secrets before we overwrite .env — required when reusing an
+    # already-initialized Postgres/MySQL data directory (POSTGRES_PASSWORD is
+    # only applied on first boot).
+    if [ -f "$APP_DIR/.env" ]; then
+        existing_db_password=$(grep -E '^DB_PASSWORD=' "$APP_DIR/.env" 2>/dev/null | head -1 | cut -d= -f2- | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//" || true)
+        existing_db_user=$(grep -E '^DB_USER=' "$APP_DIR/.env" 2>/dev/null | head -1 | cut -d= -f2- | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//" || true)
+        existing_db_name=$(grep -E '^DB_NAME=' "$APP_DIR/.env" 2>/dev/null | head -1 | cut -d= -f2- | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//" || true)
+        cp -a "$APP_DIR/.env" "$APP_DIR/.env.bak.$(date +%s)" 2>/dev/null || true
+    fi
 
     colorized_echo blue "Fetching .env file"
     # Pre-create .env as 0600 (and tighten any pre-existing copy) so the DB,
@@ -1225,9 +1238,24 @@ install_hpxpanel() {
         # Comment out the SQLite line
         sed -i 's~^SQLALCHEMY_DATABASE_URL = "sqlite~#&~' "$APP_DIR/.env"
 
-        DB_NAME="hpxpanel"
-        DB_USER="hpxpanel"
-        prompt_for_db_password
+        DB_NAME="${existing_db_name:-hpxpanel}"
+        DB_USER="${existing_db_user:-hpxpanel}"
+        if [ "${KEEP_EXISTING_DB_DATA:-0}" = "1" ] && [ -n "$existing_db_password" ]; then
+            DB_PASSWORD="$existing_db_password"
+            colorized_echo green "Reusing database password from previous .env (existing DB volume kept)."
+        elif [ "${KEEP_EXISTING_DB_DATA:-0}" = "1" ]; then
+            colorized_echo yellow "Existing DB volume kept but no old DB_PASSWORD found."
+            read -p "Enter the existing database password: " DB_PASSWORD
+            DB_PASSWORD="${DB_PASSWORD// /}"
+            if [ -z "$DB_PASSWORD" ]; then
+                colorized_echo red "Password required when keeping an existing database volume."
+                exit 1
+            fi
+        else
+            DB_NAME="hpxpanel"
+            DB_USER="hpxpanel"
+            prompt_for_db_password
+        fi
 
         echo "" >>"$ENV_FILE"
         echo "# Database configuration" >>"$ENV_FILE"
@@ -1364,6 +1392,7 @@ check_existing_database_volumes() {
     local db_type=$1
     local found_paths=()
     local found_named_volumes=()
+    KEEP_EXISTING_DB_DATA=0
 
     if [[ "$db_type" == "sqlite" ]]; then
         return 0
@@ -1371,10 +1400,10 @@ check_existing_database_volumes() {
 
     case "$db_type" in
     mariadb|mysql)
-        found_paths=("/var/lib/mysql/hpxpanel")
+        found_paths=("/var/lib/mysql/hpxpanel" "/var/lib/mysql/pasarguard")
         ;;
     postgresql|timescaledb)
-        found_paths=("/var/lib/postgresql/hpxpanel")
+        found_paths=("/var/lib/postgresql/hpxpanel" "/var/lib/postgresql/pasarguard")
         found_named_volumes=("pgadmin")
         ;;
     esac
@@ -1400,19 +1429,22 @@ check_existing_database_volumes() {
         return 0
     fi
 
-    colorized_echo yellow "⚠️  WARNING: Found existing volumes/directories that may conflict with the installation:"
+    colorized_echo yellow "WARNING: Found existing database data that will conflict if the password changes:"
 
     for path in "${existing_paths[@]}"; do
-        local dir_size=$(du -sh "$path" 2>/dev/null | cut -f1 || echo "unknown size")
+        local dir_size
+        dir_size=$(du -sh "$path" 2>/dev/null | cut -f1 || echo "unknown size")
         colorized_echo yellow "  - Directory: $path (Size: $dir_size)"
     done
 
     for vol_name in "${existing_named_volumes[@]}"; do
         local vol_size="unknown size"
         local prefixed_vol="${APP_NAME}_${vol_name}"
-        local actual_vol=$(docker volume ls --format '{{.Name}}' 2>/dev/null | grep -E "^${prefixed_vol}$|^${vol_name}$" | head -n1)
+        local actual_vol
+        actual_vol=$(docker volume ls --format '{{.Name}}' 2>/dev/null | grep -E "^${prefixed_vol}$|^${vol_name}$" | head -n1)
         if [ -n "$actual_vol" ]; then
-            local mountpoint=$(docker volume inspect "$actual_vol" --format '{{.Mountpoint}}' 2>/dev/null)
+            local mountpoint
+            mountpoint=$(docker volume inspect "$actual_vol" --format '{{.Mountpoint}}' 2>/dev/null)
             if [ -n "$mountpoint" ] && [ -d "$mountpoint" ]; then
                 vol_size=$(du -sh "$mountpoint" 2>/dev/null | cut -f1 || echo "unknown size")
             fi
@@ -1423,40 +1455,42 @@ check_existing_database_volumes() {
     done
 
     echo
-    colorized_echo red "⚠️  DANGER: These volumes may contain data from a previous hpxpanel installation."
-    colorized_echo yellow "If you proceed without deleting them, there may be conflicts or data corruption."
+    colorized_echo red "Postgres/MySQL only reads DB_PASSWORD on FIRST init."
+    colorized_echo yellow "If you keep this data, the installer must reuse the old password."
     echo
-    colorized_echo cyan "Do you want to delete these volumes? (default: no)"
-    colorized_echo yellow "WARNING: This will PERMANENTLY delete all data in these volumes!"
+    colorized_echo cyan "Delete existing DB data and start fresh? (default: no = keep + reuse password)"
+    colorized_echo yellow "WARNING: Delete permanently wipes users/settings in the database."
     read -p "Delete volumes? [y/N]: " delete_volumes
 
     if [[ "$delete_volumes" =~ ^[Yy]$ ]]; then
         colorized_echo yellow "Deleting volumes..."
+        KEEP_EXISTING_DB_DATA=0
 
         for path in "${existing_paths[@]}"; do
             if rm -rf "$path" 2>/dev/null; then
-                colorized_echo green "✓ Deleted directory: $path"
+                colorized_echo green "Deleted directory: $path"
             else
-                colorized_echo red "✗ Failed to delete directory: $path (may be in use or permission denied)"
+                colorized_echo red "Failed to delete directory: $path (may be in use or permission denied)"
             fi
         done
 
         for vol_name in "${existing_named_volumes[@]}"; do
             local prefixed_vol="${APP_NAME}_${vol_name}"
-            local actual_vol=$(docker volume ls --format '{{.Name}}' 2>/dev/null | grep -E "^${prefixed_vol}$|^${vol_name}$" | head -n1)
+            local actual_vol
+            actual_vol=$(docker volume ls --format '{{.Name}}' 2>/dev/null | grep -E "^${prefixed_vol}$|^${vol_name}$" | head -n1)
             if [ -n "$actual_vol" ]; then
                 if docker volume rm "$actual_vol" >/dev/null 2>&1; then
-                    colorized_echo green "✓ Deleted Docker volume: $actual_vol"
+                    colorized_echo green "Deleted Docker volume: $actual_vol"
                 else
-                    colorized_echo red "✗ Failed to delete Docker volume: $actual_vol (may be in use)"
+                    colorized_echo red "Failed to delete Docker volume: $actual_vol (may be in use)"
                 fi
             fi
         done
 
         colorized_echo green "Volume cleanup completed."
     else
-        colorized_echo yellow "Keeping existing volumes. Proceeding with installation..."
-        colorized_echo yellow "Note: If you encounter conflicts, you may need to manually remove these volumes later."
+        KEEP_EXISTING_DB_DATA=1
+        colorized_echo yellow "Keeping existing DB data — will reuse the previous DB_PASSWORD."
     fi
     echo
 }
@@ -1472,6 +1506,7 @@ install_command() {
     ssl_mode="auto"
     ssl_domain=""
     ssl_http_port="80"
+    KEEP_EXISTING_DB_DATA=0
 
     # Parse options
     while [[ $# -gt 0 ]]; do

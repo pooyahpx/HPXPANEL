@@ -81,6 +81,30 @@ pasarguard --help
 
 Use the one-time key on the dashboard login page to create the owner account.
 
+## Install an HPX node
+
+On each edge server (Linux), run the HPX node installer. It deploys a Docker node with **Xray**, **WireGuard**, **OpenVPN**, and **IKEv2 / IPsec**, then prints the values you paste into **HPXPANEL → Nodes**.
+
+```bash
+sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXPANEL/raw/main/scripts/hpx-node.sh)" @ install
+```
+
+Non-interactive example:
+
+```bash
+sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXPANEL/raw/main/scripts/hpx-node.sh)" @ install -y \
+  --service-port 62050 \
+  --disable openvpn
+```
+
+After install, register the node in the panel with the same **Address**, **Node Port**, **API key**, and **Server CA**.
+
+| Path | Purpose |
+| --- | --- |
+| `/opt/hpx-node` | Compose + installer copy |
+| `/var/lib/hpx-node` | Certs + generated configs |
+| `hpx-node status` / `logs` / `update` | Manage the node |
+
 ## Next
 
 - [Install from source](/en/source) — develop against this repository

@@ -1,225 +1,151 @@
 <p align="center">
-  <a href="https://github.com/pooyahpx/HPXPANEL" target="_blank" rel="noopener noreferrer">
-    <img width="120" height="120" alt="HPXPANEL" src="https://raw.githubusercontent.com/pooyahpx/HPXPANEL/main/dashboard/public/statics/favicon/android-chrome-192x192.png">
-  </a>
+  <img width="96" height="96" alt="HPXPANEL" src="https://raw.githubusercontent.com/pooyahpx/HPXPANEL/main/dashboard/public/statics/favicon/android-chrome-192x192.png">
 </p>
 
 <h1 align="center">HPXPANEL</h1>
 
 <p align="center">
-    <strong>کنسول عملیات پروکسی — command deck برای یوزر، نود، کور و سابسکریپشن</strong>
-</p>
-
----
-
-<br/>
-<p align="center">
-    <a href="https://github.com/pooyahpx/HPXPANEL/actions/workflows/build.yml" target="_blank">
-        <img src="https://img.shields.io/github/actions/workflow/status/pooyahpx/HPXPANEL/build.yml?style=flat-square" />
-    </a>
-    <a href="https://github.com/pooyahpx/HPXPANEL/blob/main/LICENSE" target="_blank">
-        <img src="https://img.shields.io/github/license/pooyahpx/HPXPANEL?style=flat-square" />
-    </a>
-    <a href="https://github.com/pooyahpx/HPXPANEL" target="_blank">
-        <img src="https://img.shields.io/github/stars/pooyahpx/HPXPANEL?style=social" />
-    </a>
-    <a href="https://github.com/pooyahpx" target="_blank">
-        <img src="https://img.shields.io/badge/dev-hpx-0ea5e9?style=flat-square&logo=github" />
-    </a>
+  <b>کنسول عملیاتی که پروکسی را مثل زیرساخت می‌بیند — نه مثل اکسل.</b>
 </p>
 
 <p align="center">
- <a href="./README.md">
- 🇺🇸 English
- </a>
- /
- <a href="./README-fa.md">
- 🇮🇷 فارسی
- </a>
- /
- <a href="./README-ru.md">
- 🇷🇺 Русский
- </a>
+  <a href="./README.md">English</a> ·
+  <a href="./README-fa.md">فارسی</a> ·
+  <a href="./README-ru.md">Русский</a>
 </p>
 
-## 📋 فهرست مطالب
-
-> **ناوبری سریع** — به هر بخش زیر پرش کنید
-
--   [📖 بررسی اجمالی](#-بررسی-اجمالی)
-    -   [🤔 چرا HPXPANEL؟](#-چرا-hpxpanel)
-        -   [✨ ویژگی‌ها](#-ویژگیها)
--   [🚀 راهنمای نصب روی لینوکس](#-راهنمای-نصب-روی-لینوکس)
--   [🔧 نصب از سورس](#-نصب-از-سورس)
--   [💖 حمایت](#-حمایت)
+<p align="center">
+  <img alt="build" src="https://img.shields.io/github/actions/workflow/status/pooyahpx/HPXPANEL/build.yml?style=flat-square&label=build">
+  <img alt="license" src="https://img.shields.io/github/license/pooyahpx/HPXPANEL?style=flat-square">
+  <img alt="stars" src="https://img.shields.io/github/stars/pooyahpx/HPXPANEL?style=social">
+  <img alt="dev" src="https://img.shields.io/badge/dev-hpx-0ea5e9?style=flat-square&logo=github">
+</p>
 
 ---
 
-# 📖 بررسی اجمالی
+## چرا این پنل؟
 
-> **HPXPANEL چیست؟**
+بیشتر پنل‌ها همین‌جا تمام می‌شوند: «یوزر بساز → لینک کپی کن.»  
+**HPXPANEL** برای اپراتورهایی است که ناوگان واقعی دارند: صدها اکانت، چند نود، چند کور، و کلاینت‌هایی که به **VPN نیتیو سیستم‌عامل** نیاز دارند — نه فقط URL از نوع Xray.
 
-HPXPANEL یک پنل مدیریت پروکسی با رابط **command deck / ops console** است؛ برای اپراتورهایی که می‌خواهند صدها اکانت، نود و کور را از یک داشبورد تیز و خوانا کنترل کنند. بک‌اند با **Python / FastAPI** و فرانت با **React** ساخته شده و از [Xray-core](https://github.com/XTLS/Xray-core)، [WireGuard](https://www.wireguard.com/) و **IPsec / IKEv2 / L2TP** پشتیبانی می‌کند.
-
----
-
-## 🤔 چرا HPXPANEL؟
-
-> **ساده، قدرتمند، متمایز**
-
-به‌جای یک پنل عمومی، HPXPANEL یک زبان بصری اختصاصی دارد: کبالت، borderهای پیکسلی، ویزارد ساخت کاربر، گیج مصرف سابسکریپشن و نمودار ترافیک. مدیریت کاربران، محدودیت‌ها، نودها و لینک اشتراک — همه از یک کنسول.
+بک‌اند Python / FastAPI. فرانت React با تم command deck. یک صفحه برای یوزر، نود، کور و سابسکریپشن.
 
 ---
 
-### ✨ ویژگی‌ها
+## چیزهایی که واقعاً جدیدند (و باید بلند گفته شوند)
 
-<div align="right">
+### L2TP / IPsec و IKEv2 — VPN واقعی داخل پنل
 
-**🌐 رابط کاربری وب و API**
-- داشبورد **Web UI** با تم command deck
-- بک‌اند کاملاً **REST API**
-- پشتیبانی از **Multi-Node** برای توزیع زیرساخت
+این یک تیک ساده توی تنظیمات نیست. HPXPANEL استک **IPsec واقعی** را به همان جریان یوزر / کور وصل می‌کند:
 
-**🔐 پروتکل‌ها و امنیت**
-- پشتیبانی از **Vmess**، **VLESS**، **Trojan**، **Shadowsocks**، **WireGuard**، **Hysteria2**
-- پشتیبانی از **IPsec / IKEv2 / L2TP**
-- پشتیبانی از **TLS** و **REALITY**
-- **چند پروتکل** برای یک کاربر
+| پروتکل | چرا مهم است |
+| --- | --- |
+| **L2TP/IPsec** | تانل کلاسیک و امتحان‌پسند. UDP `500` / `4500` / `1701`. با PSK و کرِدِنشیال مشترک. جایی که «یک کلاینت Xray دیگر نصب کن» جواب نیست، این جواب است. |
+| **IKEv2/IPsec** | IPsec مدرن، دوست‌دار گواهی. نیتیو روی Windows، iOS، macOS، Android. ریکانکت محکم روی شبکه موبایل. |
 
-**👥 مدیریت کاربران**
-- ویزارد چندمرحله‌ای ساخت کاربر
-- محدودیت‌های **ترافیک** و **تاریخ انقضا**
-- محدودیت ترافیک **دوره‌ای** (روزانه، هفتگی و غیره)
-- محدودیت **HWID** و **IP Limiter** (سقف IP همزمان)
-- **چند کاربر** روی یک inbound / چند inbound روی یک پورت
+یک **یوزرنیم / پسورد مشترک IPsec** برای هر دو پروتکل. ادیتور کور برای کریپتو، PSK و شبکه — نه JSON رها‌شده.
 
-**🔗 اشتراک‌ها و اشتراک‌گذاری**
-- **لینک اشتراک** سازگار با **V2ray**، **Clash** و **ClashMeta**
-- صفحه سابسکریپشن با گیج مصرف، متریک‌ها و نمودار ترافیک
-- تولیدکننده **QRcode** و کپی لینک
+> اگر یوزرهات با VPN خودِ سیستم‌عامل وصل می‌شن، این استک فاصلهٔ «اپ نصب کن» تا «فقط Connect بزن» است.
 
-**🛠️ ابزارها و سفارشی‌سازی**
-- ادیتور کور Xray / WireGuard / IPsec
-- **ربات تلگرام** یکپارچه
-- **CLI**
-- **چند زبان** و **چند ادمین** با **RBAC**
+### IP Limiter
 
-</div>
+سقف IP یکتای همزمان برای هر یوزر. کنترل سوءاستفاده بدون نشستن پای هر سشن.
+
+### UX اپراتور که شب را حرام نمی‌کند
+
+- **ویزارد چندمرحله‌ای ساخت یوزر** — هویت → دسترسی → محدودیت → پیشرفته، با پیش‌نمایش زنده
+- **صفحه سابسکریپشن** — گیج مصرف، ریل متریک، نمودار ترافیک، لینک پروتکل‌ها، QR
+- **UI به سبک command deck** — کبالت، border پیکسلی، تراکم خوانا برای شیفت‌های طولانی
+- **Multi-node** + ادیتور کور برای Xray / WireGuard / IPsec
 
 ---
 
-# 🚀 راهنمای نصب روی لینوکس
+## پوشش پروتکل‌ها
 
-> **شروع سریع** — HPXPANEL را روی سرور لینوکس در چند دقیقه بالا بیاورید
+**استک پروکسی / تانل**
 
-### پیش‌نیازها
-- لینوکس (Ubuntu / Debian پیشنهاد می‌شود)
-- دسترسی `sudo`
-- دامنه (برای SSL در پروداکشن)
+- VMess · VLESS · Trojan · Shadowsocks · WireGuard · Hysteria2  
+- **L2TP/IPsec · IKEv2/IPsec**  
+- TLS · REALITY · چند پروتکل روی یک یوزر
 
-### نصب سریع با اسکریپت (بر اساس دیتابیس)
+**کنترل‌پلین**
 
-**TimescaleDB (توصیه شده):**
+- REST API کامل · ربات تلگرام · CLI · RBAC چند‌ادمین · محدودیت HWID · ترافیک / انقضا / ریست دوره‌ای · فرمت سابسکریپشن Clash / ClashMeta / V2ray
+
+---
+
+## نصب روی لینوکس
+
+### یک خطی (دیتابیس را انتخاب کن)
+
+**TimescaleDB (پیشنهادی)**
 ```bash
 sudo bash -c "$(curl -fsSL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install --database timescaledb
 ```
 
-**SQLite:**
+**SQLite**
 ```bash
 sudo bash -c "$(curl -fsSL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install
 ```
 
-**MySQL:**
+**MySQL / MariaDB / PostgreSQL**
 ```bash
 sudo bash -c "$(curl -fsSL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install --database mysql
+# --database mariadb | postgresql
 ```
 
-**MariaDB:**
-```bash
-sudo bash -c "$(curl -fsSL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install --database mariadb
-```
+### بعد از نصب
 
-**PostgreSQL:**
-```bash
-sudo bash -c "$(curl -fsSL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install --database postgresql
-```
+| | |
+| --- | --- |
+| فایل‌ها | `/opt/pasarguard` |
+| کانفیگ | `/opt/pasarguard/.env` |
+| دیتا | `/var/lib/pasarguard` |
+| داشبورد | `https://YOUR_DOMAIN:8000/dashboard/` |
 
-### 📋 پس از نصب
-
-<div align="right">
-
-**📋 لاگ‌ها را ببینید** (برای توقف `Ctrl+C`)
-
-**📁 فایل‌ها:** `/opt/pasarguard`
-
-**⚙️ پیکربندی:** `/opt/pasarguard/.env`
-
-**💾 داده:** `/var/lib/pasarguard`
-
-**🔒 مهم:** برای امنیت، داشبورد به SSL نیاز دارد  
-دسترسی پروداکشن: `https://YOUR_DOMAIN:8000/dashboard/`
-
-**🔗 تست بدون دامنه:** از SSH port forwarding استفاده کنید
-
-</div>
+برای پروداکشن SSL لازم است. تست سریع بدون دامنه:
 
 ```bash
 ssh -L 8000:localhost:8000 user@serverip
+# → http://localhost:8000/dashboard/
 ```
 
-سپس باز کنید: `http://localhost:8000/dashboard/`
-
-> ⚠️ **فقط برای تست** — با بستن ترمینال SSH دسترسی قطع می‌شود.
-
-### 🔧 مراحل بعدی
+راه‌اندازی اکانت owner:
 
 ```bash
-# ساخت کلید موقت برای راه‌اندازی حساب owner
 pasarguard cli generate-temp-key
-
-# راهنما
 pasarguard --help
 ```
 
 ---
 
-# 🔧 نصب از سورس
-
-اگر می‌خواهید مستقیم از ریپوی HPXPANEL روی لینوکس کار کنید:
+## نصب از سورس (همین ریپو)
 
 ```bash
-# کلون
 git clone https://github.com/pooyahpx/HPXPANEL.git
 cd HPXPANEL
 
-# بک‌اند
 uv sync
 uv run alembic upgrade head
 uv run main.py
 
-# داشبورد (ترمینال جدا)
-cd dashboard
-bun install
-bun run dev
+# ترمینال جدا
+cd dashboard && bun install && bun run dev
 ```
 
-داشبورد معمولاً روی `http://127.0.0.1:5173/dashboard/` و API روی پورت بک‌اند در دسترس است.
+داشبورد: `http://127.0.0.1:5173/dashboard/`
 
 ---
 
-# 💖 حمایت
+## استک
 
-<div align="right">
-
-اگر HPXPANEL براتون مفیده، ستاره بزنید و توسعه را دنبال کنید:
-
-**GitHub:** [pooyahpx/HPXPANEL](https://github.com/pooyahpx/HPXPANEL)  
-**dev by hpx:** [github.com/pooyahpx](https://github.com/pooyahpx)
-
-</div>
+- بک‌اند: Python، FastAPI، SQLAlchemy، Alembic  
+- فرانت: React، Vite، Tailwind  
+- انجین‌ها: Xray-core · WireGuard · IPsec (IKEv2 / L2TP)
 
 ---
 
 <p align="center">
-  <a href="https://github.com/pooyahpx">dev by hpx</a>
+  <b>dev by <a href="https://github.com/pooyahpx">hpx</a></b><br/>
+  <a href="https://github.com/pooyahpx/HPXPANEL">pooyahpx/HPXPANEL</a>
 </p>

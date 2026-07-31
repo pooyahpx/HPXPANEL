@@ -1,164 +1,116 @@
 <p align="center">
-  <a href="https://github.com/pooyahpx/HPXPANEL" target="_blank" rel="noopener noreferrer">
-    <img width="120" height="120" alt="HPXPANEL" src="https://raw.githubusercontent.com/pooyahpx/HPXPANEL/main/dashboard/public/statics/favicon/android-chrome-192x192.png">
-  </a>
+  <img width="96" height="96" alt="HPXPANEL" src="https://raw.githubusercontent.com/pooyahpx/HPXPANEL/main/dashboard/public/statics/favicon/android-chrome-192x192.png">
 </p>
 
 <h1 align="center">HPXPANEL</h1>
 
 <p align="center">
-    <strong>Консоль управления прокси — command deck для пользователей, нод, ядер и подписок</strong>
-</p>
-
----
-
-<br/>
-<p align="center">
-    <a href="https://github.com/pooyahpx/HPXPANEL/actions/workflows/build.yml" target="_blank">
-        <img src="https://img.shields.io/github/actions/workflow/status/pooyahpx/HPXPANEL/build.yml?style=flat-square" />
-    </a>
-    <a href="https://github.com/pooyahpx/HPXPANEL/blob/main/LICENSE" target="_blank">
-        <img src="https://img.shields.io/github/license/pooyahpx/HPXPANEL?style=flat-square" />
-    </a>
-    <a href="https://github.com/pooyahpx/HPXPANEL" target="_blank">
-        <img src="https://img.shields.io/github/stars/pooyahpx/HPXPANEL?style=social" />
-    </a>
-    <a href="https://github.com/pooyahpx" target="_blank">
-        <img src="https://img.shields.io/badge/dev-hpx-0ea5e9?style=flat-square&logo=github" />
-    </a>
+  <b>Консоль, которая видит прокси как инфраструктуру — а не как таблицу.</b>
 </p>
 
 <p align="center">
- <a href="./README.md">
- 🇺🇸 English
- </a>
- /
- <a href="./README-fa.md">
- 🇮🇷 فارسی
- </a>
- /
- <a href="./README-ru.md">
- 🇷🇺 Русский
- </a>
+  <a href="./README.md">English</a> ·
+  <a href="./README-fa.md">فارسی</a> ·
+  <a href="./README-ru.md">Русский</a>
 </p>
 
-## 📋 Содержание
-
-> **Быстрая навигация**
-
--   [📖 Обзор](#-обзор)
-    -   [🤔 Почему HPXPANEL?](#-почему-hpxpanel)
-        -   [✨ Возможности](#-возможности)
--   [🚀 Установка на Linux](#-установка-на-linux)
--   [🔧 Установка из исходников](#-установка-из-исходников)
--   [💖 Поддержка](#-поддержка)
+<p align="center">
+  <img alt="build" src="https://img.shields.io/github/actions/workflow/status/pooyahpx/HPXPANEL/build.yml?style=flat-square&label=build">
+  <img alt="license" src="https://img.shields.io/github/license/pooyahpx/HPXPANEL?style=flat-square">
+  <img alt="stars" src="https://img.shields.io/github/stars/pooyahpx/HPXPANEL?style=social">
+  <img alt="dev" src="https://img.shields.io/badge/dev-hpx-0ea5e9?style=flat-square&logo=github">
+</p>
 
 ---
 
-# 📖 Обзор
+## Зачем это нужно
 
-> **Что такое HPXPANEL?**
+Большинство панелей заканчиваются на «создай юзера → скопируй ссылку».  
+**HPXPANEL** — для операторов с реальным флотом: сотни аккаунтов, несколько нод, разные ядра и клиенты, которым нужен **нативный VPN ОС**, а не только Xray-URL.
 
-HPXPANEL — панель управления прокси с интерфейсом **command deck / ops console**. Управляйте пользователями, нодами, ядрами и подписками из одной удобной плоскости. Написано на **Python / FastAPI** и **React**, поддерживает [Xray-core](https://github.com/XTLS/Xray-core), [WireGuard](https://www.wireguard.com/) и **IPsec / IKEv2 / L2TP**.
-
----
-
-## 🤔 Почему HPXPANEL?
-
-> **Просто, мощно, узнаваемо**
-
-У HPXPANEL свой визуальный язык: cobalt-акценты, pixel-бордеры, пошаговый мастер создания пользователя, gauge потребления и графики трафика — без лишнего шума.
+Бэкенд Python / FastAPI. React UI в стиле command deck. Один контур для пользователей, нод, ядер и подписок.
 
 ---
 
-### ✨ Возможности
+## Что реально новое (и об этом стоит говорить громко)
 
-**🌐 Web UI и API**
-- Встроенный **Web UI** с темой command deck
-- Полноценный бэкенд **REST API**
-- Поддержка **Multi-Node**
+### L2TP / IPsec и IKEv2 — настоящий VPN внутри панели
 
-**🔐 Протоколы и безопасность**
-- **Vmess**, **VLESS**, **Trojan**, **Shadowsocks**, **WireGuard**, **Hysteria2**
-- **IPsec / IKEv2 / L2TP**
-- **TLS** и **REALITY**
-- Несколько протоколов на одного пользователя
+Это не галочка в настройках. HPXPANEL встраивает **живой IPsec-стек** в тот же user / core workflow:
 
-**👥 Управление пользователями**
-- Пошаговый wizard создания пользователя
-- Лимиты **трафика** и **срока действия**
-- Периодический сброс трафика
-- Лимит **HWID** и **IP Limiter** (макс. одновременных уникальных IP)
-- Мульти-пользователь / мульти-inbound сценарии
+| Протокол | Почему важно |
+| --- | --- |
+| **L2TP/IPsec** | Классический, проверенный туннель. UDP `500` / `4500` / `1701`. PSK + общие credentials. Там, где «поставь ещё один Xray-клиент» не вариант. |
+| **IKEv2/IPsec** | Современный IPsec с сертификатами. Нативно на Windows, iOS, macOS, Android. Стабильные реконнекты в мобильных сетях. |
 
-**🔗 Подписки**
-- Ссылки подписки для **V2ray**, **Clash**, **ClashMeta**
-- Страница пользователя с gauge, метриками и графиком трафика
-- QR-коды и копирование ссылок
+Один общий **IPsec username / password** для L2TP и IKEv2. Редакторы ядра для crypto, PSK и сети — без «кинь JSON и молись».
 
-**🛠️ Инструменты**
-- Редакторы ядер Xray / WireGuard / IPsec
-- Интегрированный **Telegram-бот**
-- **CLI**
-- Мультиязычность и мульти-админ **RBAC**
+> Если пользователи подключаются через встроенный VPN системы — это путь от «ставь приложение» к «просто Connect».
+
+### IP Limiter
+
+Лимит одновременных уникальных IP на пользователя. Контроль абьюза без ручного мониторинга каждой сессии.
+
+### UX оператора, который не сжигает ночь
+
+- **Пошаговый wizard создания пользователя** — identity → access → limits → advanced с live-черновиком
+- **Страница подписки** — gauge расхода, метрики, график трафика, ссылки протоколов, QR
+- **Command-deck UI** — cobalt, pixel-бордеры, читаемая плотность для длинных смен
+- **Multi-node** + редакторы ядер Xray / WireGuard / IPsec
 
 ---
 
-# 🚀 Установка на Linux
+## Покрытие протоколов
 
-> **Быстрый старт** — поднимите HPXPANEL на Linux-сервере за несколько минут
+**Прокси / туннели**
 
-### Требования
-- Linux (рекомендуется Ubuntu / Debian)
-- Доступ `sudo`
-- Домен (для SSL в продакшене)
+- VMess · VLESS · Trojan · Shadowsocks · WireGuard · Hysteria2  
+- **L2TP/IPsec · IKEv2/IPsec**  
+- TLS · REALITY · несколько протоколов на одного пользователя
 
-### Однострочная установка (выберите БД)
+**Control plane**
 
-**TimescaleDB (рекомендуется):**
+- Полный REST API · Telegram-бот · CLI · multi-admin RBAC · HWID · трафик / expiry / периодический сброс · подписки Clash / ClashMeta / V2ray
+
+---
+
+## Установка на Linux
+
+### Одной командой (выберите БД)
+
+**TimescaleDB (рекомендуется)**
 ```bash
 sudo bash -c "$(curl -fsSL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install --database timescaledb
 ```
 
-**SQLite:**
+**SQLite**
 ```bash
 sudo bash -c "$(curl -fsSL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install
 ```
 
-**MySQL:**
+**MySQL / MariaDB / PostgreSQL**
 ```bash
 sudo bash -c "$(curl -fsSL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install --database mysql
+# --database mariadb | postgresql
 ```
 
-**MariaDB:**
-```bash
-sudo bash -c "$(curl -fsSL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install --database mariadb
-```
+### После установки
 
-**PostgreSQL:**
-```bash
-sudo bash -c "$(curl -fsSL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install --database postgresql
-```
+| | |
+| --- | --- |
+| Файлы | `/opt/pasarguard` |
+| Конфиг | `/opt/pasarguard/.env` |
+| Данные | `/var/lib/pasarguard` |
+| Дашборд | `https://YOUR_DOMAIN:8000/dashboard/` |
 
-### 📋 После установки
-
-- **Логи:** смотрите логи сервиса (`Ctrl+C` для остановки)
-- **Файлы:** `/opt/pasarguard`
-- **Конфиг:** `/opt/pasarguard/.env`
-- **Данные:** `/var/lib/pasarguard`
-- **Продакшен URL:** `https://YOUR_DOMAIN:8000/dashboard/` (нужен SSL)
-
-**Тест без домена** через SSH port forwarding:
+Для продакшена нужен SSL. Быстрый тест без домена:
 
 ```bash
 ssh -L 8000:localhost:8000 user@serverip
+# → http://localhost:8000/dashboard/
 ```
 
-Откройте: `http://localhost:8000/dashboard/`
-
-> ⚠️ **Только для теста** — закрытие SSH-сессии обрывает доступ.
-
-### 🔧 Следующие шаги
+Создание owner:
 
 ```bash
 pasarguard cli generate-temp-key
@@ -167,36 +119,33 @@ pasarguard --help
 
 ---
 
-# 🔧 Установка из исходников
+## Установка из исходников (этот репозиторий)
 
 ```bash
 git clone https://github.com/pooyahpx/HPXPANEL.git
 cd HPXPANEL
 
-# Backend
 uv sync
 uv run alembic upgrade head
 uv run main.py
 
-# Dashboard (отдельный терминал)
-cd dashboard
-bun install
-bun run dev
+# другой терминал
+cd dashboard && bun install && bun run dev
 ```
 
 Дашборд: `http://127.0.0.1:5173/dashboard/`
 
 ---
 
-# 💖 Поддержка
+## Стек
 
-Поставьте звезду и следите за разработкой:
-
-**GitHub:** [pooyahpx/HPXPANEL](https://github.com/pooyahpx/HPXPANEL)  
-**dev by hpx:** [github.com/pooyahpx](https://github.com/pooyahpx)
+- Backend: Python, FastAPI, SQLAlchemy, Alembic  
+- Frontend: React, Vite, Tailwind  
+- Engines: Xray-core · WireGuard · IPsec (IKEv2 / L2TP)
 
 ---
 
 <p align="center">
-  <a href="https://github.com/pooyahpx">dev by hpx</a>
+  <b>dev by <a href="https://github.com/pooyahpx">hpx</a></b><br/>
+  <a href="https://github.com/pooyahpx/HPXPANEL">pooyahpx/HPXPANEL</a>
 </p>

@@ -1,165 +1,116 @@
 <p align="center">
-  <a href="https://github.com/pooyahpx/HPXPANEL" target="_blank" rel="noopener noreferrer">
-    <img width="120" height="120" alt="HPXPANEL" src="https://raw.githubusercontent.com/pooyahpx/HPXPANEL/main/dashboard/public/statics/favicon/android-chrome-192x192.png">
-  </a>
+  <img width="96" height="96" alt="HPXPANEL" src="https://raw.githubusercontent.com/pooyahpx/HPXPANEL/main/dashboard/public/statics/favicon/android-chrome-192x192.png">
 </p>
 
 <h1 align="center">HPXPANEL</h1>
 
 <p align="center">
-    <strong>Command-deck proxy operations console</strong><br/>
-    Users · Nodes · Cores · Subscriptions — one sharp control plane.
-</p>
-
----
-
-<br/>
-<p align="center">
-    <a href="https://github.com/pooyahpx/HPXPANEL/actions/workflows/build.yml" target="_blank">
-        <img src="https://img.shields.io/github/actions/workflow/status/pooyahpx/HPXPANEL/build.yml?style=flat-square" />
-    </a>
-    <a href="https://github.com/pooyahpx/HPXPANEL/blob/main/LICENSE" target="_blank">
-        <img src="https://img.shields.io/github/license/pooyahpx/HPXPANEL?style=flat-square" />
-    </a>
-    <a href="https://github.com/pooyahpx/HPXPANEL" target="_blank">
-        <img src="https://img.shields.io/github/stars/pooyahpx/HPXPANEL?style=social" />
-    </a>
-    <a href="https://github.com/pooyahpx" target="_blank">
-        <img src="https://img.shields.io/badge/dev-hpx-0ea5e9?style=flat-square&logo=github" />
-    </a>
+  <b>The ops console that treats proxies like infrastructure — not a spreadsheet.</b>
 </p>
 
 <p align="center">
- <a href="./README.md">
- 🇺🇸 English
- </a>
- /
- <a href="./README-fa.md">
- 🇮🇷 فارسی
- </a>
- /
- <a href="./README-ru.md">
- 🇷🇺 Русский
- </a>
+  <a href="./README.md">English</a> ·
+  <a href="./README-fa.md">فارسی</a> ·
+  <a href="./README-ru.md">Русский</a>
 </p>
 
-## 📋 Table of Contents
-
-> **Quick navigation**
-
--   [📖 Overview](#-overview)
-    -   [🤔 Why HPXPANEL?](#-why-hpxpanel)
-        -   [✨ Features](#-features)
--   [🚀 Linux install guide](#-linux-install-guide)
--   [🔧 Install from source](#-install-from-source)
--   [💖 Support](#-support)
+<p align="center">
+  <img alt="build" src="https://img.shields.io/github/actions/workflow/status/pooyahpx/HPXPANEL/build.yml?style=flat-square&label=build">
+  <img alt="license" src="https://img.shields.io/github/license/pooyahpx/HPXPANEL?style=flat-square">
+  <img alt="stars" src="https://img.shields.io/github/stars/pooyahpx/HPXPANEL?style=social">
+  <img alt="dev" src="https://img.shields.io/badge/dev-hpx-0ea5e9?style=flat-square&logo=github">
+</p>
 
 ---
 
-# 📖 Overview
+## Why this exists
 
-> **What is HPXPANEL?**
+Most panels stop at “create user → copy link.”  
+**HPXPANEL** is built for operators who run real fleets: hundreds of accounts, multi-node edges, mixed cores, and clients that need **native VPN protocols** — not only Xray URLs.
 
-HPXPANEL is a proxy management panel with a custom **command deck / ops console** UI. Manage users, nodes, cores, and subscriptions from one readable control plane. Built with **Python / FastAPI** and **React**, it supports [Xray-core](https://github.com/XTLS/Xray-core), [WireGuard](https://www.wireguard.com/), and **IPsec / IKEv2 / L2TP**.
-
----
-
-## 🤔 Why HPXPANEL?
-
-> **Simple, powerful, distinct**
-
-HPXPANEL keeps the operator workflow sharp: cobalt accents, pixel borders, a multi-step user wizard, subscription usage gauges, and traffic charts — without drowning you in clutter.
+Python / FastAPI backend. React command-deck UI. One place for users, nodes, cores, and subscriptions.
 
 ---
 
-### ✨ Features
+## What’s actually new (and loud)
 
-**🌐 Web UI & API**
-- Built-in **Web UI** with command-deck theme
-- Full **REST API** backend
-- **Multi-Node** infrastructure support
+### L2TP / IPsec & IKEv2 — native VPN in the panel
 
-**🔐 Protocols & security**
-- **Vmess**, **VLESS**, **Trojan**, **Shadowsocks**, **WireGuard**, **Hysteria2**
-- **IPsec / IKEv2 / L2TP**
-- **TLS** & **REALITY**
-- Multiple protocols per user
+This is not a checkbox on a settings page. HPXPANEL wires **real IPsec stacks** into the same user / core workflow you already use:
 
-**👥 User management**
-- Multi-step create-user wizard
-- Traffic & expiry limits
-- Periodic traffic reset strategies
-- **HWID** limit + **IP Limiter** (max concurrent unique IPs)
-- Multi-user / multi-inbound workflows
+| Protocol | Why it matters |
+| --- | --- |
+| **L2TP/IPsec** | Classic, battle-tested tunnel. UDP `500` / `4500` / `1701`. PSK + shared credentials. Works where “another Xray client” is a non-starter. |
+| **IKEv2/IPsec** | Modern, certificate-friendly IPsec. Native on Windows, iOS, macOS, Android. Rock-solid reconnects on mobile networks. |
 
-**🔗 Subscriptions**
-- Subscription links for **V2ray**, **Clash**, **ClashMeta**
-- User delivery page with usage gauge, metrics rail, and traffic chart
-- QR codes & copy actions
+One shared **IPsec username / password** for both L2TP and IKEv2. Core editors for server crypto, PSK, and network — not dump-and-pray JSON.
 
-**🛠️ Tools**
-- Xray / WireGuard / IPsec core editors
-- Integrated **Telegram bot**
-- **CLI**
-- Multi-language + multi-admin **RBAC**
+> If your users live on stock OS VPN settings, this stack is the difference between “install an app” and “just connect.”
+
+### IP Limiter
+
+Cap concurrent unique client IPs per user. Abuse control without babysitting every session.
+
+### Operator UX that doesn’t waste your night
+
+- **Multi-step create-user wizard** — identity → access → limits → advanced, with a live draft rail
+- **Subscription page** — usage gauge, metrics rail, traffic chart, protocol links, QR
+- **Command-deck UI** — cobalt accents, pixel borders, readable density for long ops sessions
+- **Multi-node** + core editors for Xray / WireGuard / IPsec
 
 ---
 
-# 🚀 Linux install guide
+## Protocol coverage
 
-> **Quick start** — bring HPXPANEL up on a Linux server in minutes
+**Proxy / tunnel stack**
 
-### Requirements
-- Linux (Ubuntu / Debian recommended)
-- `sudo` access
-- Domain (for SSL in production)
+- VMess · VLESS · Trojan · Shadowsocks · WireGuard · Hysteria2  
+- **L2TP/IPsec · IKEv2/IPsec**  
+- TLS · REALITY · multi-protocol per user
 
-### One-line install (choose database)
+**Control plane**
 
-**TimescaleDB (recommended):**
+- Full REST API · Telegram bot · CLI · multi-admin RBAC · HWID limits · traffic / expiry / periodic reset · Clash / ClashMeta / V2ray subscription formats
+
+---
+
+## Install on Linux
+
+### One-liner (pick a database)
+
+**TimescaleDB (recommended)**
 ```bash
 sudo bash -c "$(curl -fsSL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install --database timescaledb
 ```
 
-**SQLite:**
+**SQLite**
 ```bash
 sudo bash -c "$(curl -fsSL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install
 ```
 
-**MySQL:**
+**MySQL / MariaDB / PostgreSQL**
 ```bash
 sudo bash -c "$(curl -fsSL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install --database mysql
+# --database mariadb | postgresql
 ```
 
-**MariaDB:**
-```bash
-sudo bash -c "$(curl -fsSL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install --database mariadb
-```
+### After install
 
-**PostgreSQL:**
-```bash
-sudo bash -c "$(curl -fsSL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install --database postgresql
-```
+| | |
+| --- | --- |
+| Files | `/opt/pasarguard` |
+| Config | `/opt/pasarguard/.env` |
+| Data | `/var/lib/pasarguard` |
+| Dashboard | `https://YOUR_DOMAIN:8000/dashboard/` |
 
-### 📋 After install
-
-- **Logs:** follow service logs (`Ctrl+C` to stop)
-- **Files:** `/opt/pasarguard`
-- **Config:** `/opt/pasarguard/.env`
-- **Data:** `/var/lib/pasarguard`
-- **Production URL:** `https://YOUR_DOMAIN:8000/dashboard/` (SSL required)
-
-**Test without a domain** using SSH port forwarding:
+SSL is required for production. For a quick local smoke test without a domain:
 
 ```bash
 ssh -L 8000:localhost:8000 user@serverip
+# → http://localhost:8000/dashboard/
 ```
 
-Open: `http://localhost:8000/dashboard/`
-
-> ⚠️ **Testing only** — closing the SSH session drops access.
-
-### 🔧 Next steps
+Bootstrap the owner account:
 
 ```bash
 pasarguard cli generate-temp-key
@@ -168,36 +119,33 @@ pasarguard --help
 
 ---
 
-# 🔧 Install from source
+## Install from source (this repo)
 
 ```bash
 git clone https://github.com/pooyahpx/HPXPANEL.git
 cd HPXPANEL
 
-# Backend
 uv sync
 uv run alembic upgrade head
 uv run main.py
 
-# Dashboard (separate terminal)
-cd dashboard
-bun install
-bun run dev
+# another terminal
+cd dashboard && bun install && bun run dev
 ```
 
 Dashboard: `http://127.0.0.1:5173/dashboard/`
 
 ---
 
-# 💖 Support
+## Stack
 
-Star the repo and follow development:
-
-**GitHub:** [pooyahpx/HPXPANEL](https://github.com/pooyahpx/HPXPANEL)  
-**dev by hpx:** [github.com/pooyahpx](https://github.com/pooyahpx)
+- Backend: Python, FastAPI, SQLAlchemy, Alembic  
+- Frontend: React, Vite, Tailwind  
+- Engines: Xray-core · WireGuard · IPsec (IKEv2 / L2TP)
 
 ---
 
 <p align="center">
-  <a href="https://github.com/pooyahpx">dev by hpx</a>
+  <b>dev by <a href="https://github.com/pooyahpx">hpx</a></b><br/>
+  <a href="https://github.com/pooyahpx/HPXPANEL">pooyahpx/HPXPANEL</a>
 </p>

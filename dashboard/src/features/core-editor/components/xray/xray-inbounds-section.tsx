@@ -4172,13 +4172,10 @@ export function XrayInboundsSection({ headerAddPulse, headerAddEpoch }: XrayInbo
                                       setRealityScanTarget(typeof destValue === 'string' ? destValue : '')
                                       setIsRealityScanOpen(true)
                                     }}
-                                    className="reality-probe__btn-ghost h-10 w-full text-sm font-medium sm:h-11"
+                                    className="h-10 w-full text-sm font-medium transition-all hover:shadow-md sm:h-11"
                                     isLoading={false}
                                   >
-                                    <span className="font-hud flex items-center gap-2 truncate tracking-[0.08em] uppercase">
-                                      <ScanSearch className="h-4 w-4 shrink-0 text-sky-400" />
-                                      {t('coreConfigModal.scanRealityTarget', { defaultValue: 'Scan Reality target' })}
-                                    </span>
+                                    <span className="flex items-center gap-2 truncate">{t('coreConfigModal.scanRealityTarget', { defaultValue: 'Scan target' })}</span>
                                   </LoaderButton>
                                 </div>
                               )}

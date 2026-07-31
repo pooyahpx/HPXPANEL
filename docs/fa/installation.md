@@ -85,7 +85,7 @@ pasarguard --help
 روی هر سرور لبه (Linux) اینستالر نود HPX را اجرا کن. نود Docker با **Xray**، **WireGuard**، **OpenVPN** و **IKEv2** بالا می‌آید و مقادیر Address / Port / API key / Server CA را برای ثبت در **HPXPANEL → Nodes** چاپ می‌کند.
 
 ```bash
-sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXPANEL/raw/main/scripts/hpx-node.sh)" @ install
+sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXNODE/raw/main/scripts/install.sh)" @ install
 ```
 
 | مسیر | کاربرد |

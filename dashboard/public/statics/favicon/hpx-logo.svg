@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="HPX">
+  <defs>
+    <linearGradient id="plate" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0A1628"/>
+      <stop offset="100%" stop-color="#050A12"/>
+    </linearGradient>
+    <linearGradient id="cyan" x1="0.2" y1="0" x2="0.8" y2="1">
+      <stop offset="0%" stop-color="#67E8F9"/>
+      <stop offset="55%" stop-color="#0EA5E9"/>
+      <stop offset="100%" stop-color="#0284C7"/>
+    </linearGradient>
+  </defs>
+
+  <!-- plate -->
+  <rect x="16" y="16" width="480" height="480" rx="96" fill="url(#plate)"/>
+
+  <!-- outer HUD frame -->
+  <rect x="40" y="40" width="432" height="432" rx="78" fill="none" stroke="#0EA5E9" stroke-width="10" opacity="0.95"/>
+
+  <!-- inner pixel / stepped corners -->
+  <path fill="none" stroke="#22D3EE" stroke-width="4" opacity="0.55"
+        d="M88 72 H424
+           M440 88 V424
+           M424 440 H88
+           M72 424 V88
+           M72 88 H100 V72
+           M412 72 H440 V100
+           M440 412 V440 H412
+           M100 440 H72 V412"/>
+
+  <!-- corner ticks -->
+  <path stroke="#67E8F9" stroke-width="6" stroke-linecap="square" fill="none"
+        d="M64 112 V64 H112 M400 64 H448 V112 M448 400 V448 H400 M112 448 H64 V400"/>
+
+  <!-- shield -->
+  <path fill="none" stroke="url(#cyan)" stroke-width="14" stroke-linejoin="round"
+        d="M256 92
+           C312 118 360 128 392 136
+           V250
+           C392 330 340 392 256 430
+           C172 392 120 330 120 250
+           V136
+           C152 128 200 118 256 92 Z"/>
+
+  <!-- network links -->
+  <g stroke="#7DD3FC" stroke-width="8" stroke-linecap="round" opacity="0.9">
+    <line x1="256" y1="210" x2="198" y2="268"/>
+    <line x1="256" y1="210" x2="314" y2="268"/>
+    <line x1="198" y1="268" x2="256" y2="318"/>
+    <line x1="314" y1="268" x2="256" y2="318"/>
+  </g>
+
+  <!-- nodes -->
+  <circle cx="256" cy="210" r="22" fill="#0EA5E9"/>
+  <circle cx="256" cy="210" r="10" fill="#ECFEFF"/>
+  <circle cx="198" cy="268" r="16" fill="#38BDF8"/>
+  <circle cx="314" cy="268" r="16" fill="#38BDF8"/>
+  <circle cx="256" cy="318" r="18" fill="#0EA5E9"/>
+  <circle cx="256" cy="318" r="7" fill="#ECFEFF"/>
+
+  <!-- HPX wordmark -->
+  <text x="256" y="390" text-anchor="middle"
+        font-family="Segoe UI, Helvetica Neue, Arial, sans-serif"
+        font-size="54" font-weight="800" letter-spacing="10"
+        fill="#F8FAFC">HPX</text>
+</svg>

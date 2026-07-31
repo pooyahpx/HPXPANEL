@@ -23,6 +23,7 @@ import { z } from 'zod'
 import useDirDetection from '@/hooks/use-dir-detection'
 import { passwordValidation } from '@/features/admins/forms/admin-form'
 import { cn } from '@/lib/utils'
+import { HPX_LOGO_URL } from '@/constants/brand'
 
 const schema = z.object({
   username: z.string().min(1, 'login.fieldRequired'),
@@ -374,8 +375,8 @@ export const Login: FC = () => {
       <aside className="auth-mesh relative hidden w-[46%] flex-col justify-between overflow-hidden p-10 text-white lg:flex xl:w-[48%]">
         <div className="auth-grid absolute inset-0" />
         <div className="relative z-10 flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center border-2 border-white/30 bg-white/10 shadow-[3px_3px_0_0_rgba(0,0,0,0.45)] backdrop-blur-md">
-            <span className="font-hud text-xl leading-none tracking-wide text-white">HPX</span>
+          <div className="flex h-11 w-11 items-center justify-center overflow-hidden border-2 border-white/30 shadow-[3px_3px_0_0_rgba(0,0,0,0.45)]">
+            <img src={HPX_LOGO_URL} alt="HPXPANEL" className="h-full w-full object-cover" draggable={false} />
           </div>
           <div>
             <p className="font-display text-lg font-bold tracking-tight">{t('pasarguard')}</p>
@@ -417,8 +418,8 @@ export const Login: FC = () => {
       <main className="relative flex min-h-screen flex-1 flex-col">
         <div className="flex items-center justify-between px-5 pt-5 sm:px-8">
           <div className="flex items-center gap-2 lg:invisible">
-            <div className="bg-primary text-primary-foreground flex h-8 w-8 items-center justify-center border-2 border-[hsl(var(--pixel-border))]">
-              <span className="font-hud text-sm leading-none">HPX</span>
+            <div className="flex h-8 w-8 items-center justify-center overflow-hidden border-2 border-[hsl(var(--pixel-border))]">
+              <img src={HPX_LOGO_URL} alt="HPXPANEL" className="h-full w-full object-cover" draggable={false} />
             </div>
             <span className="font-display text-sm font-bold">{t('pasarguard')}</span>
           </div>

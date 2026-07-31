@@ -74,6 +74,46 @@ One shared **IPsec username / password** for both. Core editors for crypto, PSK,
 
 ---
 
+## Screenshots
+
+### REALITY target scanner
+
+Probe one or more decoy domains before you wire them into Xray. HPXPANEL checks **TLS 1.3**, **HTTP/2 (ALPN)**, latency, and marks what is actually suitable.
+
+<p align="center">
+  <img src="./docs/assets/readme/reality-scan.png" alt="SCAN REALITY TARGET — multi-target probe with TLS 1.3 / H2 badges" width="820">
+</p>
+
+<p align="center"><i>Scan Reality target — multi-host probe, suitable-only filter, live latency chips</i></p>
+
+<p align="center">
+  <img src="./docs/assets/readme/reality-target-detail.png" alt="Suitable Reality target detail for google.com" width="820">
+</p>
+
+<p align="center"><i>Expanded target telemetry — SNI, TLS 1.3, H2, X25519 / PQ, certificate SAN grid</i></p>
+
+### Command deck statistics
+
+Live NOC-style overview: scope rail for nodes, system meters, traffic + user charts.
+
+<p align="center">
+  <img src="./docs/assets/readme/statistics-command-deck.png" alt="HPXPANEL statistics command deck" width="820">
+</p>
+
+<p align="center"><i>Statistics — nodes scope, CPU / RAM / disk, traffic usage, online users</i></p>
+
+### Multi-core protocols
+
+One console for **Xray**, **WireGuard**, **IKEv2/IPsec**, and **L2TP/IPsec**.
+
+<p align="center">
+  <img src="./docs/assets/readme/core-protocol-picker.png" alt="Core protocol picker" width="420">
+</p>
+
+<p align="center"><i>Core type picker — switch stacks without leaving the panel</i></p>
+
+---
+
 ## Install on Linux
 
 ### One-liner (pick a database)

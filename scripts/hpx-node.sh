@@ -1,31 +1,25 @@
 #!/usr/bin/env bash
 #
-# HPXPANEL Node â€” command-deck edge installer
-# ------------------------------------------
+# HPXPANEL Node — edge installer
+# -----------------------------
 # Installs an HPX-compatible multi-backend node (Xray / WireGuard / OpenVPN / IKEv2)
-# as a Docker container, then prints the Address + Port + API key + Server CA that
-# you paste into HPXPANEL â†’ Nodes.
+# as a Docker container, then prints Address + Port + API key + Server CA for
+# HPXPANEL -> Nodes.
 #
 # One-liner (Linux):
-#   sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXNODE/raw/main/scripts/install.sh)" @ install
+#   sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXNODE/raw/main/scripts/install.sh)" @ install -y
 #
 # Interactive menu:
 #   sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXNODE/raw/main/scripts/install.sh)"
 #
-# Local:
-#   sudo bash scripts/hpx-node.sh install -y
-#   sudo bash scripts/hpx-node.sh menu
-#
 set -euo pipefail
 
-# When invoked as: bash -c "$(curl â€¦)" @ install â€¦
-# the "@" is $0-style arg noise from one-liners â€” strip it.
+# When invoked as: bash -c "$(curl ...)" @ install ...
+# the "@" is arg noise from one-liners — strip it.
 if [ "${1:-}" = "@" ]; then shift; fi
 
-# ---- defaults (override via flags / env) -----------------------------------
 PANEL_DOCS="${PANEL_DOCS:-https://pooyahpx.github.io/HPXPANEL/}"
 PANEL_REPO="${PANEL_REPO:-https://github.com/pooyahpx/HPXPANEL}"
-# Multi-backend image (Xray + WG + OpenVPN + IKEv2). Override with --image / IMAGE=.
 REPO="${REPO:-https://github.com/pooyahpx/HPXNODE}"
 IMAGE="${IMAGE:-ghcr.io/pooyahpx/hpx-node:latest}"
 FALLBACK_IMAGE="${FALLBACK_IMAGE:-ghcr.io/pooyahpx/hpx-node:latest}"
@@ -35,7 +29,6 @@ SERVICE="${SERVICE:-hpx-node}"
 INSTALL_DIR="${INSTALL_DIR:-/opt/hpx-node}"
 COMPOSE_FILE="$INSTALL_DIR/docker-compose.yml"
 DATA_DIR="${DATA_DIR:-/var/lib/hpx-node}"
-# Container still expects the classic data path internally.
 CONTAINER_DATA="/var/lib/hpx-node"
 
 SERVICE_PORT="${SERVICE_PORT:-62050}"
@@ -46,7 +39,6 @@ QUIET="${QUIET:-0}"
 
 XRAY_ON=1; OVPN_ON=1; WG_ON=1; IKEV2_ON=1
 
-# ---- colors ----------------------------------------------------------------
 if [ -t 1 ]; then
   c_grn='\033[0;32m'; c_yel='\033[0;33m'; c_red='\033[0;31m'
   c_cyn='\033[0;36m'; c_mag='\033[0;35m'; c_blu='\033[0;34m'
@@ -60,7 +52,7 @@ log()  { echo -e "${c_grn}[+]${c_off} $*"; }
 warn() { echo -e "${c_yel}[!]${c_off} $*"; }
 err()  { echo -e "${c_red}[x]${c_off} $*" >&2; }
 die()  { err "$*"; exit 1; }
-hr()   { echo -e "${c_cyn}â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€${c_off}"; }
+hr()   { echo -e "${c_cyn}------------------------------------------------------------${c_off}"; }
 has()  { command -v "$1" >/dev/null 2>&1; }
 
 _read() { if [ -e /dev/tty ]; then read "$@" </dev/tty || true; else read "$@" || true; fi; }
@@ -69,7 +61,7 @@ STEP_LOG="/tmp/hpx-node-install.log"
 
 run_step() {
   local msg="$1"; shift
-  echo -ne "  ${c_cyn}â–¶${c_off} ${msg} ${c_dim}...${c_off} "
+  echo -ne "  ${c_cyn}>${c_off} ${msg} ${c_dim}...${c_off} "
   if "$@" >>"$STEP_LOG" 2>&1; then
     echo -e "${c_grn}done${c_off}"
   else
@@ -79,7 +71,7 @@ run_step() {
   fi
 }
 
-_rule() { echo -e "${c_dim}    â”„â”„â”„â”„â”„â”„â”„â”„â”„â”„â”„â”„â”„â”„â”„â”„â”„â”„â”„â”„â”„â”„â”„â”„â”„â”„â”„â”„â”„â”„â”„â”„â”„â”„â”„â”„â”„â”„â”„â”„â”„â”„â”„â”„â”„â”„â”„â”„${c_off}"; }
+_rule() { echo -e "${c_dim}    ------------------------------------------------${c_off}"; }
 
 _stream() {
   local fd rc
@@ -98,12 +90,12 @@ _stream() {
 run_step_live() {
   local msg="$1"; shift
   if [ "${QUIET:-0}" = "1" ]; then run_step "$msg" "$@"; return; fi
-  echo -e "  ${c_cyn}â–¶${c_off} ${c_bld}${msg}${c_off}"
+  echo -e "  ${c_cyn}>${c_off} ${c_bld}${msg}${c_off}"
   _rule
   if _stream "$@"; then
-    _rule; echo -e "  ${c_grn}âœ”${c_off} ${msg}"
+    _rule; echo -e "  ${c_grn}OK${c_off} ${msg}"
   else
-    _rule; echo -e "  ${c_red}âœ˜${c_off} ${msg}"
+    _rule; echo -e "  ${c_red}FAIL${c_off} ${msg}"
     err "step failed: ${msg} (full log: ${STEP_LOG})"
     exit 1
   fi
@@ -112,18 +104,18 @@ run_step_live() {
 run_step_live_soft() {
   local msg="$1"; shift
   if [ "${QUIET:-0}" = "1" ]; then run_step_soft "$msg" "$@"; return; fi
-  echo -e "  ${c_cyn}â–¶${c_off} ${c_bld}${msg}${c_off}"
+  echo -e "  ${c_cyn}>${c_off} ${c_bld}${msg}${c_off}"
   _rule
   if _stream "$@"; then
-    echo -e "  ${c_grn}âœ”${c_off} ${msg}"; return 0
+    echo -e "  ${c_grn}OK${c_off} ${msg}"; return 0
   else
-    echo -e "  ${c_yel}â–·${c_off} ${msg} â€” ${c_yel}skipped${c_off}"; return 1
+    echo -e "  ${c_yel}skip${c_off} ${msg}"; return 1
   fi
 }
 
 run_step_soft() {
   local msg="$1"; shift
-  echo -ne "  ${c_cyn}â–¶${c_off} ${msg} ${c_dim}...${c_off} "
+  echo -ne "  ${c_cyn}>${c_off} ${msg} ${c_dim}...${c_off} "
   if "$@" >>"$STEP_LOG" 2>&1; then echo -e "${c_grn}done${c_off}"; return 0
   else echo -e "${c_yel}skipped${c_off}"; return 1; fi
 }
@@ -203,7 +195,7 @@ wait_for_apt() {
   has apt-get || return 0
   apt_busy || return 0
   local waited=0 max="${APT_LOCK_TIMEOUT:-900}"
-  log "apt/dpkg is busy ($(apt_holder)) â€” waiting up to $((max / 60))m..."
+  log "apt/dpkg is busy ($(apt_holder)) — waiting up to $((max / 60))m..."
   while apt_busy; do
     if [ "$waited" -ge "$max" ]; then
       warn "apt still locked after $((max / 60))m (holder: $(apt_holder))."
@@ -217,48 +209,45 @@ wait_for_apt() {
 
 install_docker() {
   if ! has docker; then
-    wait_for_apt || die "apt is locked â€” retry later"
+    wait_for_apt || die "apt is locked — retry later"
     curl -fsSL https://get.docker.com | sh
     systemctl enable --now docker 2>/dev/null || true
   fi
   detect_compose || die "docker compose plugin not available after install"
 }
 
-# ---- banner / features ------------------------------------------------------
 banner() {
   clear 2>/dev/null || true
   echo
-  echo -e "  ${c_cyn}${c_bld}â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”“${c_off}"
-  echo -e "  ${c_cyn}${c_bld}â”ƒ${c_off}  ${c_amb}${c_bld}HPX${c_off}${c_bld}PANEL${c_off}  ${c_dim}//${c_off}  ${c_cyn}NODE DEPLOY${c_off}  ${c_dim}Â· COMMAND DECK${c_off}     ${c_cyn}${c_bld}â”ƒ${c_off}"
-  echo -e "  ${c_cyn}${c_bld}â”—â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”›${c_off}"
+  echo -e "  ${c_cyn}${c_bld}+----------------------------------------------------------+${c_off}"
+  echo -e "  ${c_cyn}${c_bld}|${c_off}  ${c_amb}${c_bld}HPX${c_off}${c_bld}PANEL${c_off}  ${c_dim}//${c_off}  ${c_cyn}NODE DEPLOY${c_off}                         ${c_cyn}${c_bld}|${c_off}"
+  echo -e "  ${c_cyn}${c_bld}+----------------------------------------------------------+${c_off}"
   echo
-  echo -e "  ${c_dim}Edge node for${c_off} ${c_bld}HPXPANEL${c_off} ${c_dim}â€” paste Address / Port / API key / CA into the panel.${c_off}"
+  echo -e "  ${c_dim}Edge node for${c_off} ${c_bld}HPXPANEL${c_off}${c_dim}. After install, paste Address / Port / API key / CA into the panel.${c_off}"
   echo
 }
 
 features_panel() {
-  echo -e "  ${c_bld}HPX NODE CAPABILITIES${c_off}"
-  echo -e "  ${c_dim}â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”${c_off}"
-  echo -e "  ${c_dim}â”‚${c_off}  ${c_cyn}â—†${c_off} Xray stack     ${c_dim}VLESS / VMess / Trojan / SS / REALITY${c_off}"
-  echo -e "  ${c_dim}â”‚${c_off}  ${c_cyn}â—†${c_off} WireGuard      ${c_dim}kernel WG + host NAT routing${c_off}"
-  echo -e "  ${c_dim}â”‚${c_off}  ${c_cyn}â—†${c_off} OpenVPN        ${c_dim}optional tunnel backend${c_off}"
-  echo -e "  ${c_dim}â”‚${c_off}  ${c_amb}â—†${c_off} IKEv2 / IPsec  ${c_dim}native strongSwan (HPX special)${c_off}"
-  echo -e "  ${c_dim}â”‚${c_off}  ${c_grn}â—†${c_off} Panel sync     ${c_dim}gRPC â†’ HPXPANEL Nodes UI${c_off}"
-  echo -e "  ${c_dim}â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜${c_off}"
+  echo -e "  ${c_bld}Backends${c_off}"
+  echo -e "  ${c_dim}- Xray         VLESS / VMess / Trojan / SS / REALITY${c_off}"
+  echo -e "  ${c_dim}- WireGuard    kernel WG + host NAT${c_off}"
+  echo -e "  ${c_dim}- OpenVPN      optional tunnel${c_off}"
+  echo -e "  ${c_dim}- IKEv2/IPsec  strongSwan${c_off}"
+  echo -e "  ${c_dim}- Panel sync   gRPC -> HPXPANEL Nodes${c_off}"
   echo
 }
 
 usage() {
   cat <<EOF
-HPXPANEL Node â€” Docker installer (hpx-node)
+HPXPANEL Node — Docker installer (hpx-node)
 
 Usage:
-  sudo bash hpx-node.sh [command] [options]
-  sudo bash -c "\$(curl -fsSL ${PANEL_REPO}/raw/main/scripts/hpx-node.sh)" @ install -y
+  sudo bash install.sh [command] [options]
+  sudo bash -c "\$(curl -fsSL ${REPO}/raw/main/scripts/install.sh)" @ install -y
 
 Commands:
-  (none) / menu     Interactive HUD menu
-  install           Install / reinstall
+  (none) / menu     Interactive menu
+  install           Install / reinstall (use -y for no prompts)
   update | restart | status | logs
   uninstall
 
@@ -269,7 +258,7 @@ Install options:
   --image <ref>      pull image (default: ${IMAGE})
   --build            build from source instead of pull
   --branch <name> | --repo <url>
-  -y, --yes          non-interactive
+  -y, --yes          non-interactive install
   -q, --quiet
   -h, --help
 
@@ -302,14 +291,14 @@ parse_install_args() {
   done
 }
 
-onoff() { if [ "${1:-0}" -eq 1 ]; then echo -e "${c_grn}${c_bld}â— ON${c_off}"; else echo -e "${c_dim}â—‹ off${c_off}"; fi; }
-press_enter() { echo; _read -r -p "$(echo -e "  ${c_dim}Press Enter to return to the deckâ€¦${c_off}")" _; }
+onoff() { if [ "${1:-0}" -eq 1 ]; then echo -e "${c_grn}${c_bld}ON${c_off}"; else echo -e "${c_dim}off${c_off}"; fi; }
+press_enter() { echo; _read -r -p "$(echo -e "  ${c_dim}Press Enter to return...${c_off}")" _; }
 
 menu_command() {
   require_root
   if [ ! -e /dev/tty ] && [ ! -t 0 ]; then
-    die "no terminal for the menu â€” use:
-  sudo bash hpx-node.sh install --disable openvpn -y"
+    die "no terminal for the menu — use:
+  sudo bash install.sh install -y"
   fi
   local status="not installed"
   has docker && docker ps -a --format '{{.Names}}' 2>/dev/null | grep -qx "$SERVICE" && \
@@ -321,7 +310,7 @@ menu_command() {
     echo -e "  ${c_dim}State:${c_off} ${c_bld}${status}${c_off}"
     echo -e "  ${c_dim}Image:${c_off} $([ "$BUILD_FROM_SOURCE" = 1 ] && echo 'build from source' || echo "$IMAGE")"
     echo
-    echo -e "  ${c_bld}BACKENDS${c_off} ${c_dim}(toggle what this edge runs)${c_off}"
+    echo -e "  ${c_bld}BACKENDS${c_off} ${c_dim}(toggle)${c_off}"
     printf "    ${c_bld}1${c_off}  %-24s %b\n" "Xray"               "$(onoff "$XRAY_ON")"
     printf "    ${c_bld}2${c_off}  %-24s %b\n" "OpenVPN"            "$(onoff "$OVPN_ON")"
     printf "    ${c_bld}3${c_off}  %-24s %b\n" "WireGuard"          "$(onoff "$WG_ON")"
@@ -331,21 +320,21 @@ menu_command() {
     printf "    ${c_bld}5${c_off}  %-24s ${c_cyn}%s${c_off}\n" "Node port (gRPC)" "$SERVICE_PORT"
     printf "    ${c_bld}6${c_off}  %-24s ${c_cyn}%s${c_off}\n" "API key"          "${API_KEY:-auto-generate}"
     printf "    ${c_bld}7${c_off}  %-24s ${c_cyn}%s${c_off}\n" "Image source"     "$([ "$BUILD_FROM_SOURCE" = 1 ] && echo 'build from source' || echo 'pull')"
-    echo -e "    ${c_dim}VPN listener ports come from HPXPANEL core config. IKEv2 uses 500/4500.${c_off}"
+    echo -e "    ${c_dim}VPN ports come from HPXPANEL core config. IKEv2 uses 500/4500.${c_off}"
     echo
     echo -e "  ${c_bld}ACTIONS${c_off}"
-    echo -e "    ${c_grn}${c_bld}i${c_off}  Install / reinstall"
+    echo -e "    ${c_grn}${c_bld}i${c_off}  ${c_bld}Install / reinstall${c_off}   ${c_dim}<-- type i then Enter${c_off}"
     echo -e "    ${c_bld}u${c_off} Update   ${c_bld}s${c_off} Status   ${c_bld}l${c_off} Logs   ${c_bld}r${c_off} Restart"
     echo -e "    ${c_red}x${c_off} Uninstall   ${c_bld}q${c_off} Quit"
     echo
     local choice
-    _read -r -p "$(echo -e "  ${c_bld}Select${c_off} ${c_dim}(number / letter)${c_off} ${c_amb}â¯${c_off} ")" choice
+    _read -r -p "$(echo -e "  ${c_bld}Select${c_off} ${c_dim}(number / letter)${c_off} > ")" choice
     case "$choice" in
       1) XRAY_ON=$((1 - XRAY_ON)) ;;
       2) OVPN_ON=$((1 - OVPN_ON)) ;;
       3) WG_ON=$((1 - WG_ON)) ;;
       4) IKEV2_ON=$((1 - IKEV2_ON)) ;;
-      5) SERVICE_PORT="$(ask_num "Node port (gRPC â€” panel Node Port)" "$SERVICE_PORT")" ;;
+      5) SERVICE_PORT="$(ask_num "Node port (gRPC — panel Node Port)" "$SERVICE_PORT")" ;;
       6) API_KEY="$(ask_val "API key (blank = auto-generate)" "$API_KEY")" ;;
       7) BUILD_FROM_SOURCE=$((1 - BUILD_FROM_SOURCE)) ;;
       i|I) echo; run_install; break ;;
@@ -356,7 +345,7 @@ menu_command() {
       x|X) echo; uninstall_command; press_enter; status="not installed" ;;
       q|Q) echo; exit 0 ;;
       "") : ;;
-      *) warn "Unknown: '${choice}'"; sleep 1 ;;
+      *) warn "Unknown: '${choice}' — type ${c_bld}i${c_off} to install"; sleep 1 ;;
     esac
   done
 }
@@ -401,7 +390,7 @@ pull_image() { dc pull; }
 print_summary() {
   local ca="" i cert_file="$DATA_DIR/certs/ssl_cert.pem"
   echo
-  echo -e "  ${c_cyn}â–¶${c_off} ${c_bld}Waiting for Server CA${c_off} ${c_dim}(first boot)${c_off}"
+  echo -e "  ${c_cyn}>${c_off} ${c_bld}Waiting for Server CA${c_off} ${c_dim}(first boot)${c_off}"
   for i in $(seq 1 30); do
     [ -s "$cert_file" ] && { ca="$(cat "$cert_file")"; break; }
     sleep 1
@@ -417,9 +406,9 @@ print_summary() {
   [ "$IKEV2_ON" -eq 1 ] && backends="${backends} ikev2"
 
   echo
-  echo -e "  ${c_amb}${c_bld}â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”“${c_off}"
-  echo -e "  ${c_amb}${c_bld}â”ƒ${c_off}  ${c_grn}${c_bld}HPX NODE ONLINE${c_off}  ${c_dim}â€” register in HPXPANEL â†’ Nodes${c_off}   ${c_amb}${c_bld}â”ƒ${c_off}"
-  echo -e "  ${c_amb}${c_bld}â”—â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”›${c_off}"
+  echo -e "  ${c_amb}${c_bld}+----------------------------------------------------------+${c_off}"
+  echo -e "  ${c_amb}${c_bld}|${c_off}  ${c_grn}${c_bld}HPX NODE ONLINE${c_off}  ${c_dim}— register in HPXPANEL -> Nodes${c_off}   ${c_amb}${c_bld}|${c_off}"
+  echo -e "  ${c_amb}${c_bld}+----------------------------------------------------------+${c_off}"
   echo
   echo -e "  Container   : ${SERVICE} ($(docker inspect -f '{{.State.Status}}' "$SERVICE" 2>/dev/null))"
   echo -e "  Backends    : ${c_bld}${backends# }${c_off}"
@@ -437,7 +426,7 @@ print_summary() {
     echo
     echo "$ca"
   else
-    warn "Server CA not ready yet â€” run:"
+    warn "Server CA not ready yet — run:"
     echo -e "  ${c_dim}cat ${cert_file}${c_off}"
   fi
   echo
@@ -447,20 +436,22 @@ print_summary() {
 }
 
 install_cli_wrapper() {
-  # Convenience: `hpx-node status` after install
+  mkdir -p "$INSTALL_DIR"
+  if [ -f "$0" ] && [ -r "$0" ] && [[ "$0" != *"bash"* ]]; then
+    cp -f "$0" "$INSTALL_DIR/hpx-node.sh" 2>/dev/null || true
+  fi
+  # Always keep a fetchable local copy after curl|bash installs
+  if [ ! -s "$INSTALL_DIR/hpx-node.sh" ]; then
+    curl -fsSL "${REPO}/raw/main/scripts/install.sh" -o "$INSTALL_DIR/hpx-node.sh" 2>/dev/null || true
+  fi
+  chmod +x "$INSTALL_DIR/hpx-node.sh" 2>/dev/null || true
   cat > "/usr/local/bin/${SERVICE}" <<EOF
 #!/usr/bin/env bash
-exec bash -c "\$(curl -fsSL ${PANEL_REPO}/raw/main/scripts/hpx-node.sh 2>/dev/null || cat ${INSTALL_DIR}/hpx-node.sh 2>/dev/null)" @ "\$@"
+if [ -f "${INSTALL_DIR}/hpx-node.sh" ]; then
+  exec bash "${INSTALL_DIR}/hpx-node.sh" "\$@"
+fi
+exec bash -c "\$(curl -fsSL ${REPO}/raw/main/scripts/install.sh)" @ "\$@"
 EOF
-  # Prefer local copy when present (offline-safe)
-  if [ -f "$0" ] && [ -r "$0" ]; then
-    cp -f "$0" "$INSTALL_DIR/hpx-node.sh" 2>/dev/null || true
-    chmod +x "$INSTALL_DIR/hpx-node.sh" 2>/dev/null || true
-    cat > "/usr/local/bin/${SERVICE}" <<EOF
-#!/usr/bin/env bash
-exec bash "${INSTALL_DIR}/hpx-node.sh" "\$@"
-EOF
-  fi
   chmod +x "/usr/local/bin/${SERVICE}" 2>/dev/null || true
 }
 
@@ -468,7 +459,7 @@ run_install() {
   require_root
   : > "$STEP_LOG"
   [ -z "$API_KEY" ] && API_KEY="$(gen_uuid)"
-  local quiet_note=""; [ "${QUIET:-0}" = "1" ] && quiet_note=" â€” quiet mode"
+  local quiet_note=""; [ "${QUIET:-0}" = "1" ] && quiet_note=" — quiet mode"
 
   banner
   features_panel
@@ -480,16 +471,16 @@ run_install() {
   if [ "$BUILD_FROM_SOURCE" = 0 ]; then
     if ! run_step_live_soft "Pulling image ${IMAGE}" pull_image; then
       if [ "$IMAGE" != "$FALLBACK_IMAGE" ]; then
-        warn "primary image failed â€” trying fallback ${FALLBACK_IMAGE}"
+        warn "primary image failed — trying fallback ${FALLBACK_IMAGE}"
         IMAGE="$FALLBACK_IMAGE"
         run_step "Rewriting compose for fallback" write_compose
         if ! run_step_live_soft "Pulling fallback ${IMAGE}" pull_image; then
-          warn "pull failed â€” building from source (takes a few minutes)"
+          warn "pull failed — building from source (takes a few minutes)"
           BUILD_FROM_SOURCE=1
           run_step "Rewriting compose for build" write_compose
         fi
       else
-        warn "image pull failed â€” building from source"
+        warn "image pull failed — building from source"
         BUILD_FROM_SOURCE=1
         run_step "Rewriting compose for build" write_compose
       fi
@@ -503,7 +494,9 @@ run_install() {
 install_command() {
   parse_install_args "$@"
   require_root
-  if [ "$ASSUME_YES" -eq 1 ]; then run_install; else menu_command; fi
+  # `install` always installs. Menu is only when no command is given.
+  # -y skips confirmations inside run_install paths that ask.
+  run_install
 }
 
 update_command() {
@@ -521,7 +514,7 @@ update_command() {
 }
 
 need_compose() {
-  detect_compose || { warn "Docker / compose not found â€” install first."; return 1; }
+  detect_compose || { warn "Docker / compose not found — install first."; return 1; }
   [ -f "$COMPOSE_FILE" ] || { warn "no install at $COMPOSE_FILE"; return 1; }
 }
 restart_command()  { require_root; need_compose || return 0; dc restart; log "restarted"; }

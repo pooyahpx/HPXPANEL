@@ -1,0 +1,125 @@
+import logging
+from copy import copy
+from urllib.parse import unquote
+
+import click
+from uvicorn.config import LOGGING_CONFIG
+from uvicorn.logging import AccessFormatter, ColourizedFormatter, DefaultFormatter
+
+from config import database_settings, logging_settings
+
+
+class CustomLoggingFormatter(DefaultFormatter):
+    def formatMessage(self, record: logging.LogRecord) -> str:
+        recordcopy = copy(record)
+        recordcopy.__dict__["nameprefix"] = click.style(record.name.capitalize(), fg="blue")
+        return super().formatMessage(recordcopy)
+
+
+class CustomAccessFormatter(AccessFormatter):
+    def formatMessage(self, record: logging.LogRecord) -> str:
+        recordcopy = copy(record)
+
+        try:
+            client_addr, method, full_path, http_version, status_code = recordcopy.args  # type: ignore[misc]
+        except Exception:
+            return super().formatMessage(record)
+
+        status_code = self.get_status_code(int(status_code))  # type: ignore[arg-type]
+        request_line = f"{method} {full_path} HTTP/{http_version}"
+        if self.use_colors:
+            request_line = click.style(request_line, bold=True)
+
+        recordcopy.__dict__.update(
+            {
+                "client_addr": client_addr,
+                "request_line": request_line,
+                "status_code": status_code,
+                "process_time": getattr(recordcopy, "process_time", "-"),
+            }
+        )
+
+        return ColourizedFormatter.formatMessage(self, recordcopy)
+
+
+class RequireProcessTimeFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        return getattr(record, "process_time", None) is not None
+
+
+LOGGING_CONFIG["formatters"]["custom"] = {
+    "()": CustomLoggingFormatter,
+    "fmt": "%(levelprefix)s %(asctime)s - %(nameprefix)s - %(message)s",
+    "use_colors": None,
+}
+LOGGING_CONFIG["handlers"]["custom"] = {
+    "class": LOGGING_CONFIG["handlers"]["default"]["class"],
+    "formatter": "custom",
+    "stream": LOGGING_CONFIG["handlers"]["default"]["stream"],
+}
+
+LOGGING_CONFIG["formatters"]["default"]["fmt"] = "%(levelprefix)s %(asctime)s - %(message)s"
+LOGGING_CONFIG["formatters"]["access"]["fmt"] = (
+    '%(levelprefix)s %(asctime)s - %(client_addr)s - "%(request_line)s" %(status_code)s - %(process_time)s'
+)
+LOGGING_CONFIG["formatters"]["access"]["()"] = CustomAccessFormatter
+
+LOGGING_CONFIG.setdefault("filters", {})
+LOGGING_CONFIG["filters"]["require_process_time"] = {"()": RequireProcessTimeFilter}
+LOGGING_CONFIG["loggers"]["uvicorn.access"].setdefault("filters", [])
+LOGGING_CONFIG["loggers"]["uvicorn.access"]["filters"].append("require_process_time")
+
+LOGGING_CONFIG["loggers"]["uvicorn"]["level"] = logging_settings.level
+LOGGING_CONFIG["loggers"]["uvicorn.error"]["level"] = logging_settings.level
+LOGGING_CONFIG["loggers"]["uvicorn.access"]["level"] = logging_settings.level
+
+if logging_settings.save_to_file:
+    if logging_settings.rotation_enabled:
+        LOGGING_CONFIG["handlers"]["file"] = {
+            "class": "logging.handlers.TimedRotatingFileHandler",
+            "formatter": "default",
+            "filename": logging_settings.file_path,
+            "interval": logging_settings.rotation_interval,
+            "when": logging_settings.rotation_unit,
+            "backupCount": logging_settings.backup_count,
+        }
+    else:
+        LOGGING_CONFIG["handlers"]["file"] = {
+            "class": "logging.handlers.RotatingFileHandler",
+            "formatter": "default",
+            "filename": logging_settings.file_path,
+            "maxBytes": logging_settings.max_bytes,
+            "backupCount": logging_settings.backup_count,
+        }
+    LOGGING_CONFIG["loggers"]["uvicorn"]["handlers"].append("file")
+    LOGGING_CONFIG["loggers"]["uvicorn.access"]["handlers"].append("file")
+
+
+def get_logger(name: str = "uvicorn.error") -> logging.Logger:
+    if not LOGGING_CONFIG["loggers"].get(name):
+        handlers = ["custom"]
+        if logging_settings.save_to_file:
+            handlers.append("file")
+        LOGGING_CONFIG["loggers"][name] = {
+            "handlers": handlers,
+            "level": LOGGING_CONFIG["loggers"]["uvicorn"]["level"],
+        }
+        logging.config.dictConfig(LOGGING_CONFIG)
+
+    logger = logging.getLogger(name)
+    return logger
+
+
+if database_settings.echo_queries:
+    _ = get_logger("sqlalchemy.engine")
+
+
+class EndpointFilter(logging.Filter):
+    def __init__(self, excluded_endpoints: list[str]):
+        self.excluded_endpoints = excluded_endpoints
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if record.args and len(record.args) >= 2:
+            path = unquote(record.args[2])
+            return path not in self.excluded_endpoints
+        return True

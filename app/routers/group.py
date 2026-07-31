@@ -1,0 +1,291 @@
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, status
+
+from app.db import AsyncSession, get_db
+from app.models.admin import AdminDetails
+from app.models.group import (
+    BulkGroup,
+    BulkGroupsActionResponse,
+    BulkGroupSelection,
+    GroupCreate,
+    GroupListQuery,
+    GroupModify,
+    GroupResponse,
+    GroupSimpleListQuery,
+    GroupsResponse,
+    GroupsSimpleResponse,
+    RemoveGroupsResponse,
+)
+from app.operation import OperatorType
+from app.operation.group import GroupOperation
+from app.utils import responses
+
+from .authentication import require_permission
+from .dependencies import get_group_list_query, get_group_simple_list_query
+
+router = APIRouter(prefix="/api/group", tags=["Groups"], responses={401: responses._401, 403: responses._403})
+group_operator = GroupOperation(OperatorType.API)
+
+
+@router.post(
+    "",
+    response_model=GroupResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create a new group",
+    description="Creates a new group in the system. Only authorized administrators can create groups.",
+)
+async def create_group(
+    new_group: GroupCreate,
+    db: AsyncSession = Depends(get_db),
+    admin: AdminDetails = Depends(require_permission("groups", "create")),
+):
+    """
+    Create a new group in the system.
+
+    The group model has the following properties:
+    - **name**: String (3-64 chars) containing only a-z and 0-9
+    - **inbound_tags**: List of inbound tags that this group can access
+    - **is_disabled**: Boolean flag to disable/enable the group
+
+    Returns:
+        GroupResponse: The created group data with additional fields:
+            - **id**: Unique identifier for the group
+            - **total_users**: Number of users in this group
+
+    Raises:
+        401: Unauthorized - If not authenticated
+        403: Forbidden - If not authorized admin
+    """
+    return await group_operator.create_group(db, new_group, admin)
+
+
+@router.get(
+    "s",
+    response_model=GroupsResponse,
+    summary="List all groups",
+    description="Retrieves a paginated list of all groups in the system. Requires admin authentication.",
+)
+async def get_all_groups(
+    query: Annotated[GroupListQuery, Depends(get_group_list_query)],
+    db: AsyncSession = Depends(get_db),
+    admin: AdminDetails = Depends(require_permission("groups", "read")),
+):
+    """
+    Retrieve a list of all groups with optional pagination.
+
+    The response includes:
+    - **groups**: List of GroupResponse objects containing:
+        - **id**: Unique identifier
+        - **name**: Group name
+        - **inbound_tags**: List of allowed inbound tags
+        - **is_disabled**: Group status
+        - **total_users**: Number of users in group
+    - **total**: Total count of groups
+
+    Returns:
+        GroupsResponse: List of groups and total count
+
+    Raises:
+        401: Unauthorized - If not authenticated
+    """
+    return await group_operator.get_all_groups(db, query, admin)
+
+
+@router.get(
+    "s/simple",
+    response_model=GroupsSimpleResponse,
+    summary="Get lightweight group list",
+    description="Returns only id and name for groups. Optimized for dropdowns and autocomplete.",
+)
+async def get_groups_simple(
+    query: Annotated[GroupSimpleListQuery, Depends(get_group_simple_list_query)],
+    db: AsyncSession = Depends(get_db),
+    admin: AdminDetails = Depends(require_permission("groups", "read_simple")),
+):
+    """Get lightweight group list with only id and name"""
+    return await group_operator.get_groups_simple(db=db, query=query, admin=admin)
+
+
+@router.get(
+    "/{group_id}",
+    response_model=GroupResponse,
+    summary="Get group details",
+    description="Retrieves detailed information about a specific group by its ID.",
+    responses={404: responses._404},
+)
+async def get_group(
+    group_id: int,
+    db: AsyncSession = Depends(get_db),
+    admin: AdminDetails = Depends(require_permission("groups", "read")),
+):
+    """
+    Get a specific group by its **ID**.
+
+    The response includes:
+    - **id**: Unique identifier
+    - **name**: Group name (3-64 chars, a-z, 0-9)
+    - **inbound_tags**: List of allowed inbound tags
+    - **is_disabled**: Group status
+    - **total_users**: Number of users in group
+
+    Returns:
+        GroupResponse: The requested group data
+
+    Raises:
+        404: Not Found - If group doesn't exist
+    """
+    return await group_operator._get_group_with_access(db, group_id, admin)
+
+
+@router.put(
+    "/{group_id}",
+    response_model=GroupResponse,
+    summary="Modify group",
+    description="Updates an existing group's information. Only authorized administrators can modify groups.",
+    responses={404: responses._404},
+)
+async def modify_group(
+    group_id: int,
+    modified_group: GroupModify,
+    db: AsyncSession = Depends(get_db),
+    admin: AdminDetails = Depends(require_permission("groups", "update")),
+):
+    """
+    Modify an existing group's information.
+
+    The group model can be modified with:
+    - **name**: String (3-64 chars) containing only a-z and 0-9
+    - **inbound_tags**: List of inbound tags that this group can access
+    - **is_disabled**: Boolean flag to disable/enable the group
+
+    Returns:
+        GroupResponse: The modified group data with additional fields:
+            - **id**: Unique identifier for the group
+            - **total_users**: Number of users in this group
+
+    Raises:
+        401: Unauthorized - If not authenticated
+        403: Forbidden - If not authorized admin
+        404: Not Found - If group doesn't exist
+    """
+    return await group_operator.modify_group(db, group_id, modified_group, admin)
+
+
+@router.delete(
+    "/{group_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Remove group",
+    description="Deletes a group from the system. Only authorized administrators can delete groups.",
+    responses={404: responses._404},
+)
+async def remove_group(
+    group_id: int,
+    db: AsyncSession = Depends(get_db),
+    admin: AdminDetails = Depends(require_permission("groups", "delete")),
+):
+    """
+    Remove a group by its **ID**.
+
+    Returns:
+        dict: Empty dictionary on successful deletion
+
+    Raises:
+        401: Unauthorized - If not authenticated
+        403: Forbidden - If not authorized admin
+        404: Not Found - If group doesn't exist
+    """
+    await group_operator.remove_group(db, group_id, admin)
+    return {}
+
+
+@router.post(
+    "s/bulk/add",
+    summary="Bulk add groups to users",
+    response_description="Success confirmation",
+)
+async def bulk_add_groups_to_users(
+    bulk_group: BulkGroup,
+    db: AsyncSession = Depends(get_db),
+    _: AdminDetails = Depends(require_permission("groups", "update")),
+):
+    """
+    Bulk assign groups to multiple users, users under specific admins, or all users.
+
+    - **group_ids**: List of group IDs to add (required)
+    - **users**: Optional list of user IDs to assign the groups to
+    - **admins**: Optional list of admin IDs — their users will be targeted
+
+    Notes:
+    - If neither 'users' nor 'admins' are provided, groups will be added to *all users*
+    - Existing user-group associations will be ignored (no duplication)
+    - Returns list of affected users (those who received new group associations)
+    """
+    return await group_operator.bulk_add_groups(db, bulk_group)
+
+
+@router.post(
+    "s/bulk/remove",
+    summary="Bulk remove groups from users",
+    response_description="Success confirmation",
+)
+async def bulk_remove_users_from_groups(
+    bulk_group: BulkGroup,
+    db: AsyncSession = Depends(get_db),
+    _: AdminDetails = Depends(require_permission("groups", "update")),
+):
+    """
+    Bulk remove groups from multiple users, users under specific admins, or all users.
+
+    - **group_ids**: List of group IDs to remove (required)
+    - **users**: Optional list of user IDs to remove the groups from
+    - **admins**: Optional list of admin IDs — their users will be targeted
+
+    Notes:
+    - If neither 'users' nor 'admins' are provided, groups will be removed from *all users*
+    - Only existing user-group associations will be removed
+    - Returns list of affected users (those who had groups removed)
+    """
+    return await group_operator.bulk_remove_groups(db, bulk_group)
+
+
+@router.post(
+    "s/bulk/delete",
+    response_model=RemoveGroupsResponse,
+    responses={400: responses._400, 403: responses._403, 404: responses._404},
+)
+async def bulk_delete_groups(
+    bulk_groups: BulkGroupSelection,
+    db: AsyncSession = Depends(get_db),
+    admin: AdminDetails = Depends(require_permission("groups", "delete")),
+):
+    """Delete selected groups by ID."""
+    return await group_operator.bulk_remove_groups_by_id(db, bulk_groups, admin)
+
+
+@router.post(
+    "s/bulk/disable",
+    response_model=BulkGroupsActionResponse,
+    responses={400: responses._400, 403: responses._403, 404: responses._404},
+)
+async def bulk_disable_groups(
+    bulk_groups: BulkGroupSelection,
+    db: AsyncSession = Depends(get_db),
+    admin: AdminDetails = Depends(require_permission("groups", "update")),
+):
+    """Disable selected groups by ID."""
+    return await group_operator.bulk_set_groups_disabled(db, bulk_groups, admin, is_disabled=True)
+
+
+@router.post(
+    "s/bulk/enable",
+    response_model=BulkGroupsActionResponse,
+    responses={400: responses._400, 403: responses._403, 404: responses._404},
+)
+async def bulk_enable_groups(
+    bulk_groups: BulkGroupSelection,
+    db: AsyncSession = Depends(get_db),
+    admin: AdminDetails = Depends(require_permission("groups", "update")),
+):
+    """Enable selected groups by ID."""
+    return await group_operator.bulk_set_groups_disabled(db, bulk_groups, admin, is_disabled=False)

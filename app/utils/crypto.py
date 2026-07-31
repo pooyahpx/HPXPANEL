@@ -1,0 +1,137 @@
+import base64
+import binascii
+import hashlib
+import hmac
+
+from cryptography import x509
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import x25519
+
+
+def get_cert_SANs(cert: bytes):
+    cert = x509.load_pem_x509_certificate(cert, default_backend())
+    san_list = []
+    for extension in cert.extensions:
+        if isinstance(extension.value, x509.SubjectAlternativeName):
+            san = extension.value
+            for name in san:
+                san_list.append(name.value)
+    return san_list
+
+
+def add_base64_padding(b64_string: str) -> str:
+    """Adds missing Base64 padding if necessary."""
+    missing_padding = len(b64_string) % 4
+    return b64_string + ("=" * (4 - missing_padding)) if missing_padding else b64_string
+
+
+def get_x25519_public_key(private_key_b64: str) -> str:
+    """
+    Converts an X25519 private key (URL-safe Base64) into a public key (URL-safe Base64 format).
+
+    :param private_key_b64: The private key in URL-safe Base64 format (without padding).
+    :return: The corresponding public key as a URL-safe Base64 string (without padding).
+    """
+    try:
+        # Decode Base64 (URL-safe) Add padding if needed
+        private_key_bytes = base64.urlsafe_b64decode(add_base64_padding(private_key_b64))
+
+        # Ensure the private key is 32 bytes
+        if len(private_key_bytes) != 32:
+            raise ValueError("Invalid private key length. Must be 32 bytes after decoding.")
+
+        # Load the private key
+        private_key = x25519.X25519PrivateKey.from_private_bytes(private_key_bytes)
+
+        # Derive the public key
+        public_key = private_key.public_key()
+
+        # Convert the public key to bytes
+        public_key_bytes = public_key.public_bytes(
+            encoding=serialization.Encoding.Raw, format=serialization.PublicFormat.Raw
+        )
+
+        # Encode the public key as URL-safe Base64 (without padding)
+        public_key_b64 = base64.urlsafe_b64encode(public_key_bytes).decode().rstrip("=")
+
+        return public_key_b64
+
+    except ValueError, binascii.Error:
+        raise ValueError("Invalid private key.")
+
+
+def validate_wireguard_key(key_b64: str, field_name: str = "wireguard key") -> str:
+    try:
+        key_bytes = base64.b64decode(add_base64_padding(key_b64.strip()), validate=True)
+    except (ValueError, binascii.Error) as exc:
+        raise ValueError(f"Invalid {field_name}.") from exc
+
+    if len(key_bytes) != 32:
+        raise ValueError(f"Invalid {field_name}.")
+
+    return base64.b64encode(key_bytes).decode("ascii")
+
+
+def get_wireguard_public_key(private_key_b64: str) -> str:
+    normalized_private_key = validate_wireguard_key(private_key_b64, "wireguard private_key")
+    private_key_bytes = base64.b64decode(normalized_private_key, validate=True)
+    private_key = x25519.X25519PrivateKey.from_private_bytes(private_key_bytes)
+    public_key_bytes = private_key.public_key().public_bytes(
+        encoding=serialization.Encoding.Raw,
+        format=serialization.PublicFormat.Raw,
+    )
+    return base64.b64encode(public_key_bytes).decode("ascii")
+
+
+def generate_wireguard_keypair() -> tuple[str, str]:
+    private_key = x25519.X25519PrivateKey.generate()
+    private_key_bytes = private_key.private_bytes(
+        encoding=serialization.Encoding.Raw,
+        format=serialization.PrivateFormat.Raw,
+        encryption_algorithm=serialization.NoEncryption(),
+    )
+    public_key_bytes = private_key.public_key().public_bytes(
+        encoding=serialization.Encoding.Raw,
+        format=serialization.PublicFormat.Raw,
+    )
+    return (
+        base64.b64encode(private_key_bytes).decode("ascii"),
+        base64.b64encode(public_key_bytes).decode("ascii"),
+    )
+
+
+API_KEY_HASH_VERSION = "v1"
+API_KEY_SHA256_ALGORITHM = "sha256"
+API_KEY_LOOKUP_BYTES = 16
+
+
+def api_key_lookup_id(raw_api_key: str) -> str:
+    digest = hashlib.sha256(raw_api_key.encode("utf-8")).digest()[:API_KEY_LOOKUP_BYTES]
+    return base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
+
+
+def hash_api_key(raw_api_key: str) -> str:
+    lookup_id = api_key_lookup_id(raw_api_key)
+
+    hash_hex = _sha256_api_key_digest(raw_api_key)
+    return f"{API_KEY_HASH_VERSION}${lookup_id}${API_KEY_SHA256_ALGORITHM}${hash_hex}"
+
+
+def _sha256_api_key_digest(raw_api_key: str) -> str:
+    return hashlib.sha256(raw_api_key.encode("utf-8")).hexdigest()
+
+
+def verify_api_key(raw_api_key: str, stored_hash: str) -> bool:
+    parts = stored_hash.split("$")
+
+    if len(parts) != 4:
+        return False
+
+    version, lookup_id, algorithm, hash_hex = parts
+    if version != API_KEY_HASH_VERSION or algorithm != API_KEY_SHA256_ALGORITHM:
+        return False
+    if not hmac.compare_digest(lookup_id, api_key_lookup_id(raw_api_key)):
+        return False
+
+    return hmac.compare_digest(_sha256_api_key_digest(raw_api_key), hash_hex)

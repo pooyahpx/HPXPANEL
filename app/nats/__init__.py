@@ -1,0 +1,22 @@
+from config import nats_settings
+
+
+def is_nats_enabled() -> bool:
+    return nats_settings.enabled
+
+
+def get_nats_config():
+    return {
+        "url": nats_settings.url,
+    }
+
+
+def require_nats_if_multiworker(multi_worker: bool):
+    if multi_worker and not is_nats_enabled():
+        raise RuntimeError(
+            "NATS is required when running more than 1 worker. "
+            "Set NATS_ENABLED=1 and provide proper NATS configuration."
+        )
+
+
+__all__ = ["get_nats_config", "is_nats_enabled", "require_nats_if_multiworker"]

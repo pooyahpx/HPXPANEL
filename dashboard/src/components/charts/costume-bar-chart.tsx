@@ -1,0 +1,418 @@
+import { useEffect, useState, useCallback, useMemo } from 'react'
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, XAxis, YAxis, TooltipProps } from 'recharts'
+import { DateRange } from 'react-day-picker'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { type ChartConfig, ChartContainer, ChartTooltip } from '@/components/ui/chart'
+import { useTranslation } from 'react-i18next'
+import useDirDetection from '@/hooks/use-dir-detection'
+import { useChartViewType } from '@/hooks/use-chart-view-type'
+import { Period, type NodeUsageStat, type UserUsageStat, useGetAdminUsageById, useGetAdminUsageByUsername, useGetUsage } from '@/service/api'
+import { formatBytes } from '@/utils/formatByte'
+import { Skeleton } from '@/components/ui/skeleton'
+import { EmptyState } from './empty-state'
+import { BarChart3, Calendar, Download, Upload } from 'lucide-react'
+import AdminFilterCombobox from '@/components/common/admin-filter-combobox'
+import TimeSelector, { TRAFFIC_TIME_SELECTOR_SHORTCUTS } from './time-selector'
+import { TimeRangeSelector } from '@/components/common/time-range-selector'
+import {
+  formatTooltipDate,
+  pickStatsArray,
+  getChartQueryRangeFromShortcut,
+  getChartQueryRangeFromDateRange,
+  formatPeriodLabelForPeriod,
+  getXAxisIntervalForShortcut,
+  TrafficShortcutKey,
+} from '@/utils/chart-period-utils'
+
+type DataPoint = {
+  time: string
+  usage: number
+  _uplink: number
+  _downlink: number
+  _period_start: string
+}
+
+const chartConfig = {
+  usage: {
+    label: 'Traffic Usage (GB)',
+    color: 'hsl(var(--primary))',
+  },
+} satisfies ChartConfig
+
+interface CostumeBarChartProps {
+  nodeId?: number
+}
+
+const isNodeUsageStat = (point: NodeUsageStat | UserUsageStat): point is NodeUsageStat => 'uplink' in point && 'downlink' in point
+
+const getTrafficBytes = (point: NodeUsageStat | UserUsageStat) => {
+  if ('total_traffic' in point) {
+    return Number(point.total_traffic || 0)
+  }
+  return Number(point.uplink || 0) + Number(point.downlink || 0)
+}
+
+const getDirectionalTraffic = (point: NodeUsageStat | UserUsageStat) => {
+  if (isNodeUsageStat(point) && !('total_traffic' in point)) {
+    return {
+      uplink: Number(point.uplink || 0),
+      downlink: Number(point.downlink || 0),
+    }
+  }
+
+  return {
+    uplink: 0,
+    downlink: 0,
+  }
+}
+
+function CustomBarTooltip({ active, payload, period }: TooltipProps<number, string> & { period: Period }) {
+  const { t, i18n } = useTranslation()
+  if (!active || !payload || !payload.length) return null
+
+  const data = payload[0].payload as DataPoint
+  const formattedDate = data._period_start ? formatTooltipDate(data._period_start, period, i18n.language) : data.time
+  const isRTL = i18n.language === 'fa'
+  const hasDirectionalTraffic = (data._uplink || 0) > 0 || (data._downlink || 0) > 0
+
+  return (
+    <div className={`border-border bg-background min-w-[140px] rounded border p-2 text-[11px] shadow ${isRTL ? 'text-right' : 'text-left'}`} dir={isRTL ? 'rtl' : 'ltr'}>
+      <div className={`mb-1.5 text-[11px] font-semibold opacity-70 ${isRTL ? 'text-right' : 'text-center'}`}>
+        <span dir="ltr" className="inline-block">
+          {formattedDate}
+        </span>
+      </div>
+      <div className={`text-muted-foreground mb-1.5 text-[11px] ${isRTL ? 'text-right' : 'text-center'}`}>
+        <span>{t('statistics.totalUsage', { defaultValue: 'Total' })}: </span>
+        <span dir="ltr" className="inline-block font-mono">
+          {data.usage} GB
+        </span>
+      </div>
+      {hasDirectionalTraffic && (
+        <div className="flex flex-col gap-1">
+          <div className={`text-muted-foreground flex items-center gap-1 text-[10px] ${isRTL ? 'flex-row-reverse' : 'flex-row'}`}>
+            <Upload className="h-3 w-3 flex-shrink-0" />
+            <span dir="ltr" className="inline-block font-mono">
+              {formatBytes(data._uplink)}
+            </span>
+            <span className="mx-1 opacity-60">|</span>
+            <Download className="h-3 w-3 flex-shrink-0" />
+            <span dir="ltr" className="inline-block font-mono">
+              {formatBytes(data._downlink)}
+            </span>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+export function CostumeBarChart({ nodeId }: CostumeBarChartProps) {
+  const [selectedAdmin, setSelectedAdmin] = useState<string>('all')
+  const [selectedAdminId, setSelectedAdminId] = useState<number | null>(null)
+  const [selectedTime, setSelectedTime] = useState<TrafficShortcutKey>('1w')
+  const [showCustomRange, setShowCustomRange] = useState(false)
+  const [customRange, setCustomRange] = useState<DateRange | undefined>(undefined)
+  const [windowWidth, setWindowWidth] = useState<number>(() => (typeof window !== 'undefined' ? window.innerWidth : 1024))
+
+  const { t, i18n } = useTranslation()
+  const dir = useDirDetection()
+  const chartViewType = useChartViewType()
+  const shouldUseNodeUsage = selectedAdmin === 'all'
+
+  const activeQueryRange = useMemo(() => {
+    if (showCustomRange && customRange?.from && customRange?.to) {
+      return getChartQueryRangeFromDateRange(customRange, selectedTime)
+    }
+
+    return getChartQueryRangeFromShortcut(selectedTime, new Date(), { minuteForOneHour: true })
+  }, [showCustomRange, customRange, selectedTime])
+
+  const activePeriod = activeQueryRange.period
+
+  const nodeUsageParams = useMemo(
+    () => ({
+      period: activePeriod,
+      start: activeQueryRange.startDate,
+      end: activeQueryRange.endDate,
+      ...(nodeId !== undefined ? { node_id: nodeId } : {}),
+    }),
+    [activePeriod, activeQueryRange.startDate, activeQueryRange.endDate, nodeId],
+  )
+
+  const adminUsageParams = useMemo(
+    () => ({
+      period: activePeriod,
+      start: activeQueryRange.startDate,
+      end: activeQueryRange.endDate,
+      ...(nodeId !== undefined ? { node_id: nodeId } : {}),
+    }),
+    [activePeriod, activeQueryRange.startDate, activeQueryRange.endDate, nodeId],
+  )
+
+  const {
+    data: nodeUsageData,
+    isLoading: isLoadingNodeUsage,
+    error: nodeUsageError,
+  } = useGetUsage(nodeUsageParams, {
+    query: {
+      enabled: shouldUseNodeUsage,
+      refetchInterval: 1000 * 60 * 5,
+    },
+  })
+
+  const {
+    data: adminUsageByIdData,
+    isLoading: isLoadingAdminUsageById,
+    error: adminUsageByIdError,
+  } = useGetAdminUsageById(selectedAdminId ?? 0, adminUsageParams, {
+    query: {
+      enabled: !shouldUseNodeUsage && selectedAdmin !== 'all' && selectedAdminId != null,
+      refetchInterval: 1000 * 60 * 5,
+    },
+  })
+
+  const {
+    data: adminUsageByUsernameData,
+    isLoading: isLoadingAdminUsageByUsername,
+    error: adminUsageByUsernameError,
+  } = useGetAdminUsageByUsername(selectedAdmin, adminUsageParams, {
+    query: {
+      enabled: !shouldUseNodeUsage && selectedAdmin !== 'all' && selectedAdminId == null,
+      refetchInterval: 1000 * 60 * 5,
+    },
+  })
+
+  const usageData = shouldUseNodeUsage ? nodeUsageData : selectedAdminId != null ? adminUsageByIdData : adminUsageByUsernameData
+  const isLoading = shouldUseNodeUsage ? isLoadingNodeUsage : selectedAdminId != null ? isLoadingAdminUsageById : isLoadingAdminUsageByUsername
+  const error = shouldUseNodeUsage ? nodeUsageError : selectedAdminId != null ? adminUsageByIdError : adminUsageByUsernameError
+
+  const statsArr = useMemo(() => pickStatsArray<NodeUsageStat | UserUsageStat>(usageData?.stats, nodeId !== undefined ? [String(nodeId), '-1'] : ['-1']), [usageData?.stats, nodeId])
+
+  const chartData = useMemo<DataPoint[]>(
+    () =>
+      statsArr.map(point => {
+        const usageBytes = getTrafficBytes(point)
+        const directionalTraffic = getDirectionalTraffic(point)
+
+        return {
+          time: formatPeriodLabelForPeriod(point.period_start, activePeriod, i18n.language),
+          usage: parseFloat((usageBytes / (1024 * 1024 * 1024)).toFixed(2)),
+          _uplink: directionalTraffic.uplink,
+          _downlink: directionalTraffic.downlink,
+          _period_start: point.period_start,
+        }
+      }),
+    [statsArr, activePeriod, i18n.language],
+  )
+
+  const totalUsage = useMemo(() => {
+    const total = statsArr.reduce((sum, point) => sum + getTrafficBytes(point), 0)
+    if (total <= 0) return null
+    return String(formatBytes(total, 2))
+  }, [statsArr])
+
+  const xAxisInterval = useMemo(() => {
+    if (showCustomRange && customRange?.from && customRange?.to) {
+      if (activePeriod === Period.hour || activePeriod === Period.minute) {
+        return Math.max(1, Math.floor(chartData.length / 8))
+      }
+
+      const daysDiff = Math.ceil(Math.abs(customRange.to.getTime() - customRange.from.getTime()) / (1000 * 60 * 60 * 24))
+      if (daysDiff > 30) {
+        return Math.max(1, Math.floor(chartData.length / 5))
+      }
+
+      if (daysDiff > 7) {
+        return Math.max(1, Math.floor(chartData.length / 8))
+      }
+
+      return 0
+    }
+
+    if (windowWidth < 500 && selectedTime === '1w') {
+      return chartData.length <= 4 ? 0 : Math.max(1, Math.floor(chartData.length / 4))
+    }
+
+    return getXAxisIntervalForShortcut(selectedTime, chartData.length, { minuteForOneHour: true })
+  }, [showCustomRange, customRange, activePeriod, chartData.length, selectedTime, windowWidth])
+
+  useEffect(() => {
+    const handleResize = () => {
+      setWindowWidth(window.innerWidth)
+    }
+
+    handleResize()
+    window.addEventListener('resize', handleResize)
+
+    return () => {
+      window.removeEventListener('resize', handleResize)
+    }
+  }, [])
+
+  const handleTimeSelect = useCallback((value: string) => {
+    setSelectedTime(value as TrafficShortcutKey)
+    setShowCustomRange(false)
+    setCustomRange(undefined)
+  }, [])
+
+  const handleCustomRangeChange = useCallback((range: DateRange | undefined) => {
+    setCustomRange(range)
+    if (range?.from && range?.to) {
+      setShowCustomRange(true)
+    }
+  }, [])
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-col items-stretch space-y-0 border-b p-0 xl:flex-row">
+        <div className="flex flex-1 flex-col gap-2 border-b px-4 py-3 xl:px-6 xl:py-4">
+          <div className="flex min-w-0 flex-col justify-center gap-1 pt-2">
+            <CardTitle className="mb-0.5 flex items-center gap-2">
+              <BarChart3 className="text-muted-foreground h-4 w-4 shrink-0" />
+              <span>{t('statistics.trafficUsage')}</span>
+            </CardTitle>
+            <CardDescription>{t('statistics.trafficUsageDescription')}</CardDescription>
+          </div>
+          <div className="flex w-full min-w-0 flex-wrap items-center gap-2">
+            <div className="flex w-full min-w-0 items-center gap-2 sm:w-auto sm:flex-none">
+              <TimeSelector selectedTime={selectedTime} setSelectedTime={handleTimeSelect} shortcuts={TRAFFIC_TIME_SELECTOR_SHORTCUTS} maxVisible={5} className="w-full sm:w-fit" />
+              <button
+                type="button"
+                aria-label="Custom Range"
+                className={`shrink-0 rounded border p-1 ${showCustomRange ? 'bg-muted' : ''}`}
+                onClick={() => {
+                  const next = !showCustomRange
+                  setShowCustomRange(next)
+                  if (!next) {
+                    setCustomRange(undefined)
+                  }
+                }}
+              >
+                <Calendar className="h-4 w-4" />
+              </button>
+            </div>
+            <AdminFilterCombobox
+              value={selectedAdmin}
+              onValueChange={username => {
+                setSelectedAdmin(username)
+                setSelectedAdminId(null)
+              }}
+              onAdminSelect={admin => setSelectedAdminId(admin?.id ?? null)}
+              className="w-full sm:w-[220px] sm:shrink-0"
+            />
+          </div>
+          {showCustomRange && (
+            <div className="flex w-full">
+              <TimeRangeSelector onRangeChange={handleCustomRangeChange} initialRange={customRange} className="w-full" />
+            </div>
+          )}
+        </div>
+        <div className="m-0 flex flex-col justify-center p-4 xl:border-l xl:p-5 xl:px-6">
+          <span className="text-muted-foreground text-xs">{t('statistics.usageDuringPeriod')}</span>
+          <span dir="ltr" className="text-foreground flex items-center justify-center gap-2 text-base sm:text-lg">
+            <BarChart3 className="text-muted-foreground h-4 w-4" />
+            {isLoading ? <Skeleton className="h-5 w-20" /> : totalUsage ? totalUsage : <span className="text-muted-foreground">—</span>}
+          </span>
+        </div>
+      </CardHeader>
+      <CardContent dir={dir} className="px-4 pt-4 sm:px-6 sm:pt-8">
+        {isLoading ? (
+          <div className="flex max-h-[300px] min-h-[150px] w-full items-center justify-center sm:max-h-[400px] sm:min-h-[200px]">
+            <Skeleton className="h-[250px] w-full sm:h-[300px]" />
+          </div>
+        ) : error ? (
+          <EmptyState type="error" className="max-h-[300px] min-h-[150px] sm:max-h-[400px] sm:min-h-[200px]" />
+        ) : (
+          <div className="mx-auto w-full max-w-7xl">
+            <ChartContainer dir="ltr" config={chartConfig} className="h-[200px] w-full overflow-x-auto sm:h-[320px] lg:h-[400px]">
+              {chartData.length > 0 ? (
+                chartViewType === 'area' ? (
+                  <AreaChart accessibilityLayer data={chartData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
+                    <defs>
+                      <linearGradient id="usageGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="var(--color-usage)" stopOpacity={0.4} />
+                        <stop offset="100%" stopColor="var(--color-usage)" stopOpacity={0.05} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid direction="ltr" vertical={false} />
+                    <XAxis
+                      direction="ltr"
+                      dataKey="time"
+                      tickLine={false}
+                      tickMargin={8}
+                      axisLine={false}
+                      interval={xAxisInterval}
+                      tick={{
+                        fill: 'hsl(var(--muted-foreground))',
+                        fontSize: 8,
+                        fontWeight: 500,
+                      }}
+                      minTickGap={5}
+                    />
+                    <YAxis
+                      direction="ltr"
+                      tickLine={false}
+                      axisLine={false}
+                      domain={[0, 'auto']}
+                      tickFormatter={value => formatBytes(Number(value || 0) * 1024 * 1024 * 1024, 0, true).toString()}
+                      tick={{
+                        fill: 'hsl(var(--muted-foreground))',
+                        fontSize: 8,
+                        fontWeight: 500,
+                      }}
+                      width={28}
+                      tickMargin={2}
+                    />
+                    <ChartTooltip cursor={false} content={props => <CustomBarTooltip {...(props as TooltipProps<number, string>)} period={activePeriod} />} />
+                    <Area dataKey="usage" type="monotone" fill="url(#usageGradient)" stroke="var(--color-usage)" strokeWidth={2} dot={false} />
+                  </AreaChart>
+                ) : (
+                  <BarChart accessibilityLayer data={chartData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
+                    <CartesianGrid direction="ltr" vertical={false} />
+                    <XAxis
+                      direction="ltr"
+                      dataKey="time"
+                      tickLine={false}
+                      tickMargin={8}
+                      axisLine={false}
+                      interval={xAxisInterval}
+                      tick={{
+                        fill: 'hsl(var(--muted-foreground))',
+                        fontSize: 8,
+                        fontWeight: 500,
+                      }}
+                      minTickGap={5}
+                    />
+                    <YAxis
+                      direction="ltr"
+                      tickLine={false}
+                      axisLine={false}
+                      tickFormatter={value => formatBytes(Number(value || 0) * 1024 * 1024 * 1024, 0, true).toString()}
+                      tick={{
+                        fill: 'hsl(var(--muted-foreground))',
+                        fontSize: 8,
+                        fontWeight: 500,
+                      }}
+                      width={28}
+                      tickMargin={2}
+                    />
+                    <ChartTooltip cursor={false} content={props => <CustomBarTooltip {...(props as TooltipProps<number, string>)} period={activePeriod} />} />
+                    <Bar dataKey="usage" fill="var(--color-usage)" radius={6} />
+                  </BarChart>
+                )
+              ) : (
+                <EmptyState
+                  type="no-data"
+                  title={t('statistics.noDataInRange')}
+                  description={t('statistics.noDataInRangeDescription')}
+                  className="max-h-[300px] min-h-[150px] sm:max-h-[400px] sm:min-h-[200px]"
+                />
+              )}
+            </ChartContainer>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}

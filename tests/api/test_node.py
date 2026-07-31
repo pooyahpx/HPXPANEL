@@ -361,7 +361,10 @@ async def test_core_users_only_excludes_admins_with_blocking_sync_roles(monkeypa
     monkeypatch.setattr(
         node_user_module,
         "_serialize_user_for_node",
-        lambda id, user_settings, inbounds, allowed_protocols=None: {"id": id, "inbounds": inbounds},
+        lambda id, user_settings, inbounds, allowed_protocols=None, ip_limit=None, speed_limit=None: {
+            "id": id,
+            "inbounds": inbounds,
+        },
     )
 
     async with TestSession() as session:

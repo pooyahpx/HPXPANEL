@@ -849,9 +849,8 @@ def test_user_subscriptions(access_token):
             assert response.status_code == status.HTTP_200_OK
             if usf == "":
                 assert response.headers["content-type"].startswith("text/html")
-                assert "Readable Pixel" in response.text
                 assert "HPXPANEL" in response.text
-                assert "Subscription access" in response.text
+                assert "User dashboard" in response.text
                 assert user["username"] in response.text
     finally:
         delete_user(access_token, user["username"])

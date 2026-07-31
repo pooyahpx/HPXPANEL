@@ -74,7 +74,7 @@ ssh -L 8000:localhost:8000 user@serverip
 ## راه‌اندازی owner
 
 ```bash
-hpxpanel cli generate-temp-key
+hpxpanel cli forge-seal
 hpxpanel --help
 ```
 

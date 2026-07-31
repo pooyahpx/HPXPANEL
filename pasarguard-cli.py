@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
-PasarGuard CLI Wrapper
-This script provides a simple entry point for the PasarGuard CLI.
+HPXPANEL CLI entrypoint (container binary name kept for compose compatibility).
 """
 
 import sys
@@ -17,7 +16,7 @@ try:
     app()
 except ImportError as e:
     print(f"Error importing CLI: {e}")
-    print("Make sure you're running this from the PasarGuard project directory.")
+    print("Make sure you're running this from the HPXPANEL project directory.")
     sys.exit(1)
 except Exception as e:
     print(f"Error running CLI: {e}")

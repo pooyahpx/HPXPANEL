@@ -1,7 +1,5 @@
 """
-PasarGuard CLI Package
-
-A modern, type-safe CLI built with Typer for managing PasarGuard instances.
+HPXPANEL CLI package — Typer + Rich control-plane commands.
 """
 
 from pydantic import ValidationError

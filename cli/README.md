@@ -1,43 +1,27 @@
-# PasarGuard CLI
+# HPXPANEL CLI
 
-A modern, type-safe command-line interface for managing PasarGuard, built with Typer. PasarGuard supports both [Xray-core](https://github.com/XTLS/Xray-core) and [WireGuard](https://www.wireguard.com/).
+Control-plane CLI for HPXPANEL — built with Typer + Rich.
 
-## Features
-
--   🎯 Type-safe CLI with rich output
--   🔒 One-time temp key generation for owner setup
--   ⌨️ Simple project-root and installed-service usage
-
-## Installation
-
-The CLI is included with PasarGuard and can be used directly:
+## Commands
 
 ```bash
-PasarGuard cli --help
+# Forge a one-time owner seal (Owner Access on the login page)
+hpxpanel cli forge-seal
 
-# Or from the project root
-uv run PasarGuard-cli.py --help
-```
-
-## Usage
-
-### General Commands
-
-```bash
 # Show version
-pasarguard cli version
+hpxpanel cli version
 
-# Generate a one-time temp key for owner setup
-pasarguard cli generate-temp-key
-
-# Show help
-pasarguard cli --help
+# Help
+hpxpanel cli --help
 ```
 
-### Owner Setup
+## Owner Access
 
-Admin management is handled from the dashboard. For owner setup, reset, delete, or upgrade operations, generate a one-time temp key and use it on the dashboard login page.
+1. Run `hpxpanel cli forge-seal` on the panel host
+2. Copy the **SEAL** from the panel output
+3. Open the dashboard login → **Owner access**
+4. Paste the seal to create / promote / reset / delete the owner
 
-```bash
-pasarguard cli generate-temp-key
-```
+The seal is valid for **5 minutes** and burns after a single use.
+
+`generate-temp-key` still works as a hidden legacy alias for `forge-seal`.

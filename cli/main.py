@@ -1,31 +1,55 @@
 #!/usr/bin/env python3
-"""PasarGuard CLI"""
+"""HPXPANEL CLI"""
+
+from __future__ import annotations
+
+import os
+import sys
 
 import typer
 
 from cli import console
-from cli.admin import generate_temp_key
+from cli.admin import forge_owner_seal
+
+# Installer sets this so help shows `hpxpanel cli` instead of the container binary name.
+if prog := os.environ.get("CLI_PROG_NAME"):
+    sys.argv[0] = prog
 
 app = typer.Typer(
-    name="PasarGuard",
-    help="PasarGuard CLI",
+    name="HPXPANEL",
+    help="[bold cyan]HPXPANEL[/bold cyan] control-plane CLI — seals, ops, edge management.",
     add_completion=False,
     rich_markup_mode="rich",
+    no_args_is_help=True,
 )
 
 
-@app.command("generate-temp-key")
+@app.command("forge-seal")
+def cmd_forge_seal():
+    """
+    Forge a one-time [bold cyan]owner seal[/bold cyan] for login → Owner Access.
+
+    Use it to create, promote, reset, or delete the owner account.
+    """
+    forge_owner_seal()
+
+
+@app.command("generate-temp-key", hidden=True)
 def cmd_generate_temp_key():
-    """Generate a one-time temp key for owner setup (create/reset/delete)."""
-    generate_temp_key()
+    """Legacy alias for [cyan]forge-seal[/cyan]."""
+    forge_owner_seal()
 
 
 @app.command()
 def version():
-    """Show PasarGuard version."""
+    """Show HPXPANEL version."""
     from app import __version__
 
-    console.print(f"[bold blue]PasarGuard[/bold blue] version [bold green]{__version__}[/bold green]")
+    console.print(
+        f"[bold cyan]HPXPANEL[/bold cyan]  "
+        f"[dim]control plane[/dim]  "
+        f"v[bold green]{__version__}[/bold green]"
+    )
 
 
 if __name__ == "__main__":

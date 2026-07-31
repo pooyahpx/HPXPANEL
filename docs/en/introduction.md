@@ -49,7 +49,7 @@ Most panels stop at “create user → copy link.” HPXPANEL goes further:
 ## Quick start
 
 1. Install on a Linux server — see [Installation](/en/installation)
-2. Generate an owner temp key with the CLI
+2. Forge an owner seal with `hpxpanel cli forge-seal`
 3. Open the dashboard and create your owner account
 4. Configure Xray cores — see [Xray stack](/en/protocols/xray)
 5. Optionally enable native VPN — see [L2TP & IKEv2](/en/protocols/ipsec)

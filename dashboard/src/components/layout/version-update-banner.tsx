@@ -114,7 +114,7 @@ export function VersionUpdateBanner() {
   const handleCopyCommand = async (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    await copy('pasarguard update')
+    await copy('hpxpanel update')
     toast.success(t('usersTable.copied'))
   }
 
@@ -159,7 +159,7 @@ export function VersionUpdateBanner() {
                 onClick={handleCopyCommand}
                 title={t('copy')}
               >
-                pasarguard update
+                hpxpanel update
               </code>
             </div>
           </div>

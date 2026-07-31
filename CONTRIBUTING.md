@@ -1,202 +1,126 @@
-# Contribute to HPXPANEL
+# Contributing to HPXPANEL
 
-Thanks for considering contributing to **HPXPANEL**!
+**dev by hpx** — thanks for showing up.
 
-## 🙋 Questions
+HPXPANEL is a command-deck proxy ops console. Contributions should make the panel sharper for operators: clearer UX, stronger protocol coverage (Xray first, plus WireGuard / Hysteria2 / IPsec), and fewer 3am surprises in production.
 
-Please **don’t use GitHub Issues** only for casual questions. Prefer:
-
--   🗣️ GitHub Discussions / Issues: [pooyahpx/HPXPANEL](https://github.com/pooyahpx/HPXPANEL)
--   👨‍💻 Maintainer: [pooyahpx](https://github.com/pooyahpx)
-
-## 🐞 Reporting Issues
-
-When reporting a bug or issue, please include:
-
--   ✅ What you expected to happen
--   ❌ What actually happened (include server logs or browser errors)
--   ⚙️ Your `xray` JSON config and `.env` settings (censor sensitive info)
--   🔢 Your HPXPANEL version and Docker version (if applicable)
+Repo: [pooyahpx/HPXPANEL](https://github.com/pooyahpx/HPXPANEL)  
+Docs: [pooyahpx.github.io/HPXPANEL](https://pooyahpx.github.io/HPXPANEL/)  
+Maintainer: [pooyahpx](https://github.com/pooyahpx)
 
 ---
 
-# 🚀 Submitting a Pull Request
+## Before you open anything
 
-If there's no open issue for your idea, consider opening one for discussion **before submitting a PR**.
+| You want to… | Do this |
+| --- | --- |
+| Ask a quick question | Open a [GitHub Discussion / Issue](https://github.com/pooyahpx/HPXPANEL/issues) with context |
+| Report a bug | File an issue with the checklist below |
+| Ship a change | Branch → PR against `main` |
 
-You can contribute to any issue that:
-
--   Has no PR linked
--   Has no maintainer assigned
-
-No need to ask for permission!
-
-## 🔀 Branching Strategy
-
--   Prefer branching off of `main` (or the active development branch)
--   Keep `main` stable and production-ready
+Skip the formalities. If the PR is useful and clean, it gets reviewed.
 
 ---
 
-# 📁 Project Structure
+## Bug reports that actually help
+
+Please include:
+
+1. **What you tried to do**
+2. **What broke** (logs / browser console / screenshots)
+3. **Relevant config** — `.env` and core JSON with secrets redacted
+4. **Environment** — OS, HPXPANEL commit/tag, DB type, Docker or bare metal
+
+Vague “doesn’t work” reports get closed or asked for more detail.
+
+---
+
+## Pull requests
+
+- Prefer a linked issue for non-trivial changes
+- One concern per PR when possible
+- Match the existing command-deck UI language on frontend work (cobalt accents, readable density — no random redesigns)
+- Backend business logic belongs in `app/operation/` — keep routers thin
+- Don’t commit secrets, local `.env`, or giant unrelated lockfile churn
+
+### Branching
 
 ```text
-.
-├── app          # Backend code (FastAPI - Python)
-├── cli          # CLI code (Typer - Python)
-├── dashboard    # Frontend code (React Router - TypeScript)
-├── docs         # VitePress documentation
-└── tests        # API tests
+main   ← production-ready
+  └── your-feature-branch
+```
+
+Open PRs into `main` unless told otherwise.
+
+---
+
+## Repo map
+
+```text
+app/         FastAPI backend, ops layer, DB, routers
+cli/         Typer CLI
+dashboard/   React command-deck UI
+docs/        VitePress docs (EN / FA / RU)
+tests/       pytest API tests
 ```
 
 ---
 
-## ⚙️ Development Setup
+## Local setup
 
-The project uses [uv](https://github.com/astral-sh/uv) for Python dependency management and [bun](https://bun.sh/) for frontend dependencies.
-
-### 🐍 Backend Setup
-
-1. Install `uv` if you haven't already.
-2. Initialize the virtual environment and install dependencies:
-   ```bash
-   make setup
-   ```
-3. Run database migrations:
-   ```bash
-   make run-migration
-   ```
-4. Start the application:
-   ```bash
-   make run
-   ```
-
-### 💻 Frontend Setup
-
-1. Install `bun` if you haven't already.
-2. Install frontend dependencies:
-   ```bash
-   make install-front
-   ```
-
----
-
-## 🧠 Backend (FastAPI)
-
-The backend is built with **FastAPI** and **SQLAlchemy**:
-
--   **Pydantic models**: [`app/models/`](./app/models)
--   **Database structure**: [`app/db/`](./app/db)
-    -   SQLAlchemy models: [`app/db/models.py`](./app/db/models.py)
-    -   Database CRUD operations: [`app/db/crud/`](./app/db/crud)
-    -   Alembic migrations: [`app/db/migrations/`](./app/db/migrations)
--   **Core backend logic**: [`app/operation/`](./app/operation)
--   **API Routers**: [`app/routers/`](./app/routers)
-
-🧩 **Note**: Prefer keeping core backend business logic in the `app/operation` module so routes, DB access, and services stay separated.
-
-### 📘 API Docs (Swagger / ReDoc)
-
-Enable the `DOCS` flag in your `.env` file to access:
-
--   Swagger UI: http://localhost:8000/docs
--   ReDoc: http://localhost:8000/redoc
-
-### 🎯 Code Formatting & Linting
+Needs **uv** + **bun**.
 
 ```bash
-make check
-make format
-```
-
-### 🗃️ Database Migrations
-
-```bash
+# backend
+make setup
 make run-migration
-make check-migrations
-```
-
----
-
-## 💻 Frontend (React + Tailwind)
-
-> ⚠️ **We no longer upload pre-built frontend files.**
-
-The frontend lives in [`dashboard/`](./dashboard) and is built with:
-
--   **React Router 7 + TypeScript**
--   **Tailwind CSS + Shadcn UI**
--   **Orval** (API client generation)
-
-### 🔄 API Client Generation
-
-```bash
-make gen-api
-```
-
-### 🎯 Code Formatting
-
-```bash
-make fformat
-```
-
-### 🧩 Component Guidelines
-
--   Follow **Tailwind + Shadcn** best practices
--   Keep components **single-purpose**
--   Prioritize **readability** and **maintainability**
-
----
-
-## 🛠️ HPXPANEL CLI
-
-The CLI is built with [Typer](https://typer.tiangolo.com/).
-
--   Code: [`cli/`](./cli) and entrypoint [`pasarguard-cli.py`](./pasarguard-cli.py)
--   Run in development:
-    ```bash
-    make run-cli
-    ```
-
----
-
-## 📚 Docs
-
-```bash
-cd docs
-bun install
-bun run dev
-```
-
-Live docs: https://pooyahpx.github.io/HPXPANEL/
-
----
-
-## 🧪 Testing
-
-```bash
-make test
-```
-
----
-
-## 🐛 Debug Mode
-
-Set `DEBUG=true` in `.env`, then:
-
-```bash
-make install-front
 make run
+
+# frontend (other terminal / or via make)
+make install-front
 ```
 
-With `DEBUG=true`:
+API docs (set `DOCS=true` in `.env`):
 
-1. Backend runs with Uvicorn reload
-2. Frontend Vite dev server starts
-3. API client generation can stay in sync
+- http://localhost:8000/docs  
+- http://localhost:8000/redoc  
 
-In production (`DEBUG=false`), the backend serves `dashboard/build/` at `/dashboard/` (builds once if missing).
+Docs site:
+
+```bash
+cd docs && bun install && bun run dev
+```
+
+Debug mode: `DEBUG=true` in `.env` → backend reload + dashboard Vite.
 
 ---
 
-Questions? Open an issue on [pooyahpx/HPXPANEL](https://github.com/pooyahpx/HPXPANEL) — **dev by hpx**. Happy contributing! 🚀
+## Quality bar
+
+```bash
+make check      # backend lint
+make format     # backend format
+make fformat    # frontend format
+make gen-api    # regenerate Orval client after API changes
+make test       # pytest
+```
+
+Frontend: Tailwind + Shadcn, single-purpose components, no drive-by refactors.
+
+CLI: Typer app under `cli/` — run with `make run-cli`.
+
+---
+
+## What we care about most
+
+- **Xray stack** reliability (VLESS / VMess / Trojan / Shadowsocks / TLS / REALITY)
+- **IPsec** (L2TP / IKEv2) when native OS VPN is required
+- **Operator UX** — create-user wizard, IP Limiter, subscription delivery page
+- **Docs** that sound like HPXPANEL, not a generic panel clone
+
+If your change advances one of those, lead with that in the PR description.
+
+---
+
+Ship something useful.  
+**— hpx**

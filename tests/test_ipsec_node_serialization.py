@@ -37,3 +37,18 @@ def test_ipsec_user_serialization_reuses_ikev2_credentials_and_limits(protocol):
     assert user.proxies.ikev2.password == "native-password"
     assert user.ip_limit == 3
     assert user.speed_limit == 0
+
+
+def test_default_all_protocols_skips_missing_ipsec_credentials():
+    """When allowed_protocols is None (all protocols), missing IKEv2 must not abort sync."""
+    user = _serialize_user_for_node(
+        7,
+        {"vmess": {"id": "11111111-1111-1111-1111-111111111111"}},
+        ["tag-a"],
+        None,
+        ip_limit=2,
+    )
+
+    assert user.email == "7"
+    assert user.inbounds == ["tag-a"]
+    assert user.ip_limit == 2

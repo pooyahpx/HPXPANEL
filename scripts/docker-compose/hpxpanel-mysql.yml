@@ -1,0 +1,67 @@
+services:
+  hpxpanel:
+    image: ghcr.io/pooyahpx/hpxpanel:latest
+    restart: always
+    env_file: .env
+    network_mode: host
+    volumes:
+      - /var/lib/hpxpanel:/var/lib/hpxpanel
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  mysql:
+    image: mysql:lts
+    network_mode: host
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_ROOT_HOST: "%"
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    command:
+      - --mysqlx=OFF # Disables MySQL X Plugin to save resources if X Protocol isn't used
+      - --bind-address=127.0.0.1 # Restricts access to localhost for increased security
+      - --character_set_server=utf8mb4 # Sets UTF-8 character set for full Unicode support
+      - --collation_server=utf8mb4_unicode_ci # Defines collation for Unicode
+      - --host-cache-size=0 # Disables host cache to prevent DNS issues
+      - --innodb-open-files=1024 # Sets the limit for InnoDB open files
+      - --innodb-buffer-pool-size=256M # Allocates buffer pool size for InnoDB
+      - --general_log=0 # Disables general query log for lower disk usage
+      - --slow_query_log=1 # Enables slow query log for performance analysis
+      - --slow_query_log_file=/var/lib/mysql/slow.log # Logs slow queries for troubleshooting
+      - --long_query_time=2 # Defines slow query threshold as 2 seconds
+      - --skip-log-bin
+    volumes:
+      - /var/lib/mysql/hpxpanel:/var/lib/mysql
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mysqladmin",
+          "ping",
+          "-h",
+          "127.0.0.1",
+          "-u",
+          "${DB_USER}",
+          "--password=${DB_PASSWORD}",
+        ]
+      start_period: 5s
+      interval: 5s
+      timeout: 5s
+      retries: 55
+
+  phpmyadmin:
+    container_name: phpmyadmin
+    image: phpmyadmin:latest
+    restart: always
+    env_file: .env
+    network_mode: host
+    environment:
+      PMA_HOST: 127.0.0.1
+      APACHE_PORT: 8010
+      UPLOAD_LIMIT: 1024M
+    depends_on:
+      mysql:
+        condition: service_healthy

@@ -80,17 +80,17 @@
 
 **TimescaleDB (рекомендуется)**
 ```bash
-sudo bash -c "$(curl -fsSL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install --database timescaledb
+sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXPANEL/raw/main/scripts/hpxpanel.sh)" @ install --database timescaledb
 ```
 
 **SQLite**
 ```bash
-sudo bash -c "$(curl -fsSL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install
+sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXPANEL/raw/main/scripts/hpxpanel.sh)" @ install
 ```
 
 **MySQL / MariaDB / PostgreSQL**
 ```bash
-sudo bash -c "$(curl -fsSL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install --database mysql
+sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXPANEL/raw/main/scripts/hpxpanel.sh)" @ install --database mysql
 # --database mariadb | postgresql
 ```
 
@@ -98,9 +98,9 @@ sudo bash -c "$(curl -fsSL https://github.com/PasarGuard/scripts/raw/main/pasarg
 
 | | |
 | --- | --- |
-| Файлы | `/opt/pasarguard` |
-| Конфиг | `/opt/pasarguard/.env` |
-| Данные | `/var/lib/pasarguard` |
+| Файлы | `/opt/hpxpanel` |
+| Конфиг | `/opt/hpxpanel/.env` |
+| Данные | `/var/lib/hpxpanel` |
 | Дашборд | `https://YOUR_DOMAIN:8000/dashboard/` |
 
 Для продакшена нужен SSL. Быстрый тест без домена:
@@ -113,8 +113,8 @@ ssh -L 8000:localhost:8000 user@serverip
 Создание owner:
 
 ```bash
-pasarguard cli generate-temp-key
-pasarguard --help
+hpxpanel cli generate-temp-key
+hpxpanel --help
 ```
 
 ---

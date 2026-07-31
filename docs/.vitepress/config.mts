@@ -81,6 +81,17 @@ const ruSidebar = [
   },
 ]
 
+/** Map /en/foo ↔ /fa/foo ↔ /ru/foo (and root / → /en/) */
+function localePath(pathname: string, targetLocale: string) {
+  const clean = pathname.replace(/\/$/, '') || '/'
+  const stripped = clean.replace(/^\/(en|fa|ru)(?=\/|$)/, '') || '/'
+  const suffix = stripped === '/' ? '/' : stripped
+  if (targetLocale === 'root' || targetLocale === 'en') {
+    return suffix === '/' ? '/en/' : `/en${suffix}`
+  }
+  return suffix === '/' ? `/${targetLocale}/` : `/${targetLocale}${suffix}`
+}
+
 export default defineConfig({
   title: 'HPXPANEL',
   description: 'Command-deck proxy operations console — documentation',
@@ -103,12 +114,17 @@ export default defineConfig({
       message: 'dev by <a href="https://github.com/pooyahpx">hpx</a>',
       copyright: 'HPXPANEL documentation',
     },
+    i18nRouting(data, route, targetLocale) {
+      const path = route.path.replace(data.site.value.base, '/')
+      return localePath(path, targetLocale)
+    },
   },
 
   locales: {
-    root: {
+    en: {
       label: 'English',
       lang: 'en',
+      link: '/en/',
       themeConfig: {
         nav: [
           { text: 'Introduction', link: '/en/introduction' },
@@ -116,10 +132,7 @@ export default defineConfig({
           { text: 'Xray', link: '/en/protocols/xray' },
           { text: 'GitHub', link: 'https://github.com/pooyahpx/HPXPANEL' },
         ],
-        sidebar: {
-          '/en/': enSidebar,
-          '/': enSidebar,
-        },
+        sidebar: { '/en/': enSidebar },
         outline: { label: 'On this page' },
       },
     },
@@ -141,6 +154,7 @@ export default defineConfig({
         sidebarMenuLabel: 'منو',
         returnToTopLabel: 'بازگشت به بالا',
         docFooter: { prev: 'قبلی', next: 'بعدی' },
+        langMenuLabel: 'زبان',
       },
     },
     ru: {

@@ -4,10 +4,11 @@ import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { getAuthToken } from '@/utils/authStorage'
+import { DONATION_URL, REPO_URL } from '@/constants/Project'
 
 const DONATION_STORAGE_KEY = 'donation_popup_data'
 const FIRST_SHOW_DELAY = 10 * 60 * 1000 // 10 minutes in milliseconds
-const SECRET_SALT = 'pasarguard_donation_v1' // Simple salt for checksum
+const SECRET_SALT = 'hpxpanel_donation_v1' // Simple salt for checksum
 const MAX_TIMEOUT_MS = 2_147_483_647 // Browser timeout limit (~24.8 days)
 
 interface DonationData {
@@ -249,12 +250,12 @@ export default function DonationPopup() {
   }
 
   const handleDonate = () => {
-    window.open('https://donate.pasarguard.org/', '_blank', 'noopener,noreferrer')
+    window.open(DONATION_URL, '_blank', 'noopener,noreferrer')
     handleClose()
   }
 
   const handleGitHub = () => {
-    window.open('https://github.com/pooyahpx', '_blank', 'noopener,noreferrer')
+    window.open(REPO_URL, '_blank', 'noopener,noreferrer')
     handleClose()
   }
 

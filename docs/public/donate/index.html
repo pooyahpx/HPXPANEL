@@ -1,0 +1,561 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Donate · HPXPANEL</title>
+    <meta name="description" content="Support HPXPANEL development — command-deck proxy ops by hpx" />
+    <meta name="theme-color" content="#0ea5e9" />
+    <link rel="icon" href="./hpx-logo.svg" type="image/svg+xml" />
+    <style>
+      :root {
+        --bg: #070b14;
+        --bg-2: #0a1220;
+        --card: #0d1626;
+        --line: #1e2a3f;
+        --text: #f1f5f9;
+        --muted: #94a3b8;
+        --cyan: #0ea5e9;
+        --cyan-2: #38bdf8;
+        --cyan-soft: rgba(14, 165, 233, 0.12);
+        --ok: #34d399;
+        --radius: 16px;
+        --max: 720px;
+        --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      }
+
+      * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: var(--font);
+        color: var(--text);
+        background:
+          radial-gradient(900px 480px at 50% -10%, rgba(14, 165, 233, 0.18), transparent 55%),
+          radial-gradient(700px 400px at 100% 20%, rgba(2, 132, 199, 0.1), transparent 50%),
+          var(--bg);
+      }
+
+      a { color: var(--cyan-2); text-decoration: none; }
+      a:hover { text-decoration: underline; }
+
+      .wrap {
+        width: min(100% - 2rem, var(--max));
+        margin: 0 auto;
+        padding: 1.25rem 0 3rem;
+      }
+
+      header.top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-bottom: 2rem;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        color: inherit;
+        text-decoration: none;
+      }
+      .brand img {
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
+        box-shadow: 0 0 0 1px rgba(14, 165, 233, 0.35);
+      }
+      .brand strong { display: block; font-size: 1rem; letter-spacing: 0.02em; }
+      .brand span { display: block; color: var(--muted); font-size: 0.75rem; }
+
+      .tools { display: flex; gap: 0.5rem; align-items: center; }
+      .icon-btn {
+        appearance: none;
+        border: 1px solid var(--line);
+        background: var(--card);
+        color: var(--text);
+        border-radius: 10px;
+        width: 40px;
+        height: 40px;
+        cursor: pointer;
+        display: grid;
+        place-items: center;
+      }
+      .icon-btn:hover { border-color: var(--cyan); color: var(--cyan-2); }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        padding: 0.35rem 0.75rem;
+        border-radius: 999px;
+        background: var(--cyan-soft);
+        color: var(--cyan-2);
+        font-size: 0.8rem;
+        border: 1px solid rgba(14, 165, 233, 0.25);
+        margin-bottom: 1rem;
+      }
+
+      h1 {
+        font-size: clamp(1.8rem, 4vw, 2.4rem);
+        line-height: 1.15;
+        margin: 0 0 0.75rem;
+        letter-spacing: -0.02em;
+      }
+      h1 em {
+        font-style: normal;
+        color: var(--cyan-2);
+      }
+      .lead {
+        color: var(--muted);
+        font-size: 1.05rem;
+        margin: 0 0 1.25rem;
+        max-width: 36rem;
+      }
+
+      .cta {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.55rem;
+        width: 100%;
+        padding: 0.95rem 1.2rem;
+        border: 0;
+        border-radius: 14px;
+        background: linear-gradient(135deg, #0284c7, #0ea5e9 55%, #38bdf8);
+        color: #041018;
+        font-weight: 700;
+        font-size: 1rem;
+        cursor: pointer;
+        box-shadow: 0 12px 40px rgba(14, 165, 233, 0.25);
+        text-decoration: none;
+      }
+      .cta:hover { filter: brightness(1.05); text-decoration: none; color: #041018; }
+
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.65rem;
+        margin: 0.9rem 0 2rem;
+      }
+      .ghost {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.65rem 0.9rem;
+        border-radius: 12px;
+        border: 1px solid var(--line);
+        background: var(--card);
+        color: var(--text);
+        font-weight: 600;
+        font-size: 0.9rem;
+        text-decoration: none;
+      }
+      .ghost:hover { border-color: var(--cyan); text-decoration: none; }
+
+      section { margin-top: 1.75rem; }
+      section h2 {
+        font-size: 1.1rem;
+        margin: 0 0 0.85rem;
+        display: flex;
+        align-items: center;
+        gap: 0.45rem;
+      }
+
+      .card {
+        background: linear-gradient(180deg, rgba(14, 165, 233, 0.05), transparent 40%), var(--card);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 1rem;
+      }
+
+      .wallets { display: grid; gap: 0.75rem; }
+      .wallet {
+        display: grid;
+        gap: 0.55rem;
+        padding: 0.9rem;
+        border-radius: 14px;
+        border: 1px solid var(--line);
+        background: var(--bg-2);
+      }
+      .wallet-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 0.75rem;
+      }
+      .wallet-name { font-weight: 700; }
+      .wallet-tag {
+        font-size: 0.72rem;
+        color: var(--cyan-2);
+        background: var(--cyan-soft);
+        border-radius: 999px;
+        padding: 0.2rem 0.55rem;
+      }
+      .addr {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 0.78rem;
+        word-break: break-all;
+        color: var(--muted);
+        background: rgba(0,0,0,0.25);
+        border-radius: 10px;
+        padding: 0.65rem 0.75rem;
+        border: 1px solid var(--line);
+      }
+      .copy {
+        appearance: none;
+        border: 1px solid var(--line);
+        background: transparent;
+        color: var(--text);
+        border-radius: 10px;
+        padding: 0.55rem 0.8rem;
+        cursor: pointer;
+        font-weight: 600;
+        font-size: 0.85rem;
+      }
+      .copy:hover { border-color: var(--cyan); color: var(--cyan-2); }
+      .copy.ok { color: var(--ok); border-color: rgba(52, 211, 153, 0.45); }
+
+      .note {
+        margin-top: 0.75rem;
+        color: var(--muted);
+        font-size: 0.85rem;
+        line-height: 1.5;
+      }
+
+      .goals {
+        display: grid;
+        gap: 0.75rem;
+      }
+      .goal {
+        padding: 0.9rem 1rem;
+        border-radius: 14px;
+        border: 1px solid var(--line);
+        background: var(--bg-2);
+      }
+      .goal strong { display: block; margin-bottom: 0.35rem; }
+      .bar {
+        height: 8px;
+        border-radius: 999px;
+        background: #132033;
+        overflow: hidden;
+        margin: 0.55rem 0 0.35rem;
+      }
+      .bar > i {
+        display: block;
+        height: 100%;
+        width: var(--p, 0%);
+        background: linear-gradient(90deg, #0284c7, #38bdf8);
+      }
+      .meta { color: var(--muted); font-size: 0.8rem; }
+
+      .contrib {
+        display: grid;
+        gap: 0.55rem;
+      }
+      .person {
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        align-items: center;
+        padding: 0.75rem 0.85rem;
+        border-radius: 12px;
+        border: 1px solid var(--line);
+        background: var(--bg-2);
+      }
+      .person b { display: block; }
+      .person small { color: var(--muted); }
+      .amount { color: var(--cyan-2); font-weight: 700; white-space: nowrap; }
+
+      footer {
+        margin-top: 2.5rem;
+        padding-top: 1.25rem;
+        border-top: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 0.85rem;
+        text-align: center;
+      }
+
+      html[lang='fa'] body { font-family: Tahoma, 'Segoe UI', sans-serif; }
+      html[lang='fa'] .wrap { text-align: right; }
+      html[lang='fa'] .brand,
+      html[lang='fa'] .wallet-head,
+      html[lang='fa'] .person,
+      html[lang='fa'] header.top { flex-direction: row-reverse; }
+      html[lang='fa'] .tools { flex-direction: row-reverse; }
+      html[lang='fa'] .addr { direction: ltr; text-align: left; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header class="top">
+        <a class="brand" href="https://github.com/pooyahpx/HPXPANEL" target="_blank" rel="noopener">
+          <img src="./hpx-logo.png" alt="HPX" />
+          <div>
+            <strong>HPXPANEL</strong>
+            <span data-i18n="tagline">Support the command deck</span>
+          </div>
+        </a>
+        <div class="tools">
+          <button class="icon-btn" type="button" id="langBtn" title="Language">EN</button>
+          <a class="icon-btn" href="https://github.com/pooyahpx/HPXPANEL" target="_blank" rel="noopener" title="GitHub" aria-label="GitHub">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5a12 12 0 0 0-3.79 23.4c.6.11.82-.26.82-.58v-2.02c-3.34.73-4.04-1.61-4.04-1.61-.55-1.4-1.34-1.77-1.34-1.77-1.1-.75.08-.74.08-.74 1.22.09 1.86 1.25 1.86 1.25 1.08 1.85 2.83 1.32 3.52 1.01.11-.78.42-1.32.76-1.62-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.12-.3-.54-1.52.12-3.17 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.29-1.55 3.3-1.23 3.3-1.23.66 1.65.24 2.87.12 3.17.77.84 1.24 1.91 1.24 3.22 0 4.61-2.81 5.62-5.49 5.92.43.37.81 1.1.81 2.22v3.29c0 .32.22.7.82.58A12 12 0 0 0 12 .5Z"/></svg>
+          </a>
+        </div>
+      </header>
+
+      <div class="pill" data-i18n="pill">✦ Support independent proxy ops</div>
+      <h1 data-i18n-html="hero">Support <em>HPXPANEL</em></h1>
+      <p class="lead" data-i18n="lead">
+        Help keep the command deck sharp — Xray, REALITY, WireGuard, Hysteria2, and native IPsec for operators who run real fleets.
+      </p>
+
+      <a class="cta" href="#donate" data-i18n="cta">❤  Make a Donation Now</a>
+      <div class="row">
+        <a class="ghost" href="https://github.com/pooyahpx/HPXPANEL" target="_blank" rel="noopener" data-i18n="star">★ Star on GitHub</a>
+        <a class="ghost" href="https://pooyahpx.github.io/HPXPANEL/" target="_blank" rel="noopener" data-i18n="docs">Docs</a>
+        <a class="ghost" href="https://github.com/pooyahpx" target="_blank" rel="noopener">dev by hpx</a>
+      </div>
+
+      <section id="donate">
+        <h2 data-i18n="methodsTitle">◈ Donation methods</h2>
+        <div class="card">
+          <div class="wallets" id="wallets"></div>
+          <p class="note" data-i18n="methodsNote">
+            Send only on the network shown. After donating, open a GitHub issue with tx id if you want to be listed under contributors.
+          </p>
+        </div>
+      </section>
+
+      <section>
+        <h2 data-i18n="goalsTitle">◎ Current goals</h2>
+        <div class="goals" id="goals"></div>
+      </section>
+
+      <section>
+        <h2 data-i18n="contribTitle">♛ Contributors</h2>
+        <div class="card">
+          <div class="contrib" id="contrib"></div>
+          <p class="note" data-i18n="contribNote">Manual hall of fame for now — thank you to everyone who fuels the deck.</p>
+        </div>
+      </section>
+
+      <footer>
+        <div data-i18n="footer">© HPXPANEL · built by hpx · Made for Internet freedom</div>
+      </footer>
+    </div>
+
+    <script>
+      /**
+       * ⚙️ Edit your wallets / goals / contributors here
+       * Leave address empty to hide a method.
+       */
+      const CONFIG = {
+        wallets: [
+          {
+            id: 'usdt-trc20',
+            name: 'USDT',
+            network: 'TRC20',
+            address: '', // ← paste TRC20 address
+          },
+          {
+            id: 'ton',
+            name: 'TON',
+            network: 'TON',
+            address: '', // ← paste TON address
+          },
+          {
+            id: 'btc',
+            name: 'Bitcoin',
+            network: 'BTC',
+            address: '', // ← paste BTC address
+          },
+          {
+            id: 'eth',
+            name: 'ETH / USDT',
+            network: 'ERC20',
+            address: '', // ← paste ETH address
+          },
+        ],
+        goals: [
+          {
+            title: { en: 'Keep HPXPANEL shipping', fa: 'ادامه توسعه HPXPANEL' },
+            desc: {
+              en: 'Servers, domains, and late-night protocol work.',
+              fa: 'سرور، دامنه و کار روی پروتکل‌ها.',
+            },
+            raised: 0,
+            target: 500,
+          },
+          {
+            title: { en: 'Anti-DPI / Stealth profiles', fa: 'پروفایل‌های ضد DPI / Stealth' },
+            desc: {
+              en: 'Fund advanced REALITY + HPX stealth presets.',
+              fa: 'توسعه presetهای Stealth و REALITY.',
+            },
+            raised: 0,
+            target: 1200,
+          },
+        ],
+        contributors: [
+          // { name: 'supporter', amount: '$50', note: { en: 'For IPsec work', fa: 'برای IPsec' } },
+        ],
+      }
+
+      const I18N = {
+        en: {
+          tagline: 'Support the command deck',
+          pill: '✦ Support independent proxy ops',
+          hero: 'Support <em>HPXPANEL</em>',
+          lead: 'Help keep the command deck sharp — Xray, REALITY, WireGuard, Hysteria2, and native IPsec for operators who run real fleets.',
+          cta: '❤  Make a Donation Now',
+          star: '★ Star on GitHub',
+          docs: 'Docs',
+          methodsTitle: '◈ Donation methods',
+          methodsNote: 'Send only on the network shown. After donating, open a GitHub issue with tx id if you want to be listed under contributors.',
+          goalsTitle: '◎ Current goals',
+          contribTitle: '♛ Contributors',
+          contribNote: 'Manual hall of fame for now — thank you to everyone who fuels the deck.',
+          footer: '© HPXPANEL · built by hpx · Made for Internet freedom',
+          copy: 'Copy',
+          copied: 'Copied',
+          noWallet: 'Wallet address coming soon — star the repo or contact hpx on GitHub.',
+          emptyContrib: 'No public contributors yet. Be the first.',
+          raised: 'raised',
+          of: 'of',
+        },
+        fa: {
+          tagline: 'حمایت از command deck',
+          pill: '✦ حمایت از توسعه مستقل',
+          hero: 'حمایت از <em>HPXPANEL</em>',
+          lead: 'کمک کن command deck تیز بمونه — Xray، REALITY، WireGuard، Hysteria2 و IPsec نیتیو برای اپراتورهای واقعی.',
+          cta: '❤  همین حالا دونیت کن',
+          star: '★ ستاره در گیت‌هاب',
+          docs: 'مستندات',
+          methodsTitle: '◈ روش‌های دونیت',
+          methodsNote: 'فقط روی همان شبکه ارسال کن. بعد از واریز اگر می‌خوای اسمت بیاد، با tx id در GitHub Issue بده.',
+          goalsTitle: '◎ هدف‌های فعلی',
+          contribTitle: '♛ حامیان',
+          contribNote: 'لیست دستی فعلاً — ممنون از هرکسی که سوخت این پنل را می‌دهد.',
+          footer: '© HPXPANEL · ساخته‌شده توسط hpx',
+          copy: 'کپی',
+          copied: 'کپی شد',
+          noWallet: 'آدرس ولت به‌زودی — فعلاً ریپو را ستاره بزن یا در گیت‌هاب به hpx پیام بده.',
+          emptyContrib: 'هنوز حامی عمومی ثبت نشده. اولی باش.',
+          raised: 'جمع‌شده',
+          of: 'از',
+        },
+      }
+
+      let lang = localStorage.getItem('hpx-donate-lang') || 'en'
+
+      function t(key) {
+        return I18N[lang][key] || I18N.en[key] || key
+      }
+
+      function applyI18n() {
+        document.documentElement.lang = lang
+        document.documentElement.dir = lang === 'fa' ? 'rtl' : 'ltr'
+        document.getElementById('langBtn').textContent = lang === 'fa' ? 'FA' : 'EN'
+        document.querySelectorAll('[data-i18n]').forEach((el) => {
+          el.textContent = t(el.getAttribute('data-i18n'))
+        })
+        document.querySelectorAll('[data-i18n-html]').forEach((el) => {
+          el.innerHTML = t(el.getAttribute('data-i18n-html'))
+        })
+        render()
+      }
+
+      function renderWallets() {
+        const root = document.getElementById('wallets')
+        const list = CONFIG.wallets.filter((w) => w.address && w.address.trim())
+        if (!list.length) {
+          root.innerHTML = `<div class="wallet"><div class="note">${t('noWallet')}</div></div>`
+          return
+        }
+        root.innerHTML = list
+          .map(
+            (w) => `
+          <div class="wallet">
+            <div class="wallet-head">
+              <div class="wallet-name">${w.name}</div>
+              <span class="wallet-tag">${w.network}</span>
+            </div>
+            <div class="addr">${w.address}</div>
+            <button class="copy" type="button" data-copy="${w.address}">${t('copy')}</button>
+          </div>`
+          )
+          .join('')
+
+        root.querySelectorAll('[data-copy]').forEach((btn) => {
+          btn.addEventListener('click', async () => {
+            try {
+              await navigator.clipboard.writeText(btn.getAttribute('data-copy'))
+              btn.textContent = t('copied')
+              btn.classList.add('ok')
+              setTimeout(() => {
+                btn.textContent = t('copy')
+                btn.classList.remove('ok')
+              }, 1400)
+            } catch (_) {}
+          })
+        })
+      }
+
+      function renderGoals() {
+        const root = document.getElementById('goals')
+        root.innerHTML = CONFIG.goals
+          .map((g) => {
+            const pct = Math.min(100, Math.round((g.raised / g.target) * 100) || 0)
+            const title = g.title[lang] || g.title.en
+            const desc = g.desc[lang] || g.desc.en
+            return `
+              <div class="goal">
+                <strong>${title}</strong>
+                <div class="meta">${desc}</div>
+                <div class="bar"><i style="--p:${pct}%"></i></div>
+                <div class="meta">$${g.raised} ${t('raised')} · ${t('of')} $${g.target} (${pct}%)</div>
+              </div>`
+          })
+          .join('')
+      }
+
+      function renderContrib() {
+        const root = document.getElementById('contrib')
+        if (!CONFIG.contributors.length) {
+          root.innerHTML = `<div class="note">${t('emptyContrib')}</div>`
+          return
+        }
+        root.innerHTML = CONFIG.contributors
+          .map((c) => {
+            const note = c.note ? c.note[lang] || c.note.en : ''
+            return `
+              <div class="person">
+                <div>
+                  <b>${c.name}</b>
+                  ${note ? `<small>${note}</small>` : ''}
+                </div>
+                <div class="amount">${c.amount}</div>
+              </div>`
+          })
+          .join('')
+      }
+
+      function render() {
+        renderWallets()
+        renderGoals()
+        renderContrib()
+      }
+
+      document.getElementById('langBtn').addEventListener('click', () => {
+        lang = lang === 'en' ? 'fa' : 'en'
+        localStorage.setItem('hpx-donate-lang', lang)
+        applyI18n()
+      })
+
+      applyI18n()
+    </script>
+  </body>
+</html>

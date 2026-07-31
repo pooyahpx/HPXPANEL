@@ -142,6 +142,10 @@ Dashboard: `http://127.0.0.1:5173/dashboard/`
 cd docs && bun install && bun run dev
 ```
 
+## Donate
+
+**https://pooyahpx.github.io/HPXPANEL/donate/**
+
 ## Stack
 
 - Backend: Python, FastAPI, SQLAlchemy, Alembic  

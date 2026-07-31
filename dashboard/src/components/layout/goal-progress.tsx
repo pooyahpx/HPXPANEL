@@ -9,6 +9,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { useEffect, useState, useRef } from 'react'
 import { useSidebar } from '@/components/ui/sidebar'
+import { DONATION_URL } from '@/constants/Project'
 
 export function GoalProgress() {
   const { data: goalsData, isLoading, isError } = useAllGoals()
@@ -148,7 +149,7 @@ export function GoalProgress() {
   const progressLabel = isGithubGoal ? t('goal.githubProgress', { defaultValue: 'Star progress' }) : t('goal.progress', { defaultValue: 'Progress' })
   const remainingLabel = t('goal.remaining')
   const ctaLabel = isGithubGoal ? t('donation.starOnGitHub', { defaultValue: 'Star on GitHub' }) : t('goal.contribute')
-  const ctaHref = isGithubGoal && currentGoal.repo_owner && currentGoal.repo_name ? `https://github.com/${currentGoal.repo_owner}/${currentGoal.repo_name}` : 'https://donate.pasarguard.org'
+  const ctaHref = isGithubGoal && currentGoal.repo_owner && currentGoal.repo_name ? `https://github.com/${currentGoal.repo_owner}/${currentGoal.repo_name}` : DONATION_URL
   const CtaIcon = isGithubGoal ? Star : Target
   const BadgeIcon = isGithubGoal ? Star : TrendingUp
   const badgeClasses = isGithubGoal ? 'bg-amber-500/20 text-amber-700 dark:text-amber-400' : 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-400'

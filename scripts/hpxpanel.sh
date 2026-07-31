@@ -1777,33 +1777,123 @@ is_hpxpanel_up() {
 
 uninstall_command() {
     check_running_as_root
-    # Check if hpxpanel is installed
-    if ! is_hpxpanel_installed; then
+
+    local assume_yes=0
+    local purge_all=0
+    while [ $# -gt 0 ]; do
+        case "$1" in
+        -y|--yes) assume_yes=1; shift ;;
+        --purge|--all|purge) purge_all=1; shift ;;
+        -h|--help)
+            echo "Usage: hpxpanel uninstall [-y] [--purge]"
+            echo "  -y, --yes     no confirmation prompts"
+            echo "  --purge       also wipe DB volumes + data (needed for clean reinstall)"
+            return 0
+            ;;
+        *) colorized_echo red "Unknown option: $1"; exit 1 ;;
+        esac
+    done
+
+    if ! is_hpxpanel_installed && [ "$purge_all" -eq 0 ]; then
         colorized_echo red "HPXPANEL is not installed!"
+        colorized_echo yellow "To wipe leftover DB volumes anyway:  hpxpanel purge -y"
         exit 1
     fi
 
-    read -p "Do you really want to uninstall HPXPANEL? (y/n) "
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        colorized_echo red "Aborted"
-        exit 1
+    if [ "$assume_yes" -eq 0 ]; then
+        read -p "Do you really want to uninstall HPXPANEL? (y/n) "
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            colorized_echo red "Aborted"
+            exit 1
+        fi
     fi
 
-    detect_compose
-    if is_hpxpanel_up; then
-        down_hpxpanel
+    if [ -f "$COMPOSE_FILE" ]; then
+        detect_compose || true
+        if is_hpxpanel_up 2>/dev/null; then
+            down_hpxpanel
+        else
+            $COMPOSE -f "$COMPOSE_FILE" -p "$APP_NAME" down --remove-orphans >/dev/null 2>&1 || true
+        fi
+    else
+        docker rm -f hpxpanel 2>/dev/null || true
+        docker ps -aq --filter "name=hpxpanel" 2>/dev/null | while read -r id; do [ -n "$id" ] && docker rm -f "$id" 2>/dev/null || true; done
     fi
+
     uninstall_completion
     uninstall_hpxpanel_script
     uninstall_hpxpanel
     uninstall_hpxpanel_docker_images
 
-    read -p "Do you want to remove HPXPANEL data files too ($DATA_DIR)? (y/n) "
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        colorized_echo green "HPXPANEL uninstalled successfully"
-    else
+    if [ "$purge_all" -eq 1 ]; then
         uninstall_hpxpanel_data_files
-        colorized_echo green "HPXPANEL uninstalled successfully"
+        purge_hpxpanel_database_volumes
+        colorized_echo green "HPXPANEL purged completely (app + data + DB volumes)."
+        colorized_echo green "Reinstall with:"
+        colorized_echo cyan "  sudo bash -c \"\$(curl -fsSL https://github.com/pooyahpx/HPXPANEL/raw/main/scripts/hpxpanel.sh)\" @ install --database timescaledb"
+        return 0
+    fi
+
+    if [ "$assume_yes" -eq 1 ]; then
+        colorized_echo green "HPXPANEL uninstalled (data/DB volumes kept)."
+        colorized_echo yellow "For a clean reinstall wipe DB too:  hpxpanel purge -y"
+        return 0
+    fi
+
+    read -p "Remove data files too ($DATA_DIR)? (y/n) "
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        uninstall_hpxpanel_data_files
+    fi
+    read -p "Also wipe database volumes (Postgres/MySQL)? Required if you got InvalidPasswordError. (y/n) "
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        purge_hpxpanel_database_volumes
+    fi
+    colorized_echo green "HPXPANEL uninstalled successfully"
+}
+
+purge_command() {
+    # Full clean removal for reinstall — no leftover DB password conflict.
+    uninstall_command --purge "$@"
+}
+
+purge_hpxpanel_database_volumes() {
+    local paths=(
+        "/var/lib/postgresql/hpxpanel"
+        "/var/lib/postgresql/pasarguard"
+        "/var/lib/mysql/hpxpanel"
+        "/var/lib/mysql/pasarguard"
+    )
+    local path=""
+    local vol=""
+
+    colorized_echo yellow "Wiping database volumes/directories..."
+
+    # Stop anything that might hold the mounts.
+    if [ -f "$COMPOSE_FILE" ]; then
+        detect_compose 2>/dev/null || true
+        $COMPOSE -f "$COMPOSE_FILE" -p "$APP_NAME" down -v --remove-orphans >/dev/null 2>&1 || true
+    fi
+    docker ps -aq --filter "name=hpxpanel" 2>/dev/null | while read -r id; do [ -n "$id" ] && docker rm -f "$id" 2>/dev/null || true; done
+    docker ps -aq --filter "name=timescaledb" 2>/dev/null | while read -r id; do [ -n "$id" ] && docker rm -f "$id" 2>/dev/null || true; done
+    docker ps -aq --filter "name=pgbouncer" 2>/dev/null | while read -r id; do [ -n "$id" ] && docker rm -f "$id" 2>/dev/null || true; done
+    docker ps -aq --filter "name=pgadmin" 2>/dev/null | while read -r id; do [ -n "$id" ] && docker rm -f "$id" 2>/dev/null || true; done
+
+    for path in "${paths[@]}"; do
+        if [ -e "$path" ]; then
+            if rm -rf "$path" 2>/dev/null; then
+                colorized_echo green "Deleted: $path"
+            else
+                colorized_echo red "Failed to delete: $path"
+            fi
+        fi
+    done
+
+    if command -v docker >/dev/null 2>&1; then
+        for vol in $(docker volume ls --format '{{.Name}}' 2>/dev/null | grep -E '^(hpxpanel_|pasarguard_)?(pgadmin)$' || true); do
+            if docker volume rm "$vol" >/dev/null 2>&1; then
+                colorized_echo green "Deleted Docker volume: $vol"
+            fi
+        done
     fi
 }
 
@@ -1817,7 +1907,7 @@ uninstall_hpxpanel_script() {
 uninstall_hpxpanel() {
     if [ -d "$APP_DIR" ]; then
         colorized_echo yellow "Removing directory: $APP_DIR"
-        rm -r "$APP_DIR"
+        rm -rf "$APP_DIR"
     fi
 }
 
@@ -1851,7 +1941,7 @@ uninstall_hpxpanel_docker_images() {
 uninstall_hpxpanel_data_files() {
     if [ -d "$DATA_DIR" ]; then
         colorized_echo yellow "Removing directory: $DATA_DIR"
-        rm -r "$DATA_DIR"
+        rm -rf "$DATA_DIR"
     fi
 }
 
@@ -2148,7 +2238,7 @@ _hpxpanel_completions()
     local cur cmds
     COMPREPLY=()
     cur="${COMP_WORDS[COMP_CWORD]}"
-    cmds="up down restart status logs cli tui install update uninstall install-script install-node backup backup-service restore core-update edit edit-env help completion"
+    cmds="up down restart status logs cli tui install update uninstall purge install-script install-node ssl backup backup-service restore core-update edit edit-env help completion"
     COMPREPLY=( $(compgen -W "$cmds" -- "$cur") )
     return 0
 }
@@ -2195,6 +2285,7 @@ usage() {
     colorized_echo yellow "  install         $(tput sgr0)– Install HPXPANEL"
     colorized_echo yellow "  update          $(tput sgr0)– Update to latest version"
     colorized_echo yellow "  uninstall       $(tput sgr0)– Uninstall HPXPANEL"
+    colorized_echo yellow "  purge           $(tput sgr0)– Full wipe (app+data+DB) for clean reinstall"
     colorized_echo yellow "  install-script  $(tput sgr0)– Install HPXPANEL script"
     colorized_echo yellow "  install-node    $(tput sgr0)– Install HPXPANEL node"
     colorized_echo yellow "  ssl             $(tput sgr0)– Issue / reconfigure Let's Encrypt SSL"
@@ -2266,6 +2357,10 @@ hpxpanel_main() {
     uninstall)
         shift
         uninstall_command "$@"
+        ;;
+    purge)
+        shift
+        purge_command "$@"
         ;;
     install-script)
         shift

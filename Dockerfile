@@ -12,9 +12,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 ENV UV_PYTHON_DOWNLOADS=0
 
 WORKDIR /build
+# Lockfile references a path dependency under vendor/ — mount it for the first sync.
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    --mount=type=bind,source=vendor,target=vendor \
     uv sync --frozen --no-install-project --no-dev
 ADD . /build
 RUN --mount=type=cache,target=/root/.cache/uv \

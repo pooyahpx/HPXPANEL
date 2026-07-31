@@ -595,6 +595,251 @@
     box-shadow: 4px 4px 0 hsl(var(--pixel-border));
   }
 
+  /* REALITY decoy probe — command-deck telemetry surface */
+  .reality-probe {
+    position: relative;
+    isolation: isolate;
+  }
+
+  .reality-probe__targets {
+    display: flex;
+    min-height: 2.75rem;
+    width: 100%;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+    border: 1px solid hsl(var(--border));
+    background: hsl(var(--background) / 0.55);
+    padding: 0.4rem 0.55rem;
+    box-shadow: inset 0 0 0 1px hsl(var(--primary) / 0.04);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  .reality-probe__targets:focus-within {
+    border-color: hsl(var(--primary) / 0.55);
+    box-shadow:
+      0 0 0 1px hsl(var(--primary) / 0.25),
+      0 0 24px -10px hsl(var(--primary) / 0.55);
+  }
+
+  .reality-probe__tag {
+    display: inline-flex;
+    max-width: 100%;
+    align-items: center;
+    gap: 0.35rem;
+    border: 1px solid hsl(var(--border));
+    background: hsl(var(--card));
+    padding: 0.2rem 0.35rem 0.2rem 0.55rem;
+    color: hsl(var(--foreground));
+    box-shadow: 2px 2px 0 hsl(var(--pixel-border) / 0.55);
+  }
+
+  .reality-probe__timeout {
+    border-width: 1px !important;
+    box-shadow: 2px 2px 0 hsl(var(--pixel-border) / 0.45);
+  }
+
+  .reality-probe__badge {
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid transparent;
+    padding: 0.15rem 0.45rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    line-height: 1.2;
+    text-transform: uppercase;
+  }
+
+  .reality-probe__badge--ok {
+    border-color: hsl(var(--neon-green) / 0.45);
+    background: hsl(var(--neon-green) / 0.14);
+    color: hsl(var(--neon-green));
+    box-shadow: 0 0 12px -4px hsl(var(--neon-green) / 0.65);
+  }
+
+  .reality-probe__badge--bad {
+    border-color: hsl(var(--destructive) / 0.4);
+    background: hsl(var(--destructive) / 0.12);
+    color: hsl(var(--destructive));
+  }
+
+  .reality-probe__latency {
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid hsl(var(--border));
+    background: hsl(var(--background) / 0.65);
+    padding: 0.15rem 0.45rem;
+    color: hsl(var(--foreground));
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+  }
+
+  .reality-probe__banner {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+    border: 1px solid;
+    padding: 0.85rem 1rem;
+  }
+
+  @media (min-width: 640px) {
+    .reality-probe__banner {
+      flex-direction: row;
+      align-items: center;
+      justify-content: space-between;
+    }
+  }
+
+  .reality-probe__banner--ok {
+    border-color: hsl(var(--neon-green) / 0.45);
+    background: linear-gradient(105deg, hsl(var(--neon-green) / 0.18), hsl(var(--neon-green) / 0.05) 70%);
+    color: hsl(var(--neon-green));
+    box-shadow:
+      0 0 0 1px hsl(var(--neon-green) / 0.08) inset,
+      0 10px 28px -18px hsl(var(--neon-green) / 0.7);
+  }
+
+  .reality-probe__banner--bad {
+    border-color: hsl(var(--destructive) / 0.4);
+    background: linear-gradient(105deg, hsl(var(--destructive) / 0.16), hsl(var(--destructive) / 0.04) 70%);
+    color: hsl(var(--destructive));
+  }
+
+  .reality-probe__checks {
+    border: 1px solid hsl(var(--border));
+    background: hsl(var(--card) / 0.45);
+    padding: 0.15rem 0.85rem;
+  }
+
+  .reality-probe__check {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.7rem 0;
+    border-bottom: 1px solid hsl(var(--border) / 0.7);
+  }
+
+  .reality-probe__check:last-child {
+    border-bottom: 0;
+  }
+
+  .reality-probe__chip {
+    display: inline-flex;
+    max-width: 100%;
+    align-items: center;
+    border: 1px solid hsl(var(--border));
+    background: hsl(var(--background) / 0.5);
+    padding: 0.28rem 0.55rem;
+    color: hsl(var(--foreground) / 0.92);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    transition: border-color 0.15s ease, color 0.15s ease;
+  }
+
+  .reality-probe__chip:hover {
+    border-color: hsl(var(--primary) / 0.45);
+    color: hsl(var(--primary));
+  }
+
+  .reality-probe__chip--ghost {
+    text-transform: none;
+    letter-spacing: 0.02em;
+    font-weight: 500;
+    opacity: 0.85;
+  }
+
+  .reality-probe__row {
+    overflow: hidden;
+    border: 1px solid hsl(var(--border));
+    background: hsl(var(--card) / 0.4);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  .reality-probe__row--ok {
+    border-color: hsl(var(--neon-green) / 0.28);
+  }
+
+  .reality-probe__row--open {
+    border-color: hsl(var(--primary) / 0.4);
+    box-shadow: 0 0 0 1px hsl(var(--primary) / 0.12), 0 12px 28px -22px hsl(var(--primary) / 0.55);
+  }
+
+  .reality-probe__row-head {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    gap: 0.55rem;
+    padding: 0.7rem 0.85rem;
+    text-align: left;
+    transition: background-color 0.12s ease;
+  }
+
+  .reality-probe__row-head:hover {
+    background: hsl(var(--muted) / 0.35);
+  }
+
+  .reality-probe__row-body {
+    border-top: 1px solid hsl(var(--border) / 0.8);
+    background: hsl(var(--background) / 0.35);
+    padding: 0.95rem;
+  }
+
+  .reality-probe__empty {
+    position: relative;
+    display: flex;
+    min-height: 13rem;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    overflow: hidden;
+    border: 1px dashed hsl(var(--border));
+    background:
+      radial-gradient(circle at 50% 40%, hsl(var(--primary) / 0.1), transparent 55%),
+      linear-gradient(hsl(var(--primary) / 0.03) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(var(--primary) / 0.03) 1px, transparent 1px);
+    background-size: auto, 24px 24px, 24px 24px;
+    padding: 1.5rem;
+  }
+
+  .reality-probe__radar {
+    display: grid;
+    place-items: center;
+    width: 4.25rem;
+    height: 4.25rem;
+    border: 1px solid hsl(var(--primary) / 0.28);
+    border-radius: 999px;
+    background: hsl(var(--card) / 0.5);
+    box-shadow: 0 0 0 6px hsl(var(--primary) / 0.05), 0 0 28px -8px hsl(var(--primary) / 0.55);
+  }
+
+  .reality-probe__radar--live {
+    animation: beacon-pulse 1.8s ease-out infinite;
+  }
+
+  .reality-probe__btn-scan {
+    border-color: hsl(var(--primary)) !important;
+    background: hsl(var(--primary)) !important;
+    color: hsl(var(--primary-foreground)) !important;
+    box-shadow: 0 0 0 1px hsl(var(--primary) / 0.3), 0 10px 28px -12px hsl(var(--primary) / 0.85) !important;
+  }
+
+  .reality-probe__btn-scan:hover {
+    filter: brightness(1.06);
+  }
+
+  .reality-probe__btn-ghost {
+    box-shadow: 2px 2px 0 hsl(var(--pixel-border) / 0.5);
+  }
+
   .online-beacon {
     position: relative;
     display: block;
@@ -762,7 +1007,8 @@
     .online-beacon::after,
     .status-live,
     .status-live::after,
-    .wifi-signal__arc {
+    .wifi-signal__arc,
+    .reality-probe__radar--live {
       animation: none !important;
     }
   }

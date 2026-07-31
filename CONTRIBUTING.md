@@ -1,13 +1,13 @@
-# Contribute to PasarGuard
+# Contribute to HPXPANEL
 
-Thanks for considering contributing to **PasarGuard**!
+Thanks for considering contributing to **HPXPANEL**!
 
 ## 🙋 Questions
 
-Please **don’t use GitHub Issues** to ask questions. Instead, use one of the following platforms:
+Please **don’t use GitHub Issues** only for casual questions. Prefer:
 
--   💬 Telegram: [@Pasar_Guard](https://t.me/pasar_guard)
--   🗣️ GitHub Discussions: [PasarGuard Discussions](https://github.com/pasarguard/panel/discussions)
+-   🗣️ GitHub Discussions / Issues: [pooyahpx/HPXPANEL](https://github.com/pooyahpx/HPXPANEL)
+-   👨‍💻 Maintainer: [pooyahpx](https://github.com/pooyahpx)
 
 ## 🐞 Reporting Issues
 
@@ -16,7 +16,7 @@ When reporting a bug or issue, please include:
 -   ✅ What you expected to happen
 -   ❌ What actually happened (include server logs or browser errors)
 -   ⚙️ Your `xray` JSON config and `.env` settings (censor sensitive info)
--   🔢 Your PasarGuard version and Docker version (if applicable)
+-   🔢 Your HPXPANEL version and Docker version (if applicable)
 
 ---
 
@@ -33,7 +33,7 @@ No need to ask for permission!
 
 ## 🔀 Branching Strategy
 
--   Always branch off of the `next` branch
+-   Prefer branching off of `main` (or the active development branch)
 -   Keep `main` stable and production-ready
 
 ---
@@ -45,6 +45,7 @@ No need to ask for permission!
 ├── app          # Backend code (FastAPI - Python)
 ├── cli          # CLI code (Typer - Python)
 ├── dashboard    # Frontend code (React Router - TypeScript)
+├── docs         # VitePress documentation
 └── tests        # API tests
 ```
 
@@ -84,26 +85,24 @@ The project uses [uv](https://github.com/astral-sh/uv) for Python dependency man
 
 The backend is built with **FastAPI** and **SQLAlchemy**:
 
--   **Pydantic models**: [app/models/](file:///home/coder/panel/app/models)
--   **Database structure**: [app/db/](file:///home/coder/panel/app/db)
-    -   SQLAlchemy models: [app/db/models.py](file:///home/coder/panel/app/db/models.py)
-    -   Database CRUD operations: [app/db/crud/](file:///home/coder/panel/app/db/crud)
-    -   Alembic migrations: [app/db/migrations/](file:///home/coder/panel/app/db/migrations)
--   **Core backend logic**: [app/operation/](file:///home/coder/panel/app/operation)
--   **API Routers**: [app/routers/](file:///home/coder/panel/app/routers)
+-   **Pydantic models**: [`app/models/`](./app/models)
+-   **Database structure**: [`app/db/`](./app/db)
+    -   SQLAlchemy models: [`app/db/models.py`](./app/db/models.py)
+    -   Database CRUD operations: [`app/db/crud/`](./app/db/crud)
+    -   Alembic migrations: [`app/db/migrations/`](./app/db/migrations)
+-   **Core backend logic**: [`app/operation/`](./app/operation)
+-   **API Routers**: [`app/routers/`](./app/routers)
 
-🧩 **Note**: Ensure **all core backend business logic is organized and implemented in the `app/operation` module**. This keeps route handling, database access, and service logic clearly separated and easier to maintain.
+🧩 **Note**: Prefer keeping core backend business logic in the `app/operation` module so routes, DB access, and services stay separated.
 
 ### 📘 API Docs (Swagger / ReDoc)
 
 Enable the `DOCS` flag in your `.env` file to access:
 
--   Swagger UI: [http://localhost:8000/docs](http://localhost:8000/docs)
--   ReDoc: [http://localhost:8000/redoc](http://localhost:8000/redoc)
+-   Swagger UI: http://localhost:8000/docs
+-   ReDoc: http://localhost:8000/redoc
 
 ### 🎯 Code Formatting & Linting
-
-Format and lint backend Python code with:
 
 ```bash
 make check
@@ -112,15 +111,8 @@ make format
 
 ### 🗃️ Database Migrations
 
-Apply Alembic migrations to your database:
-
 ```bash
 make run-migration
-```
-
-Check migrations integrity:
-
-```bash
 make check-migrations
 ```
 
@@ -130,15 +122,13 @@ make check-migrations
 
 > ⚠️ **We no longer upload pre-built frontend files.**
 
-The frontend is located in the [dashboard/](file:///home/coder/panel/dashboard) directory and is built using:
+The frontend lives in [`dashboard/`](./dashboard) and is built with:
 
 -   **React Router 7 + TypeScript**
--   **Tailwind CSS v4 + Shadcn UI**
--   **Orval** (for API client generation)
+-   **Tailwind CSS + Shadcn UI**
+-   **Orval** (API client generation)
 
 ### 🔄 API Client Generation
-
-The frontend uses generated API clients via Orval. If you change backend routes or models, regenerate the TypeScript client by running:
 
 ```bash
 make gen-api
@@ -146,64 +136,67 @@ make gen-api
 
 ### 🎯 Code Formatting
 
-Format frontend code using Prettier:
-
 ```bash
 make fformat
 ```
 
 ### 🧩 Component Guidelines
 
--   Follow **Tailwind + Shadcn** best practices.
--   Keep components **single-purpose**.
--   Prioritize **readability** and **maintainability**.
+-   Follow **Tailwind + Shadcn** best practices
+-   Keep components **single-purpose**
+-   Prioritize **readability** and **maintainability**
 
 ---
 
-## 🛠️ PasarGuard CLI
+## 🛠️ HPXPANEL CLI
 
-PasarGuard’s CLI is built using [Typer](https://typer.tiangolo.com/).
+The CLI is built with [Typer](https://typer.tiangolo.com/).
 
--   CLI codebase: [cli/](file:///home/coder/panel/cli) and the entrypoint script [pasarguard-cli.py](file:///home/coder/panel/pasarguard-cli.py).
--   To run the CLI in development:
+-   Code: [`cli/`](./cli) and entrypoint [`pasarguard-cli.py`](./pasarguard-cli.py)
+-   Run in development:
     ```bash
     make run-cli
     ```
 
 ---
 
+## 📚 Docs
+
+```bash
+cd docs
+bun install
+bun run dev
+```
+
+Live docs: https://pooyahpx.github.io/HPXPANEL/
+
+---
+
 ## 🧪 Testing
 
-We use [pytest](https://docs.pytest.org/) for backend tests.
-
--   Run tests:
-    ```bash
-    make test
-    ```
--   Run tests in watch mode:
-    ```bash
-    make test-whatch
-    ```
+```bash
+make test
+```
 
 ---
 
 ## 🐛 Debug Mode
 
-To run the project in debug mode with auto-reload, set `DEBUG=true` in your `.env` file.
-
-When you run `make run` (or `uv run main.py`) with `DEBUG=true`:
-1. The backend FastAPI server starts in reload mode via Uvicorn.
-2. The frontend Vite dev server (`bun run dev`) automatically spins up on a separate port.
-3. The API client generator runs in the background to keep the frontend types in sync.
-
-Install frontend dependencies first before running in debug mode:
+Set `DEBUG=true` in `.env`, then:
 
 ```bash
 make install-front
+make run
 ```
 
-> 💡 **Note**: In production mode (`DEBUG=false`), the backend will check if the `dashboard/build` directory exists. If it doesn't, it will build the frontend once using `bun run build` and then mount and serve the static files from `dashboard/build/` at `/dashboard/`.
+With `DEBUG=true`:
+
+1. Backend runs with Uvicorn reload
+2. Frontend Vite dev server starts
+3. API client generation can stay in sync
+
+In production (`DEBUG=false`), the backend serves `dashboard/build/` at `/dashboard/` (builds once if missing).
 
 ---
 
-Feel free to reach out via [Telegram](https://t.me/pasar_guard) or GitHub Discussions if you have any questions. Happy contributing! 🚀
+Questions? Open an issue on [pooyahpx/HPXPANEL](https://github.com/pooyahpx/HPXPANEL) — **dev by hpx**. Happy contributing! 🚀

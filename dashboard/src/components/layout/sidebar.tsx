@@ -11,7 +11,7 @@ import { SidebarTriggerWithBadge } from '@/components/layout/sidebar-trigger-wit
 import { VersionBadge } from '@/components/layout/version-badge'
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from '@/components/ui/sidebar'
 import { HPX_LOGO_URL } from '@/constants/brand'
-import { DISCUSSION_GROUP, DOCUMENTATION, DONATION_URL, REPO_URL } from '@/constants/Project'
+import { DOCUMENTATION, DONATION_URL, REPO_URL } from '@/constants/Project'
 import { useAdmin } from '@/hooks/use-admin'
 import useDirDetection from '@/hooks/use-dir-detection'
 import { useSystemVersion } from '@/hooks/use-system-version'
@@ -42,7 +42,6 @@ import {
   Network,
   Palette,
   PieChart,
-  RssIcon,
   Send,
   Settings,
   Settings2,
@@ -399,12 +398,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         title: 'documentation',
         url: DOCUMENTATION,
         icon: BookOpen,
-        target: '_blank',
-      },
-      {
-        title: 'discussionGroup',
-        url: DISCUSSION_GROUP,
-        icon: RssIcon,
         target: '_blank',
       },
       {

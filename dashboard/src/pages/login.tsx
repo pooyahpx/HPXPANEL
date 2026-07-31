@@ -379,7 +379,7 @@ export const Login: FC = () => {
             <img src={HPX_LOGO_URL} alt="HPXPANEL" className="h-full w-full object-cover" draggable={false} />
           </div>
           <div>
-            <p className="font-display text-lg font-bold tracking-tight">{t('pasarguard')}</p>
+            <p className="font-display text-lg font-bold tracking-tight">HPXPANEL</p>
             <p className="font-hud text-[14px] tracking-[0.18em] text-white/55 uppercase">Control Plane</p>
           </div>
         </div>
@@ -421,7 +421,7 @@ export const Login: FC = () => {
             <div className="flex h-8 w-8 items-center justify-center overflow-hidden border-2 border-[hsl(var(--pixel-border))]">
               <img src={HPX_LOGO_URL} alt="HPXPANEL" className="h-full w-full object-cover" draggable={false} />
             </div>
-            <span className="font-display text-sm font-bold">{t('pasarguard')}</span>
+            <span className="font-display text-sm font-bold">HPXPANEL</span>
           </div>
           <div className="flex items-center gap-2">
             <Language />

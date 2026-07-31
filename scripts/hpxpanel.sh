@@ -1142,21 +1142,16 @@ ensure_hpx_engine_image() {
     local wanted="ghcr.io/pooyahpx/hpxpanel:${tag}"
     colorized_echo blue "Preparing HPXPANEL engine image (${tag})..."
     if docker image inspect "$wanted" >/dev/null 2>&1; then
-        colorized_echo green "Engine image ready"
+        colorized_echo green "Engine image ready (local)"
         return 0
     fi
-    if docker pull "$wanted" >/dev/null 2>&1; then
-        colorized_echo green "Engine image pulled"
+    if docker pull "$wanted"; then
+        colorized_echo green "Engine image pulled from GHCR"
         return 0
     fi
-    local upstream="pasarguard/panel:${tag}"
-    colorized_echo cyan "Fetching compatible engine layers..."
-    if docker pull "$upstream" >/dev/null 2>&1; then
-        docker tag "$upstream" "$wanted" >/dev/null 2>&1 || true
-        colorized_echo green "Engine image ready"
-        return 0
-    fi
-    colorized_echo red "Could not prepare HPXPANEL engine image."
+    colorized_echo red "Could not pull ${wanted}"
+    colorized_echo yellow "Build the image first: GitHub Actions → \"Build and push panel image (GHCR)\" → Run workflow"
+    colorized_echo yellow "Repo: https://github.com/pooyahpx/HPXPANEL/actions"
     return 1
 }
 set_hpxpanel_image() {
@@ -1322,8 +1317,8 @@ install_hpxpanel() {
         target_image="ghcr.io/pooyahpx/hpxpanel:latest"
     fi
     case "$panel_version" in
-    latest|dev|pre-release) ensure_hpx_engine_image latest || true ;;
-    *) ensure_hpx_engine_image "${panel_version#v}" || ensure_hpx_engine_image latest || true ;;
+    latest|dev|pre-release) ensure_hpx_engine_image latest || exit 1 ;;
+    *) ensure_hpx_engine_image "${panel_version#v}" || ensure_hpx_engine_image latest || exit 1 ;;
     esac
     set_hpxpanel_image "$target_image"
     colorized_echo green "File saved in $APP_DIR/docker-compose.yml"

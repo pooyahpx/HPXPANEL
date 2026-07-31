@@ -1,17 +1,17 @@
-name: Build-Docker
+name: Build-Docker (legacy)
 
+# Prefer `.github/workflows/build-ghcr.yml` for HPXPANEL GHCR images.
+# This legacy workflow needs Docker Hub secrets and is manual-only.
 on:
-    release:
-        types: [created]
-    workflow_dispatch:
+  workflow_dispatch:
 
 permissions:
-    contents: write
-    packages: write
+  contents: write
+  packages: write
 
 env:
-    IMAGE_NAME: pasarguard/${{ github.event.repository.name }}
-    FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  IMAGE_NAME: pooyahpx/hpxpanel
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
     generate-changelog:

@@ -202,6 +202,7 @@ class UserOperation(BaseOperation):
         if "hwid_limit" in modified_user.model_fields_set and modified_user.hwid_limit is None:
             db_user.hwid_limit = None
 
+    @staticmethod
     def _apply_explicit_null_ip_limit(db_user: User, modified_user: UserModify) -> None:
         if "ip_limit" in modified_user.model_fields_set and modified_user.ip_limit is None:
             db_user.ip_limit = None

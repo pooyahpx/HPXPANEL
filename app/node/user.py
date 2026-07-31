@@ -109,10 +109,12 @@ def _serialize_user_for_node(
         ikev2_settings = user_settings.get("ikev2") or {}
         username = ikev2_settings.get("username")
         password = ikev2_settings.get("password")
-        if not username or not password:
+        if username and password:
+            proxy.ikev2.username = str(username)
+            proxy.ikev2.password = str(password)
+        elif protocols_were_explicit:
+            # Only hard-fail when the node explicitly asked for IPsec protocols.
             raise ValueError("ikev2 username and password are required for IKEv2/L2TP users")
-        proxy.ikev2.username = str(username)
-        proxy.ikev2.password = str(password)
     elif needs_ipsec_credentials and protocols_were_explicit:
         raise RuntimeError(
             "Installed PasarGuardNodeBridge cannot serialize IKEv2/L2TP credentials; "
@@ -156,6 +158,7 @@ async def core_users(
             User.id,
             User.proxy_settings,
             User.hwid_limit,
+            User.ip_limit,
             inbound_agg,
         )
         .outerjoin(users_groups_association, User.id == users_groups_association.c.user_id)

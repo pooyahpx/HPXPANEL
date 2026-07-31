@@ -86,13 +86,13 @@ Use the one-time key on the dashboard login page to create the owner account.
 On each edge server (Linux), run the HPX node installer. It deploys a Docker node with **Xray**, **WireGuard**, **OpenVPN**, and **IKEv2 / IPsec**, then prints the values you paste into **HPXPANEL → Nodes**.
 
 ```bash
-sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXPANEL/raw/main/scripts/hpx-node.sh)" @ install
+sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXNODE/raw/main/scripts/install.sh)" @ install
 ```
 
 Non-interactive example:
 
 ```bash
-sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXPANEL/raw/main/scripts/hpx-node.sh)" @ install -y \
+sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXNODE/raw/main/scripts/install.sh)" @ install -y \
   --service-port 62050 \
   --disable openvpn
 ```

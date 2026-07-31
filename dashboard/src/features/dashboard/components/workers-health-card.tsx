@@ -62,8 +62,9 @@ const WorkersHealthCard = () => {
   const natsDisabled = [scheduler?.error, node?.error].some(error => error?.toLowerCase().includes('nats is disabled'))
   const workerHealthDocsUrl = useMemo(() => {
     const locale = i18n.resolvedLanguage || i18n.language || 'en'
-    const normalizedLocale = locale.split('-')[0]
-    return `${DOCUMENTATION}/${normalizedLocale}/learn/multi-worker/`
+    const normalizedLocale = ['en', 'fa', 'ru'].includes(locale.split('-')[0]) ? locale.split('-')[0] : 'en'
+    const base = DOCUMENTATION.replace(/\/$/, '')
+    return `${base}/${normalizedLocale}/features`
   }, [i18n.language, i18n.resolvedLanguage])
   const summaryStatus = useMemo(() => {
     if (!scheduler && !node) return { label: t('workersHealth.status.unknown', { defaultValue: 'Unknown' }), variant: 'blank' as WorkerStatusVariant }

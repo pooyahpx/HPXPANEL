@@ -1,65 +1,29 @@
 import { DOCUMENTATION } from '@/constants/Project'
 import i18n from '@/locales/i18n'
 
+const docsBase = () => DOCUMENTATION.replace(/\/$/, '')
+
 /**
- * Generates a documentation URL for a given page path
- * Format: docs.pasarguard.org/{locale}/panel/{page}
- * Special case: /nodes routes use docs.pasarguard.org/{locale}/node/
- *
- * @param pagePath - The page path (e.g., '/settings', '/users', '/nodes/cores')
- * @returns The full documentation URL
+ * Documentation URL for a panel route.
+ * HPXPANEL docs: pooyahpx.github.io/HPXPANEL/{locale}/…
  */
 export function getDocsUrl(pagePath: string): string {
   const locale = i18n.language || 'en'
-  // Normalize locale (e.g., 'en-US' -> 'en')
-  const normalizedLocale = locale.split('-')[0]
+  const normalizedLocale = ['en', 'fa', 'ru'].includes(locale.split('-')[0]) ? locale.split('-')[0] : 'en'
+  const base = `${docsBase()}/${normalizedLocale}`
 
-  // Special case: node documentation uses /node/ instead of /panel/nodes
-  if (pagePath === '/nodes') {
-    return `${DOCUMENTATION}/${normalizedLocale}/node/`
+  if (pagePath.startsWith('/nodes')) {
+    return `${base}/protocols/overview`
   }
-  if (pagePath.startsWith('/settings')) {
-    return `${DOCUMENTATION}/${normalizedLocale}/panel/settings`
+  if (pagePath.startsWith('/users') || pagePath.startsWith('/admins') || pagePath.startsWith('/admin-roles')) {
+    return `${base}/users`
   }
-  if (pagePath === '/templates/client') {
-    return `${DOCUMENTATION}/${normalizedLocale}/panel/client_template`
+  if (pagePath.startsWith('/templates') || pagePath.startsWith('/hosts') || pagePath.startsWith('/groups') || pagePath.startsWith('/bulk')) {
+    return `${base}/subscriptions`
   }
-  if (pagePath === '/templates/user') {
-    return `${DOCUMENTATION}/${normalizedLocale}/panel/user_template`
-  }
-  // Map route paths to documentation paths
-  const pathMap: Record<string, string> = {
-    '/': 'dashboard',
-    '/users': 'users',
-    '/statistics': 'statistics',
-    '/hosts': 'host',
-    '/groups': 'groups',
-    '/templates': 'user_template',
-    '/admins': 'admins',
-    '/admin-roles': 'admin_roles',
-    '/api-keys': 'api_keys',
-    '/bulk': 'bulk',
-    '/nodes/cores': 'core',
+  if (pagePath.startsWith('/settings') || pagePath === '/' || pagePath.startsWith('/statistics') || pagePath.startsWith('/api-keys')) {
+    return `${base}/features`
   }
 
-  // Handle nested routes - find the longest matching route
-  let mappedPath = ''
-  let longestMatch = ''
-
-  for (const [route, docPath] of Object.entries(pathMap)) {
-    if (pagePath.startsWith(route) && route.length > longestMatch.length) {
-      longestMatch = route
-      mappedPath = docPath
-    }
-  }
-
-  // If we found a match, always use the base path (no sub-routes in docs)
-  if (mappedPath) {
-    return `${DOCUMENTATION}/${normalizedLocale}/panel/${mappedPath}`
-  }
-
-  // If no mapping found, use the last segment of the path
-  const segments = pagePath.split('/').filter(Boolean)
-  const fallbackPath = segments[segments.length - 1] || 'dashboard'
-  return `${DOCUMENTATION}/${normalizedLocale}/panel/${fallbackPath}`
+  return `${base}/`
 }

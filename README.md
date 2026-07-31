@@ -120,7 +120,7 @@ pasarguard --help
 Branded one-liner — deploys a Docker node with Xray / WireGuard / OpenVPN / IKEv2 and prints Address, Port, API key, and Server CA for **HPXPANEL → Nodes**:
 
 ```bash
-sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXPANEL/raw/main/scripts/hpx-node.sh)" @ install
+sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXNODE/raw/main/scripts/install.sh)" @ install
 ```
 
 | | |

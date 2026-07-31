@@ -60,7 +60,7 @@ ssh -L 8000:localhost:8000 user@serverip
 На каждом edge-сервере (Linux) запустите инсталлятор. Поднимается Docker-нода с **Xray**, **WireGuard**, **OpenVPN** и **IKEv2** — значения Address / Port / API key / Server CA вставляются в **HPXPANEL → Nodes**.
 
 ```bash
-sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXPANEL/raw/main/scripts/hpx-node.sh)" @ install
+sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXNODE/raw/main/scripts/install.sh)" @ install
 ```
 
 | Путь | Назначение |

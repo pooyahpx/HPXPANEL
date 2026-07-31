@@ -10,6 +10,7 @@ import { NavUser } from '@/components/layout/nav-user'
 import { SidebarTriggerWithBadge } from '@/components/layout/sidebar-trigger-with-badge'
 import { VersionBadge } from '@/components/layout/version-badge'
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from '@/components/ui/sidebar'
+import { HPX_LOGO_URL } from '@/constants/brand'
 import { DISCUSSION_GROUP, DOCUMENTATION, DONATION_URL, REPO_URL } from '@/constants/Project'
 import { useAdmin } from '@/hooks/use-admin'
 import useDirDetection from '@/hooks/use-dir-detection'
@@ -418,10 +419,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const brandMark = (
     <Link
       to="/"
-      className="bg-sidebar-primary text-sidebar-primary-foreground relative flex h-11 w-11 items-center justify-center border-2 border-[hsl(var(--pixel-border))] shadow-[3px_3px_0_0_hsl(var(--pixel-border))]"
+      className="relative flex h-11 w-11 items-center justify-center overflow-hidden border-2 border-[hsl(var(--pixel-border))] shadow-[3px_3px_0_0_hsl(var(--pixel-border))]"
       aria-label="HPXPANEL home"
     >
-      <span className="font-hud text-lg leading-none tracking-wide">HPX</span>
+      <img src={HPX_LOGO_URL} alt="HPXPANEL" className="h-full w-full object-cover" draggable={false} />
       {canReadSystem && <VersionBadge currentVersion={normalizedVersion} />}
     </Link>
   )
@@ -467,8 +468,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <div className="bg-sidebar h-[env(safe-area-inset-top)]" />
         <div className="border-sidebar-border bg-sidebar/90 supports-[backdrop-filter]:bg-sidebar/75 flex items-center justify-between border-b px-4 py-3.5 backdrop-blur-xl">
           <Link to="/" className="flex items-center gap-2.5">
-            <div className="bg-sidebar-primary text-sidebar-primary-foreground flex h-9 w-9 items-center justify-center border-2 border-[hsl(var(--pixel-border))] shadow-[2px_2px_0_0_hsl(var(--pixel-border))]">
-              <span className="font-hud text-base leading-none">HPX</span>
+            <div className="flex h-9 w-9 items-center justify-center overflow-hidden border-2 border-[hsl(var(--pixel-border))] shadow-[2px_2px_0_0_hsl(var(--pixel-border))]">
+              <img src={HPX_LOGO_URL} alt="HPXPANEL" className="h-full w-full object-cover" draggable={false} />
             </div>
             <div dir={isRTL ? 'rtl' : 'ltr'} className="leading-tight">
               <span className="font-display block text-sm font-black tracking-[0.08em]">HPXPANEL</span>
@@ -484,8 +485,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             <SidebarMenuItem>
               <SidebarMenuButton size="lg" asChild className="!gap-2">
                 <Link to="/">
-                  <div className="bg-sidebar-primary text-sidebar-primary-foreground flex h-8 w-8 shrink-0 items-center justify-center border-2 border-[hsl(var(--pixel-border))]">
-                    <span className="font-hud text-sm leading-none">HPX</span>
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden border-2 border-[hsl(var(--pixel-border))]">
+                    <img src={HPX_LOGO_URL} alt="HPXPANEL" className="h-full w-full object-cover" draggable={false} />
                   </div>
                   <div className="flex min-w-0 flex-col overflow-hidden">
                     <span className={cn(isRTL ? 'text-right' : 'text-left', 'font-display truncate text-sm leading-tight font-black tracking-[0.08em]')}>HPXPANEL</span>

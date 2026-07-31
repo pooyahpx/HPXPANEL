@@ -1,39 +1,30 @@
 <p align="center">
-  <a href="https://github.com/PasarGuard/panel" target="_blank" rel="noopener noreferrer">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://github.com/PasarGuard/PasarGuard.github.io/raw/main/public/logos/PasarGuard-white-logo.png">
-      <img width="160" height="160" src="https://github.com/PasarGuard/PasarGuard.github.io/raw/main/public/logos/PasarGuard-black-logo.png">
-    </picture>
+  <a href="https://github.com/pooyahpx/HPXPANEL" target="_blank" rel="noopener noreferrer">
+    <img width="120" height="120" alt="HPXPANEL" src="https://raw.githubusercontent.com/pooyahpx/HPXPANEL/main/dashboard/public/statics/favicon/android-chrome-192x192.png">
   </a>
 </p>
 
-<h1 align="center">🛡️ PasarGuard</h1>
+<h1 align="center">HPXPANEL</h1>
 
 <p align="center">
-    <strong>Унифицированное решение для управления прокси, устойчивое к цензуре</strong>
+    <strong>Консоль управления прокси — command deck для пользователей, нод, ядер и подписок</strong>
 </p>
 
 ---
 
 <br/>
 <p align="center">
-    <a href="#">
-        <img src="https://img.shields.io/github/actions/workflow/status/PasarGuard/panel/build.yml?style=flat-square" />
+    <a href="https://github.com/pooyahpx/HPXPANEL/actions/workflows/build.yml" target="_blank">
+        <img src="https://img.shields.io/github/actions/workflow/status/pooyahpx/HPXPANEL/build.yml?style=flat-square" />
     </a>
-    <a href="https://hub.docker.com/r/PasarGuard/panel" target="_blank">
-        <img src="https://img.shields.io/docker/pulls/PasarGuard/panel?style=flat-square&logo=docker" />
+    <a href="https://github.com/pooyahpx/HPXPANEL/blob/main/LICENSE" target="_blank">
+        <img src="https://img.shields.io/github/license/pooyahpx/HPXPANEL?style=flat-square" />
     </a>
-    <a href="#">
-        <img src="https://img.shields.io/github/license/PasarGuard/panel?style=flat-square" />
+    <a href="https://github.com/pooyahpx/HPXPANEL" target="_blank">
+        <img src="https://img.shields.io/github/stars/pooyahpx/HPXPANEL?style=social" />
     </a>
-    <a href="https://t.me/Pasar_Guard" target="_blank">
-        <img src="https://img.shields.io/badge/telegram-group-blue?style=flat-square&logo=telegram" />
-    </a>
-    <a href="#">
-        <img src="https://img.shields.io/badge/twitter-commiunity-blue?style=flat-square&logo=twitter" />
-    </a>
-    <a href="#">
-        <img src="https://img.shields.io/github/stars/PasarGuard/panel?style=social" />
+    <a href="https://github.com/pooyahpx" target="_blank">
+        <img src="https://img.shields.io/badge/dev-hpx-0ea5e9?style=flat-square&logo=github" />
     </a>
 </p>
 
@@ -45,97 +36,86 @@
  <a href="./README-fa.md">
  🇮🇷 فارسی
  </a>
-  /
-  <a href="./README-zh-cn.md">
- 🇨🇳 简体中文
- </a>
-   /
-  <a href="./README-ru.md">
+ /
+ <a href="./README-ru.md">
  🇷🇺 Русский
  </a>
 </p>
 
-<p align="center">
-  <a href="https://github.com/PasarGuard/panel" target="_blank" rel="noopener noreferrer" >
-    <img src="https://github.com/PasarGuard/PasarGuard.github.io/raw/main/public/logos/screenshot.png" alt="PasarGuard скриншоты" width="600" height="auto">
-  </a>
-</p>
-
 ## 📋 Содержание
 
-> **Быстрая навигация** - Перейдите к любому разделу ниже
+> **Быстрая навигация**
 
 -   [📖 Обзор](#-обзор)
-    -   [🤔 Зачем использовать PasarGuard?](#-зачем-использовать-pasarguard)
-        -   [✨ Функции](#-функции)
--   [🚀 Руководство по установке](#-руководство-по-установке)
--   [📚 Документация](#-документация)
--   [💖 Пожертвования](#-пожертвования)
+    -   [🤔 Почему HPXPANEL?](#-почему-hpxpanel)
+        -   [✨ Возможности](#-возможности)
+-   [🚀 Установка на Linux](#-установка-на-linux)
+-   [🔧 Установка из исходников](#-установка-из-исходников)
+-   [💖 Поддержка](#-поддержка)
 
 ---
 
 # 📖 Обзор
 
-> **Что такое PasarGuard?**
+> **Что такое HPXPANEL?**
 
-PasarGuard — это мощный инструмент управления прокси-серверами, который предлагает интуитивно понятный и эффективный интерфейс для работы с сотнями прокси-аккаунтов. Построенный на Python и React.js, он сочетает производительность, масштабируемость и простоту использования для упрощения управления прокси в больших масштабах. Он поддерживает и [Xray-core](https://github.com/XTLS/Xray-core), и [WireGuard](https://www.wireguard.com/) для максимальной производительности.
-
----
-
-## 🤔 Зачем использовать PasarGuard?
-
-> **Простой, Мощный, Надежный**
-
-PasarGuard — это удобный, многофункциональный и надежный инструмент управления прокси-серверами. Он позволяет создавать и управлять несколькими прокси для ваших пользователей без необходимости сложной настройки. С помощью встроенного веб-интерфейса вы можете легко отслеживать активность, изменять настройки и контролировать ограничения доступа пользователей — все из одного удобного панели управления.
+HPXPANEL — панель управления прокси с интерфейсом **command deck / ops console**. Управляйте пользователями, нодами, ядрами и подписками из одной удобной плоскости. Написано на **Python / FastAPI** и **React**, поддерживает [Xray-core](https://github.com/XTLS/Xray-core), [WireGuard](https://www.wireguard.com/) и **IPsec / IKEv2 / L2TP**.
 
 ---
 
-### ✨ Функции
+## 🤔 Почему HPXPANEL?
 
-<div align="left">
+> **Просто, мощно, узнаваемо**
 
-**🌐 Веб-интерфейс и API**
-- Встроенная панель управления **Web UI**
-- Полностью функциональный бэкенд **REST API**
-- Поддержка **Multi-Node** для распределения инфраструктуры
+У HPXPANEL свой визуальный язык: cobalt-акценты, pixel-бордеры, пошаговый мастер создания пользователя, gauge потребления и графики трафика — без лишнего шума.
+
+---
+
+### ✨ Возможности
+
+**🌐 Web UI и API**
+- Встроенный **Web UI** с темой command deck
+- Полноценный бэкенд **REST API**
+- Поддержка **Multi-Node**
 
 **🔐 Протоколы и безопасность**
-- Поддержка **Vmess**, **VLESS**, **Trojan**, **Shadowsocks**, **WireGuard** и **Hysteria2**
-- Поддержка **TLS** и **REALITY**
-- **Мультипротокол** для одного пользователя
+- **Vmess**, **VLESS**, **Trojan**, **Shadowsocks**, **WireGuard**, **Hysteria2**
+- **IPsec / IKEv2 / L2TP**
+- **TLS** и **REALITY**
+- Несколько протоколов на одного пользователя
 
 **👥 Управление пользователями**
-- **Мультипользователь** на одном inbound
-- **Мультиinbound** на **одном порту** (поддержка fallbacks)
-- Ограничения по **трафику** и **сроку действия**
-- **Периодические** ограничения трафика (ежедневно, еженедельно и т.д.)
-- Ограничения **HWID/устройств** для контроля доступа по оборудованию
+- Пошаговый wizard создания пользователя
+- Лимиты **трафика** и **срока действия**
+- Периодический сброс трафика
+- Лимит **HWID** и **IP Limiter** (макс. одновременных уникальных IP)
+- Мульти-пользователь / мульти-inbound сценарии
 
-**🔗 Подписки и обмен**
-- **Ссылка подписки** совместимая с **V2ray**, **Clash** и **ClashMeta**
-- Автоматический генератор **ссылок для обмена** и **QR-кодов**
-- Мониторинг системы и **статистика трафика**
+**🔗 Подписки**
+- Ссылки подписки для **V2ray**, **Clash**, **ClashMeta**
+- Страница пользователя с gauge, метриками и графиком трафика
+- QR-коды и копирование ссылок
 
-**🛠️ Инструменты и настройка**
-- Настраиваемая конфигурация xray
-- Встроенный **Telegram Bot**
-- **Интерфейс командной строки (CLI)**
-- Поддержка **многоязычности**
-- Поддержка **множественных администраторов** с **RBAC** для детальных прав и ограниченных областей доступа
-
-</div>
+**🛠️ Инструменты**
+- Редакторы ядер Xray / WireGuard / IPsec
+- Интегрированный **Telegram-бот**
+- **CLI**
+- Мультиязычность и мульти-админ **RBAC**
 
 ---
 
-# 🚀 Руководство по установке
+# 🚀 Установка на Linux
 
-> **Быстрый старт** - Запустите PasarGuard за несколько минут
+> **Быстрый старт** — поднимите HPXPANEL на Linux-сервере за несколько минут
 
-### Для быстрой настройки используйте следующие команды в зависимости от предпочитаемой базы данных.
+### Требования
+- Linux (рекомендуется Ubuntu / Debian)
+- Доступ `sudo`
+- Домен (для SSL в продакшене)
 
----
+### Однострочная установка (выберите БД)
 
-**TimescaleDB (Рекомендуется):**
+**TimescaleDB (рекомендуется):**
 ```bash
 sudo bash -c "$(curl -fsSL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install --database timescaledb
 ```
@@ -160,84 +140,63 @@ sudo bash -c "$(curl -fsSL https://github.com/PasarGuard/scripts/raw/main/pasarg
 sudo bash -c "$(curl -fsSL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install --database postgresql
 ```
 
-### 📋 После установки:
+### 📋 После установки
 
-<div align="left">
+- **Логи:** смотрите логи сервиса (`Ctrl+C` для остановки)
+- **Файлы:** `/opt/pasarguard`
+- **Конфиг:** `/opt/pasarguard/.env`
+- **Данные:** `/var/lib/pasarguard`
+- **Продакшен URL:** `https://YOUR_DOMAIN:8000/dashboard/` (нужен SSL)
 
-**📋 Следите за логами** (нажмите `Ctrl+C` для остановки)
-
-**📁 Файлы находятся в** `/opt/pasarguard`
-
-**⚙️ Файл конфигурации:** `/opt/pasarguard/.env` (см. [Конфигурация](#-конфигурация) для деталей)
-
-**💾 Файлы данных:** `/var/lib/pasarguard`
-
-**🔒 Важно:** Панель управления требует SSL-сертификат для безопасности
-- Получить SSL-сертификат: [Руководство](https://PasarGuard.github.io/PasarGuard/ru/examples/issue-ssl-certificate)
-- Доступ: `https://YOUR_DOMAIN:8000/dashboard/`
-
-**🔗 Для тестирования без домена:** Используйте SSH port forwarding (см. ниже)
-
-</div>
-
----
+**Тест без домена** через SSH port forwarding:
 
 ```bash
 ssh -L 8000:localhost:8000 user@serverip
 ```
 
-Затем доступ: `http://localhost:8000/dashboard/`
+Откройте: `http://localhost:8000/dashboard/`
 
-> ⚠️ **Только для тестирования** - Вы потеряете доступ при закрытии SSH-терминала.
+> ⚠️ **Только для теста** — закрытие SSH-сессии обрывает доступ.
 
-### 🔧 Следующие шаги:
+### 🔧 Следующие шаги
 
 ```bash
-# Сгенерировать одноразовый временный ключ для настройки owner-аккаунта
 pasarguard cli generate-temp-key
-
-# Используйте ключ на странице входа в панель, чтобы создать owner-аккаунт
-
-# Получить справку
 pasarguard --help
 ```
 
 ---
 
-# 📚 Документация
+# 🔧 Установка из исходников
 
-<div align="left">
+```bash
+git clone https://github.com/pooyahpx/HPXPANEL.git
+cd HPXPANEL
 
-**📖 Официальная документация** - Полные руководства доступны на:
+# Backend
+uv sync
+uv run alembic upgrade head
+uv run main.py
 
-🇺🇸 **[English](https://PasarGuard.github.io/PasarGuard)**
+# Dashboard (отдельный терминал)
+cd dashboard
+bun install
+bun run dev
+```
 
-🇮🇷 **[فارسی](https://PasarGuard.github.io/PasarGuard)**
-
-🇷🇺 **[Русский](https://PasarGuard.github.io/PasarGuard)**
-
-</div>
-
-> **Участие:** Помогите улучшить документацию на [GitHub](https://github.com/PasarGuard/PasarGuard.github.io)
+Дашборд: `http://127.0.0.1:5173/dashboard/`
 
 ---
 
-# 💖 Пожертвования
+# 💖 Поддержка
 
-<div align="left">
+Поставьте звезду и следите за разработкой:
 
-> **Поддержка разработки PasarGuard**
-
-Если PasarGuard помогает вам, рассмотрите возможность поддержки его разработки:
-
-[![Donate](https://img.shields.io/badge/Donate-Support%20Us-green?style=for-the-badge)](http://donate.pasarguard.org)
-
-**Спасибо за вашу поддержку!** 💖
-
-</div>
+**GitHub:** [pooyahpx/HPXPANEL](https://github.com/pooyahpx/HPXPANEL)  
+**dev by hpx:** [github.com/pooyahpx](https://github.com/pooyahpx)
 
 ---
 
 <p align="center">
-  Made with ❤️ for Internet freedom
+  <a href="https://github.com/pooyahpx">dev by hpx</a>
 </p>

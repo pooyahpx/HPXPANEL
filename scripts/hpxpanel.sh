@@ -187,6 +187,123 @@ is_port_in_use() {
     return 1
 }
 
+describe_port_listener() {
+    local port="$1"
+    if command -v ss >/dev/null 2>&1; then
+        ss -ltnp 2>/dev/null | awk -v p=":${port}$" '$4 ~ p {print; exit}'
+        return 0
+    fi
+    if command -v lsof >/dev/null 2>&1; then
+        lsof -nP -iTCP:"${port}" -sTCP:LISTEN 2>/dev/null | tail -n +2 | head -1
+        return 0
+    fi
+    echo "(unknown process)"
+}
+
+resolve_domain_ipv4() {
+    local domain="$1"
+    local ip=""
+
+    if command -v dig >/dev/null 2>&1; then
+        ip=$(dig +short A "$domain" 2>/dev/null | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | head -1 || true)
+    fi
+    if [ -z "$ip" ] && command -v getent >/dev/null 2>&1; then
+        ip=$(getent ahostsv4 "$domain" 2>/dev/null | awk '{print $1; exit}' || true)
+    fi
+    if [ -z "$ip" ] && command -v python3 >/dev/null 2>&1; then
+        ip=$(python3 -c "import socket; print(socket.gethostbyname('${domain}'))" 2>/dev/null || true)
+    fi
+    if [ -z "$ip" ] && command -v host >/dev/null 2>&1; then
+        ip=$(host -t A "$domain" 2>/dev/null | awk '/has address/ {print $4; exit}' || true)
+    fi
+
+    if is_ipv4 "$ip"; then
+        echo "$ip"
+        return 0
+    fi
+    return 1
+}
+
+print_ssl_troubleshoot() {
+    local target="$1"
+    local http_port="${2:-80}"
+    local server_ip=""
+    server_ip=$(get_public_ipv4 || true)
+
+    colorized_echo yellow "SSL checklist (Let's Encrypt HTTP-01):"
+    echo "  1) Domain/IP A record must point to THIS server${server_ip:+ ($server_ip)}"
+    echo "  2) Cloud firewall (Vultr/AWS/…) must allow inbound TCP ${http_port}"
+    echo "  3) Cloudflare orange-cloud proxy must be OFF while issuing (grey cloud / DNS only)"
+    echo "  4) Nothing else may listen on port ${http_port} during issue"
+    echo "  5) Retry later with:  hpxpanel ssl"
+    if [ -f "${HOME}/.acme.sh/acme.sh.log" ]; then
+        colorized_echo yellow "Last acme.sh log lines:"
+        tail -n 20 "${HOME}/.acme.sh/acme.sh.log" 2>/dev/null || true
+    elif [ -f "/root/.acme.sh/acme.sh.log" ]; then
+        colorized_echo yellow "Last acme.sh log lines:"
+        tail -n 20 "/root/.acme.sh/acme.sh.log" 2>/dev/null || true
+    fi
+    [ -n "$target" ] || true
+}
+
+prepare_acme_account() {
+    local acme_bin="$1"
+    local domain_hint="${2:-}"
+    local email="ssl@hpxpanel.local"
+
+    if [ -n "$domain_hint" ] && is_domain "$domain_hint"; then
+        if [[ "$domain_hint" == *.*.* ]]; then
+            email="ssl@${domain_hint#*.}"
+        else
+            email="ssl@${domain_hint}"
+        fi
+    fi
+
+    "$acme_bin" --set-default-ca --server letsencrypt >/dev/null 2>&1 || true
+    "$acme_bin" --register-account -m "$email" >/dev/null 2>&1 || true
+}
+
+preflight_http01_challenge() {
+    local http_port="$1"
+    local domain="${2:-}"
+    local expect_ip="${3:-}"
+    local server_ip=""
+    local resolved=""
+    local listener=""
+
+    server_ip=$(get_public_ipv4 || true)
+
+    if is_port_in_use "$http_port"; then
+        listener=$(describe_port_listener "$http_port" || true)
+        colorized_echo red "Port ${http_port} is already in use — Let's Encrypt standalone cannot bind it."
+        [ -n "$listener" ] && echo "  Listener: ${listener}"
+        colorized_echo yellow "Stop that service, or pass a free port: --ssl-http-port <port> (must be reachable from the internet)."
+        return 1
+    fi
+
+    if [ -n "$domain" ]; then
+        colorized_echo blue "Checking DNS for ${domain}..."
+        if ! resolved=$(resolve_domain_ipv4 "$domain"); then
+            colorized_echo red "Could not resolve A record for ${domain}."
+            colorized_echo yellow "Point ${domain} to this server${server_ip:+ ($server_ip)} and wait for DNS, then retry: hpxpanel ssl"
+            return 1
+        fi
+        colorized_echo green "DNS ${domain} -> ${resolved}"
+        if [ -n "$server_ip" ] && [ "$resolved" != "$server_ip" ]; then
+            colorized_echo red "DNS mismatch: ${domain} points to ${resolved}, but this server is ${server_ip}."
+            colorized_echo yellow "If you use Cloudflare, set the record to DNS-only (grey cloud), then retry."
+            return 1
+        fi
+    fi
+
+    if [ -n "$expect_ip" ] && [ -n "$server_ip" ] && [ "$expect_ip" != "$server_ip" ]; then
+        colorized_echo yellow "Warning: requested IP ${expect_ip} differs from detected public IP ${server_ip}."
+        colorized_echo yellow "Let's Encrypt must reach ${expect_ip}:${http_port} on this machine."
+    fi
+
+    return 0
+}
+
 # Map the detected OS to its cron daemon package name, mirroring the OS matrix
 # in lib/system.sh: Debian/Ubuntu ship "cron"; the Red Hat family, Fedora,
 # Arch and openSUSE ship "cronie". Returns non-zero for an unrecognized OS.
@@ -350,6 +467,8 @@ setup_ssl_certificate() {
     local acme_bin=""
     local cert_dir="$DATA_DIR/certs/${domain}"
     local reload_cmd=""
+    local issue_log=""
+    local force_flag=()
 
     if [ -z "$domain" ]; then
         colorized_echo red "Domain is required for SSL certificate issuance."
@@ -376,23 +495,38 @@ setup_ssl_certificate() {
         }
     fi
 
-    if is_port_in_use "$http_port"; then
-        colorized_echo yellow "Port ${http_port} is already in use. SSL issuance may fail unless that service is stopped."
+    if ! preflight_http01_challenge "$http_port" "$domain"; then
+        print_ssl_troubleshoot "$domain" "$http_port"
+        return 1
     fi
 
     mkdir -p "$cert_dir"
     reload_cmd=$(build_hpxpanel_ssl_reload_command)
+    prepare_acme_account "$acme_bin" "$domain"
 
-    colorized_echo blue "Issuing Let's Encrypt certificate for ${domain}..."
-    "$acme_bin" --set-default-ca --server letsencrypt --force >/dev/null 2>&1 || true
-    if ! "$acme_bin" --issue -d "$domain" --standalone --httpport "$http_port" --force; then
+    # Only force-reissue when a broken/partial store already exists.
+    if [ -d "${HOME}/.acme.sh/${domain}" ] || [ -d "${HOME}/.acme.sh/${domain}_ecc" ] ||
+        [ -d "/root/.acme.sh/${domain}" ] || [ -d "/root/.acme.sh/${domain}_ecc" ]; then
+        force_flag=(--force)
+        colorized_echo yellow "Existing ACME order found — reissuing with --force."
+    fi
+
+    issue_log=$(mktemp)
+    colorized_echo blue "Issuing Let's Encrypt certificate for ${domain} (HTTP-01 on :${http_port})..."
+    if ! "$acme_bin" --issue -d "$domain" --standalone --httpport "$http_port" \
+        --keylength ec-256 --server letsencrypt "${force_flag[@]}" 2>&1 | tee "$issue_log"; then
         colorized_echo red "Failed to issue certificate for ${domain}."
-        rm -rf "${HOME}/.acme.sh/${domain}" "$cert_dir" 2>/dev/null || true
+        print_ssl_troubleshoot "$domain" "$http_port"
+        rm -rf "${HOME}/.acme.sh/${domain}" "${HOME}/.acme.sh/${domain}_ecc" \
+            "/root/.acme.sh/${domain}" "/root/.acme.sh/${domain}_ecc" "$cert_dir" 2>/dev/null || true
+        rm -f "$issue_log"
         return 1
     fi
+    rm -f "$issue_log"
 
     if ! install_acme_cert_pair "$acme_bin" "$domain" "$cert_dir" "$reload_cmd"; then
         colorized_echo red "Failed to install certificate for ${domain}."
+        print_ssl_troubleshoot "$domain" "$http_port"
         return 1
     fi
 
@@ -414,6 +548,7 @@ setup_ip_ssl_certificate() {
     local cert_dir="$DATA_DIR/certs/ip"
     local reload_cmd=""
     local domain_args=()
+    local force_flag=()
 
     if ! is_ipv4 "$ipv4"; then
         colorized_echo red "Invalid IPv4 address: ${ipv4}"
@@ -440,19 +575,25 @@ setup_ip_ssl_certificate() {
         }
     fi
 
-    if is_port_in_use "$http_port"; then
-        colorized_echo yellow "Port ${http_port} is already in use. SSL issuance may fail unless that service is stopped."
+    colorized_echo yellow "IP certificates are short-lived and stricter than domain certs. Prefer option 1 (domain) when possible."
+    if ! preflight_http01_challenge "$http_port" "" "$ipv4"; then
+        print_ssl_troubleshoot "$ipv4" "$http_port"
+        return 1
     fi
 
     mkdir -p "$cert_dir"
     reload_cmd=$(build_hpxpanel_ssl_reload_command)
+    prepare_acme_account "$acme_bin"
     domain_args=(-d "$ipv4")
     if [ -n "$ipv6" ]; then
         domain_args+=(-d "$ipv6")
     fi
 
+    if [ -d "${HOME}/.acme.sh/${ipv4}" ] || [ -d "/root/.acme.sh/${ipv4}" ]; then
+        force_flag=(--force)
+    fi
+
     colorized_echo blue "Issuing Let's Encrypt IP certificate for ${ipv4}..."
-    "$acme_bin" --set-default-ca --server letsencrypt --force >/dev/null 2>&1 || true
     if ! "$acme_bin" --issue \
         "${domain_args[@]}" \
         --standalone \
@@ -460,15 +601,17 @@ setup_ip_ssl_certificate() {
         --certificate-profile shortlived \
         --days 6 \
         --httpport "$http_port" \
-        --force; then
+        "${force_flag[@]}"; then
         colorized_echo red "Failed to issue IP certificate."
-        rm -rf "${HOME}/.acme.sh/${ipv4}" "$cert_dir" 2>/dev/null || true
-        [ -n "$ipv6" ] && rm -rf "${HOME}/.acme.sh/${ipv6}" 2>/dev/null || true
+        print_ssl_troubleshoot "$ipv4" "$http_port"
+        rm -rf "${HOME}/.acme.sh/${ipv4}" "/root/.acme.sh/${ipv4}" "$cert_dir" 2>/dev/null || true
+        [ -n "$ipv6" ] && rm -rf "${HOME}/.acme.sh/${ipv6}" "/root/.acme.sh/${ipv6}" 2>/dev/null || true
         return 1
     fi
 
     if ! install_acme_cert_pair "$acme_bin" "$ipv4" "$cert_dir" "$reload_cmd"; then
         colorized_echo red "Failed to install IP certificate files."
+        print_ssl_troubleshoot "$ipv4" "$http_port"
         rm -rf "$cert_dir" 2>/dev/null || true
         return 1
     fi
@@ -585,10 +728,17 @@ setup_hpxpanel_ssl_during_install() {
         if setup_ssl_certificate "$ssl_domain" "$ssl_http_port"; then
             enable_hpxpanel_ssl_env "${DATA_DIR}/certs/${ssl_domain}/fullchain.pem" "${DATA_DIR}/certs/${ssl_domain}/privkey.pem" "public"
             colorized_echo green "SSL enabled for https://${ssl_domain}:8000/dashboard/"
+            # Restart panel if already running so new cert is picked up.
+            if is_hpxpanel_installed && is_hpxpanel_up 2>/dev/null; then
+                detect_compose
+                $COMPOSE -f "$COMPOSE_FILE" -p "$APP_NAME" restart >/dev/null 2>&1 || true
+            fi
             return 0
         fi
+        colorized_echo yellow "You can retry later with:  hpxpanel ssl"
         ;;
     2)
+        colorized_echo yellow "Tip: domain certificates (option 1) are more reliable than IP certificates."
         detected_ipv4=$(get_public_ipv4 || true)
         if [ -n "$detected_ipv4" ]; then
             read -p "Enter IPv4 for SSL certificate (default: ${detected_ipv4}): " input_ipv4
@@ -663,8 +813,52 @@ setup_hpxpanel_ssl_during_install() {
     esac
 
     disable_hpxpanel_ssl_env
-    colorized_echo yellow "SSL setup failed. Continuing without SSL. You can configure SSL later in ${ENV_FILE}."
+    colorized_echo yellow "SSL setup failed. Continuing without SSL."
+    colorized_echo yellow "Fix DNS/firewall/port 80, then run:  hpxpanel ssl"
+    colorized_echo yellow "Or edit ${ENV_FILE} manually."
     return 0
+}
+
+ssl_command() {
+    check_running_as_root
+    if ! is_hpxpanel_installed; then
+        colorized_echo red "HPXPANEL is not installed!"
+        exit 1
+    fi
+    detect_compose
+    local ssl_http_port="80"
+    while [ $# -gt 0 ]; do
+        case "$1" in
+        --ssl-http-port)
+            ssl_http_port="$2"
+            shift 2
+            ;;
+        --domain)
+            if setup_ssl_certificate "$2" "$ssl_http_port"; then
+                enable_hpxpanel_ssl_env "${DATA_DIR}/certs/${2}/fullchain.pem" "${DATA_DIR}/certs/${2}/privkey.pem" "public"
+                if is_hpxpanel_up 2>/dev/null; then
+                    $COMPOSE -f "$COMPOSE_FILE" -p "$APP_NAME" restart >/dev/null 2>&1 || true
+                fi
+                colorized_echo green "SSL enabled for https://${2}:8000/dashboard/"
+                return 0
+            fi
+            exit 1
+            ;;
+        -h|--help)
+            echo "Usage: hpxpanel ssl [--domain example.com] [--ssl-http-port 80]"
+            return 0
+            ;;
+        *)
+            colorized_echo red "Unknown option: $1"
+            echo "Usage: hpxpanel ssl [--domain example.com] [--ssl-http-port 80]"
+            exit 1
+            ;;
+        esac
+    done
+    setup_hpxpanel_ssl_during_install "auto" "" "$ssl_http_port"
+    if is_hpxpanel_up 2>/dev/null; then
+        $COMPOSE -f "$COMPOSE_FILE" -p "$APP_NAME" restart >/dev/null 2>&1 || true
+    fi
 }
 
 compose_service_exists() {
@@ -1968,6 +2162,7 @@ usage() {
     colorized_echo yellow "  uninstall       $(tput sgr0)– Uninstall HPXPANEL"
     colorized_echo yellow "  install-script  $(tput sgr0)– Install HPXPANEL script"
     colorized_echo yellow "  install-node    $(tput sgr0)– Install HPXPANEL node"
+    colorized_echo yellow "  ssl             $(tput sgr0)– Issue / reconfigure Let's Encrypt SSL"
     colorized_echo yellow "  backup          $(tput sgr0)– Manual backup launch"
     colorized_echo yellow "  backup-service  $(tput sgr0)– hpxpanel Backup service to backup to TG, and a new job in crontab"
     colorized_echo yellow "  restore         $(tput sgr0)– Restore database from backup file"
@@ -2044,6 +2239,10 @@ hpxpanel_main() {
     install-node)
         shift
         install_node_command "$@"
+        ;;
+    ssl|cert)
+        shift
+        ssl_command "$@"
         ;;
     edit)
         shift

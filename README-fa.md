@@ -74,6 +74,46 @@
 
 ---
 
+## اسکرین‌شات‌ها
+
+### اسکنر هدف REALITY
+
+قبل از اینکه دامنه‌ای را به Xray وصل کنی، آن را به‌عنوان decoy اسکن کن. پنل **TLS 1.3**، **HTTP/2 (ALPN)** و latency را چک می‌کند و هدف‌های مناسب را مشخص می‌کند.
+
+<p align="center">
+  <img src="./docs/assets/readme/reality-scan.png" alt="اسکن هدف REALITY" width="820">
+</p>
+
+<p align="center"><i>اسکن Reality — چند هدف، فیلتر Suitable only، بج TLS 1.3 / H2 و latency</i></p>
+
+<p align="center">
+  <img src="./docs/assets/readme/reality-target-detail.png" alt="جزئیات هدف Suitable Reality" width="820">
+</p>
+
+<p align="center"><i>جزئیات هدف — SNI، TLS، H2، تبادل کلید / PQ، سرتیفیکت و SANها</i></p>
+
+### آمار Command Deck
+
+نمای NOC زنده: لیست نودها، متریک سیستم، ترافیک و یوزر آنلاین.
+
+<p align="center">
+  <img src="./docs/assets/readme/statistics-command-deck.png" alt="آمار HPXPANEL" width="820">
+</p>
+
+<p align="center"><i>Statistics — اسکوپ نود، CPU / RAM / Disk، ترافیک و کاربران آنلاین</i></p>
+
+### انتخاب هسته / پروتکل
+
+یک کنسول برای **Xray**، **WireGuard**، **IKEv2/IPsec** و **L2TP/IPsec**.
+
+<p align="center">
+  <img src="./docs/assets/readme/core-protocol-picker.png" alt="انتخاب نوع Core" width="420">
+</p>
+
+<p align="center"><i>انتخاب نوع Core — جابه‌جایی بین استک‌ها بدون خروج از پنل</i></p>
+
+---
+
 ## نصب روی لینوکس
 
 ### یک خطی (دیتابیس را انتخاب کن)

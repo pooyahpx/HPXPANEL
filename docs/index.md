@@ -3,7 +3,7 @@ layout: home
 hero:
   name: HPXPANEL
   text: Docs
-  tagline: Command-deck proxy operations — users, nodes, cores, and native IPsec.
+  tagline: Xray-powered ops console — VLESS, REALITY, WireGuard, Hysteria2, and native IPsec when you need it.
   image:
     src: /hpx-logo.png
     alt: HPX
@@ -12,16 +12,16 @@ hero:
       text: Introduction
       link: /en/introduction
     - theme: alt
-      text: Install on Linux
-      link: /en/installation
+      text: Xray stack
+      link: /en/protocols/xray
     - theme: alt
-      text: GitHub
-      link: https://github.com/pooyahpx/HPXPANEL
+      text: Install
+      link: /en/installation
 features:
-  - title: L2TP / IPsec
-    details: Classic native VPN tunnels with PSK — stock OS clients, no extra Xray app required.
-  - title: IKEv2 / IPsec
-    details: Modern certificate-friendly IPsec with solid mobile reconnects.
-  - title: Operator UX
-    details: Multi-step user wizard, IP Limiter, subscription gauges, multi-node cores.
+  - title: Xray-core
+    details: VMess, VLESS, Trojan, Shadowsocks with TLS & REALITY — the daily driver for serious proxy fleets.
+  - title: WireGuard & Hysteria2
+    details: Modern high-performance tunnels beside the Xray stack when the path demands it.
+  - title: Native IPsec
+    details: L2TP / IKEv2 for stock OS VPN clients — same panel, same users, extra reach.
 ---

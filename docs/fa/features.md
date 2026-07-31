@@ -8,19 +8,25 @@ title: ویژگی‌ها
 
 <div class="callout-new">
 
-**L2TP/IPsec و IKEv2** — VPN نیتیو در همان پایپ‌لاین یوزر/کور. کلاینت خودِ OS. کرِدِنشیال مشترک. ادیتور کور اختصاصی.
+**استک Xray-core** — VMess، VLESS، Trojan، Shadowsocks با TLS و REALITY. چند inbound، چند پروتکل، ادیتور کور. ران روزانه اکثر فلیت‌ها همین‌جاست.
 
 </div>
 
 <div class="callout-new">
 
-**IP Limiter** — سقف IP یکتای همزمان برای هر یوزر.
+**WireGuard و Hysteria2** — تانل‌های مدرن وقتی پروفایل سرعت/ترانزپورت دیگری می‌خواهی.
 
 </div>
 
 <div class="callout-new">
 
-**UI به سبک command deck** — ویزارد ساخت یوزر، گیج سابسکریپشن، نمودار ترافیک.
+**L2TP/IPsec و IKEv2** — VPN نیتیو سیستم‌عامل در همان پایپ‌لاین پنل.
+
+</div>
+
+<div class="callout-new">
+
+**IP Limiter + UI command deck** — سقف IP همزمان، ویزارد یوزر، گیج سابسکریپشن.
 
 </div>
 
@@ -29,7 +35,8 @@ title: ویژگی‌ها
 | حوزه | قابلیت‌ها |
 | --- | --- |
 | کنترل‌پلین | Web UI، REST API، مولتی‌نود، RBAC، CLI، تلگرام |
-| پروکسی | VMess، VLESS، Trojan، Shadowsocks، WireGuard، Hysteria2 |
-| VPN نیتیو | **L2TP/IPsec**، **IKEv2/IPsec** |
-| امنیت | TLS، REALITY، HWID، IP Limiter |
+| **استک Xray** | VMess، VLESS، Trojan، Shadowsocks، TLS، REALITY |
+| تانل مدرن | WireGuard، Hysteria2 |
+| VPN نیتیو | L2TP/IPsec، IKEv2/IPsec |
+| امنیت | HWID، IP Limiter |
 | تحویل | سابسکریپشن، QR، صفحه مصرف |

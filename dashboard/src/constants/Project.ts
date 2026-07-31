@@ -1,5 +1,4 @@
 export const REPO_URL = 'https://github.com/pooyahpx/HPXPANEL'
 export const ORGANIZATION_URL = 'https://github.com/pooyahpx'
 export const DONATION_URL = 'https://pooyahpx.github.io/HPXPANEL/donate/'
-export const DISCUSSION_GROUP = 'https://github.com/pooyahpx/HPXPANEL/issues'
 export const DOCUMENTATION = 'https://pooyahpx.github.io/HPXPANEL/'

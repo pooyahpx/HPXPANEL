@@ -1,6 +1,6 @@
-﻿import { Footer } from '@/components/layout/footer'
-import { Language } from '@/components/common/language'
+﻿import { Language } from '@/components/common/language'
 import { ThemeToggle } from '@/components/common/theme-toggle'
+import { Footer } from '@/components/layout/footer'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -371,8 +371,8 @@ export const Login: FC = () => {
   }, [])
 
   return (
-    <div className="relative flex min-h-screen w-full overflow-hidden">
-      <aside className="auth-mesh relative hidden w-[46%] flex-col justify-between overflow-hidden p-10 text-white lg:flex xl:w-[48%]">
+    <div className="relative flex min-h-screen w-full flex-col overflow-hidden lg:flex-row">
+      <aside className="auth-mesh relative flex w-full flex-col justify-between overflow-hidden p-6 text-white sm:p-8 lg:w-[46%] lg:p-10 xl:w-[48%]">
         <div className="auth-grid absolute inset-0" />
         <div className="relative z-10 flex items-center gap-3">
           <div className="flex h-11 w-11 items-center justify-center overflow-hidden border-2 border-white/30 shadow-[3px_3px_0_0_rgba(0,0,0,0.45)]">
@@ -384,11 +384,11 @@ export const Login: FC = () => {
           </div>
         </div>
 
-        <div className="relative z-10 max-w-md animate-rise space-y-5">
+        <div className="relative z-10 max-w-md animate-rise space-y-4 py-8 lg:space-y-5 lg:py-0">
           <p className="inline-flex rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[11px] font-semibold tracking-[0.16em] text-emerald-200/90 uppercase backdrop-blur-sm">
             Proxy operations
           </p>
-          <h1 className="font-display text-4xl leading-[1.05] font-extrabold tracking-tight xl:text-5xl">
+          <h1 className="font-display text-3xl leading-[1.05] font-extrabold tracking-tight sm:text-4xl xl:text-5xl">
             One desk for
             <span className="block text-emerald-300">users, nodes & traffic.</span>
           </h1>
@@ -412,17 +412,11 @@ export const Login: FC = () => {
           </div>
         </div>
 
-        <p className="relative z-10 text-xs text-white/40">HPXPANEL · secure edge management</p>
+        <p className="relative z-10 hidden text-xs text-white/40 lg:block">HPXPANEL · secure edge management</p>
       </aside>
 
-      <main className="relative flex min-h-screen flex-1 flex-col">
-        <div className="flex items-center justify-between px-5 pt-5 sm:px-8">
-          <div className="flex items-center gap-2 lg:invisible">
-            <div className="flex h-8 w-8 items-center justify-center overflow-hidden border-2 border-[hsl(var(--pixel-border))]">
-              <img src={HPX_LOGO_URL} alt="HPXPANEL" className="h-full w-full object-cover" draggable={false} />
-            </div>
-            <span className="font-display text-sm font-bold">HPXPANEL</span>
-          </div>
+      <main className="relative flex min-h-0 flex-1 flex-col lg:min-h-screen">
+        <div className="flex items-center justify-end px-5 pt-5 sm:px-8">
           <div className="flex items-center gap-2">
             <Language />
             <ThemeToggle />

@@ -21,23 +21,23 @@ description: نصب HPXPANEL روی لینوکس
 ::: code-group
 
 ```bash [TimescaleDB]
-sudo bash -c "$(curl -fsSL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install --database timescaledb
+sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXPANEL/raw/main/scripts/hpxpanel.sh)" @ install --database timescaledb
 ```
 
 ```bash [SQLite]
-sudo bash -c "$(curl -fsSL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install
+sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXPANEL/raw/main/scripts/hpxpanel.sh)" @ install
 ```
 
 ```bash [MySQL]
-sudo bash -c "$(curl -fsSL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install --database mysql
+sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXPANEL/raw/main/scripts/hpxpanel.sh)" @ install --database mysql
 ```
 
 ```bash [MariaDB]
-sudo bash -c "$(curl -fsSL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install --database mariadb
+sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXPANEL/raw/main/scripts/hpxpanel.sh)" @ install --database mariadb
 ```
 
 ```bash [PostgreSQL]
-sudo bash -c "$(curl -fsSL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install --database postgresql
+sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXPANEL/raw/main/scripts/hpxpanel.sh)" @ install --database postgresql
 ```
 
 :::
@@ -50,9 +50,9 @@ sudo bash -c "$(curl -fsSL https://github.com/PasarGuard/scripts/raw/main/pasarg
 
 | مسیر | کاربرد |
 | --- | --- |
-| `/opt/pasarguard` | فایل‌های برنامه |
-| `/opt/pasarguard/.env` | پیکربندی |
-| `/var/lib/pasarguard` | داده پایدار |
+| `/opt/hpxpanel` | فایل‌های برنامه |
+| `/opt/hpxpanel/.env` | پیکربندی |
+| `/var/lib/hpxpanel` | داده پایدار |
 | `https://YOUR_DOMAIN:8000/dashboard/` | داشبورد پروداکشن |
 
 ::: warning SSL لازم است
@@ -74,8 +74,8 @@ ssh -L 8000:localhost:8000 user@serverip
 ## راه‌اندازی owner
 
 ```bash
-pasarguard cli generate-temp-key
-pasarguard --help
+hpxpanel cli generate-temp-key
+hpxpanel --help
 ```
 
 کلید یک‌بارمصرف را در صفحه لاگین داشبورد بزنید و اکانت owner بسازید.

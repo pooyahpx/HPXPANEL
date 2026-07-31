@@ -1,0 +1,59 @@
+services:
+  hpxpanel:
+    image: ghcr.io/pooyahpx/hpxpanel:latest
+    restart: always
+    env_file: .env
+    network_mode: host
+    volumes:
+      - /var/lib/hpxpanel:/var/lib/hpxpanel
+    depends_on:
+      mariadb:
+        condition: service_healthy
+
+  mariadb:
+    image: mariadb:lts
+    network_mode: host
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_ROOT_HOST: "%"
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    command:
+      - --bind-address=127.0.0.1 # Restricts access to localhost for increased security
+      - --character_set_server=utf8mb4 # Sets UTF-8 character set for full Unicode support
+      - --collation_server=utf8mb4_unicode_ci # Defines collation for Unicode
+      - --host-cache-size=0 # Disables host cache to prevent DNS issues
+      - --innodb-open-files=1024 # Sets the limit for InnoDB open files
+      - --innodb-buffer-pool-size=256M # Allocates buffer pool size for InnoDB
+      - --binlog_expire_logs_seconds=1209600 # Sets binary log expiration to 14 days (2 weeks)
+      - --innodb-doublewrite=0 # Disables doublewrite buffer (reduces disk I/O; may increase data loss risk)
+      - --general_log=0 # Disables general query log to reduce disk usage
+      - --slow_query_log=1 # Enables slow query log for identifying performance issues
+      - --slow_query_log_file=/var/lib/mysql/slow.log # Logs slow queries for troubleshooting
+      - --long_query_time=2 # Defines slow query threshold as 2 seconds
+      - --innodb_snapshot_isolation=0   # Disables snapshot isolation for better performance
+    volumes:
+      - /var/lib/mysql/hpxpanel:/var/lib/mysql
+    healthcheck:
+      test: [ "CMD", "healthcheck.sh", "--connect", "--innodb_initialized" ]
+      start_period: 10s
+      start_interval: 3s
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  phpmyadmin:
+    container_name: phpmyadmin
+    image: phpmyadmin:latest
+    restart: always
+    env_file: .env
+    network_mode: host
+    environment:
+      PMA_HOST: 127.0.0.1
+      APACHE_PORT: 8010
+      UPLOAD_LIMIT: 1024M
+    depends_on:
+      mariadb:
+        condition: service_healthy

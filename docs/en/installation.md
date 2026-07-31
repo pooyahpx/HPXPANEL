@@ -20,23 +20,23 @@ Pick a database:
 ::: code-group
 
 ```bash [TimescaleDB]
-sudo bash -c "$(curl -fsSL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install --database timescaledb
+sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXPANEL/raw/main/scripts/hpxpanel.sh)" @ install --database timescaledb
 ```
 
 ```bash [SQLite]
-sudo bash -c "$(curl -fsSL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install
+sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXPANEL/raw/main/scripts/hpxpanel.sh)" @ install
 ```
 
 ```bash [MySQL]
-sudo bash -c "$(curl -fsSL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install --database mysql
+sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXPANEL/raw/main/scripts/hpxpanel.sh)" @ install --database mysql
 ```
 
 ```bash [MariaDB]
-sudo bash -c "$(curl -fsSL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install --database mariadb
+sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXPANEL/raw/main/scripts/hpxpanel.sh)" @ install --database mariadb
 ```
 
 ```bash [PostgreSQL]
-sudo bash -c "$(curl -fsSL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install --database postgresql
+sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXPANEL/raw/main/scripts/hpxpanel.sh)" @ install --database postgresql
 ```
 
 :::
@@ -49,9 +49,9 @@ sudo bash -c "$(curl -fsSL https://github.com/PasarGuard/scripts/raw/main/pasarg
 
 | Path | Purpose |
 | --- | --- |
-| `/opt/pasarguard` | Application files |
-| `/opt/pasarguard/.env` | Configuration |
-| `/var/lib/pasarguard` | Persistent data |
+| `/opt/hpxpanel` | Application files |
+| `/opt/hpxpanel/.env` | Configuration |
+| `/var/lib/hpxpanel` | Persistent data |
 | `https://YOUR_DOMAIN:8000/dashboard/` | Production dashboard |
 
 ::: warning SSL required
@@ -75,8 +75,8 @@ Closing the SSH session drops access.
 ## Bootstrap owner
 
 ```bash
-pasarguard cli generate-temp-key
-pasarguard --help
+hpxpanel cli generate-temp-key
+hpxpanel --help
 ```
 
 Use the one-time key on the dashboard login page to create the owner account.

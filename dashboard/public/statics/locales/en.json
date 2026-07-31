@@ -3154,7 +3154,7 @@
       "description": "Remove {{count}} selected items? They will be dropped from configuration."
     },
     "realityScan": {
-      "title": "SCAN REALITY TARGET",
+      "title": "Scan Reality target",
       "description": "Probe one or more targets to check they work as REALITY decoys. REALITY needs HTTP/2 and TLS 1.3.",
       "targets": "Targets",
       "maxTargets": "Up to {{max}} targets can be scanned.",

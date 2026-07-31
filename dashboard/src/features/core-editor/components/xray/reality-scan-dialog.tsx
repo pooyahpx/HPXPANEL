@@ -1,10 +1,12 @@
 import { FormEvent, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ChevronDown, CircleCheck, CircleHelp, CircleX, Loader2, Radar, ScanSearch, X } from 'lucide-react'
+import { ChevronDown, CircleCheck, CircleHelp, CircleX, Loader2, ScanSearch, X } from 'lucide-react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Separator } from '@/components/ui/separator'
 import { CoreEditorFormDialog } from '@/features/core-editor/components/shared/core-editor-form-dialog'
 import { RealityScanResult, scanRealityTarget } from '@/service/reality-scan'
 import dayjs from '@/lib/dayjs'
@@ -64,40 +66,23 @@ const getErrorMessage = (error: unknown, fallback: string) => {
 
 type TriState = boolean | null | undefined
 
-function ProbeBadge({ ok, label }: { ok: boolean; label: string }) {
-  return (
-    <span className={cn('reality-probe__badge', ok ? 'reality-probe__badge--ok' : 'reality-probe__badge--bad')} dir="ltr">
-      {label}
-    </span>
-  )
-}
-
-function LatencyChip({ ms }: { ms: number | null | undefined }) {
-  if (ms === null || ms === undefined) return null
-  return (
-    <span className="reality-probe__latency" dir="ltr">
-      {ms} MS
-    </span>
-  )
-}
-
 function CheckRow({ status, label, detail }: { status: TriState; label: string; detail?: string }) {
   const icon =
     status === true ? (
-      <CircleCheck className="h-4 w-4 shrink-0 text-[hsl(var(--neon-green))]" />
+      <CircleCheck className="h-4 w-4 shrink-0 text-green-500" />
     ) : status === false ? (
       <CircleX className="text-destructive h-4 w-4 shrink-0" />
     ) : (
       <CircleHelp className="text-muted-foreground h-4 w-4 shrink-0" />
     )
   return (
-    <div className="reality-probe__check">
-      <div className="flex min-w-0 items-center gap-2.5">
+    <div className="flex items-center justify-between gap-3 py-2">
+      <div className="flex min-w-0 items-center gap-2">
         {icon}
-        <span className="min-w-0 truncate text-sm font-medium">{label}</span>
+        <span className="min-w-0 truncate text-sm">{label}</span>
       </div>
       {detail ? (
-        <span className="text-muted-foreground shrink-0 font-mono text-[11px] tracking-wide" dir="ltr">
+        <span className="text-muted-foreground shrink-0 font-mono text-xs" dir="ltr">
           {detail}
         </span>
       ) : null}
@@ -105,11 +90,19 @@ function CheckRow({ status, label, detail }: { status: TriState; label: string; 
   )
 }
 
+function MiniBadge({ ok, label }: { ok: boolean; label: string }) {
+  return (
+    <span className={cn('rounded px-1.5 py-0.5 font-mono text-[10px] font-medium', ok ? 'bg-green-500/10 text-green-500' : 'bg-destructive/10 text-destructive')} dir="ltr">
+      {label}
+    </span>
+  )
+}
+
 function RowStatusIcon({ row }: { row: ScanRow }) {
-  if (row.status === 'scanning') return <Loader2 className="h-4 w-4 shrink-0 animate-spin text-sky-400" />
-  if (row.status === 'pending') return <CircleHelp className="text-muted-foreground/35 h-4 w-4 shrink-0" />
+  if (row.status === 'scanning') return <Loader2 className="text-muted-foreground h-4 w-4 shrink-0 animate-spin" />
+  if (row.status === 'pending') return <CircleHelp className="text-muted-foreground/40 h-4 w-4 shrink-0" />
   if (row.status === 'error') return <CircleX className="text-destructive h-4 w-4 shrink-0" />
-  return row.result?.feasible ? <CircleCheck className="h-4 w-4 shrink-0 text-[hsl(var(--neon-green))]" /> : <CircleX className="text-destructive h-4 w-4 shrink-0" />
+  return row.result?.feasible ? <CircleCheck className="h-4 w-4 shrink-0 text-green-500" /> : <CircleX className="text-destructive h-4 w-4 shrink-0" />
 }
 
 function ScanResultDetail({ result }: { result: RealityScanResult }) {
@@ -126,67 +119,63 @@ function ScanResultDetail({ result }: { result: RealityScanResult }) {
   }
 
   return (
-    <div className="reality-probe__detail animate-rise space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
+    <div className="space-y-4">
+      <div
+        className={cn(
+          'flex flex-col gap-2 rounded-md border p-3 sm:flex-row sm:items-center sm:justify-between',
+          result.feasible ? 'border-green-500/30 bg-green-500/10' : 'border-destructive/30 bg-destructive/10',
+        )}
+      >
         <div className="flex min-w-0 items-center gap-2">
-          {result.feasible ? <CircleCheck className="h-5 w-5 shrink-0 text-[hsl(var(--neon-green))]" /> : <CircleX className="text-destructive h-5 w-5 shrink-0" />}
-          <span className="font-mono text-sm font-semibold tracking-tight" dir="ltr">
-            {result.host || result.target}
-          </span>
-        </div>
-        <div className="flex shrink-0 items-center gap-1.5">
-          <ProbeBadge ok={result.tls13} label="TLS 1.3" />
-          <ProbeBadge ok={result.h2} label="H2" />
-          <LatencyChip ms={result.latency_ms} />
-        </div>
-      </div>
-
-      <div className={cn('reality-probe__banner', result.feasible ? 'reality-probe__banner--ok' : 'reality-probe__banner--bad')}>
-        <div className="flex min-w-0 items-center gap-2">
-          {result.feasible ? <CircleCheck className="h-4 w-4 shrink-0" /> : <CircleX className="h-4 w-4 shrink-0" />}
-          <span className="text-sm font-semibold tracking-tight">
+          {result.feasible ? <CircleCheck className="h-5 w-5 shrink-0 text-green-500" /> : <CircleX className="text-destructive h-5 w-5 shrink-0" />}
+          <span className="text-sm font-semibold">
             {result.feasible
               ? t('coreEditor.realityScan.feasible', { defaultValue: 'Suitable Reality target' })
               : t('coreEditor.realityScan.notFeasible', { defaultValue: 'Not a suitable Reality target' })}
           </span>
         </div>
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
-          <span className="font-mono text-[11px] tracking-wide opacity-90" dir="ltr">
+        <div className="flex shrink-0 items-center gap-2">
+          <span className="text-muted-foreground truncate font-mono text-xs" dir="ltr">
             {result.host}
             {result.ip ? ` (${result.ip})` : ''}:{result.port}
           </span>
-          <LatencyChip ms={result.latency_ms} />
+          {result.latency_ms !== null ? (
+            <Badge dir="ltr" variant="outline" className="shrink-0 font-mono text-xs">
+              {result.latency_ms} ms
+            </Badge>
+          ) : null}
         </div>
       </div>
 
       {result.sni ? (
         <div className="flex flex-wrap items-center gap-2 text-sm">
-          <span className="font-hud text-muted-foreground text-[10px] tracking-[0.18em] uppercase">
-            {t('coreEditor.realityScan.sniLabel', { defaultValue: 'SNI' })}
-          </span>
+          <span className="text-muted-foreground">{t('coreEditor.realityScan.sniLabel', { defaultValue: 'SNI' })}:</span>
           <span className="text-foreground font-mono break-all" dir="ltr">
             {result.sni}
           </span>
           {result.sni_discovered ? (
-            <span className="reality-probe__chip reality-probe__chip--ghost">
+            <Badge variant="outline" className="text-[10px]">
               {t('coreEditor.realityScan.sniDiscovered', { defaultValue: 'discovered from IP' })}
-            </span>
+            </Badge>
           ) : null}
         </div>
       ) : null}
 
       {result.reason ? (
-        <Alert className="border-amber-500/30 bg-amber-500/5">
-          <AlertDescription dir="ltr" className="font-mono text-xs text-amber-200/90">
+        <Alert>
+          <AlertDescription dir="ltr" className="font-mono text-xs">
             {result.reason}
           </AlertDescription>
         </Alert>
       ) : null}
 
-      <div className="reality-probe__checks">
+      <div className="divide-border rounded-md border px-3">
         <CheckRow status={result.tls13} label={t('coreEditor.realityScan.tls13', { defaultValue: 'TLS 1.3' })} detail={result.tls_version ? `TLS ${result.tls_version}` : undefined} />
+        <Separator />
         <CheckRow status={result.h2} label={t('coreEditor.realityScan.h2', { defaultValue: 'HTTP/2 (ALPN)' })} detail={result.alpn ?? undefined} />
+        <Separator />
         <CheckRow status={result.x25519} label={t('coreEditor.realityScan.keyExchange', { defaultValue: 'X25519 key exchange' })} detail={keyExchangeDetail ?? undefined} />
+        <Separator />
         <CheckRow
           status={result.post_quantum}
           label={t('coreEditor.realityScan.postQuantum', { defaultValue: 'Post-quantum (X25519MLKEM768)' })}
@@ -198,27 +187,29 @@ function ScanResultDetail({ result }: { result: RealityScanResult }) {
                 : t('coreEditor.realityScan.notAdvertised', { defaultValue: 'Not offered' })
           }
         />
+        <Separator />
         <CheckRow
           status={result.h3}
           label={t('coreEditor.realityScan.h3', { defaultValue: 'HTTP/3 (advertised)' })}
           detail={result.h3 ? t('coreEditor.realityScan.advertised', { defaultValue: 'Alt-Svc' }) : t('coreEditor.realityScan.notAdvertised', { defaultValue: 'Not advertised' })}
         />
+        <Separator />
         <CheckRow status={result.cert_valid} label={t('coreEditor.realityScan.certificate', { defaultValue: 'Valid certificate' })} detail={result.cert_issuer ?? undefined} />
       </div>
 
       <div className="text-muted-foreground grid gap-2 text-xs sm:grid-cols-2">
         {result.cert_subject ? (
           <div className="min-w-0">
-            <span className="font-hud tracking-[0.12em] uppercase opacity-70">{t('coreEditor.realityScan.subject', { defaultValue: 'Subject' })} · </span>
-            <span className="text-foreground font-mono break-all" dir="ltr">
+            <span>{t('coreEditor.realityScan.subject', { defaultValue: 'Subject' })}: </span>
+            <span className="text-foreground break-all" dir="ltr">
               {result.cert_subject}
             </span>
           </div>
         ) : null}
         {result.not_after ? (
           <div className="min-w-0">
-            <span className="font-hud tracking-[0.12em] uppercase opacity-70">{t('coreEditor.realityScan.expires', { defaultValue: 'Expires' })} · </span>
-            <span className="text-foreground font-mono" dir="ltr">
+            <span>{t('coreEditor.realityScan.expires', { defaultValue: 'Expires' })}: </span>
+            <span className="text-foreground" dir="ltr">
               {formatExpiry(result.not_after)}
             </span>
           </div>
@@ -226,15 +217,13 @@ function ScanResultDetail({ result }: { result: RealityScanResult }) {
       </div>
 
       {result.server_names.length ? (
-        <div className="space-y-2.5">
-          <div className="font-hud text-muted-foreground text-[10px] font-semibold tracking-[0.16em] uppercase">
-            {t('coreEditor.realityScan.serverNames', { defaultValue: 'Certificate server names (valid SNIs)' })}
-          </div>
+        <div className="space-y-2">
+          <div className="text-muted-foreground text-xs font-medium">{t('coreEditor.realityScan.serverNames', { defaultValue: 'Certificate server names (valid SNIs)' })}</div>
           <div className="flex flex-wrap gap-1.5">
             {result.server_names.map(name => (
-              <span key={name} className="reality-probe__chip" dir="ltr">
+              <Badge key={name} dir="ltr" variant="secondary" className="font-mono text-xs">
                 {name}
-              </span>
+              </Badge>
             ))}
           </div>
         </div>
@@ -247,35 +236,35 @@ function ScanRowItem({ row, expanded, onToggle }: { row: ScanRow; expanded: bool
   const { t } = useTranslation()
   const canExpand = row.status === 'done' || row.status === 'error'
   return (
-    <div className={cn('reality-probe__row', expanded && 'reality-probe__row--open', row.status === 'done' && row.result?.feasible && 'reality-probe__row--ok')}>
-      <button type="button" onClick={canExpand ? onToggle : undefined} className={cn('reality-probe__row-head', canExpand ? 'cursor-pointer' : 'cursor-default')}>
+    <div className="overflow-hidden rounded-md border">
+      <button type="button" onClick={canExpand ? onToggle : undefined} className={cn('flex w-full items-center gap-2 px-3 py-2 text-left', canExpand ? 'hover:bg-muted/50' : 'cursor-default')}>
         <RowStatusIcon row={row} />
-        <span className="min-w-0 flex-1 truncate font-mono text-sm tracking-tight" dir="ltr">
+        <span className="min-w-0 flex-1 truncate font-mono text-sm" dir="ltr">
           {row.target}
         </span>
         {row.status === 'done' && row.result ? (
           <span className="hidden shrink-0 items-center gap-1.5 sm:flex">
-            <ProbeBadge ok={row.result.tls13} label="TLS 1.3" />
-            <ProbeBadge ok={row.result.h2} label="H2" />
-            <LatencyChip ms={row.result.latency_ms} />
+            <MiniBadge ok={row.result.tls13} label="TLS 1.3" />
+            <MiniBadge ok={row.result.h2} label="H2" />
+            {row.result.latency_ms !== null ? (
+              <Badge dir="ltr" variant="outline" className="font-mono text-[10px]">
+                {row.result.latency_ms} ms
+              </Badge>
+            ) : null}
           </span>
         ) : row.status === 'scanning' ? (
-          <span className="font-hud shrink-0 text-[10px] tracking-[0.14em] text-sky-400 uppercase">
-            {t('coreEditor.realityScan.scanningShort', { defaultValue: 'Scanning' })}
-          </span>
+          <span className="text-muted-foreground shrink-0 text-xs">{t('coreEditor.realityScan.scanningShort', { defaultValue: 'Scanning' })}</span>
         ) : row.status === 'error' ? (
-          <span className="text-destructive font-hud shrink-0 text-[10px] tracking-[0.14em] uppercase">
-            {t('coreEditor.realityScan.scanFailed', { defaultValue: 'Failed' })}
-          </span>
+          <span className="text-destructive shrink-0 text-xs">{t('coreEditor.realityScan.scanFailed', { defaultValue: 'Failed' })}</span>
         ) : null}
-        {canExpand ? <ChevronDown className={cn('text-muted-foreground h-4 w-4 shrink-0 transition-transform duration-200', expanded && 'rotate-180')} /> : <span className="w-4 shrink-0" />}
+        {canExpand ? <ChevronDown className={cn('text-muted-foreground h-4 w-4 shrink-0 transition-transform', expanded && 'rotate-180')} /> : <span className="w-4 shrink-0" />}
       </button>
       {expanded && row.status === 'done' && row.result ? (
-        <div className="reality-probe__row-body">
+        <div className="border-t p-3">
           <ScanResultDetail result={row.result} />
         </div>
       ) : expanded && row.status === 'error' ? (
-        <div className="reality-probe__row-body">
+        <div className="border-t p-3">
           <Alert variant="destructive">
             <AlertDescription dir="ltr" className="font-mono text-xs">
               {row.error}
@@ -309,35 +298,38 @@ function TargetsInput({ value, onChange, disabled, max }: { value: string[]; onC
 
   return (
     <div
-      className={cn('reality-probe__targets', disabled && 'pointer-events-none opacity-50')}
+      className={cn(
+        'border-input focus-within:ring-ring flex min-h-10 w-full flex-wrap items-center gap-1.5 rounded-md border bg-transparent px-2 py-1.5 text-sm focus-within:ring-1',
+        disabled && 'pointer-events-none opacity-50',
+      )}
       dir="ltr"
       onMouseDown={event => {
         if (event.target === event.currentTarget) inputRef.current?.focus()
       }}
     >
       {value.map(tag => (
-        <span key={tag} className="reality-probe__tag">
-          <span className="truncate font-mono text-[11px] tracking-wide uppercase">{tag}</span>
+        <Badge key={tag} variant="secondary" className="max-w-full gap-1 py-0.5 pr-1 pl-2 font-mono text-[11px] font-normal">
+          <span className="truncate">{tag}</span>
           <button
             type="button"
             disabled={disabled}
-            className="hover:bg-foreground/10 inline-flex shrink-0 rounded p-0.5"
+            className="hover:bg-muted-foreground/20 inline-flex shrink-0 rounded p-0.5"
             onClick={() => onChange(value.filter(item => item !== tag))}
             aria-label={t('coreEditor.realityScan.removeTarget', { defaultValue: 'Remove {{tag}}', tag })}
           >
             <X className="h-3 w-3" />
           </button>
-        </span>
+        </Badge>
       ))}
       <input
         ref={inputRef}
-        className="placeholder:text-muted-foreground/50 min-w-[8rem] flex-1 bg-transparent font-mono text-sm outline-none"
+        className="placeholder:text-muted-foreground min-w-[8rem] flex-1 bg-transparent outline-none"
         value={draft}
         disabled={disabled}
         dir="ltr"
         autoComplete="off"
         spellCheck={false}
-        placeholder={value.length ? '' : 'yahoo.com, google.com, play.google.com'}
+        placeholder={value.length ? '' : 'www.microsoft.com:443, apple.com, cloudflare.com'}
         onChange={event => {
           const raw = event.target.value
           if (/[\s,]/.test(raw)) {
@@ -450,21 +442,15 @@ export function RealityScanDialog({ open, onOpenChange, initialTarget }: Reality
     <CoreEditorFormDialog
       isDialogOpen={open}
       onOpenChange={onOpenChange}
-      title={
-        <span className="font-hud tracking-[0.14em] uppercase">
-          {t('coreEditor.realityScan.title', { defaultValue: 'Scan Reality target' })}
-        </span>
-      }
-      leadingIcon={<ScanSearch className="h-5 w-5 shrink-0 text-sky-400" />}
+      title={t('coreEditor.realityScan.title', { defaultValue: 'Scan Reality target' })}
+      leadingIcon={<ScanSearch className="h-5 w-5 shrink-0" />}
       size="lg"
-      className="reality-probe"
       inlinePersistValidation={false}
       footerExtra={
         isScanning ? (
           <Button
             type="button"
             variant="outline"
-            className="reality-probe__btn-ghost"
             onClick={() => {
               abortRef.current?.abort()
               abortRef.current = null
@@ -475,60 +461,37 @@ export function RealityScanDialog({ open, onOpenChange, initialTarget }: Reality
             <span>{t('coreEditor.realityScan.stop', { defaultValue: 'Stop' })}</span>
           </Button>
         ) : (
-          <Button type="submit" form="reality-scan-form" disabled={!canScan} className="reality-probe__btn-scan">
+          <Button type="submit" form="reality-scan-form" disabled={!canScan}>
             <ScanSearch className="h-4 w-4" />
             <span>
               {t('coreEditor.realityScan.scan', { defaultValue: 'Scan' })}
-              {targets.length > 0 ? ` (${targets.length})` : ''}
+              {targets.length > 1 ? ` (${targets.length})` : ''}
             </span>
           </Button>
         )
       }
     >
-      <div className="space-y-5">
-        <p className="text-muted-foreground text-sm leading-relaxed">
-          {t('coreEditor.realityScan.description', {
-            defaultValue: 'Probe one or more targets to check they work as REALITY decoys. REALITY needs HTTP/2 and TLS 1.3.',
-          })}
-        </p>
+      <div className="space-y-4">
+        <p className="text-muted-foreground text-sm">{t('coreEditor.realityScan.description', { defaultValue: 'Probe one or more targets to check they work as REALITY decoys. REALITY needs HTTP/2 and TLS 1.3.' })}</p>
 
-        <form id="reality-scan-form" onSubmit={handleSubmit} className="grid items-start gap-4 sm:grid-cols-[minmax(0,1fr)_132px]">
+        <form id="reality-scan-form" onSubmit={handleSubmit} className="grid items-start gap-4 sm:grid-cols-[minmax(0,1fr)_140px]">
           <div className="flex min-w-0 flex-col gap-2">
-            <Label className="font-hud text-[10px] tracking-[0.16em] uppercase">
-              {t('coreEditor.realityScan.targets', { defaultValue: 'Targets' })}
-            </Label>
+            <Label>{t('coreEditor.realityScan.targets', { defaultValue: 'Targets' })}</Label>
             <TargetsInput value={targets} onChange={setTargets} disabled={isScanning} max={MAX_TARGETS} />
             {targets.length >= MAX_TARGETS ? (
               <p className="text-muted-foreground text-xs">{t('coreEditor.realityScan.maxTargets', { defaultValue: 'Up to {{max}} targets can be scanned.', max: MAX_TARGETS })}</p>
             ) : null}
           </div>
           <div className="flex min-w-0 flex-col gap-2">
-            <Label className="font-hud text-[10px] tracking-[0.16em] uppercase">
-              {t('coreEditor.realityScan.timeout', { defaultValue: 'Timeout (s)' })}
-            </Label>
-            <Input
-              className="reality-probe__timeout h-10 font-mono"
-              value={timeoutInput}
-              onChange={event => setTimeoutInput(event.target.value)}
-              inputMode="numeric"
-              type="number"
-              min={1}
-              max={20}
-              disabled={isScanning}
-              dir="ltr"
-            />
+            <Label>{t('coreEditor.realityScan.timeout', { defaultValue: 'Timeout (s)' })}</Label>
+            <Input className="h-10" value={timeoutInput} onChange={event => setTimeoutInput(event.target.value)} inputMode="numeric" type="number" min={1} max={20} disabled={isScanning} dir="ltr" />
           </div>
         </form>
 
         <div>
           {!rows.length ? (
-            <div className="reality-probe__empty">
-              <div className="reality-probe__radar" aria-hidden>
-                <Radar className="h-8 w-8 text-sky-400/80" />
-              </div>
-              <p className="font-hud text-muted-foreground max-w-xs text-center text-[11px] tracking-[0.14em] uppercase">
-                {t('coreEditor.realityScan.empty', { defaultValue: 'Enter one or more targets and run the scan.' })}
-              </p>
+            <div className="text-muted-foreground flex min-h-48 items-center justify-center rounded-md border border-dashed px-4 text-center text-sm">
+              {t('coreEditor.realityScan.empty', { defaultValue: 'Enter one or more targets and run the scan.' })}
             </div>
           ) : single ? (
             single.status === 'done' && single.result ? (
@@ -540,40 +503,25 @@ export function RealityScanDialog({ open, onOpenChange, initialTarget }: Reality
                 </AlertDescription>
               </Alert>
             ) : (
-              <div className="reality-probe__empty">
-                <div className="reality-probe__radar reality-probe__radar--live" aria-hidden>
-                  <Radar className="h-8 w-8 animate-pulse text-sky-400" />
-                </div>
-                <div className="flex items-center gap-2 text-sm text-sky-300/90">
+              <div className="flex min-h-48 items-center justify-center rounded-md border border-dashed">
+                <div className="text-muted-foreground flex items-center gap-2 text-sm">
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  <span className="font-hud text-[11px] tracking-[0.16em] uppercase">
-                    {t('coreEditor.realityScan.loading', { defaultValue: 'Scanning target...' })}
-                  </span>
+                  {t('coreEditor.realityScan.loading', { defaultValue: 'Scanning target...' })}
                 </div>
               </div>
             )
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-2">
               <div className="flex items-center justify-between gap-2">
-                <span className="font-hud text-muted-foreground flex items-center gap-2 text-[11px] tracking-[0.14em] uppercase">
-                  <span className="text-foreground font-mono text-sm tracking-normal normal-case">
-                    {t('coreEditor.realityScan.summary', { defaultValue: '{{feasible}} / {{total}} suitable', feasible: feasibleCount, total: rows.length })}
-                  </span>
-                  {isScanning ? <Loader2 className="h-3.5 w-3.5 animate-spin text-sky-400" /> : null}
-                  {!isScanning && feasibleCount > 0 ? <span className="online-beacon" /> : null}
+                <span className="text-muted-foreground text-sm">
+                  {t('coreEditor.realityScan.summary', { defaultValue: '{{feasible}} / {{total}} suitable', feasible: feasibleCount, total: rows.length })}
+                  {isScanning ? <Loader2 className="ml-2 inline h-3.5 w-3.5 animate-spin align-[-2px]" /> : null}
                 </span>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={feasibleOnly ? 'default' : 'outline'}
-                  className={cn('h-8 text-[11px] tracking-wide', feasibleOnly && 'reality-probe__btn-scan')}
-                  onClick={() => setFeasibleOnly(value => !value)}
-                  disabled={!feasibleCount}
-                >
+                <Button type="button" size="sm" variant={feasibleOnly ? 'default' : 'outline'} className="h-7 text-xs" onClick={() => setFeasibleOnly(value => !value)} disabled={!feasibleCount}>
                   {t('coreEditor.realityScan.suitableOnly', { defaultValue: 'Suitable only' })}
                 </Button>
               </div>
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 {displayedRows.map(row => (
                   <ScanRowItem key={row.target} row={row} expanded={expanded === row.target} onToggle={() => setExpanded(prev => (prev === row.target ? null : row.target))} />
                 ))}

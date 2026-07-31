@@ -75,7 +75,7 @@ Closing the SSH session drops access.
 ## Bootstrap owner
 
 ```bash
-hpxpanel cli generate-temp-key
+hpxpanel cli forge-seal
 hpxpanel --help
 ```
 

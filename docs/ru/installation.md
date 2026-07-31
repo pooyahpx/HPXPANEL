@@ -46,7 +46,7 @@ sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXPANEL/raw/main/scripts
 | `https://YOUR_DOMAIN:8000/dashboard/` | Дашборд |
 
 ```bash
-hpxpanel cli generate-temp-key
+hpxpanel cli forge-seal
 ```
 
 Тест без домена:

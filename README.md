@@ -115,6 +115,20 @@ pasarguard cli generate-temp-key
 pasarguard --help
 ```
 
+### HPX Node (edge servers)
+
+Branded one-liner — deploys a Docker node with Xray / WireGuard / OpenVPN / IKEv2 and prints Address, Port, API key, and Server CA for **HPXPANEL → Nodes**:
+
+```bash
+sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXPANEL/raw/main/scripts/hpx-node.sh)" @ install
+```
+
+| | |
+| --- | --- |
+| Files | `/opt/hpx-node` |
+| Data | `/var/lib/hpx-node` |
+| CLI | `hpx-node status` · `logs` · `update` |
+
 ---
 
 ## Install from source

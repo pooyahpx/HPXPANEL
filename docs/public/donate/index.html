@@ -58,7 +58,27 @@
       h1 { font-size: clamp(1.8rem, 4vw, 2.35rem); line-height: 1.15; margin: 0 0 0.7rem; letter-spacing: -0.02em; }
       h1 em { font-style: normal; color: var(--cyan-2); }
       .lead { color: var(--muted); font-size: 1.02rem; margin: 0 0 1.25rem; max-width: 36rem; }
-      .row { display: flex; flex-wrap: wrap; gap: 0.65rem; margin: 0.85rem 0 1.5rem; }
+      .cta {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.55rem;
+        width: 100%;
+        padding: 0.95rem 1.2rem;
+        border: 0;
+        border-radius: 14px;
+        background: linear-gradient(135deg, #0284c7, #0ea5e9 55%, #38bdf8);
+        color: #041018;
+        font-weight: 800;
+        font-size: 1rem;
+        cursor: pointer;
+        box-shadow: 0 12px 40px rgba(14, 165, 233, 0.25);
+        text-decoration: none;
+        margin-bottom: 0.85rem;
+      }
+      .cta:hover { filter: brightness(1.05); text-decoration: none; color: #041018; }
+
+      .row { display: flex; flex-wrap: wrap; gap: 0.65rem; margin: 0 0 1.5rem; }
       .ghost {
         display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.65rem 0.9rem; border-radius: 12px;
         border: 1px solid var(--line); background: var(--card); color: var(--text); font-weight: 600; font-size: 0.9rem; text-decoration: none;
@@ -199,6 +219,7 @@
       <div class="pill" data-i18n="pill">✦ Support independent proxy ops</div>
       <h1 data-i18n-html="hero">Support <em>HPXPANEL</em></h1>
       <p class="lead" data-i18n="lead">Help keep the command deck sharp — Xray, REALITY, WireGuard, Hysteria2, and native IPsec.</p>
+      <button class="cta" type="button" id="donateNowBtn" data-i18n="cta">❤ Make a Donation Now</button>
       <div class="row">
         <a class="ghost" href="https://github.com/pooyahpx/HPXPANEL" target="_blank" rel="noopener" data-i18n="star">★ Star on GitHub</a>
         <a class="ghost" href="https://pooyahpx.github.io/HPXPANEL/" target="_blank" rel="noopener" data-i18n="docs">Docs</a>
@@ -329,6 +350,7 @@
           pill: '✦ Support independent proxy ops',
           hero: 'Support <em>HPXPANEL</em>',
           lead: 'Help keep the command deck sharp — Xray, REALITY, WireGuard, Hysteria2, and native IPsec.',
+          cta: '❤ Make a Donation Now',
           star: '★ Star on GitHub',
           docs: 'Docs',
           formTitle: '❤ Make a Donation',
@@ -371,6 +393,7 @@
           pill: '✦ حمایت از توسعه مستقل',
           hero: 'حمایت از <em>HPXPANEL</em>',
           lead: 'کمک کن command deck تیز بمونه — Xray، REALITY، WireGuard، Hysteria2 و IPsec نیتیو.',
+          cta: '❤ همین حالا دونیت کن',
           star: '★ ستاره در گیت‌هاب',
           docs: 'مستندات',
           formTitle: '❤ ثبت دونیت',
@@ -590,6 +613,13 @@
         lang = lang === 'en' ? 'fa' : 'en'
         localStorage.setItem('hpx-donate-lang', lang)
         applyI18n()
+      })
+
+      $('donateNowBtn').addEventListener('click', () => {
+        const target = document.getElementById('donate')
+        if (!target) return
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        setTimeout(() => $('amount')?.focus(), 350)
       })
 
       applyI18n()

@@ -3,10 +3,16 @@
   --vp-c-brand-2: #38bdf8;
   --vp-c-brand-3: #0284c7;
   --vp-c-brand-soft: rgba(14, 165, 233, 0.14);
+
+  /* tighter, less empty chrome */
+  --vp-sidebar-width: 236px;
+  --vp-aside-width: 216px;
+  --vp-layout-max-width: 1280px;
+
   --vp-home-hero-name-color: transparent;
   --vp-home-hero-name-background: linear-gradient(120deg, #67e8f9 10%, #0ea5e9 45%, #0369a1 90%);
-  --vp-home-hero-image-background-image: radial-gradient(circle at 40% 40%, rgba(14, 165, 233, 0.35), transparent 55%);
-  --vp-home-hero-image-filter: blur(44px);
+  --vp-home-hero-image-background-image: radial-gradient(circle at 40% 40%, rgba(14, 165, 233, 0.28), transparent 55%);
+  --vp-home-hero-image-filter: blur(40px);
 }
 
 .dark {
@@ -24,14 +30,104 @@
   --vp-c-brand-3: #67e8f9;
 }
 
+/* ——— denser doc layout (kill the giant void) ——— */
+@media (min-width: 960px) {
+  .VPSidebar {
+    width: var(--vp-sidebar-width) !important;
+    padding-top: 12px !important;
+  }
+
+  .VPContent.has-sidebar {
+    padding-left: var(--vp-sidebar-width) !important;
+    padding-right: 0 !important;
+  }
+
+  .VPDoc {
+    padding: 24px 28px 48px !important;
+  }
+
+  .VPDoc .container {
+    max-width: 100% !important;
+    margin: 0 !important;
+  }
+
+  .VPDoc .content {
+    padding: 0 20px 0 12px !important;
+  }
+
+  .VPDoc .content-container {
+    max-width: 820px !important;
+    margin: 0 !important;
+  }
+
+  .VPDoc.has-aside .content-container {
+    max-width: min(820px, calc(100% - var(--vp-aside-width) - 24px)) !important;
+  }
+
+  .VPDoc .aside {
+    padding-left: 16px !important;
+    width: var(--vp-aside-width) !important;
+  }
+
+  .VPNavBar.has-sidebar .content {
+    padding-left: var(--vp-sidebar-width) !important;
+    padding-right: 24px !important;
+  }
+}
+
+@media (min-width: 1440px) {
+  :root {
+    --vp-layout-max-width: 1360px;
+  }
+
+  .VPDoc .content-container {
+    max-width: 880px !important;
+  }
+}
+
+.VPSidebarItem.level-0 {
+  padding-bottom: 0.55rem !important;
+}
+
+.VPSidebarItem .text {
+  font-size: 13.5px !important;
+  line-height: 1.35 !important;
+}
+
+.vp-doc h1 {
+  font-size: 1.85rem !important;
+  margin-bottom: 0.85rem !important;
+}
+
+.vp-doc h2 {
+  margin-top: 1.6rem !important;
+  padding-top: 0.85rem !important;
+  font-size: 1.35rem !important;
+}
+
+.vp-doc p,
+.vp-doc li {
+  line-height: 1.65 !important;
+}
+
+.VPHero {
+  padding: 48px 24px 36px !important;
+}
+
 .VPHero .image-src {
-  border-radius: 24px;
-  box-shadow: 0 0 0 1px rgba(14, 165, 233, 0.35), 0 24px 60px rgba(2, 8, 23, 0.55);
+  border-radius: 22px;
+  box-shadow: 0 0 0 1px rgba(14, 165, 233, 0.35), 0 20px 48px rgba(2, 8, 23, 0.5);
+  max-width: 220px !important;
+}
+
+.VPFeatures {
+  padding: 12px 24px 48px !important;
 }
 
 .VPFeature {
   border-color: rgba(14, 165, 233, 0.18) !important;
   background: linear-gradient(160deg, rgba(14, 165, 233, 0.06), transparent 55%) !important;
+  border-radius: 14px !important;
 }
 
 .vp-doc table {
@@ -47,204 +143,165 @@
   border: 1px solid rgba(14, 165, 233, 0.35);
   background: rgba(14, 165, 233, 0.08);
   border-radius: 12px;
-  padding: 1rem 1.15rem;
-  margin: 1.25rem 0;
+  padding: 0.9rem 1.05rem;
+  margin: 1rem 0;
 }
 
 .callout-new strong {
   color: var(--vp-c-brand-1);
 }
 
-/* ========== Persian RTL ========== */
-html[dir='rtl'],
-html[lang='fa'] {
+/* ——— force LTR chrome for English / non-FA ——— */
+html[lang='en'],
+html[dir='ltr']:not(.fa-rtl) {
+  direction: ltr !important;
+}
+
+html[lang='en'] .VPSidebar,
+html[dir='ltr']:not(.fa-rtl) .VPSidebar {
+  left: 0 !important;
+  right: auto !important;
+  border-left: none !important;
+  border-right: 1px solid var(--vp-c-divider);
+  transform: none !important;
+}
+
+@media (min-width: 960px) {
+  html[lang='en'] .VPContent.has-sidebar,
+  html[dir='ltr']:not(.fa-rtl) .VPContent.has-sidebar {
+    padding-left: var(--vp-sidebar-width) !important;
+    padding-right: 0 !important;
+  }
+
+  html[lang='en'] .VPNavBar.has-sidebar .content,
+  html[dir='ltr']:not(.fa-rtl) .VPNavBar.has-sidebar .content {
+    padding-left: var(--vp-sidebar-width) !important;
+    padding-right: 24px !important;
+  }
+
+  html[lang='en'] .VPNavBar.has-sidebar > .wrapper > .container > .title,
+  html[dir='ltr']:not(.fa-rtl) .VPNavBar.has-sidebar > .wrapper > .container > .title {
+    left: 0 !important;
+    right: auto !important;
+  }
+}
+
+/* ========== Persian RTL (scoped to .fa-rtl only) ========== */
+html.fa-rtl {
   direction: rtl !important;
   font-family: Tahoma, 'Segoe UI', 'Noto Sans Arabic', 'Vazirmatn', sans-serif;
 }
 
-html[dir='rtl'] body,
-html[lang='fa'] body,
-html[dir='rtl'] #app,
-html[lang='fa'] #app,
-html[dir='rtl'] .Layout,
-html[lang='fa'] .Layout,
-html[dir='rtl'] .VPContent,
-html[lang='fa'] .VPContent,
-html[dir='rtl'] .VPDoc,
-html[lang='fa'] .VPDoc,
-html[dir='rtl'] .vp-doc,
-html[lang='fa'] .vp-doc,
-html[dir='rtl'] .VPSidebar,
-html[lang='fa'] .VPSidebar,
-html[dir='rtl'] .VPNav,
-html[lang='fa'] .VPNav,
-html[dir='rtl'] .VPLocalNav,
-html[lang='fa'] .VPLocalNav,
-html[dir='rtl'] .VPDocAside,
-html[lang='fa'] .VPDocAside,
-html[dir='rtl'] .VPDocFooter,
-html[lang='fa'] .VPDocFooter,
-html[dir='rtl'] .VPHero,
-html[lang='fa'] .VPHero,
-html[dir='rtl'] .VPFeatures,
-html[lang='fa'] .VPFeatures {
+html.fa-rtl .Layout,
+html.fa-rtl .VPContent,
+html.fa-rtl .VPDoc,
+html.fa-rtl .vp-doc,
+html.fa-rtl .VPSidebar,
+html.fa-rtl .VPNav,
+html.fa-rtl .VPLocalNav,
+html.fa-rtl .VPDocAside,
+html.fa-rtl .VPDocFooter,
+html.fa-rtl .VPHero,
+html.fa-rtl .VPFeatures {
   direction: rtl !important;
 }
 
-html[dir='rtl'] .vp-doc,
-html[lang='fa'] .vp-doc {
+html.fa-rtl .vp-doc {
   text-align: right !important;
 }
 
-html[dir='rtl'] .vp-doc h1,
-html[dir='rtl'] .vp-doc h2,
-html[dir='rtl'] .vp-doc h3,
-html[dir='rtl'] .vp-doc h4,
-html[dir='rtl'] .vp-doc p,
-html[dir='rtl'] .vp-doc li,
-html[dir='rtl'] .vp-doc ul,
-html[dir='rtl'] .vp-doc ol,
-html[dir='rtl'] .vp-doc blockquote,
-html[dir='rtl'] .vp-doc td,
-html[dir='rtl'] .vp-doc th,
-html[dir='rtl'] .vp-doc .custom-block,
-html[lang='fa'] .vp-doc h1,
-html[lang='fa'] .vp-doc h2,
-html[lang='fa'] .vp-doc h3,
-html[lang='fa'] .vp-doc h4,
-html[lang='fa'] .vp-doc p,
-html[lang='fa'] .vp-doc li,
-html[lang='fa'] .vp-doc ul,
-html[lang='fa'] .vp-doc ol,
-html[lang='fa'] .vp-doc blockquote,
-html[lang='fa'] .vp-doc td,
-html[lang='fa'] .vp-doc th,
-html[lang='fa'] .vp-doc .custom-block {
+html.fa-rtl .vp-doc h1,
+html.fa-rtl .vp-doc h2,
+html.fa-rtl .vp-doc h3,
+html.fa-rtl .vp-doc h4,
+html.fa-rtl .vp-doc p,
+html.fa-rtl .vp-doc li,
+html.fa-rtl .vp-doc ul,
+html.fa-rtl .vp-doc ol,
+html.fa-rtl .vp-doc blockquote,
+html.fa-rtl .vp-doc td,
+html.fa-rtl .vp-doc th,
+html.fa-rtl .vp-doc .custom-block {
   direction: rtl !important;
   text-align: right !important;
 }
 
-html[dir='rtl'] .vp-doc ul,
-html[dir='rtl'] .vp-doc ol,
-html[lang='fa'] .vp-doc ul,
-html[lang='fa'] .vp-doc ol {
+html.fa-rtl .vp-doc ul,
+html.fa-rtl .vp-doc ol {
   padding-left: 0 !important;
   padding-right: 1.5rem !important;
-  margin-left: 0 !important;
   list-style-position: outside;
 }
 
-html[dir='rtl'] .vp-doc ul > li,
-html[dir='rtl'] .vp-doc ol > li,
-html[lang='fa'] .vp-doc ul > li,
-html[lang='fa'] .vp-doc ol > li {
-  direction: rtl !important;
-  text-align: right !important;
-  padding-left: 0 !important;
-  margin-left: 0 !important;
-}
-
-html[dir='rtl'] .vp-doc .header-anchor,
-html[lang='fa'] .vp-doc .header-anchor {
+html.fa-rtl .vp-doc .header-anchor {
   margin-left: 0.25em;
   margin-right: -1.2em;
   float: right;
 }
 
-/* Code stays LTR */
-html[dir='rtl'] .vp-doc div[class*='language-'],
-html[dir='rtl'] .vp-doc pre,
-html[dir='rtl'] .vp-doc code,
-html[dir='rtl'] .vp-doc .vp-code-group,
-html[lang='fa'] .vp-doc div[class*='language-'],
-html[lang='fa'] .vp-doc pre,
-html[lang='fa'] .vp-doc code,
-html[lang='fa'] .vp-doc .vp-code-group {
+html.fa-rtl .vp-doc div[class*='language-'],
+html.fa-rtl .vp-doc pre,
+html.fa-rtl .vp-doc code,
+html.fa-rtl .vp-doc .vp-code-group {
   direction: ltr !important;
   text-align: left !important;
 }
 
-html[dir='rtl'] .vp-doc :not(pre) > code,
-html[lang='fa'] .vp-doc :not(pre) > code {
+html.fa-rtl .vp-doc :not(pre) > code {
   direction: ltr !important;
   unicode-bidi: isolate;
 }
 
-/* Sidebar → right */
 @media (min-width: 960px) {
-  html[dir='rtl'] .VPSidebar,
-  html[lang='fa'] .VPSidebar {
+  html.fa-rtl .VPSidebar {
     left: auto !important;
     right: 0 !important;
     border-right: none !important;
     border-left: 1px solid var(--vp-c-divider);
-    transform: translateX(0) !important;
   }
 
-  html[dir='rtl'] .VPContent.has-sidebar,
-  html[lang='fa'] .VPContent.has-sidebar {
+  html.fa-rtl .VPContent.has-sidebar {
     padding-left: 0 !important;
     padding-right: var(--vp-sidebar-width) !important;
   }
 
-  html[dir='rtl'] .VPNavBar.has-sidebar > .wrapper > .container > .title,
-  html[lang='fa'] .VPNavBar.has-sidebar > .wrapper > .container > .title {
+  html.fa-rtl .VPNavBar.has-sidebar > .wrapper > .container > .title {
     left: auto !important;
     right: 0 !important;
-    padding-left: 0 !important;
-    padding-right: 16px !important;
-    width: var(--vp-sidebar-width) !important;
   }
 
-  html[dir='rtl'] .VPNavBar.has-sidebar .content,
-  html[lang='fa'] .VPNavBar.has-sidebar .content {
-    padding-left: 32px !important;
+  html.fa-rtl .VPNavBar.has-sidebar .content {
+    padding-left: 24px !important;
     padding-right: var(--vp-sidebar-width) !important;
   }
+
+  html.fa-rtl .VPDoc .content {
+    padding: 0 12px 0 20px !important;
+  }
+
+  html.fa-rtl .VPDoc .aside {
+    padding-left: 0 !important;
+    padding-right: 16px !important;
+  }
 }
 
-html[dir='rtl'] .VPSidebarItem .text,
-html[dir='rtl'] .VPSidebarItem .link,
-html[lang='fa'] .VPSidebarItem .text,
-html[lang='fa'] .VPSidebarItem .link {
+html.fa-rtl .VPSidebarItem .text,
+html.fa-rtl .VPSidebarItem .link,
+html.fa-rtl .VPDocAsideOutline,
+html.fa-rtl .VPLocalNav,
+html.fa-rtl .VPDocFooter .prev {
   text-align: right !important;
 }
 
-html[dir='rtl'] .VPDocAsideOutline,
-html[lang='fa'] .VPDocAsideOutline {
-  text-align: right !important;
-}
-
-html[dir='rtl'] .VPLocalNav,
-html[lang='fa'] .VPLocalNav {
-  text-align: right !important;
-}
-
-html[dir='rtl'] .VPDocFooter .prev,
-html[lang='fa'] .VPDocFooter .prev {
-  text-align: right !important;
-}
-
-html[dir='rtl'] .VPDocFooter .next,
-html[lang='fa'] .VPDocFooter .next {
+html.fa-rtl .VPDocFooter .next {
   text-align: left !important;
 }
 
-html[dir='rtl'] .VPHero .name,
-html[dir='rtl'] .VPHero .text,
-html[dir='rtl'] .VPHero .tagline,
-html[dir='rtl'] .VPFeature .title,
-html[dir='rtl'] .VPFeature .details,
-html[lang='fa'] .VPHero .name,
-html[lang='fa'] .VPHero .text,
-html[lang='fa'] .VPHero .tagline,
-html[lang='fa'] .VPFeature .title,
-html[lang='fa'] .VPFeature .details {
+html.fa-rtl .VPHero .name,
+html.fa-rtl .VPHero .text,
+html.fa-rtl .VPHero .tagline,
+html.fa-rtl .VPFeature .title,
+html.fa-rtl .VPFeature .details {
   text-align: right !important;
   direction: rtl !important;
-}
-
-html[dir='rtl'] .VPHero .actions,
-html[lang='fa'] .VPHero .actions {
-  justify-content: flex-start !important;
 }

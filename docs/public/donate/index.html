@@ -62,30 +62,51 @@
       }
       .ghost:hover { border-color: var(--cyan); text-decoration: none; }
 
-      /* Accordion donation ribbon */
-      .donate-panel {
-        border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden;
-        background: var(--card); margin-bottom: 1.5rem;
-        box-shadow: 0 10px 40px rgba(0,0,0,.22);
+      /* ===== Ribbon accordion (PasarGuard-style) ===== */
+      .ribbon {
+        border-radius: var(--radius);
+        overflow: hidden;
+        border: 1px solid rgba(14,165,233,.35);
+        margin-bottom: 1.5rem;
+        box-shadow: 0 12px 40px rgba(0,0,0,.28);
       }
-      .donate-toggle {
-        width: 100%; appearance: none; border: 0; cursor: pointer;
-        background: linear-gradient(135deg, #0284c7, #0ea5e9 55%, #38bdf8);
-        color: #041018; font-weight: 800; font-size: 1.05rem;
-        padding: 1rem 1.15rem; display: flex; align-items: center; justify-content: center; gap: .5rem;
+      .ribbon-bar {
+        width: 100%;
+        appearance: none;
+        border: 0;
+        cursor: pointer;
+        background: linear-gradient(135deg, #0284c7, #0ea5e9 50%, #38bdf8);
+        color: #041018;
+        font-weight: 800;
+        font-size: 1.05rem;
+        padding: 1.05rem 1.2rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: .55rem;
+        user-select: none;
       }
-      .donate-toggle .chev {
-        transition: transform .25s ease; display: inline-block; font-size: .85rem;
+      .ribbon-bar .chev {
+        display: inline-flex;
+        transition: transform .25s ease;
+        font-size: 1rem;
+        line-height: 1;
       }
-      .donate-panel.open .donate-toggle .chev { transform: rotate(180deg); }
-      .donate-body {
-        display: grid; grid-template-rows: 0fr; transition: grid-template-rows .28s ease;
-        background: linear-gradient(180deg, rgba(14,165,233,.04), transparent 30%), var(--card);
-      }
-      .donate-panel.open .donate-body { grid-template-rows: 1fr; }
-      .donate-body-inner { overflow: hidden; }
-      .form-body { padding: 1.1rem; display: grid; gap: 1rem; }
+      .ribbon.open .ribbon-bar .chev { transform: rotate(180deg); }
 
+      .ribbon-panel {
+        background: var(--card);
+        max-height: 0;
+        overflow: hidden;
+        opacity: 0;
+        transition: max-height .35s ease, opacity .25s ease;
+      }
+      .ribbon.open .ribbon-panel {
+        max-height: 2200px;
+        opacity: 1;
+      }
+
+      .form-body { padding: 1.15rem; display: grid; gap: 1rem; }
       .field label { display: flex; align-items: center; gap: .4rem; font-size: .88rem; font-weight: 700; margin-bottom: .45rem; }
       .req { color: var(--danger); }
       .opt { font-size: .68rem; font-weight: 700; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: .12rem .45rem; margin-inline-start: .35rem; }
@@ -124,7 +145,7 @@
         display: inline-flex; align-items: center; justify-content: center; gap: .45rem;
         box-shadow: 0 12px 36px rgba(14,165,233,.22);
       }
-      .pay:disabled { opacity: .65; cursor: wait; }
+      .pay:disabled { opacity: .7; cursor: wait; }
       .pay:hover:not(:disabled) { filter: brightness(1.05); }
       .secure { display: flex; align-items: center; justify-content: center; gap: .4rem; color: var(--muted); font-size: .78rem; }
       .toast {
@@ -132,7 +153,6 @@
         border: 1px solid rgba(248,113,113,.35); background: rgba(248,113,113,.1); color: var(--danger); font-size: .85rem;
       }
       .toast.show { display: block; }
-      .toast.ok { border-color: rgba(52,211,153,.35); background: rgba(52,211,153,.1); color: var(--ok); }
 
       section { margin-top: 1.5rem; }
       section > h2 { font-size: 1.05rem; margin: 0 0 .75rem; }
@@ -160,8 +180,7 @@
       .meta { color: var(--muted); font-size: .8rem; }
       .contrib { display: grid; gap: .55rem; padding: 1rem; }
       .person { display: flex; justify-content: space-between; gap: 1rem; align-items: center; padding: .75rem .85rem; border-radius: 12px; border: 1px solid var(--line); background: var(--bg-2); }
-      .person small { color: var(--muted); }
-      .amount { color: var(--cyan-2); font-weight: 700; white-space: nowrap; }
+      .amount { color: var(--cyan-2); font-weight: 700; }
       footer { margin-top: 2.25rem; padding-top: 1.15rem; border-top: 1px solid var(--line); color: var(--muted); font-size: .85rem; text-align: center; }
 
       html[lang='fa'] body { font-family: Tahoma, 'Segoe UI', sans-serif; }
@@ -199,67 +218,65 @@
         <a class="ghost" href="https://github.com/pooyahpx" target="_blank" rel="noopener">dev by hpx</a>
       </div>
 
-      <!-- Accordion ribbon like PasarGuard -->
-      <div class="donate-panel" id="donatePanel">
-        <button type="button" class="donate-toggle" id="donateToggle" aria-expanded="false">
-          <span data-i18n="ctaClosed">❤ Make a Donation Now</span>
-          <span class="chev">▾</span>
+      <!-- Ribbon accordion -->
+      <div class="ribbon" id="ribbon">
+        <button type="button" class="ribbon-bar" id="ribbonBtn" aria-expanded="false" aria-controls="ribbonPanel">
+          <span id="ribbonLabel">❤ Make a Donation Now</span>
+          <span class="chev" aria-hidden="true">▾</span>
         </button>
-        <div class="donate-body">
-          <div class="donate-body-inner">
-            <form class="form-body" id="donateForm" novalidate>
-              <div class="field">
-                <label><span data-i18n="amountLabel">$ Donation Amount</span> <span class="req">*</span></label>
-                <div class="presets" id="presets"></div>
-                <div class="amount-wrap" style="margin-top:.55rem">
-                  <span class="prefix">$</span>
-                  <input class="input" id="amount" type="number" min="1" step="1" value="5" required />
+        <div class="ribbon-panel" id="ribbonPanel">
+          <form class="form-body" id="donateForm" novalidate>
+            <div class="field">
+              <label><span data-i18n="amountLabel">$ Donation Amount</span> <span class="req">*</span></label>
+              <div class="presets" id="presets"></div>
+              <div class="amount-wrap" style="margin-top:.55rem">
+                <span class="prefix">$</span>
+                <input class="input" id="amount" type="number" min="1" step="1" value="5" required />
+              </div>
+              <div class="hint" data-i18n="amountHint">Choose a preset amount or enter your own</div>
+              <div class="error" id="amountErr" data-i18n="amountErr">Amount is required.</div>
+            </div>
+
+            <div class="field">
+              <label><span data-i18n="nameLabel">Your Name</span> <span class="req">*</span></label>
+              <input class="input" id="name" type="text" autocomplete="name" required />
+              <div class="hint" data-i18n="nameHint">Your name will be shown publicly with your donation.</div>
+              <div class="error" id="nameErr" data-i18n="nameErr">Name is required.</div>
+            </div>
+
+            <div class="field">
+              <label><span data-i18n="emailLabel">Email Address</span><span class="opt" data-i18n="optional">Optional</span></label>
+              <input class="input" id="email" type="email" autocomplete="email" />
+              <div class="hint" data-i18n="emailHint">We'll send you a receipt and updates.</div>
+            </div>
+
+            <div class="field">
+              <label><span data-i18n="commentLabel">Comment</span><span class="opt" data-i18n="optional">Optional</span></label>
+              <textarea class="input" id="comment"></textarea>
+              <div class="hint" data-i18n="commentHint">Add a public message with your donation.</div>
+            </div>
+
+            <div class="checks">
+              <label class="check">
+                <input type="checkbox" id="showDonation" checked />
+                <div>
+                  <b data-i18n="showDonation">Show my donation publicly</b>
+                  <small data-i18n="showDonationHint">Your name and donation amount will be visible to others.</small>
                 </div>
-                <div class="hint" data-i18n="amountHint">Choose a preset amount or enter your own</div>
-                <div class="error" id="amountErr" data-i18n="amountErr">Amount is required.</div>
-              </div>
+              </label>
+              <label class="check">
+                <input type="checkbox" id="showComment" checked />
+                <div>
+                  <b data-i18n="showComment">Show my comment publicly</b>
+                  <small data-i18n="showCommentHint">Your comment will be visible alongside your donation.</small>
+                </div>
+              </label>
+            </div>
 
-              <div class="field">
-                <label><span data-i18n="nameLabel">Your Name</span> <span class="req">*</span></label>
-                <input class="input" id="name" type="text" autocomplete="name" required />
-                <div class="hint" data-i18n="nameHint">Your name will be shown publicly with your donation.</div>
-                <div class="error" id="nameErr" data-i18n="nameErr">Name is required.</div>
-              </div>
-
-              <div class="field">
-                <label><span data-i18n="emailLabel">Email Address</span><span class="opt" data-i18n="optional">Optional</span></label>
-                <input class="input" id="email" type="email" autocomplete="email" />
-                <div class="hint" data-i18n="emailHint">We'll send you a receipt and updates.</div>
-              </div>
-
-              <div class="field">
-                <label><span data-i18n="commentLabel">Comment</span><span class="opt" data-i18n="optional">Optional</span></label>
-                <textarea class="input" id="comment"></textarea>
-                <div class="hint" data-i18n="commentHint">Add a public message with your donation.</div>
-              </div>
-
-              <div class="checks">
-                <label class="check">
-                  <input type="checkbox" id="showDonation" checked />
-                  <div>
-                    <b data-i18n="showDonation">Show my donation publicly</b>
-                    <small data-i18n="showDonationHint">Your name and donation amount will be visible to others.</small>
-                  </div>
-                </label>
-                <label class="check">
-                  <input type="checkbox" id="showComment" checked />
-                  <div>
-                    <b data-i18n="showComment">Show my comment publicly</b>
-                    <small data-i18n="showCommentHint">Your comment will be visible alongside your donation.</small>
-                  </div>
-                </label>
-              </div>
-
-              <button class="pay" type="submit" id="payBtn" data-i18n="payBtn">❤ Proceed to Payment ↗</button>
-              <div class="secure" data-i18n-html="secure">🛡 Secure payment powered by <b>NOWPayments</b></div>
-              <div class="toast" id="toast"></div>
-            </form>
-          </div>
+            <button class="pay" type="submit" id="payBtn">❤ Proceed to Payment ↗</button>
+            <div class="secure" data-i18n-html="secure">🛡 Secure payment powered by <b>NOWPayments</b></div>
+            <div class="toast" id="toast"></div>
+          </form>
         </div>
       </div>
 
@@ -267,7 +284,7 @@
         <h2 data-i18n="methodsTitle">◈ Direct wallets</h2>
         <div class="card">
           <div class="wallets" id="wallets"></div>
-          <p class="note" data-i18n="methodsNote">Fallback wallets if you prefer sending manually. Use the matching network only.</p>
+          <p class="note" data-i18n="methodsNote">Manual fallback — send only on the network shown.</p>
         </div>
       </section>
 
@@ -288,15 +305,9 @@
     </div>
 
     <script>
-      /**
-       * ⚙️ NOWPayments
-       * 1) Sign up: https://account.nowpayments.io/
-       * 2) Add payout wallets in settings
-       * 3) Create API key → paste below
-       * Donation checkout uses invoice API then redirects to NOWPayments.
-       */
       const CONFIG = {
-        nowPaymentsApiKey: '', // ← paste your NOWPayments API key here
+        nowPaymentsApiKey: 'R7XYRDX-HN14NV3-MNZQDCT-9PGFXN4',
+        nowPaymentsPublicKey: 'fb45d6dd-bc85-43e5-8870-8dd8daca19c4',
         presets: [5, 10, 25, 50, 100, 250],
         wallets: [
           { name: 'Bitcoin', network: 'BTC', address: '1G4KqvahGB7KpRkHDyXdcJBEtnvcuQAHzn' },
@@ -345,10 +356,10 @@
           showComment: 'Show my comment publicly',
           showCommentHint: 'Your comment will be visible alongside your donation.',
           payBtn: '❤ Proceed to Payment ↗',
-          paying: 'Connecting to NOWPayments…',
+          paying: 'Opening NOWPayments…',
           secure: '🛡 Secure payment powered by <b>NOWPayments</b>',
           methodsTitle: '◈ Direct wallets',
-          methodsNote: 'Fallback wallets if you prefer sending manually. Use the matching network only.',
+          methodsNote: 'Manual fallback — send only on the network shown.',
           goalsTitle: '◎ Current goals',
           contribTitle: '♛ Contributors',
           contribNote: 'Manual hall of fame for now.',
@@ -361,8 +372,7 @@
           namePh: 'John Doe',
           emailPh: 'your@email.com',
           commentPh: 'Add a message with your donation...',
-          needKey: 'NOWPayments API key is not set yet. Ask hpx to configure it — or use a direct wallet below.',
-          payFail: 'Could not open NOWPayments checkout. Try again or use a direct wallet.',
+          payFail: 'Could not reach NOWPayments. Try again or use a direct wallet below.',
         },
         fa: {
           tagline: 'دونیت امن',
@@ -389,7 +399,7 @@
           showComment: 'نمایش عمومی پیام',
           showCommentHint: 'پیامت کنار دونیت دیده شود.',
           payBtn: '❤ ادامه پرداخت ↗',
-          paying: 'در حال اتصال به NOWPayments…',
+          paying: 'در حال باز کردن NOWPayments…',
           secure: '🛡 پرداخت امن با <b>NOWPayments</b>',
           methodsTitle: '◈ ولت مستقیم',
           methodsNote: 'اگر دستی می‌فرستی، فقط همان شبکه را استفاده کن.',
@@ -405,8 +415,7 @@
           namePh: 'نام شما',
           emailPh: 'your@email.com',
           commentPh: 'پیام همراه دونیت...',
-          needKey: 'API key مربوط به NOWPayments هنوز تنظیم نشده. از ولت‌های پایین استفاده کن یا به hpx بگو key را بگذارد.',
-          payFail: 'باز کردن درگاه NOWPayments ممکن نشد. دوباره تلاش کن یا از ولت مستقیم استفاده کن.',
+          payFail: 'ارتباط با NOWPayments برقرار نشد. دوباره تلاش کن یا از ولت مستقیم استفاده کن.',
         },
       }
 
@@ -415,31 +424,30 @@
       const $ = (id) => document.getElementById(id)
       const t = (key) => I18N[lang][key] || I18N.en[key] || key
 
+      function setRibbonOpen(open) {
+        const ribbon = $('ribbon')
+        ribbon.classList.toggle('open', open)
+        $('ribbonBtn').setAttribute('aria-expanded', open ? 'true' : 'false')
+        $('ribbonLabel').textContent = t(open ? 'ctaOpen' : 'ctaClosed')
+      }
+
       function applyI18n() {
         document.documentElement.lang = lang
         document.documentElement.dir = lang === 'fa' ? 'rtl' : 'ltr'
         $('langBtn').textContent = lang === 'fa' ? 'FA' : 'EN'
         document.querySelectorAll('[data-i18n]').forEach((el) => {
-          if (el.id === 'donateToggle' || el.closest?.('#donateToggle')) return
           el.textContent = t(el.getAttribute('data-i18n'))
         })
         document.querySelectorAll('[data-i18n-html]').forEach((el) => {
           el.innerHTML = t(el.getAttribute('data-i18n-html'))
         })
-        updateToggleLabel()
+        setRibbonOpen($('ribbon').classList.contains('open'))
+        $('payBtn').textContent = t('payBtn')
         $('name').placeholder = t('namePh')
         $('email').placeholder = t('emailPh')
         $('comment').placeholder = t('commentPh')
         renderPresets()
         render()
-      }
-
-      function updateToggleLabel() {
-        const open = $('donatePanel').classList.contains('open')
-        const label = $('donateToggle').querySelector('[data-i18n]')
-        if (label) label.setAttribute('data-i18n', open ? 'ctaOpen' : 'ctaClosed')
-        if (label) label.textContent = t(open ? 'ctaOpen' : 'ctaClosed')
-        $('donateToggle').setAttribute('aria-expanded', open ? 'true' : 'false')
       }
 
       function renderPresets() {
@@ -456,13 +464,6 @@
         })
       }
 
-      $('amount').addEventListener('input', () => {
-        selectedPreset = Number($('amount').value) || 0
-        renderPresets()
-        clearErr('amount')
-      })
-      $('name').addEventListener('input', () => clearErr('name'))
-
       function clearErr(which) {
         if (which === 'amount') { $('amount').classList.remove('err'); $('amountErr').classList.remove('show') }
         if (which === 'name') { $('name').classList.remove('err'); $('nameErr').classList.remove('show') }
@@ -477,47 +478,72 @@
         return ok
       }
 
-      function showToast(msg, ok = false) {
+      function showToast(msg) {
         const el = $('toast')
         el.textContent = msg
-        el.classList.toggle('ok', ok)
         el.classList.add('show')
       }
 
-      async function createNowPaymentsInvoice(payload) {
-        const apiKey = (CONFIG.nowPaymentsApiKey || '').trim()
-        if (!apiKey) throw new Error('NO_KEY')
+      async function openNowPayments(payload) {
+        const apiKey = CONFIG.nowPaymentsApiKey
+        const orderId = `hpx-${Date.now()}`
+        const description = `HPXPANEL donation from ${payload.name}${payload.comment ? ': ' + payload.comment : ''}`
 
-        const res = await fetch('https://api.nowpayments.io/v1/invoice', {
-          method: 'POST',
-          headers: {
-            'x-api-key': apiKey,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            price_amount: payload.amount,
-            price_currency: 'usd',
-            order_id: `hpx-${Date.now()}`,
-            order_description: `HPXPANEL donation from ${payload.name}${payload.comment ? ': ' + payload.comment : ''}`,
-            success_url: `${location.origin}${location.pathname}?paid=1`,
-            cancel_url: `${location.origin}${location.pathname}?cancel=1`,
-            is_fixed_rate: false,
-            is_fee_paid_by_user: false,
-          }),
-        })
-
-        const data = await res.json().catch(() => ({}))
-        if (!res.ok || !data.invoice_url) {
-          const msg = data.message || data.error || `HTTP ${res.status}`
-          throw new Error(msg)
+        // 1) Prefer invoice API
+        try {
+          const res = await fetch('https://api.nowpayments.io/v1/invoice', {
+            method: 'POST',
+            headers: {
+              'x-api-key': apiKey,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              price_amount: payload.amount,
+              price_currency: 'usd',
+              order_id: orderId,
+              order_description: description,
+              success_url: `${location.origin}${location.pathname}?paid=1`,
+              cancel_url: `${location.origin}${location.pathname}?cancel=1`,
+              is_fixed_rate: false,
+              is_fee_paid_by_user: false,
+            }),
+          })
+          const data = await res.json().catch(() => ({}))
+          if (res.ok && data.invoice_url) {
+            window.location.href = data.invoice_url
+            return true
+          }
+          console.warn('NOWPayments invoice response', res.status, data)
+        } catch (err) {
+          console.warn('NOWPayments invoice CORS/network', err)
         }
-        return data.invoice_url
+
+        // 2) Fallback: hosted donation page with API key
+        const url = new URL('https://nowpayments.io/donation')
+        url.searchParams.set('api_key', apiKey)
+        url.searchParams.set('source_currency', 'usd')
+        url.searchParams.set('amount', String(payload.amount))
+        url.searchParams.set('order_id', orderId)
+        if (payload.email) url.searchParams.set('email', payload.email)
+        window.location.href = url.toString()
+        return true
       }
 
-      $('donateToggle').addEventListener('click', () => {
-        $('donatePanel').classList.toggle('open')
-        updateToggleLabel()
+      // Ribbon toggle — reliable open/close
+      $('ribbonBtn').addEventListener('click', () => {
+        const willOpen = !$('ribbon').classList.contains('open')
+        setRibbonOpen(willOpen)
+        if (willOpen) {
+          setTimeout(() => $('amount')?.focus(), 280)
+        }
       })
+
+      $('amount').addEventListener('input', () => {
+        selectedPreset = Number($('amount').value) || 0
+        renderPresets()
+        clearErr('amount')
+      })
+      $('name').addEventListener('input', () => clearErr('name'))
 
       $('donateForm').addEventListener('submit', async (e) => {
         e.preventDefault()
@@ -540,32 +566,26 @@
         const btn = $('payBtn')
         btn.disabled = true
         btn.textContent = t('paying')
-
         try {
-          const url = await createNowPaymentsInvoice(payload)
-          window.location.href = url
+          await openNowPayments(payload)
         } catch (err) {
+          console.error(err)
+          showToast(t('payFail'))
           btn.disabled = false
           btn.textContent = t('payBtn')
-          if (String(err.message) === 'NO_KEY') showToast(t('needKey'))
-          else showToast(t('payFail'))
-          console.error(err)
         }
       })
 
       function renderWallets() {
-        const list = CONFIG.wallets.filter((w) => w.address)
-        $('wallets').innerHTML = list
-          .map((w) => `
-            <div class="wallet">
-              <div class="wallet-head">
-                <div class="wallet-name">${w.name}</div>
-                <span class="wallet-tag">${w.network}</span>
-              </div>
-              <div class="addr">${w.address}</div>
-              <button class="copy" type="button" data-copy="${w.address}">${t('copy')}</button>
-            </div>`)
-          .join('')
+        $('wallets').innerHTML = CONFIG.wallets.map((w) => `
+          <div class="wallet">
+            <div class="wallet-head">
+              <div class="wallet-name">${w.name}</div>
+              <span class="wallet-tag">${w.network}</span>
+            </div>
+            <div class="addr">${w.address}</div>
+            <button class="copy" type="button" data-copy="${w.address}">${t('copy')}</button>
+          </div>`).join('')
         $('wallets').querySelectorAll('[data-copy]').forEach((btn) => {
           btn.addEventListener('click', async () => {
             await navigator.clipboard.writeText(btn.getAttribute('data-copy'))

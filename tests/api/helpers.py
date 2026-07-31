@@ -1,0 +1,257 @@
+from __future__ import annotations
+
+import time
+from collections.abc import Iterable
+from typing import Any
+from uuid import uuid4
+
+from fastapi import status
+
+from config import nats_settings, runtime_settings
+from tests.api import client
+from tests.api.sample_data import XRAY_CONFIG
+
+_WAIT_FOR_INBOUNDS = runtime_settings.role.requires_nats and nats_settings.enabled
+_INBOUNDS_RETRIES = 10
+_INBOUNDS_DELAY_SEC = 0.2
+
+
+def unique_name(prefix: str) -> str:
+    return f"{prefix}_{uuid4().hex[:8]}"
+
+
+# Default role IDs seeded by migration — safe to use in tests that bypass the API
+OPERATOR_ROLE_ID = 3
+
+
+def auth_headers(access_token: str) -> dict[str, str]:
+    return {"Authorization": f"Bearer {access_token}"}
+
+
+def strong_password(prefix: str) -> str:
+    """Generate a password that always satisfies password policy."""
+    suffix = unique_name("pwd").split("_")[-1]
+    return f"{prefix}#12{suffix}"
+
+
+def create_admin(
+    access_token: str, *, username: str | None = None, password: str | None = None, role_id: int = 3
+) -> dict:
+    username = username or unique_name("admin")
+    # Ensure password always meets complexity rules (>=2 digits, 2 uppercase, 2 lowercase, special char)
+    password = password or strong_password("TestAdmincreate")
+    response = client.post(
+        "/api/admin",
+        headers=auth_headers(access_token),
+        json={"username": username, "password": password, "role_id": role_id},
+    )
+    assert response.status_code == status.HTTP_201_CREATED
+    data = response.json()
+    data["password"] = password
+    return data
+
+
+def delete_admin(access_token: str, username: str) -> None:
+    response = client.delete(f"/api/admin/{username}", headers=auth_headers(access_token))
+    assert response.status_code == status.HTTP_204_NO_CONTENT
+
+
+def create_core(
+    access_token: str,
+    *,
+    name: str | None = None,
+    config: dict[str, Any] | None = None,
+    exclude: Iterable[str] | None = None,
+    fallbacks: Iterable[str] | None = None,
+    type: str = "xray",
+) -> dict:
+    payload = {
+        "config": config or XRAY_CONFIG,
+        "name": name or unique_name("core"),
+        "type": type,
+        "exclude_inbound_tags": list(exclude or []),
+        "fallbacks_inbound_tags": list(fallbacks or ([] if type == "wg" else ["fallback-A", "fallback-B"])),
+    }
+    response = client.post("/api/core", headers=auth_headers(access_token), json=payload)
+    assert response.status_code == status.HTTP_201_CREATED
+    return response.json()
+
+
+def delete_core(access_token: str, core_id: int) -> None:
+    response = client.delete(f"/api/core/{core_id}", headers=auth_headers(access_token))
+
+    assert response.status_code in (status.HTTP_204_NO_CONTENT, status.HTTP_403_FORBIDDEN)
+
+
+def create_client_template(
+    access_token: str,
+    *,
+    name: str | None = None,
+    template_type: str = "xray_subscription",
+    content: str = '{"outbounds": [{"tag":"direct","protocol":"freedom","settings":{}}],"inbounds":[{"tag":"proxy","protocol":"vmess","settings":{"clients":[{"id":"uuid","alterId":0,"email":"}',
+    is_default: bool = False,
+) -> dict:
+    payload = {
+        "name": name or unique_name("client_template"),
+        "template_type": template_type,
+        "content": content,
+        "is_default": is_default,
+    }
+    response = client.post("/api/client_template", headers=auth_headers(access_token), json=payload)
+    assert response.status_code == status.HTTP_201_CREATED
+    return response.json()
+
+
+def delete_client_template(access_token: str, template_id: int) -> None:
+    response = client.delete(f"/api/client_template/{template_id}", headers=auth_headers(access_token))
+    assert response.status_code in (status.HTTP_204_NO_CONTENT, status.HTTP_403_FORBIDDEN)
+
+
+def get_inbounds(access_token: str) -> list[str]:
+    def _fetch() -> tuple[int, list[str]]:
+        response = client.get("/api/inbounds", headers=auth_headers(access_token))
+        if response.status_code == status.HTTP_200_OK:
+            return response.status_code, response.json()
+        return response.status_code, []
+
+    def _poll() -> list[str]:
+        last_data: list[str] = []
+        for _ in range(_INBOUNDS_RETRIES):
+            code, data = _fetch()
+            if code == status.HTTP_200_OK:
+                last_data = data
+                if last_data:
+                    return last_data
+            time.sleep(_INBOUNDS_DELAY_SEC)
+        return last_data
+
+    response_code, data = _fetch()
+
+    if response_code == status.HTTP_200_OK:
+        if data or not _WAIT_FOR_INBOUNDS:
+            return data
+        return _poll()
+
+    if response_code == status.HTTP_404_NOT_FOUND:
+        core = create_core(access_token)
+        try:
+            if _WAIT_FOR_INBOUNDS:
+                return _poll()
+            response = client.get("/api/inbounds", headers=auth_headers(access_token))
+            assert response.status_code == status.HTTP_200_OK
+            return response.json()
+        finally:
+            delete_core(access_token, core["id"])
+
+    raise AssertionError(f"Unexpected response from /api/inbounds: {response_code}")
+
+
+def get_inbound_details(access_token: str) -> list[dict[str, Any]]:
+    response = client.get("/api/inbounds/details", headers=auth_headers(access_token))
+    assert response.status_code == status.HTTP_200_OK
+    return response.json()
+
+
+def create_hosts_for_inbounds(access_token: str, *, address: list[str] | None = None, port: int = 443) -> list[dict]:
+    inbound_details = get_inbound_details(access_token)
+    hosts: list[dict] = []
+    for idx, inbound in enumerate(inbound_details):
+        payload = {
+            "remark": unique_name(f"host_{idx}"),
+            "address": address or ["127.0.0.1"],
+            "port": 51820 if inbound["protocol"] == "wireguard" else port,
+            "inbound_tag": inbound["tag"],
+            "priority": idx + 1,
+        }
+        if inbound["protocol"] != "wireguard":
+            payload["sni"] = [f"test_host_{idx}.example.com"]
+        response = client.post("/api/host", headers=auth_headers(access_token), json=payload)
+        assert response.status_code == status.HTTP_201_CREATED
+        hosts.append(response.json())
+    return hosts
+
+
+def create_group(access_token: str, *, name: str | None = None, inbound_tags: Iterable[str] | None = None) -> dict:
+    tags = list(inbound_tags or [])
+    if not tags:
+        tags = get_inbounds(access_token)
+    payload = {
+        "name": name or unique_name("group"),
+        "inbound_tags": tags,
+    }
+    response = client.post("/api/group", headers=auth_headers(access_token), json=payload)
+    assert response.status_code == status.HTTP_201_CREATED
+    return response.json()
+
+
+def delete_group(access_token: str, group_id: int) -> None:
+    response = client.delete(f"/api/group/{group_id}", headers=auth_headers(access_token))
+    assert response.status_code == status.HTTP_204_NO_CONTENT
+
+
+def create_user(
+    access_token: str,
+    *,
+    username: str | None = None,
+    group_ids: Iterable[int] | None = None,
+    payload: dict[str, Any] | None = None,
+) -> dict:
+    body = {
+        "username": username or unique_name("user"),
+        "proxy_settings": {},
+        "data_limit": 1024 * 1024,
+        "data_limit_reset_strategy": "no_reset",
+        "status": "active",
+    }
+    if payload:
+        body.update(payload)
+    if group_ids is not None:
+        body["group_ids"] = list(group_ids)
+    response = client.post("/api/user", headers=auth_headers(access_token), json=body)
+    assert response.status_code == status.HTTP_201_CREATED
+    return response.json()
+
+
+def delete_user(access_token: str, username: str) -> None:
+    response = client.delete(f"/api/user/{username}", headers=auth_headers(access_token))
+    assert response.status_code == status.HTTP_204_NO_CONTENT
+
+
+def create_user_template(
+    access_token: str,
+    *,
+    name: str | None = None,
+    group_ids: Iterable[int],
+    data_limit: int = 1024 * 1024 * 1024,
+    expire_duration: int = 3600,
+    extra_settings: dict[str, Any] | None = None,
+    status_value: str = "active",
+    reset_usages: bool = True,
+    username_prefix: str | None = None,
+    username_suffix: str | None = None,
+    hwid_limit: int | None = None,
+) -> dict:
+    payload = {
+        "name": name or unique_name("user_template"),
+        "group_ids": list(group_ids),
+        "data_limit": data_limit,
+        "expire_duration": expire_duration,
+        "status": status_value,
+        "reset_usages": reset_usages,
+    }
+    if extra_settings is not None:
+        payload["extra_settings"] = extra_settings
+    if username_prefix is not None:
+        payload["username_prefix"] = username_prefix
+    if username_suffix is not None:
+        payload["username_suffix"] = username_suffix
+    if hwid_limit is not None:
+        payload["hwid_limit"] = hwid_limit
+    response = client.post("/api/user_template", headers=auth_headers(access_token), json=payload)
+    assert response.status_code == status.HTTP_201_CREATED
+    return response.json()
+
+
+def delete_user_template(access_token: str, template_id: int) -> None:
+    response = client.delete(f"/api/user_template/{template_id}", headers=auth_headers(access_token))
+    assert response.status_code == status.HTTP_204_NO_CONTENT

@@ -1,0 +1,355 @@
+import json
+from asyncio import Lock
+from copy import deepcopy
+from typing import ClassVar
+
+import nats
+from aiocache import cached
+from nats.js.client import JetStreamContext
+from nats.js.kv import KeyValue
+
+from app import on_shutdown, on_startup
+from app.core.abstract_core import AbstractCore
+from app.core.ikev2 import IKEv2Config
+from app.core.l2tp import L2TPConfig
+from app.core.wireguard import WireGuardConfig
+from app.core.xray import XRayConfig
+from app.db import GetDB
+from app.db.crud.core import get_core_configs
+from app.db.models import CoreConfig, CoreType
+from app.models.core import CoreListQuery
+from app.nats import is_nats_enabled
+from app.nats.client import setup_nats_kv
+from app.nats.message import MessageTopic
+from app.nats.router import router
+from app.utils.logger import get_logger
+from config import runtime_settings
+
+
+class CoreManager:
+    STATE_CACHE_KEY = "state"
+    KV_BUCKET_NAME = "core_manager_state"
+    CORE_CLASSES: ClassVar[dict] = {
+        CoreType.xray: XRayConfig,
+        CoreType.wg: WireGuardConfig,
+        CoreType.ikev2: IKEv2Config,
+        CoreType.l2tp: L2TPConfig,
+    }
+
+    def __init__(self):
+        self._cores: dict[int, AbstractCore] = {}
+        self._lock = Lock()
+        self._inbounds: list[str] = []
+        self._inbounds_by_tag = {}
+        self._nats_enabled = is_nats_enabled()
+        self._multi_worker = runtime_settings.role.requires_nats
+        self._nc: nats.NATS | None = None
+        self._js: JetStreamContext | None = None
+        self._kv: KeyValue | None = None
+        self._logger = get_logger("core-manager")
+        self._update_core_impl = (
+            self._update_core_nats if (self._nats_enabled and self._multi_worker) else self._update_core_local
+        )
+        self._remove_core_impl = (
+            self._remove_core_nats if (self._nats_enabled and self._multi_worker) else self._remove_core_local
+        )
+
+    async def _snapshot_state(self) -> dict:
+        async with self._lock:
+            return {
+                "cores": {k: v.to_json() for k, v in self._cores.items()},
+                "inbounds": list(self._inbounds),
+                "inbounds_by_tag": dict(self._inbounds_by_tag),
+            }
+
+    async def _persist_state(self):
+        if not self._kv:
+            return
+        state = await self._snapshot_state()
+        # State is already serialized by _snapshot_state; just encode
+        state_bytes = json.dumps(state).encode("utf-8")
+        try:
+            await self._kv.put(self.STATE_CACHE_KEY, state_bytes)
+        except Exception as exc:
+            self._logger.warning(f"Failed to persist core state to NATS KV: {exc}")
+
+    async def _load_state_from_cache(self) -> bool:
+        if not self._kv:
+            return False
+
+        try:
+            entry = await self._kv.get(self.STATE_CACHE_KEY)
+            if not entry or not entry.value:
+                return False
+
+            # Deserialize state using JSON
+            try:
+                cached_state = json.loads(entry.value.decode("utf-8"))
+            except json.JSONDecodeError, UnicodeDecodeError:
+                self._logger.warning("Failed to decode CoreManager state as JSON, ignoring...")
+                return False
+
+            # Reconstruct Core objects
+            cores = {}
+            for core_id, core_data in cached_state.get("cores", {}).items():
+                try:
+                    cores[int(core_id)] = self._core_from_json(core_data)
+                except Exception as exc:
+                    self._logger.warning(f"Failed to reconstruct core {core_id} from JSON: {exc}")
+                    continue
+
+            async with self._lock:
+                self._cores = cores
+                self._inbounds = cached_state.get("inbounds", [])
+                self._inbounds_by_tag = cached_state.get("inbounds_by_tag", {})
+
+            await self.get_inbounds.cache.clear()
+            await self.get_inbounds_by_tag.cache.clear()
+            return True
+        except Exception as exc:
+            self._logger.error(f"Error loading core state from cache: {exc}")
+            return False
+
+    async def _reload_from_cache(self):
+        loaded = await self._load_state_from_cache()
+        if loaded:
+            self._logger.debug("CoreManager state reloaded from JetStream KV cache")
+
+    def _core_payload_from_db(self, db_core_config: CoreConfig) -> dict:
+        return {
+            "id": db_core_config.id,
+            "type": db_core_config.type,
+            "config": db_core_config.config,
+            "exclude_inbound_tags": list(db_core_config.exclude_inbound_tags or []),
+            "fallbacks_inbound_tags": list(db_core_config.fallbacks_inbound_tags or []),
+        }
+
+    @classmethod
+    def _normalize_type(cls, type: CoreType | None) -> CoreType:
+        if not type:
+            return CoreType.xray
+        return type
+
+    def _get_core_class(self, type: CoreType | None):
+        normalized_type = self._normalize_type(type)
+        return self.CORE_CLASSES[normalized_type]
+
+    def _core_from_json(self, data: dict) -> AbstractCore:
+        type = data.get("type")
+        core_class = self._get_core_class(type)
+        return core_class.from_json(data)
+
+    async def _apply_core_payload(self, payload: dict):
+        try:
+            core_id = payload["id"]
+            type = payload.get("type", CoreType.xray)
+            config = payload["config"]
+        except Exception:
+            await self._reload_from_cache()
+            return
+
+        exclude_tags = set(payload.get("exclude_inbound_tags") or [])
+        fallback_tags = set(payload.get("fallbacks_inbound_tags") or [])
+
+        class _PayloadCore:
+            def __init__(self, cid, cfg, type, exclude, fallbacks):
+                self.id = cid
+                self.config = cfg
+                self.type = type
+                self.exclude_inbound_tags = exclude
+                self.fallbacks_inbound_tags = fallbacks
+
+        await self._update_core_local(_PayloadCore(core_id, config, type, exclude_tags, fallback_tags))
+
+    async def _handle_core_message(self, data: dict):
+        """Handle incoming core messages from router."""
+        action = data.get("action")
+        if action == "remove":
+            core_id = data.get("core_id")
+            if core_id:
+                await self._remove_core_local(int(core_id))
+            else:
+                await self._reload_from_cache()
+        elif action == "update":
+            core_payload = data.get("core")
+            if core_payload:
+                await self._apply_core_payload(core_payload)
+            else:
+                await self._reload_from_cache()
+        else:
+            await self._reload_from_cache()
+
+    async def _publish_invalidation(self, message: dict):
+        """Publish core update message via global router."""
+        await router.publish(MessageTopic.CORE, message)
+
+    def validate_core(
+        self,
+        config: dict,
+        exclude_inbounds: set[str] | None = None,
+        fallbacks_inbounds: set[str] | None = None,
+        type: CoreType | None = None,
+    ):
+        exclude_inbounds = exclude_inbounds or set()
+        fallbacks_inbounds = fallbacks_inbounds or set()
+        core_class = self._get_core_class(type)
+        return core_class(config, exclude_inbounds.copy(), fallbacks_inbounds.copy())
+
+    async def initialize(self, db):
+        # Register handler with global router
+        router.register_handler(MessageTopic.CORE, self._handle_core_message)
+
+        # Initialize NATS if enabled
+        if self._nats_enabled:
+            self._nc, self._js, self._kv = await setup_nats_kv(self.KV_BUCKET_NAME)
+
+        cached_loaded = await self._load_state_from_cache()
+        if cached_loaded:
+            return
+
+        core_configs, _ = await get_core_configs(db, CoreListQuery())
+        cores: dict[int, AbstractCore] = {}
+        for config in core_configs:
+            try:
+                core_config = self.validate_core(
+                    config.config,
+                    config.exclude_inbound_tags,
+                    config.fallbacks_inbound_tags,
+                    config.type,
+                )
+            except Exception as exc:
+                # Broken DB cores must not take down the process (restart loop).
+                self._logger.error(
+                    "Skipping broken core id=%s name=%r type=%s: %s",
+                    config.id,
+                    getattr(config, "name", None),
+                    config.type,
+                    exc,
+                )
+                continue
+            cores[config.id] = core_config
+
+        async with self._lock:
+            self._cores = cores
+
+        await self.update_inbounds()
+        await self._persist_state()
+
+    async def update_inbounds(self):
+        async with self._lock:
+            new_inbounds = {}
+            for core in self._cores.values():
+                new_inbounds.update(core.inbounds_by_tag)
+
+            self._inbounds_by_tag = new_inbounds
+            self._inbounds = list(self._inbounds_by_tag.keys())
+
+            await self.get_inbounds.cache.clear()
+            await self.get_inbounds_by_tag.cache.clear()
+
+    async def _update_core_local(self, db_core_config: CoreConfig, core_config: AbstractCore | None = None):
+        if core_config is None:
+            try:
+                core_config = self.validate_core(
+                    db_core_config.config,
+                    db_core_config.exclude_inbound_tags,
+                    db_core_config.fallbacks_inbound_tags,
+                    db_core_config.type,
+                )
+            except Exception as exc:
+                self._logger.error(
+                    "Skipping broken core id=%s type=%s: %s",
+                    getattr(db_core_config, "id", None),
+                    getattr(db_core_config, "type", None),
+                    exc,
+                )
+                return
+
+        async with self._lock:
+            self._cores.update({db_core_config.id: core_config})
+
+        await self.update_inbounds()
+        await self._persist_state()
+
+    async def _update_core_nats(self, db_core_config: CoreConfig, core_config: AbstractCore | None = None):
+        # Persist local state (and KV snapshot) before broadcasting.
+        # This lets node workers refresh from KV and avoids reconnect races.
+        await self._update_core_local(db_core_config, core_config)
+        try:
+            await self._publish_invalidation({"action": "update", "core": self._core_payload_from_db(db_core_config)})
+        except Exception as exc:
+            self._logger.warning(f"Failed to publish core update via NATS: {exc}")
+
+    async def update_core(self, db_core_config: CoreConfig, core_config: AbstractCore | None = None):
+        await self._update_core_impl(db_core_config, core_config)
+
+    async def _remove_core_local(self, core_id: int):
+        async with self._lock:
+            core = self._cores.get(core_id, None)
+            if core:
+                del self._cores[core_id]
+            else:
+                return
+
+        await self.update_inbounds()
+        await self._persist_state()
+
+    async def _remove_core_nats(self, core_id: int):
+        # Persist local removal (and KV snapshot) before broadcasting.
+        await self._remove_core_local(core_id)
+
+        try:
+            await self._publish_invalidation({"action": "remove", "core_id": core_id})
+        except Exception as exc:
+            self._logger.warning(f"Failed to publish core remove via NATS: {exc}")
+
+    async def remove_core(self, core_id: int):
+        await self._remove_core_impl(core_id)
+
+    async def get_core(self, core_id: int) -> AbstractCore | None:
+        async with self._lock:
+            core = self._cores.get(core_id, None)
+
+            if not core:
+                core = self._cores.get(1)
+
+            return core
+
+    async def get_cores(self, core_ids: list[int] | set[int] | None = None) -> dict[int, AbstractCore]:
+        async with self._lock:
+            if core_ids is None:
+                return {core_id: deepcopy(core) for core_id, core in self._cores.items()}
+            return {core_id: deepcopy(core) for core_id, core in self._cores.items() if core_id in core_ids}
+
+    @cached()
+    async def get_inbounds(self) -> list[str]:
+        async with self._lock:
+            return list(self._inbounds)
+
+    @cached()
+    async def get_inbounds_by_tag(self) -> dict:
+        async with self._lock:
+            return deepcopy(self._inbounds_by_tag)
+
+    async def get_inbound_by_tag(self, tag) -> dict:
+        async with self._lock:
+            inbound = self._inbounds_by_tag.get(tag, None)
+            if not inbound:
+                return None
+            return deepcopy(inbound)
+
+
+core_manager = CoreManager()
+
+
+@on_startup
+async def init_core_manager():
+    async with GetDB() as db:
+        await core_manager.initialize(db)
+
+
+@on_shutdown
+async def shutdown_core_manager():
+    # Close NATS connection
+    if core_manager._nc:
+        await core_manager._nc.close()

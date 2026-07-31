@@ -1,0 +1,236 @@
+from PasarGuardNodeBridge import create_proxy, create_user
+from PasarGuardNodeBridge.common import service_pb2 as service
+from PasarGuardNodeBridge.common.service_pb2 import User as ProtoUser
+from sqlalchemy import and_, func, or_, select
+
+from app.db import AsyncSession
+from app.db.models import (
+    Admin,
+    AdminRole,
+    AdminStatus,
+    Group,
+    ProxyInbound,
+    User,
+    UserStatus,
+    inbounds_groups_association,
+    users_groups_association,
+)
+from app.models.protocol import ProxyProtocol
+
+_ALL_PROXY_PROTOCOLS = frozenset(ProxyProtocol)
+
+
+def _has_proto_field(message_type, field: str) -> bool:
+    return field in message_type.DESCRIPTOR.fields_by_name
+
+
+def _uint32_limit(value: int | None, field: str) -> int:
+    if value in (None, 0):
+        return 0
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0 or value > 0xFFFFFFFF:
+        raise ValueError(f"{field} must be an integer between 0 and 4294967295")
+    return value
+
+
+def _inbounds_from_loaded_groups(user: User) -> list[str] | None:
+    loaded_groups = user.__dict__.get("groups")
+    if loaded_groups is None:
+        return None
+
+    tags: set[str] = set()
+    for group in loaded_groups:
+        if group.is_disabled:
+            continue
+
+        loaded_inbounds = group.__dict__.get("inbounds")
+        if loaded_inbounds is None:
+            return None
+
+        for inbound in loaded_inbounds:
+            tags.add(inbound.tag)
+
+    return list(tags)
+
+
+async def serialize_user(user: User, allowed_protocols: frozenset[ProxyProtocol] | None = None) -> ProtoUser:
+    user_settings = user.proxy_settings
+    inbounds = None
+    status = user.__dict__.get("status")
+    if status is None:
+        status = await user.awaitable_attrs.status
+
+    if status in (UserStatus.active, UserStatus.on_hold):
+        inbounds = _inbounds_from_loaded_groups(user)
+        if inbounds is None:
+            inbounds = await user.inbounds()
+
+    return _serialize_user_for_node(
+        user.id,
+        user_settings,
+        inbounds,
+        allowed_protocols,
+        ip_limit=user.ip_limit,
+    )
+
+
+def _serialize_user_for_node(
+    id: int,
+    user_settings: dict,
+    inbounds: list[str] | None = None,
+    allowed_protocols: frozenset[ProxyProtocol] | None = None,
+    ip_limit: int | None = None,
+    speed_limit: int | None = None,
+) -> ProtoUser:
+    protocols_were_explicit = allowed_protocols is not None
+    allowed_protocols = _ALL_PROXY_PROTOCOLS if allowed_protocols is None else allowed_protocols
+
+    proxy_kwargs = {}
+    if ProxyProtocol.vmess in allowed_protocols:
+        proxy_kwargs["vmess_id"] = user_settings.get("vmess", {}).get("id")
+    if ProxyProtocol.vless in allowed_protocols:
+        proxy_kwargs["vless_id"] = user_settings.get("vless", {}).get("id")
+    if ProxyProtocol.trojan in allowed_protocols:
+        proxy_kwargs["trojan_password"] = user_settings.get("trojan", {}).get("password")
+    if ProxyProtocol.shadowsocks in allowed_protocols:
+        shadowsocks_settings = user_settings.get("shadowsocks", {})
+        proxy_kwargs["shadowsocks_password"] = shadowsocks_settings.get("password")
+        proxy_kwargs["shadowsocks_method"] = shadowsocks_settings.get("method")
+    if ProxyProtocol.wireguard in allowed_protocols:
+        wireguard_settings = user_settings.get("wireguard", {})
+        proxy_kwargs["wireguard_public_key"] = wireguard_settings.get("public_key")
+        proxy_kwargs["wireguard_peer_ips"] = wireguard_settings.get("peer_ips") or []
+    if ProxyProtocol.hysteria in allowed_protocols:
+        proxy_kwargs["hysteria_auth"] = user_settings.get("hysteria", {}).get("auth")
+
+    proxy = create_proxy(**proxy_kwargs)
+    needs_ipsec_credentials = bool({ProxyProtocol.ikev2, ProxyProtocol.l2tp}.intersection(allowed_protocols))
+    bridge_has_ikev2 = _has_proto_field(service.Proxy, "ikev2")
+    if needs_ipsec_credentials and bridge_has_ikev2:
+        ikev2_settings = user_settings.get("ikev2") or {}
+        username = ikev2_settings.get("username")
+        password = ikev2_settings.get("password")
+        if not username or not password:
+            raise ValueError("ikev2 username and password are required for IKEv2/L2TP users")
+        proxy.ikev2.username = str(username)
+        proxy.ikev2.password = str(password)
+    elif needs_ipsec_credentials and protocols_were_explicit:
+        raise RuntimeError(
+            "Installed PasarGuardNodeBridge cannot serialize IKEv2/L2TP credentials; "
+            "install a bridge release with an ikev2 Proxy field"
+        )
+
+    proto_user = create_user(
+        str(id),
+        proxy,
+        inbounds,
+    )
+    if _has_proto_field(service.User, "ip_limit"):
+        proto_user.ip_limit = _uint32_limit(ip_limit, "ip_limit")
+    elif ip_limit and protocols_were_explicit and needs_ipsec_credentials:
+        raise RuntimeError(
+            "Installed PasarGuardNodeBridge cannot serialize user limits; "
+            "install a bridge release with ip_limit and speed_limit fields"
+        )
+    if _has_proto_field(service.User, "speed_limit"):
+        proto_user.speed_limit = _uint32_limit(speed_limit, "speed_limit")
+    return proto_user
+
+
+async def core_users(
+    db: AsyncSession,
+    inbound_tags: list[str] | set[str] | None = None,
+    allowed_protocols: frozenset[ProxyProtocol] | None = None,
+):
+    dialect = db.bind.dialect.name
+    inbound_tags = list(dict.fromkeys(inbound_tags or []))
+
+    # Use dialect-specific aggregation and grouping
+    if dialect == "postgresql":
+        inbound_agg = func.string_agg(ProxyInbound.tag.distinct(), ",").label("inbound_tags")
+    else:
+        # MySQL and SQLite use group_concat
+        inbound_agg = func.group_concat(ProxyInbound.tag.distinct()).label("inbound_tags")
+
+    stmt = (
+        select(
+            User.id,
+            User.proxy_settings,
+            User.hwid_limit,
+            inbound_agg,
+        )
+        .outerjoin(users_groups_association, User.id == users_groups_association.c.user_id)
+        .outerjoin(
+            Group,
+            and_(
+                users_groups_association.c.groups_id == Group.id,
+                Group.is_disabled.is_(False),
+            ),
+        )
+        .outerjoin(inbounds_groups_association, Group.id == inbounds_groups_association.c.group_id)
+        .outerjoin(
+            ProxyInbound,
+            and_(
+                inbounds_groups_association.c.inbound_id == ProxyInbound.id,
+                ProxyInbound.tag.in_(inbound_tags) if inbound_tags else True,
+            ),
+        )
+        # Exclude users whose admin role blocks user sync for the admin's current status.
+        .outerjoin(Admin, Admin.id == User.admin_id)
+        .outerjoin(AdminRole, AdminRole.id == Admin.role_id)
+        .where(User.status.in_([UserStatus.active, UserStatus.on_hold]))
+        .where(
+            or_(
+                Admin.id.is_(None),
+                Admin.status.not_in([AdminStatus.limited, AdminStatus.disabled]),
+                and_(Admin.status == AdminStatus.limited, AdminRole.disconnect_users_when_limited.is_not(True)),
+                and_(Admin.status == AdminStatus.disabled, AdminRole.disconnect_users_when_disabled.is_not(True)),
+            )
+        )
+        .group_by(User.id)
+    )
+
+    results = (await db.execute(stmt)).all()
+    bridge_users: list = []
+
+    for row in results:
+        inbound_tags = row.inbound_tags.split(",") if row.inbound_tags else []
+        if inbound_tags:
+            bridge_users.append(
+                _serialize_user_for_node(
+                    row.id,
+                    row.proxy_settings,
+                    inbound_tags,
+                    allowed_protocols,
+                    ip_limit=row.ip_limit,
+                )
+            )
+    return bridge_users
+
+
+async def serialize_users_for_node(
+    users: list[User],
+    allowed_protocols: frozenset[ProxyProtocol] | None = None,
+) -> list[ProtoUser]:
+    """Serialize users for node dispatch."""
+    bridge_users: list = []
+
+    for user in users:
+        inbounds_list = []
+        if user.status in [UserStatus.active, UserStatus.on_hold]:
+            loaded_inbounds = _inbounds_from_loaded_groups(user)
+            if loaded_inbounds is None:
+                inbounds_list = await user.inbounds()
+            else:
+                inbounds_list = loaded_inbounds
+
+        bridge_users.append(
+            _serialize_user_for_node(
+                user.id,
+                user.proxy_settings,
+                inbounds_list,
+                allowed_protocols,
+                ip_limit=user.ip_limit,
+            )
+        )
+
+    return bridge_users

@@ -1,0 +1,78 @@
+from app.models.host import BaseHost
+from app.models.settings import NotificationSettings
+from app.notification.client import send_discord_webhook
+from app.notification.helpers import get_discord_webhook
+from app.settings import notification_settings
+from app.utils.helpers import escape_ds_markdown, escape_ds_markdown_list
+
+from . import colors, messages
+from .utils import escape_md_host
+
+ENTITY = "host"
+
+
+async def create_host(host: BaseHost, by: str):
+    remark, address, inbound_tag, by = escape_md_host(host, by)
+    message = {**messages.CREATE_HOST, "footer": dict(messages.CREATE_HOST["footer"])}
+    message["description"] = message["description"].format(
+        remark=remark, address=address, inbound_tag=inbound_tag, port=host.port
+    )
+    message["footer"]["text"] = message["footer"]["text"].format(id=host.id, by=by)
+    data = {
+        "content": "",
+        "embeds": [message],
+    }
+    data["embeds"][0]["color"] = colors.GREEN
+    settings: NotificationSettings = await notification_settings()
+    if settings.notify_discord:
+        webhook = get_discord_webhook(settings, ENTITY)
+        await send_discord_webhook(data, webhook)
+
+
+async def modify_host(host: BaseHost, by: str):
+    remark, address, inbound_tag, by = escape_md_host(host, by)
+    message = {**messages.MODIFY_HOST, "footer": dict(messages.MODIFY_HOST["footer"])}
+    message["description"] = message["description"].format(
+        remark=remark, address=address, inbound_tag=inbound_tag, port=host.port
+    )
+    message["footer"]["text"] = message["footer"]["text"].format(id=host.id, by=by)
+    data = {
+        "content": "",
+        "embeds": [message],
+    }
+    data["embeds"][0]["color"] = colors.YELLOW
+    settings: NotificationSettings = await notification_settings()
+    if settings.notify_discord:
+        webhook = get_discord_webhook(settings, ENTITY)
+        await send_discord_webhook(data, webhook)
+
+
+async def remove_host(host: BaseHost, by: str):
+    remark, by = escape_ds_markdown_list((host.remark, by))
+    message = {**messages.REMOVE_HOST, "footer": dict(messages.REMOVE_HOST["footer"])}
+    message["description"] = message["description"].format(remark=remark)
+    message["footer"]["text"] = message["footer"]["text"].format(id=host.id, by=by)
+    data = {
+        "content": "",
+        "embeds": [message],
+    }
+    data["embeds"][0]["color"] = colors.RED
+    settings: NotificationSettings = await notification_settings()
+    if settings.notify_discord:
+        webhook = get_discord_webhook(settings, ENTITY)
+        await send_discord_webhook(data, webhook)
+
+
+async def modify_hosts(by: str):
+    by = escape_ds_markdown(by)
+    message = {**messages.MODIFY_HOSTS}
+    message["description"] = message["description"].format(by=by)
+    data = {
+        "content": "",
+        "embeds": [message],
+    }
+    data["embeds"][0]["color"] = colors.CYAN
+    settings: NotificationSettings = await notification_settings()
+    if settings.notify_discord:
+        webhook = get_discord_webhook(settings, ENTITY)
+        await send_discord_webhook(data, webhook)

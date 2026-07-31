@@ -1,0 +1,58 @@
+import * as React from 'react'
+import { Eye, EyeOff } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { Button } from './button'
+import { Input, InputProps } from './input'
+
+export interface PasswordInputProps extends InputProps {
+  allowBrowserSave?: boolean
+}
+
+const PasswordInput = React.forwardRef<HTMLInputElement, PasswordInputProps>(({ className, type, error, isError, value, allowBrowserSave = false, ...props }, ref) => {
+  const [showPassword, setShowPassword] = React.useState(false)
+  const [hasValue, setHasValue] = React.useState(false)
+
+  const togglePasswordVisibility = () => {
+    setShowPassword(!showPassword)
+  }
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setHasValue(e.target.value.length > 0)
+    // Call the original onChange if it exists
+    if (props.onChange) {
+      props.onChange(e)
+    }
+  }
+
+  return (
+    <div className="relative w-full min-w-0">
+      <Input
+        type={showPassword ? 'text' : 'password'}
+        className={cn('pr-10', className)}
+        ref={ref}
+        error={error}
+        isError={isError}
+        value={value}
+        autoComplete={allowBrowserSave ? 'current-password' : 'off'}
+        {...props}
+        onChange={handleInputChange}
+      />
+      {(value || hasValue) && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="absolute top-0 right-0 flex h-9 items-center justify-center px-3 py-2 transition-opacity duration-200 hover:bg-transparent"
+          onClick={togglePasswordVisibility}
+          tabIndex={-1}
+        >
+          {showPassword ? <EyeOff className="text-muted-foreground h-4 w-4" /> : <Eye className="text-muted-foreground h-4 w-4" />}
+          <span className="sr-only">{showPassword ? 'Hide password' : 'Show password'}</span>
+        </Button>
+      )}
+    </div>
+  )
+})
+PasswordInput.displayName = 'PasswordInput'
+
+export { PasswordInput }

@@ -1,4 +1,5 @@
 ---
+dir: rtl
 layout: home
 hero:
   name: HPXPANEL

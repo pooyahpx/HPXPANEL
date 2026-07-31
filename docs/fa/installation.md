@@ -1,4 +1,5 @@
 ---
+dir: rtl
 title: نصب
 description: نصب HPXPANEL روی لینوکس
 ---

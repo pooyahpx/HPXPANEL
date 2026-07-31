@@ -1,4 +1,5 @@
 ---
+dir: rtl
 title: مقدمه
 description: HPXPANEL چیست و چرا برای اپراتور ساخته شده
 outline: deep

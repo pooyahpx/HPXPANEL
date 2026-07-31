@@ -7,11 +7,13 @@ on:
     branches: [main]
     paths:
       - "app/**"
+      - "cli/**"
       - "dashboard/**"
       - "Dockerfile"
       - "start.sh"
       - "build_dashboard.sh"
       - "cli_wrapper.sh"
+      - "pasarguard-cli.py"
       - "tui_wrapper.sh"
       - "healthcheck.sh"
       - "pyproject.toml"

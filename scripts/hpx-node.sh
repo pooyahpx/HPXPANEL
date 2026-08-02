@@ -271,53 +271,33 @@ ensure_compose() {
 }
 
 force_free_apt() {
-  warn "Clearing apt/dpkg lock so Docker can install..."
   systemctl stop unattended-upgrades.service 2>/dev/null || true
   systemctl stop unattended-upgrades.timer 2>/dev/null || true
   systemctl kill --kill-who=all unattended-upgrades.service 2>/dev/null || true
-
-  # Stop common lock holders (safe on a fresh VPS mid-install).
   if has pkill; then
     pkill -9 -f unattended-upgrade 2>/dev/null || true
     pkill -9 -x apt-get 2>/dev/null || true
     pkill -9 -x apt 2>/dev/null || true
     pkill -9 -x dpkg 2>/dev/null || true
     pkill -9 -f '/usr/bin/apt' 2>/dev/null || true
+    pkill -9 -f 'apt.systemd.daily' 2>/dev/null || true
   elif has killall; then
     killall -9 unattended-upgrade apt-get apt dpkg 2>/dev/null || true
   fi
-  sleep 2
-
-  # Stale lock files after killed processes.
-  if ! apt_busy; then
-    rm -f /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock \
-      /var/lib/apt/lists/lock /var/cache/apt/archives/lock \
-      /var/cache/apt/archives/lock.bin 2>/dev/null || true
-  fi
-
+  rm -f /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock \
+    /var/lib/apt/lists/lock /var/cache/apt/archives/lock \
+    /var/cache/apt/archives/lock.bin 2>/dev/null || true
   DEBIAN_FRONTEND=noninteractive dpkg --configure -a >/dev/null 2>&1 || true
-  sleep 1
 }
 
+# No sleeping / no multi-second waits — unlock once or skip apt entirely.
 wait_for_apt() {
   has apt-get || return 0
   apt_busy || return 0
-
+  warn "apt busy ($(apt_holder)) — unlocking immediately (no wait)"
   force_free_apt
-  apt_busy || return 0
-
-  local waited=0 max="${APT_LOCK_TIMEOUT:-20}"
-  warn "apt still busy ($(apt_holder)) — waiting ${max}s..."
-  while apt_busy; do
-    if [ "$waited" -ge "$max" ]; then
-      force_free_apt
-      apt_busy || return 0
-      warn "apt still locked after unlock attempts (holder: $(apt_holder))."
-      return 1
-    fi
-    sleep 2; waited=$((waited + 2))
-  done
-  log "apt is free (waited ${waited}s)"
+  apt_busy && return 1
+  return 0
 }
 
 install_docker_static() {
@@ -335,7 +315,7 @@ install_docker_static() {
   ver="${DOCKER_STATIC_VERSION:-$ver}"
   url="https://download.docker.com/linux/static/stable/${arch}/docker-${ver}.tgz"
   tmp="$(mktemp -d)"
-  log "Installing Docker engine from static binaries (bypasses apt)..."
+  log "Installing Docker from static binaries (instant path, no apt)..."
   if ! curl -fsSL "$url" -o "$tmp/docker.tgz"; then
     rm -rf "$tmp"
     return 1
@@ -344,7 +324,6 @@ install_docker_static() {
   cp -f "$tmp"/docker/* /usr/bin/ 2>/dev/null || cp -f "$tmp"/docker/docker* /usr/bin/
   rm -rf "$tmp"
 
-  # Minimal systemd unit if missing.
   if [ -d /run/systemd/system ] && [ ! -f /etc/systemd/system/docker.service ] && [ ! -f /lib/systemd/system/docker.service ]; then
     cat > /etc/systemd/system/docker.service <<'UNIT'
 [Unit]
@@ -371,7 +350,12 @@ UNIT
     systemctl daemon-reload 2>/dev/null || true
   fi
   systemctl enable --now docker 2>/dev/null || dockerd >/var/log/dockerd.log 2>&1 &
-  sleep 2
+  # brief readiness poll (max ~3s total), not an apt wait
+  local i
+  for i in 1 2 3 4 5 6; do
+    docker info >/dev/null 2>&1 && return 0
+    sleep 0.5
+  done
   has docker
 }
 
@@ -382,21 +366,16 @@ install_docker() {
     return 0
   fi
 
-  if wait_for_apt; then
-    if curl -fsSL https://get.docker.com | sh; then
-      systemctl enable --now docker 2>/dev/null || true
-      sleep 2
-    else
-      warn "get.docker.com failed — trying static Docker binaries"
-      install_docker_static || true
-    fi
-  else
-    warn "apt locked — installing Docker via static binaries (no apt)"
-    install_docker_static || die "Could not install Docker while apt is locked. Run:
-  sudo systemctl stop unattended-upgrades
-  sudo killall -9 apt apt-get dpkg unattended-upgrade 2>/dev/null || true
-  sudo dpkg --configure -a
-then re-run the installer."
+  # Instant path: never call apt / get.docker.com (those stall on VPS unattended-upgrades).
+  if apt_busy; then
+    warn "apt busy — unlocking and using static Docker (no wait)"
+    force_free_apt
+  fi
+  if ! install_docker_static; then
+    warn "static Docker failed — last resort get.docker.com"
+    force_free_apt
+    curl -fsSL https://get.docker.com | sh || true
+    systemctl enable --now docker 2>/dev/null || true
   fi
 
   has docker || die "Docker engine is not installed"

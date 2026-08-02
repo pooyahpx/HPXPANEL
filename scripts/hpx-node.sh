@@ -270,32 +270,109 @@ ensure_compose() {
   sudo chmod +x /usr/local/lib/docker/cli-plugins/docker-compose"
 }
 
-free_apt_soft() {
-  apt_busy || return 0
-  local holder
-  holder="$(apt_holder)"
-  if echo "$holder" | grep -Eiq 'unattended'; then
-    warn "Stopping unattended-upgrades so Docker can install..."
-    systemctl stop unattended-upgrades.service 2>/dev/null || true
-    systemctl stop unattended-upgrades.timer 2>/dev/null || true
+force_free_apt() {
+  warn "Clearing apt/dpkg lock so Docker can install..."
+  systemctl stop unattended-upgrades.service 2>/dev/null || true
+  systemctl stop unattended-upgrades.timer 2>/dev/null || true
+  systemctl kill --kill-who=all unattended-upgrades.service 2>/dev/null || true
+
+  # Stop common lock holders (safe on a fresh VPS mid-install).
+  if has pkill; then
+    pkill -9 -f unattended-upgrade 2>/dev/null || true
+    pkill -9 -x apt-get 2>/dev/null || true
+    pkill -9 -x apt 2>/dev/null || true
+    pkill -9 -x dpkg 2>/dev/null || true
+    pkill -9 -f '/usr/bin/apt' 2>/dev/null || true
+  elif has killall; then
+    killall -9 unattended-upgrade apt-get apt dpkg 2>/dev/null || true
   fi
+  sleep 2
+
+  # Stale lock files after killed processes.
+  if ! apt_busy; then
+    rm -f /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock \
+      /var/lib/apt/lists/lock /var/cache/apt/archives/lock \
+      /var/cache/apt/archives/lock.bin 2>/dev/null || true
+  fi
+
+  DEBIAN_FRONTEND=noninteractive dpkg --configure -a >/dev/null 2>&1 || true
+  sleep 1
 }
 
 wait_for_apt() {
   has apt-get || return 0
   apt_busy || return 0
-  free_apt_soft
+
+  force_free_apt
   apt_busy || return 0
-  local waited=0 max="${APT_LOCK_TIMEOUT:-45}"
-  warn "apt/dpkg is busy ($(apt_holder)) — waiting up to ${max}s (not minutes)..."
+
+  local waited=0 max="${APT_LOCK_TIMEOUT:-20}"
+  warn "apt still busy ($(apt_holder)) — waiting ${max}s..."
   while apt_busy; do
     if [ "$waited" -ge "$max" ]; then
-      warn "apt still locked after ${max}s (holder: $(apt_holder))."
+      force_free_apt
+      apt_busy || return 0
+      warn "apt still locked after unlock attempts (holder: $(apt_holder))."
       return 1
     fi
     sleep 2; waited=$((waited + 2))
   done
   log "apt is free (waited ${waited}s)"
+}
+
+install_docker_static() {
+  local arch tarball url ver="27.5.1" tmp
+  arch="$(uname -m)"
+  case "$arch" in
+    x86_64|amd64) arch="x86_64" ;;
+    aarch64|arm64) arch="aarch64" ;;
+    *)
+      warn "No static Docker package for arch $(uname -m)"
+      return 1
+      ;;
+  esac
+  has curl || return 1
+  ver="${DOCKER_STATIC_VERSION:-$ver}"
+  url="https://download.docker.com/linux/static/stable/${arch}/docker-${ver}.tgz"
+  tmp="$(mktemp -d)"
+  log "Installing Docker engine from static binaries (bypasses apt)..."
+  if ! curl -fsSL "$url" -o "$tmp/docker.tgz"; then
+    rm -rf "$tmp"
+    return 1
+  fi
+  tar -xzf "$tmp/docker.tgz" -C "$tmp"
+  cp -f "$tmp"/docker/* /usr/bin/ 2>/dev/null || cp -f "$tmp"/docker/docker* /usr/bin/
+  rm -rf "$tmp"
+
+  # Minimal systemd unit if missing.
+  if [ -d /run/systemd/system ] && [ ! -f /etc/systemd/system/docker.service ] && [ ! -f /lib/systemd/system/docker.service ]; then
+    cat > /etc/systemd/system/docker.service <<'UNIT'
+[Unit]
+Description=Docker Application Container Engine
+Documentation=https://docs.docker.com
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=notify
+ExecStart=/usr/bin/dockerd
+ExecReload=/bin/kill -s HUP $MAINPID
+LimitNOFILE=1048576
+LimitNPROC=infinity
+LimitCORE=infinity
+Delegate=yes
+KillMode=process
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+    systemctl daemon-reload 2>/dev/null || true
+  fi
+  systemctl enable --now docker 2>/dev/null || dockerd >/var/log/dockerd.log 2>&1 &
+  sleep 2
+  has docker
 }
 
 install_docker() {
@@ -305,15 +382,23 @@ install_docker() {
     return 0
   fi
 
-  if ! wait_for_apt; then
-    die "apt is locked by $(apt_holder). Fix with:
+  if wait_for_apt; then
+    if curl -fsSL https://get.docker.com | sh; then
+      systemctl enable --now docker 2>/dev/null || true
+      sleep 2
+    else
+      warn "get.docker.com failed — trying static Docker binaries"
+      install_docker_static || true
+    fi
+  else
+    warn "apt locked — installing Docker via static binaries (no apt)"
+    install_docker_static || die "Could not install Docker while apt is locked. Run:
   sudo systemctl stop unattended-upgrades
-  sudo killall -9 unattended-upgrade 2>/dev/null || true
+  sudo killall -9 apt apt-get dpkg unattended-upgrade 2>/dev/null || true
+  sudo dpkg --configure -a
 then re-run the installer."
   fi
-  curl -fsSL https://get.docker.com | sh
-  systemctl enable --now docker 2>/dev/null || true
-  sleep 2
+
   has docker || die "Docker engine is not installed"
   ensure_compose
 }
@@ -323,14 +408,18 @@ apt_busy() {
   for f in /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock \
            /var/lib/apt/lists/lock /var/cache/apt/archives/lock; do
     [ -e "$f" ] || continue
-    if has fuser && fuser "$f" >/dev/null 2>&1; then return 0; fi
+    if has fuser; then
+      fuser "$f" >/dev/null 2>&1 && return 0
+    elif has lsof; then
+      lsof "$f" >/dev/null 2>&1 && return 0
+    fi
   done
   if has pgrep; then
-    local p
-    for p in apt apt-get dpkg; do
-      pgrep -x "$p" >/dev/null 2>&1 && return 0
-    done
+    pgrep -x apt >/dev/null 2>&1 && return 0
+    pgrep -x apt-get >/dev/null 2>&1 && return 0
+    pgrep -x dpkg >/dev/null 2>&1 && return 0
     pgrep -f unattended-upgr >/dev/null 2>&1 && return 0
+    pgrep -f 'apt.systemd.daily' >/dev/null 2>&1 && return 0
   fi
   return 1
 }
@@ -340,16 +429,22 @@ apt_holder() {
   for f in /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock \
            /var/lib/apt/lists/lock /var/cache/apt/archives/lock; do
     [ -e "$f" ] || continue
-    has fuser || break
-    p=$(fuser "$f" 2>/dev/null | tr -s ' ' '\n' | grep -E '^[0-9]+$' | head -1)
-    [ -n "$p" ] && { ps -o comm= -p "$p" 2>/dev/null | tail -1; return; }
+    if has fuser; then
+      p=$(fuser "$f" 2>/dev/null | tr -s ' ' '\n' | grep -E '^[0-9]+$' | head -1)
+      [ -n "$p" ] && { ps -o comm= -p "$p" 2>/dev/null | tail -1; return; }
+    elif has lsof; then
+      p=$(lsof -t "$f" 2>/dev/null | head -1)
+      [ -n "$p" ] && { ps -o comm= -p "$p" 2>/dev/null | tail -1; return; }
+    fi
   done
   if has pgrep; then
-    for p in unattended-upgr apt apt-get dpkg; do
-      pgrep -x "$p" >/dev/null 2>&1 && { echo "$p"; return; }
+    for p in unattended-upgr apt-get apt dpkg; do
+      if pgrep -x "$p" >/dev/null 2>&1 || pgrep -f "$p" >/dev/null 2>&1; then
+        echo "$p"; return
+      fi
     done
   fi
-  echo "another apt/dpkg process"
+  echo "stale-or-unknown-lock"
 }
 
 banner() {

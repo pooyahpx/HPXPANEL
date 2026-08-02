@@ -272,16 +272,24 @@ force_free_apt() {
   systemctl stop unattended-upgrades.service 2>/dev/null || true
   systemctl stop unattended-upgrades.timer 2>/dev/null || true
   systemctl kill --kill-who=all unattended-upgrades.service 2>/dev/null || true
-  if has pkill; then
-    pkill -9 -f unattended-upgrade 2>/dev/null || true
-    pkill -9 -x apt-get 2>/dev/null || true
-    pkill -9 -x apt 2>/dev/null || true
-    pkill -9 -x dpkg 2>/dev/null || true
-    pkill -9 -f '/usr/bin/apt' 2>/dev/null || true
-    pkill -9 -f 'apt.systemd.daily' 2>/dev/null || true
-  elif has killall; then
-    killall -9 unattended-upgrade apt-get apt dpkg 2>/dev/null || true
+
+  # IMPORTANT: never `pkill -f <pattern>` — when installed via
+  #   bash -c "$(curl ... install.sh)"
+  # the whole script text is in cmdline, so -f matches and kills THIS installer.
+  local pid
+  if has pgrep; then
+    for pid in $(pgrep -x apt-get 2>/dev/null; pgrep -x apt 2>/dev/null; pgrep -x dpkg 2>/dev/null); do
+      [ "$pid" = "$$" ] && continue
+      [ "$pid" = "$PPID" ] && continue
+      kill -9 "$pid" 2>/dev/null || true
+    done
+    # unattended-upgrade is often a python process — match by exact comm when possible
+    for pid in $(pgrep -f '^/usr/bin/unattended-upgrade' 2>/dev/null; pgrep -x unattended-upgrade 2>/dev/null); do
+      [ "$pid" = "$$" ] && continue
+      kill -9 "$pid" 2>/dev/null || true
+    done
   fi
+
   rm -f /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock \
     /var/lib/apt/lists/lock /var/cache/apt/archives/lock \
     /var/cache/apt/archives/lock.bin 2>/dev/null || true

@@ -157,14 +157,50 @@ detect_compose() {
 }
 dc() { ( cd "$INSTALL_DIR" && $COMPOSE_CMD "$@" ); }
 
-# Distro docker.io often ships without the Compose v2 plugin. Install it when missing.
+install_compose_binary() {
+  local arch bin_url bin_path
+  arch="$(uname -m)"
+  case "$arch" in
+    x86_64|amd64) arch="x86_64" ;;
+    aarch64|arm64) arch="aarch64" ;;
+    armv7l) arch="armv7" ;;
+    *)
+      warn "Unsupported arch for Compose binary: $(uname -m)"
+      return 1
+      ;;
+  esac
+  has curl || return 1
+  bin_path="/usr/local/lib/docker/cli-plugins/docker-compose"
+  mkdir -p "$(dirname "$bin_path")"
+  bin_url="https://github.com/docker/compose/releases/download/v2.29.7/docker-compose-linux-${arch}"
+  log "Downloading Compose v2 plugin (no apt needed)..."
+  if curl -fsSL "$bin_url" -o "$bin_path"; then
+    chmod +x "$bin_path"
+    ln -sfn "$bin_path" /usr/local/bin/docker-compose 2>/dev/null || true
+    return 0
+  fi
+  return 1
+}
+
+# Distro docker.io often ships without Compose v2. Prefer a direct binary download
+# when apt is locked (common right after get.docker.com / unattended-upgrades).
 ensure_compose() {
   if detect_compose; then return 0; fi
 
   log "Docker Compose plugin missing — installing..."
-  wait_for_apt || true
 
-  if has apt-get; then
+  # Fast path: never block 15m on apt if we can fetch the plugin binary.
+  if apt_busy 2>/dev/null; then
+    warn "apt is busy ($(apt_holder 2>/dev/null || echo locked)) — skipping packages, using binary install"
+    install_compose_binary || true
+    if detect_compose; then
+      log "Docker Compose ready ($COMPOSE_CMD)"
+      return 0
+    fi
+  fi
+
+  # Package path only when apt is free (short wait).
+  if has apt-get && ! apt_busy; then
     DEBIAN_FRONTEND=noninteractive apt-get update -y >/dev/null 2>&1 || true
     DEBIAN_FRONTEND=noninteractive apt-get install -y docker-compose-plugin >/dev/null 2>&1 \
       || DEBIAN_FRONTEND=noninteractive apt-get install -y docker-compose-v2 >/dev/null 2>&1 \
@@ -183,26 +219,7 @@ ensure_compose() {
     return 0
   fi
 
-  # Last resort: standalone Compose v2 binary (works even without apt plugin package).
-  local arch bin_url bin_path
-  arch="$(uname -m)"
-  case "$arch" in
-    x86_64|amd64) arch="x86_64" ;;
-    aarch64|arm64) arch="aarch64" ;;
-    armv7l) arch="armv7" ;;
-    *) arch="" ;;
-  esac
-  if [ -n "$arch" ] && has curl; then
-    bin_path="/usr/local/lib/docker/cli-plugins/docker-compose"
-    mkdir -p "$(dirname "$bin_path")"
-    bin_url="https://github.com/docker/compose/releases/download/v2.29.7/docker-compose-linux-${arch}"
-    log "Downloading Compose v2 plugin from GitHub releases..."
-    if curl -fsSL "$bin_url" -o "$bin_path"; then
-      chmod +x "$bin_path"
-      # Also expose classic docker-compose name for older scripts.
-      ln -sfn "$bin_path" /usr/local/bin/docker-compose 2>/dev/null || true
-    fi
-  fi
+  install_compose_binary || true
 
   if detect_compose; then
     log "Docker Compose ready ($COMPOSE_CMD)"
@@ -214,9 +231,11 @@ ensure_compose() {
 
 install_docker() {
   if ! has docker; then
-    wait_for_apt || die "apt is locked — retry later"
+    wait_for_apt || die "apt is locked — retry later with: sudo bash -c \"\$(curl -fsSL ${REPO}/raw/main/scripts/install.sh)\" @ install -y"
     curl -fsSL https://get.docker.com | sh
     systemctl enable --now docker 2>/dev/null || true
+    # get.docker.com often leaves dpkg finishing in the background for a few seconds.
+    sleep 2
   else
     systemctl enable --now docker 2>/dev/null || true
   fi

@@ -37,8 +37,6 @@ API_KEY=""
 BUILD_FROM_SOURCE=0
 ASSUME_YES=0
 QUIET="${QUIET:-0}"
-# Never block for minutes on unattended-upgrades.
-APT_LOCK_TIMEOUT="${APT_LOCK_TIMEOUT:-45}"
 
 XRAY_ON=1; OVPN_ON=1; WG_ON=1; IKEV2_ON=1
 

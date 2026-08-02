@@ -157,6 +157,73 @@ detect_compose() {
 }
 dc() { ( cd "$INSTALL_DIR" && $COMPOSE_CMD "$@" ); }
 
+# Distro docker.io often ships without the Compose v2 plugin. Install it when missing.
+ensure_compose() {
+  if detect_compose; then return 0; fi
+
+  log "Docker Compose plugin missing — installing..."
+  wait_for_apt || true
+
+  if has apt-get; then
+    DEBIAN_FRONTEND=noninteractive apt-get update -y >/dev/null 2>&1 || true
+    DEBIAN_FRONTEND=noninteractive apt-get install -y docker-compose-plugin >/dev/null 2>&1 \
+      || DEBIAN_FRONTEND=noninteractive apt-get install -y docker-compose-v2 >/dev/null 2>&1 \
+      || DEBIAN_FRONTEND=noninteractive apt-get install -y docker-compose >/dev/null 2>&1 \
+      || true
+  elif has dnf; then
+    dnf install -y docker-compose-plugin >/dev/null 2>&1 || dnf install -y docker-compose >/dev/null 2>&1 || true
+  elif has yum; then
+    yum install -y docker-compose-plugin >/dev/null 2>&1 || yum install -y docker-compose >/dev/null 2>&1 || true
+  elif has apk; then
+    apk add --no-cache docker-cli-compose >/dev/null 2>&1 || apk add --no-cache docker-compose >/dev/null 2>&1 || true
+  fi
+
+  if detect_compose; then
+    log "Docker Compose ready ($COMPOSE_CMD)"
+    return 0
+  fi
+
+  # Last resort: standalone Compose v2 binary (works even without apt plugin package).
+  local arch bin_url bin_path
+  arch="$(uname -m)"
+  case "$arch" in
+    x86_64|amd64) arch="x86_64" ;;
+    aarch64|arm64) arch="aarch64" ;;
+    armv7l) arch="armv7" ;;
+    *) arch="" ;;
+  esac
+  if [ -n "$arch" ] && has curl; then
+    bin_path="/usr/local/lib/docker/cli-plugins/docker-compose"
+    mkdir -p "$(dirname "$bin_path")"
+    bin_url="https://github.com/docker/compose/releases/download/v2.29.7/docker-compose-linux-${arch}"
+    log "Downloading Compose v2 plugin from GitHub releases..."
+    if curl -fsSL "$bin_url" -o "$bin_path"; then
+      chmod +x "$bin_path"
+      # Also expose classic docker-compose name for older scripts.
+      ln -sfn "$bin_path" /usr/local/bin/docker-compose 2>/dev/null || true
+    fi
+  fi
+
+  if detect_compose; then
+    log "Docker Compose ready ($COMPOSE_CMD)"
+    return 0
+  fi
+
+  die "docker compose plugin not available after install. Try: apt-get install -y docker-compose-plugin  (or docker-compose-v2), then re-run."
+}
+
+install_docker() {
+  if ! has docker; then
+    wait_for_apt || die "apt is locked — retry later"
+    curl -fsSL https://get.docker.com | sh
+    systemctl enable --now docker 2>/dev/null || true
+  else
+    systemctl enable --now docker 2>/dev/null || true
+  fi
+  has docker || die "Docker engine is not installed"
+  ensure_compose
+}
+
 apt_busy() {
   local f
   for f in /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock \
@@ -205,15 +272,6 @@ wait_for_apt() {
     [ $((waited % 30)) -eq 0 ] && log "  still waiting... ${waited}s (holder: $(apt_holder))"
   done
   log "apt is free (waited ${waited}s)"
-}
-
-install_docker() {
-  if ! has docker; then
-    wait_for_apt || die "apt is locked — retry later"
-    curl -fsSL https://get.docker.com | sh
-    systemctl enable --now docker 2>/dev/null || true
-  fi
-  detect_compose || die "docker compose plugin not available after install"
 }
 
 banner() {

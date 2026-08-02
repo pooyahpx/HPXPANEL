@@ -26,6 +26,7 @@ FALLBACK_IMAGE="${FALLBACK_IMAGE:-ghcr.io/pooyahpx/hpx-node:latest}"
 BRANCH="${BRANCH:-main}"
 
 SERVICE="${SERVICE:-hpx-node}"
+NODE_NAME="${NODE_NAME:-}"
 INSTALL_DIR="${INSTALL_DIR:-/opt/hpx-node}"
 COMPOSE_FILE="$INSTALL_DIR/docker-compose.yml"
 DATA_DIR="${DATA_DIR:-/var/lib/hpx-node}"
@@ -36,6 +37,8 @@ API_KEY=""
 BUILD_FROM_SOURCE=0
 ASSUME_YES=0
 QUIET="${QUIET:-0}"
+# Never block for minutes on unattended-upgrades.
+APT_LOCK_TIMEOUT="${APT_LOCK_TIMEOUT:-45}"
 
 XRAY_ON=1; OVPN_ON=1; WG_ON=1; IKEV2_ON=1
 
@@ -155,7 +158,53 @@ detect_compose() {
   elif has docker-compose; then COMPOSE_CMD="docker-compose"
   else return 1; fi
 }
-dc() { ( cd "$INSTALL_DIR" && $COMPOSE_CMD "$@" ); }
+dc() { ( cd "$INSTALL_DIR" && $COMPOSE_CMD -p "$SERVICE" -f "$COMPOSE_FILE" "$@" ); }
+
+# Sanitize --name and map paths so many nodes can live on one host.
+apply_instance() {
+  if [ -z "$NODE_NAME" ]; then
+    SERVICE="${SERVICE:-hpx-node}"
+  else
+    NODE_NAME="$(echo "$NODE_NAME" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9-]+/-/g; s/^-+//; s/-+$//; s/-+/-/g')"
+    [ -n "$NODE_NAME" ] || die "invalid --name"
+    case "$NODE_NAME" in
+      hpx-node|hpx-node-*) SERVICE="$NODE_NAME" ;;
+      *) SERVICE="hpx-node-${NODE_NAME}" ;;
+    esac
+  fi
+  INSTALL_DIR="/opt/${SERVICE}"
+  DATA_DIR="/var/lib/${SERVICE}"
+  COMPOSE_FILE="$INSTALL_DIR/docker-compose.yml"
+}
+
+port_in_use_by_other_instance() {
+  local port="$1" dir f other
+  for dir in /opt/hpx-node /opt/hpx-node-*; do
+    [ -d "$dir" ] || continue
+    f="$dir/docker-compose.yml"
+    [ -f "$f" ] || continue
+    other="$(basename "$dir")"
+    [ "$other" = "$SERVICE" ] && continue
+    if grep -E "SERVICE_PORT:[[:space:]]*${port}([[:space:]]|$)" "$f" >/dev/null 2>&1; then
+      echo "$other"
+      return 0
+    fi
+  done
+  return 1
+}
+
+assert_port_free() {
+  local conflict
+  conflict="$(port_in_use_by_other_instance "$SERVICE_PORT" || true)"
+  if [ -n "$conflict" ]; then
+    die "Node port ${SERVICE_PORT} is already used by instance '${conflict}'. Pick another --service-port."
+  fi
+  if has ss; then
+    if ss -lntu 2>/dev/null | awk '{print $5}' | grep -E "[:.]${SERVICE_PORT}\$" >/dev/null 2>&1; then
+      warn "Port ${SERVICE_PORT} looks busy on this host — install may still work if it is the same container being replaced."
+    fi
+  fi
+}
 
 install_compose_binary() {
   local arch bin_url bin_path
@@ -182,36 +231,32 @@ install_compose_binary() {
   return 1
 }
 
-# Distro docker.io often ships without Compose v2. Prefer a direct binary download
-# when apt is locked (common right after get.docker.com / unattended-upgrades).
 ensure_compose() {
   if detect_compose; then return 0; fi
 
   log "Docker Compose plugin missing — installing..."
 
-  # Fast path: never block 15m on apt if we can fetch the plugin binary.
+  # Never wait on apt here — binary install is enough.
   if apt_busy 2>/dev/null; then
-    warn "apt is busy ($(apt_holder 2>/dev/null || echo locked)) — skipping packages, using binary install"
-    install_compose_binary || true
-    if detect_compose; then
-      log "Docker Compose ready ($COMPOSE_CMD)"
-      return 0
-    fi
+    warn "apt is busy ($(apt_holder 2>/dev/null || echo locked)) — using binary Compose install"
+  fi
+  install_compose_binary || true
+  if detect_compose; then
+    log "Docker Compose ready ($COMPOSE_CMD)"
+    return 0
   fi
 
-  # Package path only when apt is free (short wait).
   if has apt-get && ! apt_busy; then
     DEBIAN_FRONTEND=noninteractive apt-get update -y >/dev/null 2>&1 || true
     DEBIAN_FRONTEND=noninteractive apt-get install -y docker-compose-plugin >/dev/null 2>&1 \
       || DEBIAN_FRONTEND=noninteractive apt-get install -y docker-compose-v2 >/dev/null 2>&1 \
-      || DEBIAN_FRONTEND=noninteractive apt-get install -y docker-compose >/dev/null 2>&1 \
       || true
   elif has dnf; then
-    dnf install -y docker-compose-plugin >/dev/null 2>&1 || dnf install -y docker-compose >/dev/null 2>&1 || true
+    dnf install -y docker-compose-plugin >/dev/null 2>&1 || true
   elif has yum; then
-    yum install -y docker-compose-plugin >/dev/null 2>&1 || yum install -y docker-compose >/dev/null 2>&1 || true
+    yum install -y docker-compose-plugin >/dev/null 2>&1 || true
   elif has apk; then
-    apk add --no-cache docker-cli-compose >/dev/null 2>&1 || apk add --no-cache docker-compose >/dev/null 2>&1 || true
+    apk add --no-cache docker-cli-compose >/dev/null 2>&1 || true
   fi
 
   if detect_compose; then
@@ -219,26 +264,56 @@ ensure_compose() {
     return 0
   fi
 
-  install_compose_binary || true
+  die "docker compose plugin not available. Run:
+  sudo mkdir -p /usr/local/lib/docker/cli-plugins
+  sudo curl -fsSL https://github.com/docker/compose/releases/download/v2.29.7/docker-compose-linux-x86_64 -o /usr/local/lib/docker/cli-plugins/docker-compose
+  sudo chmod +x /usr/local/lib/docker/cli-plugins/docker-compose"
+}
 
-  if detect_compose; then
-    log "Docker Compose ready ($COMPOSE_CMD)"
-    return 0
+free_apt_soft() {
+  apt_busy || return 0
+  local holder
+  holder="$(apt_holder)"
+  if echo "$holder" | grep -Eiq 'unattended'; then
+    warn "Stopping unattended-upgrades so Docker can install..."
+    systemctl stop unattended-upgrades.service 2>/dev/null || true
+    systemctl stop unattended-upgrades.timer 2>/dev/null || true
   fi
+}
 
-  die "docker compose plugin not available after install. Try: apt-get install -y docker-compose-plugin  (or docker-compose-v2), then re-run."
+wait_for_apt() {
+  has apt-get || return 0
+  apt_busy || return 0
+  free_apt_soft
+  apt_busy || return 0
+  local waited=0 max="${APT_LOCK_TIMEOUT:-45}"
+  warn "apt/dpkg is busy ($(apt_holder)) — waiting up to ${max}s (not minutes)..."
+  while apt_busy; do
+    if [ "$waited" -ge "$max" ]; then
+      warn "apt still locked after ${max}s (holder: $(apt_holder))."
+      return 1
+    fi
+    sleep 2; waited=$((waited + 2))
+  done
+  log "apt is free (waited ${waited}s)"
 }
 
 install_docker() {
-  if ! has docker; then
-    wait_for_apt || die "apt is locked — retry later with: sudo bash -c \"\$(curl -fsSL ${REPO}/raw/main/scripts/install.sh)\" @ install -y"
-    curl -fsSL https://get.docker.com | sh
+  if has docker; then
     systemctl enable --now docker 2>/dev/null || true
-    # get.docker.com often leaves dpkg finishing in the background for a few seconds.
-    sleep 2
-  else
-    systemctl enable --now docker 2>/dev/null || true
+    ensure_compose
+    return 0
   fi
+
+  if ! wait_for_apt; then
+    die "apt is locked by $(apt_holder). Fix with:
+  sudo systemctl stop unattended-upgrades
+  sudo killall -9 unattended-upgrade 2>/dev/null || true
+then re-run the installer."
+  fi
+  curl -fsSL https://get.docker.com | sh
+  systemctl enable --now docker 2>/dev/null || true
+  sleep 2
   has docker || die "Docker engine is not installed"
   ensure_compose
 }
@@ -277,22 +352,6 @@ apt_holder() {
   echo "another apt/dpkg process"
 }
 
-wait_for_apt() {
-  has apt-get || return 0
-  apt_busy || return 0
-  local waited=0 max="${APT_LOCK_TIMEOUT:-900}"
-  log "apt/dpkg is busy ($(apt_holder)) — waiting up to $((max / 60))m..."
-  while apt_busy; do
-    if [ "$waited" -ge "$max" ]; then
-      warn "apt still locked after $((max / 60))m (holder: $(apt_holder))."
-      return 1
-    fi
-    sleep 3; waited=$((waited + 3))
-    [ $((waited % 30)) -eq 0 ] && log "  still waiting... ${waited}s (holder: $(apt_holder))"
-  done
-  log "apt is free (waited ${waited}s)"
-}
-
 banner() {
   clear 2>/dev/null || true
   echo
@@ -325,10 +384,13 @@ Usage:
 Commands:
   (none) / menu     Interactive menu
   install           Install / reinstall (use -y for no prompts)
+  list              List all node instances on this server
   update | restart | status | logs
   uninstall
 
 Install options:
+  --name <id>        Instance name for multi-node on one server
+                     (paths: /opt/hpx-node-<id> , CLI: hpx-node --name <id>)
   --disable <list>   xray,openvpn,wireguard,ikev2 (comma)
   --api-key <uuid>   (default: auto-generate)
   --service-port <n> panel "Node Port" (default: ${SERVICE_PORT})
@@ -339,6 +401,15 @@ Install options:
   -q, --quiet
   -h, --help
 
+Multi-node examples (same server, different gRPC ports — sell as separate panel nodes):
+  sudo bash install.sh install -y --name shop1 --service-port 62051
+  sudo bash install.sh install -y --name shop2 --service-port 62052
+  sudo bash install.sh list
+  sudo bash install.sh --name shop1 status
+
+Note: host networking is shared. Give each panel node different inbound/VPN ports
+in HPXPANEL so WireGuard / OpenVPN / IKEv2 do not collide on this host.
+
 Docs: ${PANEL_DOCS}
 Log : ${STEP_LOG}
 EOF
@@ -347,6 +418,8 @@ EOF
 parse_install_args() {
   while [ $# -gt 0 ]; do
     case "$1" in
+      --name|--instance)
+        NODE_NAME="$2"; shift 2 ;;
       --disable)
         local d=",$2,"
         echo "$d" | grep -qi ",xray,"      && XRAY_ON=0
@@ -366,6 +439,7 @@ parse_install_args() {
       *) die "unknown option: $1 (see --help)" ;;
     esac
   done
+  apply_instance
 }
 
 onoff() { if [ "${1:-0}" -eq 1 ]; then echo -e "${c_grn}${c_bld}ON${c_off}"; else echo -e "${c_dim}off${c_off}"; fi; }
@@ -375,8 +449,9 @@ menu_command() {
   require_root
   if [ ! -e /dev/tty ] && [ ! -t 0 ]; then
     die "no terminal for the menu — use:
-  sudo bash install.sh install -y"
+  sudo bash install.sh install -y --name shop1 --service-port 62051"
   fi
+  apply_instance
   local status="not installed"
   has docker && docker ps -a --format '{{.Names}}' 2>/dev/null | grep -qx "$SERVICE" && \
     status="installed ($(docker inspect -f '{{.State.Status}}' "$SERVICE" 2>/dev/null))"
@@ -384,6 +459,7 @@ menu_command() {
   while true; do
     banner
     features_panel
+    echo -e "  ${c_dim}Instance:${c_off} ${c_bld}${SERVICE}${c_off}   ${c_dim}Port:${c_off} ${c_cyn}${SERVICE_PORT}${c_off}"
     echo -e "  ${c_dim}State:${c_off} ${c_bld}${status}${c_off}"
     echo -e "  ${c_dim}Image:${c_off} $([ "$BUILD_FROM_SOURCE" = 1 ] && echo 'build from source' || echo "$IMAGE")"
     echo
@@ -397,11 +473,12 @@ menu_command() {
     printf "    ${c_bld}5${c_off}  %-24s ${c_cyn}%s${c_off}\n" "Node port (gRPC)" "$SERVICE_PORT"
     printf "    ${c_bld}6${c_off}  %-24s ${c_cyn}%s${c_off}\n" "API key"          "${API_KEY:-auto-generate}"
     printf "    ${c_bld}7${c_off}  %-24s ${c_cyn}%s${c_off}\n" "Image source"     "$([ "$BUILD_FROM_SOURCE" = 1 ] && echo 'build from source' || echo 'pull')"
-    echo -e "    ${c_dim}VPN ports come from HPXPANEL core config. IKEv2 uses 500/4500.${c_off}"
+    printf "    ${c_bld}8${c_off}  %-24s ${c_cyn}%s${c_off}\n" "Instance name"    "${NODE_NAME:-default}"
+    echo -e "    ${c_dim}VPN ports come from HPXPANEL core config. Multi-node = unique gRPC + VPN ports.${c_off}"
     echo
     echo -e "  ${c_bld}ACTIONS${c_off}"
     echo -e "    ${c_grn}${c_bld}i${c_off}  ${c_bld}Install / reinstall${c_off}   ${c_dim}<-- type i then Enter${c_off}"
-    echo -e "    ${c_bld}u${c_off} Update   ${c_bld}s${c_off} Status   ${c_bld}l${c_off} Logs   ${c_bld}r${c_off} Restart"
+    echo -e "    ${c_bld}u${c_off} Update   ${c_bld}s${c_off} Status   ${c_bld}l${c_off} Logs   ${c_bld}r${c_off} Restart   ${c_bld}p${c_off} List"
     echo -e "    ${c_red}x${c_off} Uninstall   ${c_bld}q${c_off} Quit"
     echo
     local choice
@@ -414,11 +491,19 @@ menu_command() {
       5) SERVICE_PORT="$(ask_num "Node port (gRPC — panel Node Port)" "$SERVICE_PORT")" ;;
       6) API_KEY="$(ask_val "API key (blank = auto-generate)" "$API_KEY")" ;;
       7) BUILD_FROM_SOURCE=$((1 - BUILD_FROM_SOURCE)) ;;
+      8)
+        NODE_NAME="$(ask_val "Instance name (blank = default single node)" "$NODE_NAME")"
+        apply_instance
+        status="not installed"
+        has docker && docker ps -a --format '{{.Names}}' 2>/dev/null | grep -qx "$SERVICE" && \
+          status="installed ($(docker inspect -f '{{.State.Status}}' "$SERVICE" 2>/dev/null))"
+        ;;
       i|I) echo; run_install; break ;;
       u|U) echo; update_command; press_enter ;;
       s|S) echo; status_command; press_enter ;;
       l|L) echo; logs_command ;;
       r|R) echo; restart_command; press_enter ;;
+      p|P) echo; list_command; press_enter ;;
       x|X) echo; uninstall_command; press_enter; status="not installed" ;;
       q|Q) echo; exit 0 ;;
       "") : ;;
@@ -488,6 +573,7 @@ print_summary() {
   echo -e "  ${c_amb}${c_bld}+----------------------------------------------------------+${c_off}"
   echo
   echo -e "  Container   : ${SERVICE} ($(docker inspect -f '{{.State.Status}}' "$SERVICE" 2>/dev/null))"
+  echo -e "  Instance    : ${c_bld}${NODE_NAME:-default}${c_off}"
   echo -e "  Backends    : ${c_bld}${backends# }${c_off}"
   echo -e "  ${c_bld}Address${c_off}     : ${c_cyn}${c_bld}${ip}${c_off}"
   echo -e "  ${c_bld}Node port${c_off}   : ${c_cyn}${c_bld}${SERVICE_PORT}${c_off}   ${c_dim}(panel field: Node Port)${c_off}"
@@ -496,6 +582,7 @@ print_summary() {
   echo -e "  Compose     : ${COMPOSE_FILE}"
   echo
   echo -e "  ${c_dim}In HPXPANEL create a node with the same Address / Port / API key.${c_off}"
+  echo -e "  ${c_dim}More instances on this host: install -y --name other --service-port <free-port>${c_off}"
   echo -e "  ${c_dim}Docs: ${PANEL_DOCS}${c_off}"
   echo
   if [ -n "$ca" ]; then
@@ -517,30 +604,49 @@ install_cli_wrapper() {
   if [ -f "$0" ] && [ -r "$0" ] && [[ "$0" != *"bash"* ]]; then
     cp -f "$0" "$INSTALL_DIR/hpx-node.sh" 2>/dev/null || true
   fi
-  # Always keep a fetchable local copy after curl|bash installs
   if [ ! -s "$INSTALL_DIR/hpx-node.sh" ]; then
     curl -fsSL "${REPO}/raw/main/scripts/install.sh" -o "$INSTALL_DIR/hpx-node.sh" 2>/dev/null || true
   fi
   chmod +x "$INSTALL_DIR/hpx-node.sh" 2>/dev/null || true
-  cat > "/usr/local/bin/${SERVICE}" <<EOF
+
+  # Global dispatcher — always hpx-node (supports --name for multi-instance).
+  cat > /usr/local/bin/hpx-node <<EOF
 #!/usr/bin/env bash
-if [ -f "${INSTALL_DIR}/hpx-node.sh" ]; then
-  exec bash "${INSTALL_DIR}/hpx-node.sh" "\$@"
+SCRIPT="${INSTALL_DIR}/hpx-node.sh"
+# Prefer newest script from any instance / default path.
+for cand in /opt/hpx-node/hpx-node.sh /opt/hpx-node-*/hpx-node.sh; do
+  [ -f "\$cand" ] || continue
+  SCRIPT="\$cand"
+  break
+done
+if [ -f "\$SCRIPT" ]; then
+  exec bash "\$SCRIPT" "\$@"
 fi
 exec bash -c "\$(curl -fsSL ${REPO}/raw/main/scripts/install.sh)" @ "\$@"
 EOF
-  chmod +x "/usr/local/bin/${SERVICE}" 2>/dev/null || true
+  chmod +x /usr/local/bin/hpx-node 2>/dev/null || true
+
+  # Per-instance shortcut: hpx-node-shop1 status
+  if [ -n "$NODE_NAME" ]; then
+    cat > "/usr/local/bin/${SERVICE}" <<EOF
+#!/usr/bin/env bash
+exec /usr/local/bin/hpx-node --name "${NODE_NAME}" "\$@"
+EOF
+    chmod +x "/usr/local/bin/${SERVICE}" 2>/dev/null || true
+  fi
 }
 
 run_install() {
   require_root
+  apply_instance
+  assert_port_free
   : > "$STEP_LOG"
   [ -z "$API_KEY" ] && API_KEY="$(gen_uuid)"
   local quiet_note=""; [ "${QUIET:-0}" = "1" ] && quiet_note=" — quiet mode"
 
   banner
   features_panel
-  echo -e "${c_bld}Deploying HPX node${c_off} ${c_dim}(log: ${STEP_LOG}${quiet_note})${c_off}"
+  echo -e "${c_bld}Deploying HPX node${c_off} ${c_dim}${SERVICE}${c_off} ${c_dim}(log: ${STEP_LOG}${quiet_note})${c_off}"
   echo
 
   run_step_live "Installing Docker"          install_docker
@@ -571,59 +677,107 @@ run_install() {
 install_command() {
   parse_install_args "$@"
   require_root
-  # `install` always installs. Menu is only when no command is given.
-  # -y skips confirmations inside run_install paths that ask.
   run_install
 }
 
+list_command() {
+  echo -e "  ${c_bld}HPX node instances on this host${c_off}"
+  echo
+  local dir name port status
+  local found=0
+  for dir in /opt/hpx-node /opt/hpx-node-*; do
+    [ -d "$dir" ] || continue
+    [ -f "$dir/docker-compose.yml" ] || continue
+    found=1
+    name="$(basename "$dir")"
+    port="$(grep -E 'SERVICE_PORT:' "$dir/docker-compose.yml" 2>/dev/null | head -1 | awk '{print $2}')"
+    status="$(docker inspect -f '{{.State.Status}}' "$name" 2>/dev/null || echo missing)"
+    printf "  %-28s  port %-6s  %s\n" "$name" "${port:--}" "$status"
+  done
+  if [ "$found" -eq 0 ]; then
+    echo -e "  ${c_dim}(none yet)${c_off}"
+  fi
+  echo
+}
+
 update_command() {
-  require_root; detect_compose || install_docker
-  [ -f "$COMPOSE_FILE" ] || die "no install found at $COMPOSE_FILE"
+  require_root; apply_instance
+  detect_compose || install_docker
+  [ -f "$COMPOSE_FILE" ] || die "no install found at $COMPOSE_FILE (try --name <id>)"
   : > "$STEP_LOG"
-  echo -e "${c_bld}Updating HPX node${c_off}"
+  echo -e "${c_bld}Updating ${SERVICE}${c_off}"
   if grep -q "build:" "$COMPOSE_FILE"; then
-    run_step_live "Rebuilding image" bash -c "cd '$INSTALL_DIR' && $COMPOSE_CMD build --pull"
+    run_step_live "Rebuilding image" bash -c "cd '$INSTALL_DIR' && $COMPOSE_CMD -p '$SERVICE' -f '$COMPOSE_FILE' build --pull"
   else
     run_step_live "Pulling latest image" pull_image
   fi
-  run_step_live "Recreating container" bash -c "cd '$INSTALL_DIR' && $COMPOSE_CMD up -d"
+  run_step_live "Recreating container" bash -c "cd '$INSTALL_DIR' && $COMPOSE_CMD -p '$SERVICE' -f '$COMPOSE_FILE' up -d"
   log "Updated ($(docker inspect -f '{{.State.Status}}' "$SERVICE" 2>/dev/null))"
 }
 
 need_compose() {
+  apply_instance
   detect_compose || { warn "Docker / compose not found — install first."; return 1; }
-  [ -f "$COMPOSE_FILE" ] || { warn "no install at $COMPOSE_FILE"; return 1; }
+  [ -f "$COMPOSE_FILE" ] || { warn "no install at $COMPOSE_FILE (try --name <id>)"; return 1; }
 }
-restart_command()  { require_root; need_compose || return 0; dc restart; log "restarted"; }
+restart_command()  { require_root; need_compose || return 0; dc restart; log "restarted $SERVICE"; }
 status_command()   { need_compose || return 0; dc ps; }
 logs_command()     { need_compose || return 0; dc logs -f; }
 uninstall_command() {
-  require_root; detect_compose || true
+  require_root; apply_instance
+  detect_compose || true
   warn "Removing HPX node container (${SERVICE})"
   [ -f "$COMPOSE_FILE" ] && dc down 2>/dev/null || docker rm -f "$SERVICE" 2>/dev/null || true
   rm -f "$COMPOSE_FILE"
-  if ask_yn "Also remove data (certs + generated configs) in $DATA_DIR?"; then rm -rf "$DATA_DIR"; fi
-  log "Uninstalled"
+  if [ "$ASSUME_YES" = 1 ] || ask_yn "Also remove data (certs + generated configs) in $DATA_DIR?"; then rm -rf "$DATA_DIR"; fi
+  [ -n "$NODE_NAME" ] && rm -f "/usr/local/bin/${SERVICE}" 2>/dev/null || true
+  log "Uninstalled $SERVICE"
+}
+
+# Parse leading global --name before the subcommand.
+parse_global_name_args() {
+  local out=()
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --name|--instance)
+        NODE_NAME="$2"; shift 2 ;;
+      *)
+        out+=("$1"); shift ;;
+    esac
+  done
+  # shellcheck disable=SC2068
+  set -- ${out[@]+"${out[@]}"}
+  GLOBAL_ARGS=("${out[@]}")
 }
 
 main() {
+  GLOBAL_ARGS=()
+  parse_global_name_args "$@"
+  if [ ${#GLOBAL_ARGS[@]} -gt 0 ]; then
+    set -- "${GLOBAL_ARGS[@]}"
+  else
+    set --
+  fi
+
   local cmd="menu"
   case "${1:-}" in
     menu) cmd="menu"; shift ;;
-    install|update|uninstall|restart|status|logs) cmd="$1"; shift ;;
+    install|update|uninstall|restart|status|logs|list) cmd="$1"; shift ;;
     -h|--help) usage; exit 0 ;;
     "") cmd="menu" ;;
     -*) cmd="install" ;;
     *) die "unknown command: $1 (see --help)" ;;
   esac
+
   case "$cmd" in
     menu)      menu_command ;;
     install)   install_command "$@" ;;
-    update)    update_command ;;
-    uninstall) uninstall_command ;;
-    restart)   restart_command ;;
-    status)    status_command ;;
-    logs)      logs_command ;;
+    list)      list_command ;;
+    update)    parse_install_args "$@"; update_command ;;
+    uninstall) parse_install_args "$@"; uninstall_command ;;
+    restart)   parse_install_args "$@"; restart_command ;;
+    status)    parse_install_args "$@"; status_command ;;
+    logs)      parse_install_args "$@"; logs_command ;;
   esac
 }
 

@@ -36,7 +36,7 @@ def _subscription_token(text: str) -> str:
     return text.strip("/").split("/")[-1]
 
 
-@router.message(F.text)
+@router.message(F.text, ~F.text.startswith("/"))
 async def get_user(event: Message, db: AsyncSession):
     """get exact user, otherwise not found"""
     token = _subscription_token(event.text)

@@ -51,8 +51,6 @@ async def open_main_menu(
     config = await get_enabled_shop_config(db)
     if config and config.enabled:
         if edit:
-            plans_text = t(lang, "shop_home")
-            # prefer full shop render via new message when edit fails on HTML cards
             try:
                 await message.delete()
             except TelegramBadRequest:

@@ -29,7 +29,7 @@ from app.telegram import get_bot
 from app.telegram.keyboards.shop import ShopAdminAction, ShopAdminKeyboard, ShopAdminPlansKeyboard
 from app.telegram.utils import forms
 from app.telegram.utils.filters import IsAdminFilter
-from app.telegram.utils.i18n import format_bytes, format_price, rich, t
+from app.telegram.utils.i18n import format_price, rich, t
 from app.telegram.utils.shared import add_to_messages_to_delete
 
 user_operator = UserOperation(OperatorType.TELEGRAM)

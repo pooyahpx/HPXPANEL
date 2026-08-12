@@ -17,7 +17,7 @@ from app.models.admin import AdminDetails
 from app.telegram import get_bot
 from app.telegram.keyboards.shop import LangKeyboard, ShopAction, ShopHomeKeyboard, ShopKeyboard, ShopOrderAdminKeyboard
 from app.telegram.utils import forms
-from app.telegram.utils.i18n import format_bytes, format_price, plan_caption, rich, t
+from app.telegram.utils.i18n import format_bytes, format_price, rich, t
 from app.telegram.utils.shared import add_to_messages_to_delete
 
 router = Router(name="shop")

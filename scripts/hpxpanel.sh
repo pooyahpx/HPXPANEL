@@ -2161,17 +2161,17 @@ update_hpxpanel_script() {
     backup_dir=$(backup_scripts)
 
     if ! install_shared_libs_from_repo "$FETCH_REPO" common.sh system.sh docker.sh github.sh env.sh hpxpanel-backup.sh hpxpanel-restore.sh; then
-        colorized_echo red "Failed to update shared libraries. Restoring from backup..."
+        colorized_echo yellow "Failed to update shared libraries from GitHub (network). Keeping current CLI and continuing image pull..."
         restore_scripts "$backup_dir"
         cleanup_backup "$backup_dir"
-        exit 1
+        return 0
     fi
 
     if ! github_install_script_from_repo "$FETCH_REPO" "scripts/hpxpanel.sh" "hpxpanel"; then
-        colorized_echo red "Failed to update HPXPANEL CLI. Restoring from backup..."
+        colorized_echo yellow "Failed to update HPXPANEL CLI from GitHub (network). Keeping current CLI and continuing image pull..."
         restore_scripts "$backup_dir"
         cleanup_backup "$backup_dir"
-        exit 1
+        return 0
     fi
 
     cleanup_backup "$backup_dir"

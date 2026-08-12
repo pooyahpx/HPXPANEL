@@ -19,6 +19,9 @@ JSONB = sa.JSON().with_variant(postgresql.JSONB(none_as_null=True, astext_type=s
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
+    dialect = bind.dialect.name
+
     op.create_table(
         "telegram_profiles",
         sa.Column("telegram_id", sa.BigInteger(), primary_key=True),
@@ -50,8 +53,13 @@ def upgrade() -> None:
         sa.Column("is_active", sa.Boolean(), nullable=False, server_default="1"),
     )
 
-    shop_order_status = sa.Enum("pending", "approved", "rejected", name="shoporderstatus", create_constraint=True)
-    shop_order_status.create(op.get_bind(), checkfirst=True)
+    # Create PG enum once, then reference it with create_type=False to avoid DuplicateObjectError.
+    shop_order_status = sa.Enum("pending", "approved", "rejected", name="shoporderstatus")
+    if dialect == "postgresql":
+        shop_order_status.create(bind, checkfirst=True)
+        status_type = sa.Enum("pending", "approved", "rejected", name="shoporderstatus", create_type=False)
+    else:
+        status_type = sa.Enum("pending", "approved", "rejected", name="shoporderstatus")
 
     op.create_table(
         "shop_orders",
@@ -61,7 +69,7 @@ def upgrade() -> None:
         sa.Column("admin_id", sa.BigInteger(), sa.ForeignKey("admins.id", ondelete="CASCADE"), nullable=False),
         sa.Column("buyer_telegram_id", sa.BigInteger(), nullable=False),
         sa.Column("buyer_username", sa.String(length=64), nullable=True),
-        sa.Column("status", shop_order_status, nullable=False, server_default="pending"),
+        sa.Column("status", status_type, nullable=False, server_default="pending"),
         sa.Column("receipt_file_id", sa.String(length=256), nullable=True),
         sa.Column("created_user_id", sa.BigInteger(), sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
         sa.Column("note", sa.String(length=500), nullable=True),
@@ -70,9 +78,12 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    bind = op.get_bind()
+    dialect = bind.dialect.name
     op.drop_index("ix_shop_orders_buyer_telegram_id", table_name="shop_orders")
     op.drop_table("shop_orders")
     op.drop_table("shop_plans")
     op.drop_table("shop_configs")
     op.drop_table("telegram_profiles")
-    sa.Enum(name="shoporderstatus").drop(op.get_bind(), checkfirst=True)
+    if dialect == "postgresql":
+        sa.Enum(name="shoporderstatus").drop(bind, checkfirst=True)

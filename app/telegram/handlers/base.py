@@ -9,7 +9,6 @@ from app.models.admin import AdminDetails
 from app.operation import OperatorType
 from app.operation.system import SystemOperation
 from app.settings import telegram_settings
-from app.telegram.handlers.shop import render_shop_home
 from app.telegram.keyboards.base import CancelAction, CancelKeyboard
 from app.telegram.keyboards.deck import DeckPanel
 from app.telegram.keyboards.shop import LangKeyboard, ShopHomeKeyboard
@@ -30,6 +29,8 @@ async def open_main_menu(
     *,
     edit: bool = False,
 ):
+    from app.telegram.handlers.shop import render_shop_home
+
     settings = await telegram_settings()
     if admin:
         stats = await system_operator.get_system_stats(db, admin)

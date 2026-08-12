@@ -3,6 +3,7 @@ from html import escape
 
 from aiogram.utils.formatting import html_decoration
 
+from app.models.admin import AdminDetails
 from app.models.group import Group
 from app.models.status_emojis import STATUS_EMOJIS
 from app.models.system import SystemStats
@@ -23,39 +24,39 @@ ebl = html_decoration.expandable_blockquote
 
 
 class Button:
-    modify_groups = "👥 Modify Groups"
-    subscription_url = "🔗 Subscription URL"
-    subscription_qr = "📷 QR Code"
-    v2ray_links = "🌀 V2Ray Links"
-    modify_note = "📝 Modify Note"
-    random_username = "🎲 Random Username"
-    modify_data_limit = "📶 Modify Data Limit"
-    modify_expiry = "📅 Modify Expiry"
-    delete_expired = "⌛ Delete Expired"
-    bulk_actions = "🔧 Bulk Actions"
-    bulk_create_from_template = "👥 Bulk From Template"
-    open_panel = "🎛 Open Panel"
-    done = "✅ Done"
-    search = "🔎 Search"
-    enable = "✅ Enable"
-    disable = "❌ Disable"
-    revoke_sub = "📵 Revoke Sub"
-    reset_usage = "🔄 Reset Usage"
-    delete = "🗑 Delete"
-    activate_next_plan = "☑ Activate Next Plan"
-    confirm = "✅ Confirm"
-    cancel = "❌ Cancel"
-    create_user = "👤 Create User"
-    create_user_from_template = "👤 Create User From Template"
-    random_strategy = "🎲 Random"
-    sequence_strategy = "🔢 Sequence"
-    modify_with_template = "📦 Modify with Template"
-    sync_users = "🔄 Sync Users"
-    reconnect_all_nodes = "🔌 Reconnect All Nodes"
-    refresh_data = "♻ Refresh"
-    users = "👥 Users"
-    on_hold = "🔘 On-Hold"
-    back = "🔙 Back"
+    modify_groups = "🔵  Groups"
+    subscription_url = "🟣  Copy Link"
+    subscription_qr = "🟢  QR Code"
+    v2ray_links = "🟡  Configs"
+    modify_note = "📝  Note"
+    random_username = "🎲  Random"
+    modify_data_limit = "📶  Data Limit"
+    modify_expiry = "📅  Expiry"
+    delete_expired = "⌛  Delete Expired"
+    bulk_actions = "⚪️  Bulk Ops"
+    bulk_create_from_template = "👥  Bulk Template"
+    open_panel = "🪟  Open Panel"
+    done = "✅  Done"
+    search = "🔎  Search"
+    enable = "🟢  Enable"
+    disable = "🔴  Disable"
+    revoke_sub = "📵  Revoke Sub"
+    reset_usage = "🟠  Reset Usage"
+    delete = "🗑  Delete"
+    activate_next_plan = "☑️  Next Plan"
+    confirm = "✅  Confirm"
+    cancel = "❌  Cancel"
+    create_user = "🟢  New User"
+    create_user_from_template = "🟡  Template"
+    random_strategy = "🎲  Random"
+    sequence_strategy = "🔢  Sequence"
+    modify_with_template = "📦  Apply Template"
+    sync_users = "🟠  Sync Nodes"
+    reconnect_all_nodes = "🔴  Reconnect"
+    refresh_data = "🟣  Refresh"
+    users = "🔵  Users"
+    on_hold = "🔘  On-Hold"
+    back = "⬅️  Home"
 
 
 class Message:
@@ -96,25 +97,58 @@ class Message:
     v2ray_links_unavailable = "❌ No V2Ray links available for this user."
 
     @staticmethod
-    def start(stats: SystemStats):
+    def _quota_bar(used: int, limit: int | None) -> str:
+        if not limit or limit <= 0:
+            return f"💎 {b('Quota')}: {c('Unlimited')}"
+        pct = min(100, int(used / limit * 100))
+        filled = pct // 10
+        bar = "▰" * filled + "▱" * (10 - filled)
+        return f"💎 {b('Quota')}: {c(readable_size(used))} / {c(readable_size(limit))}\n{bar} {c(f'{pct}%')}"
+
+    @staticmethod
+    def deck_home(stats: SystemStats, admin: AdminDetails | None = None):
+        role_name = admin.role.name if admin and admin.role else "operator"
+        header = f"✨ {b('HPXPANEL')}  ·  {c('Command Deck')}\n{i(f'Role: {escape(role_name)}')}  ·  {c(f'v{stats.version}')}"
+
+        users_inner = (
+            f"👥 {b('Users')}  {c(stats.total_user)} total\n"
+            f"🟢 online {c(stats.online_users)}  ·  ✅ active {c(stats.active_users)}\n"
+            f"🔘 on-hold {c(stats.on_hold_users)}  ·  ⌛ expired {c(stats.expired_users)}\n"
+            f"🪫 limited {c(stats.limited_users)}  ·  🔴 disabled {c(stats.disabled_users)}\n"
+            f"🌐 traffic {c(readable_size(stats.outgoing_bandwidth + stats.incoming_bandwidth))}"
+        )
+        users_block = bl(users_inner)
+
+        if admin and not admin.is_owner:
+            quota = Message._quota_bar(admin.used_traffic, admin.data_limit)
+            return f"{header}\n\n{quota}\n\n{users_block}"
+
         memory_percentage = int(stats.mem_used / stats.mem_total * 100) if stats.mem_total else 0
         disk_percentage = int(stats.disk_used / stats.disk_total * 100) if stats.disk_total else 0
+        cpu_pct = stats.cpu_usage if stats.cpu_usage is not None else 0
+        system_inner = (
+            f"🖥 {b('System')}\n"
+            f"CPU {c(f'{cpu_pct:.0f}%')}  ·  cores {c(stats.cpu_cores)}\n"
+            f"RAM {c(readable_size(stats.mem_used))}/{c(readable_size(stats.mem_total))} ({c(f'{memory_percentage}%')})\n"
+            f"Disk {c(readable_size(stats.disk_used))}/{c(readable_size(stats.disk_total))} ({c(f'{disk_percentage}%')})"
+        )
+        system_block = bl(system_inner)
+
+        return f"{header}\n\n{system_block}\n\n{users_block}"
+
+    @staticmethod
+    def start(stats: SystemStats, admin: AdminDetails | None = None):
+        return Message.deck_home(stats, admin)
+
+    @staticmethod
+    def guest_welcome(name: str):
         return f"""\
-⚙ {b("PasarGuard Version")}: {c(stats.version)}
+✨ {b('HPXPANEL')}
 
-📊 {b("CPU Usage")}: {c(stats.cpu_usage)} %
-🎛 {b("CPU Cores")}: {c(stats.cpu_cores)}
-📈 {b("Memory")}: {c(readable_size(stats.mem_used))} / {c(readable_size(stats.mem_total))} ({c(memory_percentage)} %)
-💽 {b("Disk")}: {c(readable_size(stats.disk_used))} / {c(readable_size(stats.disk_total))} ({c(disk_percentage)} %)
-🌐 {b("Total Data Usage")}: {c(readable_size(stats.outgoing_bandwidth + stats.incoming_bandwidth))}
+Hello, {escape(name)}!
 
-👥 {b("Total Users")}: {c(stats.total_user)}
-🟢 {b("Online Users")}: {c(stats.online_users)}
-🔘 {b("Active Users")}: {c(stats.active_users)}
-🔌 {b("On-Hold Users")}: {c(stats.on_hold_users)}
-⌛ {b("Expired Users")}: {c(stats.expired_users)}
-🪫 {b("Limited Users")}: {c(stats.limited_users)}
-🔴 {b("Disabled Users")}: {c(stats.disabled_users)}
+Send a {b('subscription link')} or token here to view account info and QR code.
+Admins: use {c('/start')} after linking your Telegram ID in the panel.
 """
 
     @staticmethod
@@ -143,19 +177,19 @@ class Message:
             expire_text += f"{b('Days left: ')} {c(days_left)}"
 
         return f"""\
-👤 {b("User Information")}
+✨ {b('HPXPANEL')}  ·  {b('User')}
 
-{b("Status:")} {emojy_status} {user.status.value.replace("_", " ").title()}
-{b("Username:")} {c(user.username)}
+{b('Status:')} {emojy_status} {user.status.value.replace("_", " ").title()}
+{b('Username:')} {c(user.username)}
 
-{b("Data Limit:")} {data_limit}
-{b("Used Traffic:")} {used_traffic}
-{b("Data Limit Strategy:")} {user.data_limit_reset_strategy.value.replace("_", " ").title()}
+{b('Data Limit:')} {data_limit}
+{b('Used Traffic:')} {used_traffic}
+{b('Strategy:')} {user.data_limit_reset_strategy.value.replace("_", " ").title()}
 {expire_text}
-{b("Online At:")} {online_at}
-{b("Groups:")} {c(groups)}
-{b("Admin:")} {admin}
-{b("Note:")} {note}"""
+{b('Online At:')} {online_at}
+{b('Groups:')} {c(groups)}
+{b('Admin:')} {admin}
+{b('Note:')} {note}"""
 
     @staticmethod
     def user_short_detail(user: UserResponse) -> str:

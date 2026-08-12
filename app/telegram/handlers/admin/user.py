@@ -36,6 +36,7 @@ from app.operation.subscription import SubscriptionOperation
 from app.operation.user import UserOperation
 from app.operation.user_template import UserTemplateOperation
 from app.telegram.keyboards.admin import AdminPanel, AdminPanelAction, InlineQuerySearch
+from app.telegram.keyboards.deck import DeckPanel
 from app.telegram.keyboards.base import CancelKeyboard
 from app.telegram.keyboards.group import GroupsSelector, SelectGroupAction
 from app.telegram.keyboards.user import ChooseStatus, ChooseTemplate, RandomUsername, UserPanel, UserPanelAction
@@ -459,7 +460,7 @@ async def delete_user(event: CallbackQuery, admin: AdminDetails, db: AsyncSessio
     except (ValueError, PermissionDenied) as e:
         return await event.answer(str(e), show_alert=True)
     await event.answer(Texts.user_deleted(user.username))
-    await event.message.edit_text(Texts.user_deleted(user.username), reply_markup=AdminPanel(admin=admin).as_markup())
+    await event.message.edit_text(Texts.user_deleted(user.username), reply_markup=DeckPanel(admin=admin).as_markup())
 
 
 @router.callback_query(HasPermission("users", "update"), UserPanel.Callback.filter(UserPanelAction.enable == F.action))

@@ -85,8 +85,10 @@ class TelegramBotManager:
                     logger.warning("NATS KV unavailable, allowing this worker to set webhook")
                     return True
 
-            # Compute a fingerprint of the webhook settings
-            settings_bytes = f"{settings.token}:{settings.webhook_url}:{settings.webhook_secret}".encode()
+            # Include allowed_updates so webhook is re-registered when handler set changes.
+            settings_bytes = (
+                f"{settings.token}:{settings.webhook_url}:{settings.webhook_secret}:cb,msg,iq"
+            ).encode()
             fingerprint = hashlib.sha256(settings_bytes).hexdigest()
 
             # Try to get the last-set fingerprint
@@ -201,7 +203,8 @@ class TelegramBotManager:
         else:
             try:
                 # register webhook (only the initiator worker calls set_webhook to avoid rate limits)
-                webhook_address = f"{settings.webhook_url}/api/tghook"
+                base = (settings.webhook_url or "").rstrip("/")
+                webhook_address = f"{base}/api/tghook"
                 logger.info(webhook_address)
                 if is_initiator:
                     await self._bot.set_webhook(

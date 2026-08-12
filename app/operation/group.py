@@ -16,6 +16,7 @@ from app.db.crud.group import (
 from app.db.crud.user import get_users
 from app.db.crud.wireguard import sync_users_allocations
 from app.db.models import Admin
+from app.models.admin import AdminDetails
 from app.models.group import (
     BulkGroup,
     BulkGroupsActionResponse,

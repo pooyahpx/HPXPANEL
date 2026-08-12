@@ -760,8 +760,3 @@ async def search_user(event: InlineQuery, admin: AdminDetails, db: AsyncSession)
         await event.answer(result, cache_time=5)
     except TelegramBadRequest:  # in case of query too old
         pass
-
-
-@router.callback_query()
-async def debug(event: CallbackQuery):
-    await event.answer(event.data, show_alert=True)

@@ -12,11 +12,38 @@ c = html_decoration.code
 GB = 1024**3
 
 
+def rich(lang: str, key: str, **kwargs) -> str:
+    """Apply HTML bold/code placeholders, then format kwargs.
+
+    HTML tokens ({b}/{c}) must be expanded before str.format, otherwise
+    keys like admin_shop_home crash with KeyError('b') and the button
+    appears dead.
+    """
+    table = STRINGS.get(lang) or STRINGS["en"]
+    text = table.get(key) or STRINGS["en"].get(key) or key
+    text = (
+        text.replace("{b}", "<b>")
+        .replace("{/b}", "</b>")
+        .replace("{c}", "<code>")
+        .replace("{/c}", "</code>")
+    )
+    if kwargs:
+        text = text.format(**kwargs)
+    return text
+
+
 def t(lang: str, key: str, **kwargs) -> str:
     table = STRINGS.get(lang) or STRINGS["en"]
     text = table.get(key) or STRINGS["en"].get(key) or key
     if kwargs:
-        return text.format(**kwargs)
+        # Protect rich-text tokens if a plain t() call includes them + kwargs.
+        text = (
+            text.replace("{b}", "{{b}}")
+            .replace("{/b}", "{{/b}}")
+            .replace("{c}", "{{c}}")
+            .replace("{/c}", "{{/c}}")
+        )
+        text = text.format(**kwargs)
     return text
 
 
@@ -183,17 +210,6 @@ STRINGS: dict[str, dict[str, str]] = {
         "claim_hint": "If you are the panel owner, send /claimowner and enter your panel password.",
     },
 }
-
-
-def rich(lang: str, key: str, **kwargs) -> str:
-    """Apply HTML bold/code placeholders used in strings."""
-    raw = t(lang, key, **kwargs)
-    return (
-        raw.replace("{b}", "<b>")
-        .replace("{/b}", "</b>")
-        .replace("{c}", "<code>")
-        .replace("{/c}", "</code>")
-    )
 
 
 def plan_caption(lang: str, name: str, data_limit: int, expire_days: int, price: int) -> str:

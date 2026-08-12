@@ -34,3 +34,20 @@ class ModifyUser(StatesGroup):
     new_data_limit = State()
     new_expiry = State()
     new_note = State()
+
+
+class ShopAdminCard(StatesGroup):
+    card_number = State()
+    card_holder = State()
+
+
+class ShopAdminPlan(StatesGroup):
+    name = State()
+    gb = State()
+    days = State()
+    price = State()
+    groups = State()
+
+
+class ShopBuy(StatesGroup):
+    waiting_receipt = State()

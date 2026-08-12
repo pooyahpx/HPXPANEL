@@ -129,6 +129,7 @@ class AdminDetails(AdminContactInfo):
     note: str | None = None
     role: AdminRoleData | None = None
     permission_overrides: RoleLimits | None = None
+    access_overrides: RoleAccess | None = None
 
     @property
     def is_owner(self) -> bool:
@@ -166,6 +167,7 @@ class AdminModify(BaseModel):
     notification_enable: UserNotificationEnable | None = None
     role_id: int | None = None
     permission_overrides: RoleLimits | None = None
+    access_overrides: RoleAccess | None = None
 
     @field_validator("discord_webhook")
     @classmethod

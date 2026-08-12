@@ -733,6 +733,8 @@
     "role": "Role",
     "permissionOverrides": "Permission overrides",
     "permissionOverridesHint": "Leave empty to inherit limits from the selected role. Set to 0 to disable.",
+    "groupAccess": "Group access",
+    "groupAccessHint": "Restrict which user groups this admin can see and assign. Leave empty to inherit from the role.",
     "total.users": "Total Users",
     "used.traffic": "Used Traffic",
     "total": "Total Admins",

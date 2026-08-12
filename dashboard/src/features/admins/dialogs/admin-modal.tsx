@@ -12,10 +12,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { CustomVariablesPopover, normalizeCustomVariableKey, VariablesPopover } from '@/components/ui/variables-popover'
+import GroupsSelector from '@/components/common/groups-selector'
 import { useAdmin } from '@/hooks/use-admin'
 import useDynamicErrorHandler from '@/hooks/use-dynamic-errors.ts'
 import { useCreateAdmin, useGetRolesSimple, useModifyAdminById } from '@/service/api'
-import type { RoleLimits } from '@/service/api'
+import type { RoleAccess, RoleLimits } from '@/service/api'
 import { builtInVariableKeys, normalizeCustomVariablesForPayload } from '@/features/subscriptions/components/subscription-settings-schema'
 import { upsertAdminInAdminsCache } from '@/utils/adminsCache'
 import { removeAuthToken } from '@/utils/authStorage'
@@ -42,6 +43,10 @@ const normalizeOverrideValue = (value: unknown): number | null => {
 }
 
 const SECONDS_PER_DAY = 86_400
+
+const normalizeAccessOverrides = (overrides: AdminFormValuesInput['access_overrides']): RoleAccess => ({
+  allowed_group_ids: overrides?.allowed_group_ids?.length ? overrides.allowed_group_ids : null,
+})
 
 const normalizePermissionOverrides = (overrides: AdminFormValuesInput['permission_overrides']): RoleLimits => {
   const minDays = normalizeOverrideValue(overrides?.expire_days_min)
@@ -124,6 +129,7 @@ export default function AdminModal({ isDialogOpen, onOpenChange, editingAdminId,
   // Watch notification enable fields
   const watchedNotificationEnable = useWatch({ control: form.control, name: 'notification_enable' })
   const watchedPermissionOverrides = useWatch({ control: form.control, name: 'permission_overrides' })
+  const watchedAccessOverrides = useWatch({ control: form.control, name: 'access_overrides' })
   const NOTIFICATION_KEYS = ['create', 'modify', 'delete', 'status_change', 'reset_data_usage', 'data_reset_by_next', 'subscription_revoked'] as const
   const notificationEnabledCount = useMemo(() => NOTIFICATION_KEYS.reduce((sum, key) => sum + ((watchedNotificationEnable as any)?.[key] ? 1 : 0), 0), [watchedNotificationEnable])
   const allNotificationsEnabled = notificationEnabledCount === NOTIFICATION_KEYS.length
@@ -131,6 +137,7 @@ export default function AdminModal({ isDialogOpen, onOpenChange, editingAdminId,
     () => Object.values(watchedPermissionOverrides || {}).filter(value => value !== null && value !== undefined && value !== '').length,
     [watchedPermissionOverrides],
   )
+  const groupAccessCount = watchedAccessOverrides?.allowed_group_ids?.length ?? 0
 
   const handleAccordionChange = (value: string) => {
     setOpenSection(prev => (prev === value ? undefined : value))
@@ -192,6 +199,7 @@ export default function AdminModal({ isDialogOpen, onOpenChange, editingAdminId,
         notification_enable: values.notification_enable || null,
         role_id: values.role_id,
         permission_overrides: normalizePermissionOverrides(values.permission_overrides),
+        access_overrides: normalizeAccessOverrides(values.access_overrides),
       }
       if (editingAdmin && editingAdminId != null) {
         const updatedAdmin = await modifyAdminMutation.mutateAsync({
@@ -235,6 +243,7 @@ export default function AdminModal({ isDialogOpen, onOpenChange, editingAdminId,
           notification_enable: values.notification_enable || null,
           role_id: values.role_id,
           permission_overrides: normalizePermissionOverrides(values.permission_overrides),
+          access_overrides: normalizeAccessOverrides(values.access_overrides),
         }
         const createdAdmin = await addAdminMutation.mutateAsync({
           data: createData,
@@ -266,6 +275,7 @@ export default function AdminModal({ isDialogOpen, onOpenChange, editingAdminId,
         'custom_variables',
         'note',
         'permission_overrides',
+        'access_overrides',
       ]
       handleError({ error, fields, form, contextKey: 'admins' })
     }
@@ -710,6 +720,33 @@ export default function AdminModal({ isDialogOpen, onOpenChange, editingAdminId,
                         )}
                       />
                     </div>
+                  </AccordionContent>
+                </AccordionItem>
+
+                <AccordionItem className="rounded-md border px-4 [&_[data-state=closed]]:no-underline [&_[data-state=open]]:no-underline" value="group-access">
+                  <AccordionTrigger>
+                    <div className="flex items-center gap-2">
+                      <UserCog className="h-4 w-4" />
+                      <span>{t('admins.groupAccess', { defaultValue: 'Group access' })}</span>
+                      <span className="text-muted-foreground text-xs">{groupAccessCount || t('adminRoles.unlimited', { defaultValue: 'Unlimited' })}</span>
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent className="px-1 pt-1">
+                    <p className="text-muted-foreground mb-3 text-xs">
+                      {t('admins.groupAccessHint', {
+                        defaultValue: 'Restrict which user groups this admin can see and assign. Leave empty to inherit from the role.',
+                      })}
+                    </p>
+                    <FormField
+                      control={form.control}
+                      name="access_overrides.allowed_group_ids"
+                      render={() => (
+                        <GroupsSelector
+                          control={form.control}
+                          name="access_overrides.allowed_group_ids"
+                        />
+                      )}
+                    />
                   </AccordionContent>
                 </AccordionItem>
 

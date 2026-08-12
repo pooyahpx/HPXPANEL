@@ -135,14 +135,18 @@ def get_allowed_group_ids(admin: AdminDetails) -> list[int] | None:
     """None means all groups allowed (owner or no restriction)."""
     if admin.is_owner or admin.role is None:
         return None
-    return admin.role.access.allowed_group_ids
+    role_ids = admin.role.access.allowed_group_ids
+    admin_ids = admin.access_overrides.allowed_group_ids if admin.access_overrides else None
+    return _intersect_ids(role_ids, admin_ids)
 
 
 def get_allowed_template_ids(admin: AdminDetails) -> list[int] | None:
     """None means all templates allowed (owner or no restriction)."""
     if admin.is_owner or admin.role is None:
         return None
-    return admin.role.access.allowed_template_ids
+    role_ids = admin.role.access.allowed_template_ids
+    admin_ids = admin.access_overrides.allowed_template_ids if admin.access_overrides else None
+    return _intersect_ids(role_ids, admin_ids)
 
 
 def _intersect_ids(requested: list[int] | None, allowed: list[int] | None) -> list[int] | None:

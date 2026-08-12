@@ -9,8 +9,7 @@ interface SidebarTriggerWithBadgeProps {
 
 export function SidebarTriggerWithBadge({ showUpdateBadge = true }: SidebarTriggerWithBadgeProps) {
   const { currentVersion } = useSystemVersion({ enabled: showUpdateBadge })
-  const normalizedVersion = currentVersion ? currentVersion.replace(/[^0-9.]/g, '') : null
-  const { hasUpdate, isLoading } = useVersionCheck(normalizedVersion, { enabled: showUpdateBadge })
+  const { hasUpdate, isLoading } = useVersionCheck(currentVersion, { enabled: showUpdateBadge })
 
   // Show badge when there's an update available
   // The badge is especially important when sidebar is closed/collapsed, but we show it always for visibility

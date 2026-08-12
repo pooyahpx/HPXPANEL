@@ -7,23 +7,25 @@ from app.operation.permissions import (
     PermissionDenied,
     enforce_permission,
     enforce_scope,
+    get_allowed_group_ids,
     get_effective_limits,
 )
 
 
-def _make_admin(*, is_owner=False, permissions=None, limits=None, overrides=None, admin_id=10):
+def _make_admin(*, is_owner=False, permissions=None, limits=None, overrides=None, access=None, access_overrides=None, admin_id=10):
     role = {
         "is_owner": is_owner,
         "permissions": permissions or {},
         "limits": limits or {},
         "features": {},
-        "access": {},
+        "access": access or {},
     }
     return AdminDetails(
         id=admin_id,
         username="testadmin",
         role=role,
         permission_overrides=overrides,
+        access_overrides=access_overrides,
     )
 
 
@@ -134,3 +136,29 @@ def test_no_role_returns_empty():
     admin = AdminDetails(username="x", role=None)
     limits = get_effective_limits(admin)
     assert limits.max_users is None  # RoleLimits with all None fields
+
+
+def test_owner_has_all_groups():
+    admin = _make_admin(is_owner=True, access={"allowed_group_ids": [1, 2]})
+    assert get_allowed_group_ids(admin) is None
+
+
+def test_role_group_restriction():
+    admin = _make_admin(access={"allowed_group_ids": [1, 2, 3]})
+    assert get_allowed_group_ids(admin) == [1, 2, 3]
+
+
+def test_admin_group_override_intersects_role():
+    admin = _make_admin(
+        access={"allowed_group_ids": [1, 2, 3]},
+        access_overrides={"allowed_group_ids": [2, 3, 4]},
+    )
+    assert get_allowed_group_ids(admin) == [2, 3]
+
+
+def test_admin_group_override_when_role_unrestricted():
+    admin = _make_admin(
+        access={"allowed_group_ids": None},
+        access_overrides={"allowed_group_ids": [5, 6]},
+    )
+    assert get_allowed_group_ids(admin) == [5, 6]

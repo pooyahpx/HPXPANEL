@@ -87,6 +87,11 @@ export const adminFormSchema = z
         on_hold_timeout_days_max: z.union([z.literal('').transform(() => null), z.null(), z.coerce.number()]).optional(),
       })
       .optional(),
+    access_overrides: z
+      .object({
+        allowed_group_ids: z.array(z.number().int().positive()).nullable().optional(),
+      })
+      .optional(),
   })
   .superRefine((data, ctx) => {
     // Only validate password if it's provided (for editing) or if it's a new admin
@@ -137,6 +142,10 @@ export const adminPermissionOverridesDefaultValues = {
   on_hold_timeout_days_max: null,
 } as const
 
+export const adminAccessOverridesDefaultValues = {
+  allowed_group_ids: null,
+} as const
+
 export const adminFormDefaultValues: Partial<AdminFormValuesInput> = {
   username: '',
   role_id: 3,
@@ -163,4 +172,5 @@ export const adminFormDefaultValues: Partial<AdminFormValuesInput> = {
     subscription_revoked: true,
   },
   permission_overrides: adminPermissionOverridesDefaultValues,
+  access_overrides: adminAccessOverridesDefaultValues,
 }

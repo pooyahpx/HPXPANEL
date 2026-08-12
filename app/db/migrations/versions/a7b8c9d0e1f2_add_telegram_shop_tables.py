@@ -53,11 +53,13 @@ def upgrade() -> None:
         sa.Column("is_active", sa.Boolean(), nullable=False, server_default="1"),
     )
 
-    # Create PG enum once, then reference it with create_type=False to avoid DuplicateObjectError.
-    shop_order_status = sa.Enum("pending", "approved", "rejected", name="shoporderstatus")
+    # PG: create enum explicitly, then use postgresql.ENUM(create_type=False).
+    # Plain sa.Enum(..., create_type=False) is ignored on create_table and double-creates.
     if dialect == "postgresql":
-        shop_order_status.create(bind, checkfirst=True)
-        status_type = sa.Enum("pending", "approved", "rejected", name="shoporderstatus", create_type=False)
+        status_type = postgresql.ENUM(
+            "pending", "approved", "rejected", name="shoporderstatus", create_type=False
+        )
+        status_type.create(bind, checkfirst=True)
     else:
         status_type = sa.Enum("pending", "approved", "rejected", name="shoporderstatus")
 
@@ -86,4 +88,6 @@ def downgrade() -> None:
     op.drop_table("shop_configs")
     op.drop_table("telegram_profiles")
     if dialect == "postgresql":
-        sa.Enum(name="shoporderstatus").drop(bind, checkfirst=True)
+        postgresql.ENUM(
+            "pending", "approved", "rejected", name="shoporderstatus", create_type=False
+        ).drop(bind, checkfirst=True)

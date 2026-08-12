@@ -24,7 +24,7 @@ from app.db.models import Admin as DBAdmin, ClientTemplate, CoreConfig, Group, N
 from app.models.admin import AdminDetails
 from app.models.group import BulkGroup
 from app.models.user import UserCreate, UserModify
-from app.operation.permissions import get_scope_admin_id
+from app.operation.permissions import get_allowed_group_ids, get_scope_admin_id
 from app.utils.helpers import ensure_datetime_timezone
 from app.utils.jwt import get_subscription_payload
 
@@ -227,7 +227,12 @@ class BaseOperation:
             await self.raise_error("Group not found", 404)
         return db_group
 
-    async def validate_all_groups(self, db, model: UserCreate | UserModify | UserTemplate | BulkGroup) -> list[Group]:
+    async def validate_all_groups(
+        self,
+        db,
+        model: UserCreate | UserModify | UserTemplate | BulkGroup,
+        admin: AdminDetails | None = None,
+    ) -> list[Group]:
         requested_group_ids: list[int] = []
         if model.group_ids:
             requested_group_ids.extend(model.group_ids)
@@ -244,6 +249,13 @@ class BaseOperation:
         missing_ids = [group_id for group_id in unique_ids if group_id not in groups_by_id]
         if missing_ids:
             await self.raise_error("Group not found", 404)
+
+        if admin is not None:
+            allowed = get_allowed_group_ids(admin)
+            if allowed is not None:
+                denied = [group_id for group_id in unique_ids if group_id not in set(allowed)]
+                if denied:
+                    await self.raise_error("Permission denied: group access restricted", 403)
 
         # Preserve the requested order and duplicate semantics.
         return [groups_by_id[group_id] for group_id in requested_group_ids]

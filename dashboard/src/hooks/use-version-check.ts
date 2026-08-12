@@ -19,20 +19,69 @@ interface UseVersionCheckOptions {
 }
 
 const GITHUB_API_URL = 'https://api.github.com/repos/pooyahpx/HPXPANEL/releases/latest'
-const CACHE_KEY = 'pg_release'
+const CACHE_KEY = 'hpx_release'
 const CACHE_DURATION = 10 * 60 * 1000
 
-function compareVersions(current: string, latest: string): number {
-  const currentParts = current.replace(/^v/, '').split('.').map(Number)
-  const latestParts = latest.replace(/^v/, '').split('.').map(Number)
+interface ParsedSemver {
+  major: number
+  minor: number
+  patch: number
+  prerelease: string[]
+}
 
-  for (let i = 0; i < Math.max(currentParts.length, latestParts.length); i++) {
-    const curr = currentParts[i] || 0
-    const lat = latestParts[i] || 0
-    if (curr < lat) return -1
-    if (curr > lat) return 1
+function parseSemver(version: string): ParsedSemver {
+  const cleaned = version.replace(/^v/i, '').trim()
+  const [main = '0', prerelease = ''] = cleaned.split('-', 2)
+  const [major = 0, minor = 0, patch = 0] = main.split('.').map(part => parseInt(part, 10) || 0)
+  return {
+    major,
+    minor,
+    patch,
+    prerelease: prerelease ? prerelease.split('.') : [],
+  }
+}
+
+function comparePrerelease(a: string[], b: string[]): number {
+  if (a.length === 0 && b.length === 0) return 0
+  if (a.length === 0) return 1
+  if (b.length === 0) return -1
+
+  const len = Math.max(a.length, b.length)
+  for (let i = 0; i < len; i += 1) {
+    const av = a[i]
+    const bv = b[i]
+    if (av === undefined) return -1
+    if (bv === undefined) return 1
+
+    const an = Number(av)
+    const bn = Number(bv)
+    const aIsNum = !Number.isNaN(an) && String(an) === av
+    const bIsNum = !Number.isNaN(bn) && String(bn) === bv
+
+    if (aIsNum && bIsNum) {
+      if (an < bn) return -1
+      if (an > bn) return 1
+    } else if (aIsNum !== bIsNum) {
+      return aIsNum ? -1 : 1
+    } else if (av < bv) {
+      return -1
+    } else if (av > bv) {
+      return 1
+    }
   }
   return 0
+}
+
+function compareVersions(current: string, latest: string): number {
+  const a = parseSemver(current)
+  const b = parseSemver(latest)
+
+  for (const key of ['major', 'minor', 'patch'] as const) {
+    if (a[key] < b[key]) return -1
+    if (a[key] > b[key]) return 1
+  }
+
+  return comparePrerelease(a.prerelease, b.prerelease)
 }
 
 function getCached(): CachedRelease | null {
@@ -72,7 +121,7 @@ async function fetchLatestRelease(): Promise<{ version: string; url: string } | 
     }
 
     const data = await response.json()
-    const version = data.tag_name?.replace(/^v/, '') || ''
+    const version = data.tag_name?.replace(/^v/i, '') || ''
     const url = data.html_url || ''
 
     if (version) setCache(version, url)
@@ -97,7 +146,7 @@ export function useVersionCheck(currentVersion: string | null, options: UseVersi
   })
 
   const latestVersion = data?.version || null
-  const cleanCurrentVersion = currentVersion?.replace(/^v/, '') || null
+  const cleanCurrentVersion = currentVersion?.replace(/^v/i, '') || null
 
   const hasUpdate = enabled && !!(cleanCurrentVersion && latestVersion && compareVersions(cleanCurrentVersion, latestVersion) < 0)
 

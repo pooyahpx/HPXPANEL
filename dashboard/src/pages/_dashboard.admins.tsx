@@ -7,7 +7,7 @@ import ResourcePageShell from '@/components/layout/resource-page-shell'
 import { toast } from 'sonner'
 import AdminsTable from '@/features/admins/components/admins-table'
 import AdminModal from '@/features/admins/dialogs/admin-modal'
-import { adminFormDefaultValues, adminFormSchema, adminPermissionOverridesDefaultValues, type AdminFormValuesInput } from '@/features/admins/forms/admin-form'
+import { adminFormDefaultValues, adminFormSchema, adminAccessOverridesDefaultValues, adminPermissionOverridesDefaultValues, type AdminFormValuesInput } from '@/features/admins/forms/admin-form'
 import { useModifyAdminById, useRemoveAdminById, useResetAdminUsageById } from '@/service/api'
 import type { AdminDetails } from '@/service/api'
 import AdminsStatistics from '@/features/admins/components/admin-statistics'
@@ -167,6 +167,10 @@ export default function AdminsPage() {
               }
             })()
           : {}),
+      },
+      access_overrides: {
+        ...adminAccessOverridesDefaultValues,
+        allowed_group_ids: admin.access_overrides?.allowed_group_ids ?? null,
       },
       notification_enable: admin.notification_enable || {
         create: false,

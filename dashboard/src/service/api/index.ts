@@ -3,7 +3,7 @@
  * Do not edit manually.
  * PasarGuardAPI
  * Unified GUI Censorship Resistant Solution
- * OpenAPI spec version: 5.2.0-rc.2
+ * OpenAPI spec version: 1.0.0
  */
 import { useMutation, useQuery } from '@tanstack/react-query'
 import type {
@@ -3644,6 +3644,8 @@ export interface AdminNotificationEnable {
 
 export type AdminModifyPermissionOverrides = RoleLimits | null
 
+export type AdminModifyAccessOverrides = RoleAccess | null
+
 export type AdminModifyRoleId = number | null
 
 export type AdminModifyNotificationEnable = UserNotificationEnable | null
@@ -3685,9 +3687,12 @@ export interface AdminModify {
   notification_enable?: AdminModifyNotificationEnable
   role_id?: AdminModifyRoleId
   permission_overrides?: AdminModifyPermissionOverrides
+  access_overrides?: AdminModifyAccessOverrides
 }
 
 export type AdminDetailsPermissionOverrides = RoleLimits | null
+
+export type AdminDetailsAccessOverrides = RoleAccess | null
 
 export type AdminDetailsRole = AdminRoleData | null
 
@@ -3735,11 +3740,14 @@ export interface AdminDetails {
   note?: AdminDetailsNote
   role?: AdminDetailsRole
   permission_overrides?: AdminDetailsPermissionOverrides
+  access_overrides?: AdminDetailsAccessOverrides
   readonly is_disabled: boolean
   readonly is_limited: boolean
 }
 
 export type AdminCreatePermissionOverrides = RoleLimits | null
+
+export type AdminCreateAccessOverrides = RoleAccess | null
 
 export type AdminCreateNotificationEnable = UserNotificationEnable | null
 
@@ -3781,6 +3789,7 @@ export interface AdminCreate {
   notification_enable?: AdminCreateNotificationEnable
   role_id: number
   permission_overrides?: AdminCreatePermissionOverrides
+  access_overrides?: AdminCreateAccessOverrides
   username: string
 }
 

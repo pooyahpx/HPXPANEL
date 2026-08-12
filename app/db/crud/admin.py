@@ -36,7 +36,7 @@ from app.models.admin import (
     AdminStatus,
     hash_password,
 )
-from app.models.admin_role import RoleLimits
+from app.models.admin_role import RoleAccess, RoleLimits
 from app.models.stats import Period, UserUsageStat, UserUsageStatsList
 from app.utils.logger import get_logger
 
@@ -99,6 +99,9 @@ def build_admin_details(
         role=role,
         permission_overrides=RoleLimits.model_validate(db_admin.permission_overrides)
         if db_admin.permission_overrides
+        else None,
+        access_overrides=RoleAccess.model_validate(db_admin.access_overrides)
+        if db_admin.access_overrides
         else None,
     )
 
@@ -210,6 +213,8 @@ async def update_admin(db: AsyncSession, db_admin: Admin, modified_admin: AdminM
         db_admin.role_id = modified_admin.role_id
     if modified_admin.permission_overrides is not None:
         db_admin.permission_overrides = modified_admin.permission_overrides.model_dump()
+    if modified_admin.access_overrides is not None:
+        db_admin.access_overrides = modified_admin.access_overrides.model_dump()
     if modified_admin.telegram_id is not None:
         db_admin.telegram_id = modified_admin.telegram_id
     if modified_admin.discord_webhook is not None:

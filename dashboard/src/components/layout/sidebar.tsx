@@ -131,9 +131,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { currentVersion: systemVersion } = useSystemVersion({ enabled: canReadSystem })
   const { setOpenMobile, openMobile, isMobile } = useSidebar()
   const navigate = useNavigate()
-  const normalizedVersion = canReadSystem && systemVersion ? systemVersion.replace(/[^0-9.]/g, '') : null
   const displayVersion = canReadSystem && systemVersion ? `(v${systemVersion})` : ''
-  const { hasUpdate } = useVersionCheck(normalizedVersion, { enabled: canReadSystem })
+  const { hasUpdate } = useVersionCheck(systemVersion ?? null, { enabled: canReadSystem })
   const { data: usersStats } = useGetSystemUsersStats(undefined, {
     query: { enabled: canReadSystem, refetchInterval: 30_000, staleTime: 15_000 },
   })
@@ -416,7 +415,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       aria-label="HPXPANEL home"
     >
       <img src={HPX_LOGO_URL} alt="HPXPANEL" className="h-full w-full object-cover" draggable={false} />
-      {canReadSystem && <VersionBadge currentVersion={normalizedVersion} />}
+      {canReadSystem && <VersionBadge currentVersion={systemVersion ?? null} />}
     </Link>
   )
 

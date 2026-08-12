@@ -6,7 +6,11 @@
 # as a Docker container, then prints Address + Port + API key + Server CA for
 # HPXPANEL -> Nodes.
 #
-# One-liner (Linux):
+# One-liner (Linux) — save to a file first so cmdline stays short:
+#   curl -fsSL https://github.com/pooyahpx/HPXNODE/raw/main/scripts/install.sh -o /tmp/hpx-node.sh
+#   sudo bash /tmp/hpx-node.sh install -y
+#
+# Or:
 #   sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXNODE/raw/main/scripts/install.sh)" @ install -y
 #
 # Interactive menu:
@@ -232,31 +236,8 @@ install_compose_binary() {
 ensure_compose() {
   if detect_compose; then return 0; fi
 
-  log "Docker Compose plugin missing — installing..."
-
-  # Never wait on apt here — binary install is enough.
-  if apt_busy 2>/dev/null; then
-    warn "apt is busy ($(apt_holder 2>/dev/null || echo locked)) — using binary Compose install"
-  fi
+  log "Docker Compose plugin missing — installing binary..."
   install_compose_binary || true
-  if detect_compose; then
-    log "Docker Compose ready ($COMPOSE_CMD)"
-    return 0
-  fi
-
-  if has apt-get && ! apt_busy; then
-    DEBIAN_FRONTEND=noninteractive apt-get update -y >/dev/null 2>&1 || true
-    DEBIAN_FRONTEND=noninteractive apt-get install -y docker-compose-plugin >/dev/null 2>&1 \
-      || DEBIAN_FRONTEND=noninteractive apt-get install -y docker-compose-v2 >/dev/null 2>&1 \
-      || true
-  elif has dnf; then
-    dnf install -y docker-compose-plugin >/dev/null 2>&1 || true
-  elif has yum; then
-    yum install -y docker-compose-plugin >/dev/null 2>&1 || true
-  elif has apk; then
-    apk add --no-cache docker-cli-compose >/dev/null 2>&1 || true
-  fi
-
   if detect_compose; then
     log "Docker Compose ready ($COMPOSE_CMD)"
     return 0
@@ -268,46 +249,13 @@ ensure_compose() {
   sudo chmod +x /usr/local/lib/docker/cli-plugins/docker-compose"
 }
 
-force_free_apt() {
-  systemctl stop unattended-upgrades.service 2>/dev/null || true
-  systemctl stop unattended-upgrades.timer 2>/dev/null || true
-  systemctl kill --kill-who=all unattended-upgrades.service 2>/dev/null || true
-
-  # IMPORTANT: never `pkill -f <pattern>` — when installed via
-  #   bash -c "$(curl ... install.sh)"
-  # the whole script text is in cmdline, so -f matches and kills THIS installer.
-  local pid
-  if has pgrep; then
-    for pid in $(pgrep -x apt-get 2>/dev/null; pgrep -x apt 2>/dev/null; pgrep -x dpkg 2>/dev/null); do
-      [ "$pid" = "$$" ] && continue
-      [ "$pid" = "$PPID" ] && continue
-      kill -9 "$pid" 2>/dev/null || true
-    done
-    # unattended-upgrade is often a python process — match by exact comm when possible
-    for pid in $(pgrep -f '^/usr/bin/unattended-upgrade' 2>/dev/null; pgrep -x unattended-upgrade 2>/dev/null); do
-      [ "$pid" = "$$" ] && continue
-      kill -9 "$pid" 2>/dev/null || true
-    done
-  fi
-
-  rm -f /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock \
-    /var/lib/apt/lists/lock /var/cache/apt/archives/lock \
-    /var/cache/apt/archives/lock.bin 2>/dev/null || true
-  DEBIAN_FRONTEND=noninteractive dpkg --configure -a >/dev/null 2>&1 || true
-}
-
-# No sleeping / no multi-second waits — unlock once or skip apt entirely.
-wait_for_apt() {
-  has apt-get || return 0
-  apt_busy || return 0
-  warn "apt busy ($(apt_holder)) — unlocking immediately (no wait)"
-  force_free_apt
-  apt_busy && return 1
-  return 0
-}
+# Intentionally do NOT touch apt/dpkg here.
+# When this installer is run as: bash -c "$(curl install.sh)"
+# the whole script is inside cmdline, so any `pgrep -f apt|unattended` matches
+# and kills THIS process. Docker is installed via static binaries instead.
 
 install_docker_static() {
-  local arch tarball url ver="27.5.1" tmp
+  local arch url ver="27.5.1" tmp
   arch="$(uname -m)"
   case "$arch" in
     x86_64|amd64) arch="x86_64" ;;
@@ -321,7 +269,7 @@ install_docker_static() {
   ver="${DOCKER_STATIC_VERSION:-$ver}"
   url="https://download.docker.com/linux/static/stable/${arch}/docker-${ver}.tgz"
   tmp="$(mktemp -d)"
-  log "Installing Docker from static binaries (instant path, no apt)..."
+  log "Installing Docker from static binaries (no apt)..."
   if ! curl -fsSL "$url" -o "$tmp/docker.tgz"; then
     rm -rf "$tmp"
     return 1
@@ -356,7 +304,6 @@ UNIT
     systemctl daemon-reload 2>/dev/null || true
   fi
   systemctl enable --now docker 2>/dev/null || dockerd >/var/log/dockerd.log 2>&1 &
-  # brief readiness poll (max ~3s total), not an apt wait
   local i
   for i in 1 2 3 4 5 6; do
     docker info >/dev/null 2>&1 && return 0
@@ -372,64 +319,9 @@ install_docker() {
     return 0
   fi
 
-  # Instant path: never call apt / get.docker.com (those stall on VPS unattended-upgrades).
-  if apt_busy; then
-    warn "apt busy — unlocking and using static Docker (no wait)"
-    force_free_apt
-  fi
-  if ! install_docker_static; then
-    warn "static Docker failed — last resort get.docker.com"
-    force_free_apt
-    curl -fsSL https://get.docker.com | sh || true
-    systemctl enable --now docker 2>/dev/null || true
-  fi
-
-  has docker || die "Docker engine is not installed"
+  # Never probe/kill apt — that races with curl|bash self-match and SIGKILLs us.
+  install_docker_static || die "Docker static install failed (check network to download.docker.com)."
   ensure_compose
-}
-
-apt_busy() {
-  local f
-  for f in /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock \
-           /var/lib/apt/lists/lock /var/cache/apt/archives/lock; do
-    [ -e "$f" ] || continue
-    if has fuser; then
-      fuser "$f" >/dev/null 2>&1 && return 0
-    elif has lsof; then
-      lsof "$f" >/dev/null 2>&1 && return 0
-    fi
-  done
-  if has pgrep; then
-    pgrep -x apt >/dev/null 2>&1 && return 0
-    pgrep -x apt-get >/dev/null 2>&1 && return 0
-    pgrep -x dpkg >/dev/null 2>&1 && return 0
-    pgrep -f unattended-upgr >/dev/null 2>&1 && return 0
-    pgrep -f 'apt.systemd.daily' >/dev/null 2>&1 && return 0
-  fi
-  return 1
-}
-
-apt_holder() {
-  local f p
-  for f in /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock \
-           /var/lib/apt/lists/lock /var/cache/apt/archives/lock; do
-    [ -e "$f" ] || continue
-    if has fuser; then
-      p=$(fuser "$f" 2>/dev/null | tr -s ' ' '\n' | grep -E '^[0-9]+$' | head -1)
-      [ -n "$p" ] && { ps -o comm= -p "$p" 2>/dev/null | tail -1; return; }
-    elif has lsof; then
-      p=$(lsof -t "$f" 2>/dev/null | head -1)
-      [ -n "$p" ] && { ps -o comm= -p "$p" 2>/dev/null | tail -1; return; }
-    fi
-  done
-  if has pgrep; then
-    for p in unattended-upgr apt-get apt dpkg; do
-      if pgrep -x "$p" >/dev/null 2>&1 || pgrep -f "$p" >/dev/null 2>&1; then
-        echo "$p"; return
-      fi
-    done
-  fi
-  echo "stale-or-unknown-lock"
 }
 
 banner() {

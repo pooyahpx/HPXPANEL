@@ -109,7 +109,7 @@ def create_app() -> FastAPI:
         raise RuntimeError("NATS must be enabled for backend / node / scheduler roles.")
 
     app = FastAPI(
-        title="PasarGuardAPI",
+        title="HPXPANEL API",
         description="Unified GUI Censorship Resistant Solution",
         version=__version__,
         lifespan=lifespan,
@@ -149,7 +149,7 @@ def create_app() -> FastAPI:
 
     _use_route_names_as_operation_ids(app)
 
-    on_startup(lambda: logger.info(f"PasarGuard v{__version__} ({runtime_settings.role.value})"))
+    on_startup(lambda: logger.info(f"HPXPANEL v{__version__} ({runtime_settings.role.value})"))
 
     @app.exception_handler(RequestValidationError)
     def validation_exception_handler(request: Request, exc: RequestValidationError):

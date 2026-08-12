@@ -33,14 +33,13 @@ export function VersionUpdateBanner() {
   const [isVisible, setIsVisible] = useState(false)
   const [isClosing, setIsClosing] = useState(false)
   const [isAnimating, setIsAnimating] = useState(false)
-  const normalizedVersion = currentVersion ? currentVersion.replace(/[^0-9.]/g, '') : null
-  const { hasUpdate, latestVersion, releaseUrl, isLoading } = useVersionCheck(normalizedVersion, { enabled: isOwnerAdmin })
+  const { hasUpdate, latestVersion, releaseUrl, isLoading } = useVersionCheck(currentVersion, { enabled: isOwnerAdmin })
 
   const gradientBg = getGradientByColorTheme(colorTheme, isDark, 'banner')
   const indicatorColor = getIndicatorColorByTheme(colorTheme, isDark)
 
   useEffect(() => {
-    if (!isOwnerAdmin || isLoading || !hasUpdate || !normalizedVersion) {
+    if (!isOwnerAdmin || isLoading || !hasUpdate || !currentVersion) {
       setIsVisible(false)
       setIsAnimating(false)
       return
@@ -91,7 +90,7 @@ export function VersionUpdateBanner() {
     }
 
     checkShouldShow()
-  }, [hasUpdate, isOwnerAdmin, latestVersion, normalizedVersion, isLoading])
+  }, [hasUpdate, isOwnerAdmin, latestVersion, currentVersion, isLoading])
 
   const handleClose = (e: React.MouseEvent) => {
     e.preventDefault()
@@ -118,7 +117,7 @@ export function VersionUpdateBanner() {
     toast.success(t('usersTable.copied'))
   }
 
-  if (!isOwnerAdmin || isLoading || !hasUpdate || !isVisible || !latestVersion || !normalizedVersion) return null
+  if (!isOwnerAdmin || isLoading || !hasUpdate || !isVisible || !latestVersion || !currentVersion) return null
 
   const releaseLink = releaseUrl || 'https://github.com/pooyahpx'
 
@@ -150,7 +149,7 @@ export function VersionUpdateBanner() {
           <div className="min-w-0 flex-1 overflow-hidden">
             <p className={cn('text-foreground/90 text-xs leading-tight font-semibold break-words sm:text-sm', isRTL ? 'text-right' : 'text-left')}>{t('version.newVersionAvailable')}</p>
             <p className={cn('text-foreground/70 mt-0.5 text-[11px] leading-relaxed break-words sm:mt-1 sm:text-xs', isRTL ? 'text-right' : 'text-left')}>
-              {t('version.updateBanner', { current: `v${normalizedVersion}`, latest: `v${latestVersion}` })}
+              {t('version.updateBanner', { current: `v${currentVersion}`, latest: `v${latestVersion}` })}
             </p>
             <div className="mt-1.5 flex flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-1.5">
               <span className="text-foreground/60 text-[11px] leading-relaxed break-words sm:text-xs sm:whitespace-nowrap">{t('version.updateCommandLabel')}</span>

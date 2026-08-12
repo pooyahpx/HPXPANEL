@@ -11,6 +11,13 @@ class IsAdminFilter(Filter):
         return bool(admin)
 
 
+class IsOwnerFilter(Filter):
+    """Passes if the user is the panel owner admin."""
+
+    async def __call__(self, _, admin: AdminDetails | None = None) -> bool:
+        return bool(admin and admin.is_owner)
+
+
 class HasPermission(Filter):
     """
     RBAC filter — passes if the admin has the given resource+action permission.

@@ -1,32 +1,44 @@
 from aiogram import F, Router
 from aiogram.exceptions import TelegramBadRequest
-from aiogram.types import CallbackQuery
+from aiogram.fsm.context import FSMContext
+from aiogram.types import CallbackQuery, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.admin import AdminDetails
+from app.db.crud.admin import get_admin_by_telegram_id
+from app.db.crud.admin_role import get_role_by_name
+from app.models.admin import AdminCreate, AdminDetails
 from app.models.node import NodeListQuery
 from app.operation import OperatorType
+from app.operation.admin import AdminOperation
 from app.operation.node import NodeOperation
 from app.operation.system import SystemOperation
 from app.settings import telegram_settings
 from app.telegram.keyboards.admin import AdminPanel, AdminPanelAction
 from app.telegram.keyboards.deck import DeckPanel
-from app.telegram.utils.filters import HasPermission, IsAdminFilter
+from app.telegram.utils import forms
+from app.telegram.utils.filters import HasPermission, IsAdminFilter, IsOwnerFilter
+from app.telegram.utils.i18n import rich, t
+from app.telegram.utils.shared import add_to_messages_to_delete
 from app.telegram.utils.texts import Message as Texts
 
 system_operator = SystemOperation(OperatorType.TELEGRAM)
 node_operator = NodeOperation(OperatorType.TELEGRAM)
+admin_operator = AdminOperation(OperatorType.TELEGRAM)
 
 router = Router(name="main_menu")
 
 
-async def _render_main_menu(event: CallbackQuery, db: AsyncSession, admin: AdminDetails):
-    """Render the main admin panel with permission-aware keyboard."""
+async def _lang(db: AsyncSession, telegram_id: int) -> str:
     from app.db.crud.shop import get_telegram_lang
 
+    return (await get_telegram_lang(db, telegram_id)) or "fa"
+
+
+async def _render_main_menu(event: CallbackQuery, db: AsyncSession, admin: AdminDetails):
+    """Render the main admin panel with permission-aware keyboard."""
     stats = await system_operator.get_system_stats(db, admin)
     settings = await telegram_settings()
-    lang = (await get_telegram_lang(db, event.from_user.id)) or "en"
+    lang = await _lang(db, event.from_user.id)
     return DeckPanel(
         admin=admin,
         panel_url=settings.mini_app_web_url if settings.mini_app_login else None,
@@ -49,6 +61,65 @@ async def open_shop_manage(event: CallbackQuery, db: AsyncSession, admin: AdminD
     from app.telegram.handlers.shop_admin import _render_admin_shop
 
     await _render_admin_shop(event, db, admin)
+
+
+@router.callback_query(IsOwnerFilter(), AdminPanel.Callback.filter(AdminPanelAction.promote_admin == F.action))
+async def ask_promote_admin(event: CallbackQuery, db: AsyncSession, state: FSMContext):
+    lang = await _lang(db, event.from_user.id)
+    await state.set_state(forms.PromoteAdmin.waiting_target)
+    await state.update_data(lang=lang)
+    msg = await event.message.answer(t(lang, "promote_ask_target"))
+    await add_to_messages_to_delete(state, msg)
+    await event.answer()
+
+
+@router.message(IsOwnerFilter(), forms.PromoteAdmin.waiting_target)
+async def promote_admin_target(event: Message, db: AsyncSession, state: FSMContext, admin: AdminDetails):
+    data = await state.get_data()
+    lang = data.get("lang", "fa")
+
+    target_id: int | None = None
+    if event.forward_from is not None:
+        target_id = event.forward_from.id
+    elif event.text:
+        raw = event.text.strip()
+        if raw.isdigit():
+            target_id = int(raw)
+
+    if not target_id:
+        await event.answer(t(lang, "invalid_number"))
+        return
+
+    existing = await get_admin_by_telegram_id(db, target_id, load_users=False, load_usage_logs=False)
+    if existing:
+        await state.clear()
+        await event.answer(t(lang, "promote_exists", username=existing.username))
+        return
+
+    role = await get_role_by_name(db, "administrator")
+    if role is None:
+        role = await get_role_by_name(db, "operator")
+    if role is None:
+        await state.clear()
+        await event.answer(t(lang, "promote_fail", error="role missing"))
+        return
+
+    username = f"tg{target_id}"
+    # Meets PasswordValidator rules
+    password = f"HpX1Adm!{target_id % 10000:04d}aB"
+    try:
+        await admin_operator.create_admin(
+            db,
+            AdminCreate(username=username, password=password, role_id=role.id, telegram_id=target_id),
+            admin,
+        )
+    except Exception as exc:
+        await state.clear()
+        await event.answer(t(lang, "promote_fail", error=str(exc)))
+        return
+
+    await state.clear()
+    await event.answer(rich(lang, "promote_ok", username=username, password=password))
 
 
 @router.callback_query(

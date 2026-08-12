@@ -802,7 +802,35 @@ async def update_owner_password(db: AsyncSession, owner: Admin, new_password: st
 
 async def get_owner(db: AsyncSession) -> Admin | None:
     """Return the owner admin (role_id=1), or None if not found."""
-    return (await db.execute(select(Admin).where(Admin.role_id == 1))).scalar_one_or_none()
+    stmt = select(Admin).where(Admin.role_id == 1).options(selectinload(Admin.role)).limit(1)
+    return (await db.execute(stmt)).scalar_one_or_none()
+
+
+async def claim_owner_telegram_id(db: AsyncSession, telegram_id: int, *, force: bool = False) -> Admin | None:
+    """
+    Bind the panel owner admin to a Telegram user.
+
+    - force=False: only when owner.telegram_id is still empty (first claim).
+    - force=True: rebind even if already set (password-gated reclaim).
+    """
+    owner = await get_owner(db)
+    if owner is None:
+        return None
+    if owner.telegram_id is not None and owner.telegram_id != telegram_id and not force:
+        return None
+    if owner.telegram_id == telegram_id:
+        await load_admin_attrs(owner)
+        return owner
+
+    for other in await find_admins_by_telegram_id(db, telegram_id):
+        if other.id != owner.id:
+            other.telegram_id = None
+
+    owner.telegram_id = telegram_id
+    await db.commit()
+    await db.refresh(owner)
+    await load_admin_attrs(owner)
+    return owner
 
 
 async def owner_exists(db: AsyncSession) -> bool:

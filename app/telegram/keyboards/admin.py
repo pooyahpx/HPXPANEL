@@ -15,6 +15,7 @@ class AdminPanelAction(str, Enum):
     create_user = "create_user"
     create_user_from_template = "create_user_from_template"
     bulk_actions = "bulk_actions"
+    shop_manage = "shop_manage"
 
 
 def _has_permission(admin: AdminDetails | None, resource: str, action: str) -> bool:

@@ -1,0 +1,188 @@
+"""FA/EN strings for Telegram shop + language picker."""
+
+from __future__ import annotations
+
+from html import escape
+
+from aiogram.utils.formatting import html_decoration
+
+b = html_decoration.bold
+c = html_decoration.code
+
+GB = 1024**3
+
+
+def t(lang: str, key: str, **kwargs) -> str:
+    table = STRINGS.get(lang) or STRINGS["en"]
+    text = table.get(key) or STRINGS["en"].get(key) or key
+    if kwargs:
+        return text.format(**kwargs)
+    return text
+
+
+def format_bytes(n: int) -> str:
+    if not n:
+        return "∞"
+    if n >= GB:
+        val = n / GB
+        return f"{val:g} GB"
+    return f"{n} B"
+
+
+def format_price(toman: int) -> str:
+    return f"{toman:,}".replace(",", "٬") if toman else "0"
+
+
+STRINGS: dict[str, dict[str, str]] = {
+    "fa": {
+        "choose_lang": "🌐 زبان را انتخاب کنید\nChoose your language",
+        "lang_set": "✅ زبان روی فارسی تنظیم شد",
+        "shop_disabled": "🛍 فروشگاه فعلاً غیرفعال است.",
+        "shop_home": "🛍 {b}فروشگاه HPXPANEL{/b}\n\nیکی از پلن‌ها را انتخاب کنید:",
+        "shop_empty": "هنوز پلنی تعریف نشده است.",
+        "plan_line": "{name}\n📦 {data} · 📅 {days} روز · 💰 {price} تومان",
+        "days_unlimited": "نامحدود",
+        "pay_title": "💳 پرداخت کارت‌به‌کارت\n\n{b}پلن:{/b} {name}\n{b}حجم:{/b} {data}\n{b}مدت:{/b} {days}\n{b}مبلغ:{/b} {price} تومان",
+        "pay_card": "\n\n🏦 کارت: {c}{card}{/c}\n👤 به نام: {holder}\n\nبعد از واریز، {b}عکس رسید{/b} را همینجا بفرستید.",
+        "pay_no_card": "\n\n⚠️ ادمین هنوز شماره کارت ثبت نکرده است.",
+        "send_receipt": "🖼 لطفاً فقط عکس رسید پرداخت را بفرستید.",
+        "order_created": "✅ سفارش #{id} ثبت شد.\nبعد از تأیید ادمین، اکانت براتون ارسال می‌شود.",
+        "order_approved": "✅ سفارش #{id} تأیید شد.\n👤 یوزرنیم: {c}{username}{/c}\n🔗 سابسکریپشن:\n{url}",
+        "order_rejected": "❌ سفارش #{id} رد شد.",
+        "my_orders": "📋 سفارش‌های شما:",
+        "order_row": "#{id} · {plan} · {status} · {price} تومان",
+        "status_pending": "در انتظار",
+        "status_approved": "تأیید شده",
+        "status_rejected": "رد شده",
+        "btn_shop": "🛍 فروشگاه",
+        "btn_my_orders": "📋 سفارش‌ها",
+        "btn_lang": "🌐 زبان",
+        "btn_back": "⬅️ بازگشت",
+        "btn_buy": "خرید",
+        "btn_plans": "📦 پلن‌ها",
+        "btn_admin_shop": "🛍 مدیریت فروشگاه",
+        "admin_shop_home": "🛍 {b}مدیریت فروشگاه{/b}\nفعال: {enabled}\nکارت: {card}\nبه نام: {holder}\nپلن‌های فعال: {plans}\nسفارش‌های باز: {pending}",
+        "admin_enabled_on": "✅ فروشگاه روشن شد",
+        "admin_enabled_off": "⏸ فروشگاه خاموش شد",
+        "admin_ask_card": "💳 شماره کارت را بفرستید:",
+        "admin_ask_holder": "👤 نام صاحب کارت را بفرستید:",
+        "admin_card_saved": "✅ اطلاعات کارت ذخیره شد",
+        "admin_ask_plan_name": "📦 نام پلن را بفرستید (مثلاً ۳۰ گیگ یک‌ماهه):",
+        "admin_ask_plan_gb": "📶 حجم را به گیگابایت بفرستید (۰ = نامحدود):",
+        "admin_ask_plan_days": "📅 تعداد روز را بفرستید (۰ = نامحدود):",
+        "admin_ask_plan_price": "💰 قیمت به تومان را بفرستید:",
+        "admin_ask_plan_groups": "👥 آیدی گروه‌ها را با کاما بفرستید (مثلاً 1,2) یا - برای هیچ:",
+        "admin_plan_created": "✅ پلن ساخته شد: {name}",
+        "admin_plan_toggled": "پلن {name}: {state}",
+        "admin_plan_deleted": "🗑 پلن حذف شد",
+        "admin_pending_empty": "سفارش بازی نیست.",
+        "admin_new_order": "🧾 سفارش جدید #{id}\nخریدار: {buyer}\nپلن: {plan}\nمبلغ: {price} تومان",
+        "admin_approved": "✅ سفارش تأیید و یوزر ساخته شد: {username}",
+        "admin_rejected": "❌ سفارش رد شد",
+        "btn_enable": "🟢 روشن کردن",
+        "btn_disable": "🔴 خاموش کردن",
+        "btn_set_card": "💳 کارت",
+        "btn_add_plan": "➕ پلن جدید",
+        "btn_list_plans": "📦 لیست پلن‌ها",
+        "btn_pending": "🧾 سفارش‌های باز",
+        "btn_approve": "✅ تأیید",
+        "btn_reject": "❌ رد",
+        "btn_deactivate": "⏸ غیرفعال",
+        "btn_activate": "▶️ فعال",
+        "btn_delete": "🗑 حذف",
+        "invalid_number": "❌ عدد معتبر بفرستید",
+        "canceled": "💢 لغو شد",
+        "no_shop_for_admin": "ابتدا فروشگاه را از منوی مدیریت روشن کنید و کارت/پلن بسازید.",
+        "active": "فعال",
+        "inactive": "غیرفعال",
+        "yes": "بله",
+        "no": "خیر",
+    },
+    "en": {
+        "choose_lang": "🌐 Choose your language\nزبان را انتخاب کنید",
+        "lang_set": "✅ Language set to English",
+        "shop_disabled": "🛍 Shop is currently disabled.",
+        "shop_home": "🛍 {b}HPXPANEL Shop{/b}\n\nPick a plan:",
+        "shop_empty": "No plans available yet.",
+        "plan_line": "{name}\n📦 {data} · 📅 {days} days · 💰 {price} Toman",
+        "days_unlimited": "Unlimited",
+        "pay_title": "💳 Card-to-card payment\n\n{b}Plan:{/b} {name}\n{b}Data:{/b} {data}\n{b}Duration:{/b} {days}\n{b}Price:{/b} {price} Toman",
+        "pay_card": "\n\n🏦 Card: {c}{card}{/c}\n👤 Holder: {holder}\n\nAfter transfer, send the {b}receipt photo{/b} here.",
+        "pay_no_card": "\n\n⚠️ Admin has not set a card number yet.",
+        "send_receipt": "🖼 Please send only the payment receipt photo.",
+        "order_created": "✅ Order #{id} submitted.\nYou will receive your account after admin approval.",
+        "order_approved": "✅ Order #{id} approved.\n👤 Username: {c}{username}{/c}\n🔗 Subscription:\n{url}",
+        "order_rejected": "❌ Order #{id} was rejected.",
+        "my_orders": "📋 Your orders:",
+        "order_row": "#{id} · {plan} · {status} · {price} Toman",
+        "status_pending": "pending",
+        "status_approved": "approved",
+        "status_rejected": "rejected",
+        "btn_shop": "🛍 Shop",
+        "btn_my_orders": "📋 Orders",
+        "btn_lang": "🌐 Language",
+        "btn_back": "⬅️ Back",
+        "btn_buy": "Buy",
+        "btn_plans": "📦 Plans",
+        "btn_admin_shop": "🛍 Manage shop",
+        "admin_shop_home": "🛍 {b}Shop admin{/b}\nEnabled: {enabled}\nCard: {card}\nHolder: {holder}\nActive plans: {plans}\nPending orders: {pending}",
+        "admin_enabled_on": "✅ Shop enabled",
+        "admin_enabled_off": "⏸ Shop disabled",
+        "admin_ask_card": "💳 Send the card number:",
+        "admin_ask_holder": "👤 Send the card holder name:",
+        "admin_card_saved": "✅ Card details saved",
+        "admin_ask_plan_name": "📦 Send plan name (e.g. 30GB monthly):",
+        "admin_ask_plan_gb": "📶 Send data limit in GB (0 = unlimited):",
+        "admin_ask_plan_days": "📅 Send duration in days (0 = unlimited):",
+        "admin_ask_plan_price": "💰 Send price in Toman:",
+        "admin_ask_plan_groups": "👥 Send group IDs comma-separated (e.g. 1,2) or - for none:",
+        "admin_plan_created": "✅ Plan created: {name}",
+        "admin_plan_toggled": "Plan {name}: {state}",
+        "admin_plan_deleted": "🗑 Plan deleted",
+        "admin_pending_empty": "No pending orders.",
+        "admin_new_order": "🧾 New order #{id}\nBuyer: {buyer}\nPlan: {plan}\nAmount: {price} Toman",
+        "admin_approved": "✅ Order approved, user created: {username}",
+        "admin_rejected": "❌ Order rejected",
+        "btn_enable": "🟢 Enable",
+        "btn_disable": "🔴 Disable",
+        "btn_set_card": "💳 Card",
+        "btn_add_plan": "➕ New plan",
+        "btn_list_plans": "📦 Plans",
+        "btn_pending": "🧾 Pending",
+        "btn_approve": "✅ Approve",
+        "btn_reject": "❌ Reject",
+        "btn_deactivate": "⏸ Disable",
+        "btn_activate": "▶️ Enable",
+        "btn_delete": "🗑 Delete",
+        "invalid_number": "❌ Send a valid number",
+        "canceled": "💢 Canceled",
+        "no_shop_for_admin": "Enable the shop and add card/plans from Manage shop first.",
+        "active": "active",
+        "inactive": "inactive",
+        "yes": "Yes",
+        "no": "No",
+    },
+}
+
+
+def rich(lang: str, key: str, **kwargs) -> str:
+    """Apply HTML bold/code placeholders used in strings."""
+    raw = t(lang, key, **kwargs)
+    return (
+        raw.replace("{b}", "<b>")
+        .replace("{/b}", "</b>")
+        .replace("{c}", "<code>")
+        .replace("{/c}", "</code>")
+    )
+
+
+def plan_caption(lang: str, name: str, data_limit: int, expire_days: int, price: int) -> str:
+    days = t(lang, "days_unlimited") if not expire_days else str(expire_days)
+    return t(
+        lang,
+        "plan_line",
+        name=escape(name),
+        data=format_bytes(data_limit),
+        days=days,
+        price=format_price(price),
+    )

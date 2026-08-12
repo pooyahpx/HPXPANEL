@@ -5,6 +5,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder, WebAppInfo
 from app.models.admin import AdminDetails
 from app.operation.permissions import PermissionDenied, enforce_permission, is_scope_all
 from app.telegram.keyboards.admin import AdminPanelAction
+from app.telegram.utils.i18n import t
 from app.telegram.utils.texts import Button as Texts
 
 
@@ -21,7 +22,14 @@ def _has_permission(admin: AdminDetails | None, resource: str, action: str) -> b
 class DeckPanel(InlineKeyboardBuilder):
     """Role-aware main menu with 2-column glass-style tile buttons."""
 
-    def __init__(self, admin: AdminDetails | None = None, panel_url: str | None = None, *args, **kwargs):
+    def __init__(
+        self,
+        admin: AdminDetails | None = None,
+        panel_url: str | None = None,
+        lang: str = "en",
+        *args,
+        **kwargs,
+    ):
         super().__init__(*args, **kwargs)
         from app.telegram.keyboards.admin import AdminPanel
 
@@ -37,7 +45,6 @@ class DeckPanel(InlineKeyboardBuilder):
         can_read_nodes = _has_permission(admin, "nodes", "reconnect")
         can_bulk = is_scope_all(admin, "users", "update") if admin else False
 
-        # Row: browse + refresh
         tile_count = 0
         if can_read_users:
             self.button(text=Texts.users, switch_inline_query_current_chat="")
@@ -49,7 +56,6 @@ class DeckPanel(InlineKeyboardBuilder):
         elif tile_count == 1:
             rows.append(1)
 
-        # Row: create flows
         create_count = 0
         if can_create_users:
             self.button(text=Texts.create_user, callback_data=panel_cb(action=AdminPanelAction.create_user))
@@ -64,7 +70,6 @@ class DeckPanel(InlineKeyboardBuilder):
         elif create_count == 1:
             rows.append(1)
 
-        # Row: fleet ops
         fleet_count = 0
         if can_read_nodes:
             self.button(text=Texts.sync_users, callback_data=panel_cb(action=AdminPanelAction.sync_users))
@@ -82,6 +87,13 @@ class DeckPanel(InlineKeyboardBuilder):
         if can_bulk:
             self.button(text=Texts.bulk_actions, callback_data=panel_cb(action=AdminPanelAction.bulk_actions))
             rows.append(1)
+
+        # Shop management (any panel admin)
+        self.button(
+            text=t(lang, "btn_admin_shop"),
+            callback_data=panel_cb(action=AdminPanelAction.shop_manage),
+        )
+        rows.append(1)
 
         if rows:
             self.adjust(*rows)

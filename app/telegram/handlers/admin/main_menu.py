@@ -22,11 +22,15 @@ router = Router(name="main_menu")
 
 async def _render_main_menu(event: CallbackQuery, db: AsyncSession, admin: AdminDetails):
     """Render the main admin panel with permission-aware keyboard."""
+    from app.db.crud.shop import get_telegram_lang
+
     stats = await system_operator.get_system_stats(db, admin)
     settings = await telegram_settings()
+    lang = (await get_telegram_lang(db, event.from_user.id)) or "en"
     return DeckPanel(
         admin=admin,
         panel_url=settings.mini_app_web_url if settings.mini_app_login else None,
+        lang=lang,
     ).as_markup(), Texts.deck_home(stats, admin)
 
 
@@ -38,6 +42,13 @@ async def reload_data(event: CallbackQuery, db: AsyncSession, admin: AdminDetail
     except TelegramBadRequest:
         pass
     await event.answer(Texts.refreshed)
+
+
+@router.callback_query(IsAdminFilter(), AdminPanel.Callback.filter(AdminPanelAction.shop_manage == F.action))
+async def open_shop_manage(event: CallbackQuery, db: AsyncSession, admin: AdminDetails):
+    from app.telegram.handlers.shop_admin import _render_admin_shop
+
+    await _render_admin_shop(event, db, admin)
 
 
 @router.callback_query(

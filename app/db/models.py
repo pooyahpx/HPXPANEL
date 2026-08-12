@@ -12,6 +12,7 @@ from sqlalchemy import (
     Float,
     ForeignKey,
     Index,
+    Integer,
     String,
     Table,
     Text,
@@ -970,3 +971,57 @@ class TempKey(Base):
     expires_at: Mapped[dt] = mapped_column(DateTime(timezone=True))
     used_at: Mapped[dt | None] = mapped_column(DateTime(timezone=True), default=None)
     used_by_ip: Mapped[str | None] = mapped_column(String(45), default=None)
+
+
+class ShopOrderStatus(str, Enum):
+    pending = "pending"
+    approved = "approved"
+    rejected = "rejected"
+
+
+class TelegramProfile(Base):
+    __tablename__ = "telegram_profiles"
+
+    telegram_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    lang: Mapped[str] = mapped_column(String(8), default="fa")
+    updated_at: Mapped[dt] = mapped_column(DateTime(timezone=True), default_factory=lambda: dt.now(UTC), init=False)
+
+
+class ShopConfig(Base, CreatedAtUTCMixin):
+    __tablename__ = "shop_configs"
+
+    admin_id: Mapped[int] = fk_id_column("admins.id", ondelete="CASCADE", unique=True)
+    enabled: Mapped[bool] = mapped_column(server_default="0", default=False)
+    card_number: Mapped[str | None] = mapped_column(String(64), default=None)
+    card_holder: Mapped[str | None] = mapped_column(String(128), default=None)
+    welcome_note: Mapped[str | None] = mapped_column(String(500), default=None)
+
+
+class ShopPlan(Base, CreatedAtUTCMixin):
+    __tablename__ = "shop_plans"
+
+    admin_id: Mapped[int] = fk_id_column("admins.id", ondelete="CASCADE")
+    name: Mapped[str] = mapped_column(String(64))
+    data_limit: Mapped[int] = mapped_column(BigInteger, default=0)  # bytes; 0 = unlimited
+    expire_days: Mapped[int] = mapped_column(Integer, default=30)  # 0 = unlimited
+    price_toman: Mapped[int] = mapped_column(BigInteger, default=0)
+    group_ids: Mapped[list[int] | None] = mapped_column(PostgresJSONB, default_factory=list)
+    is_active: Mapped[bool] = mapped_column(server_default="1", default=True)
+
+
+class ShopOrder(Base, CreatedAtUTCMixin):
+    __tablename__ = "shop_orders"
+
+    plan_id: Mapped[int] = fk_id_column("shop_plans.id", ondelete="CASCADE")
+    admin_id: Mapped[int] = fk_id_column("admins.id", ondelete="CASCADE")
+    buyer_telegram_id: Mapped[int] = mapped_column(BigInteger, index=True)
+    buyer_username: Mapped[str | None] = mapped_column(String(64), default=None)
+    status: Mapped[ShopOrderStatus] = mapped_column(
+        SQLEnum(ShopOrderStatus, name="shoporderstatus", create_constraint=True),
+        default=ShopOrderStatus.pending,
+        server_default="pending",
+    )
+    receipt_file_id: Mapped[str | None] = mapped_column(String(256), default=None)
+    created_user_id: Mapped[int | None] = fk_id_column("users.id", ondelete="SET NULL", default=None)
+    note: Mapped[str | None] = mapped_column(String(500), default=None)
+

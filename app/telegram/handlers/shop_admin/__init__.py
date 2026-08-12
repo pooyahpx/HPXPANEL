@@ -25,7 +25,6 @@ from app.models.admin import AdminDetails
 from app.models.user import UserCreate
 from app.operation import OperatorType
 from app.operation.user import UserOperation
-from app.telegram import get_bot
 from app.telegram.keyboards.shop import ShopAdminAction, ShopAdminKeyboard, ShopAdminPlansKeyboard
 from app.telegram.utils import forms
 from app.telegram.utils.filters import IsAdminFilter
@@ -267,6 +266,8 @@ async def pending_orders(event: types.CallbackQuery, db: AsyncSession, admin: Ad
         await event.answer(t(lang, "admin_pending_empty"), show_alert=True)
         return
     await event.answer()
+    from app.telegram import get_bot
+
     bot = get_bot()
     for order in orders:
         plan = await get_shop_plan(db, order.plan_id)
@@ -333,6 +334,8 @@ async def approve_order(event: types.CallbackQuery, callback_data: ShopAdminKeyb
         pass
 
     buyer_lang = (await get_telegram_lang(db, order.buyer_telegram_id)) or "fa"
+    from app.telegram import get_bot
+
     bot = get_bot()
     if bot:
         text = rich(
@@ -367,6 +370,8 @@ async def reject_order(event: types.CallbackQuery, callback_data: ShopAdminKeybo
         await event.message.edit_caption(caption=(event.message.caption or "") + "\n\n❌")
     except TelegramBadRequest:
         pass
+    from app.telegram import get_bot
+
     bot = get_bot()
     buyer_lang = (await get_telegram_lang(db, order.buyer_telegram_id)) or "fa"
     if bot:

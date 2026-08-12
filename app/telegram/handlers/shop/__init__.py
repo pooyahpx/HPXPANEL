@@ -14,7 +14,6 @@ from app.db.crud.shop import (
 )
 from app.db.models import ShopOrderStatus
 from app.models.admin import AdminDetails
-from app.telegram import get_bot
 from app.telegram.keyboards.shop import LangKeyboard, ShopAction, ShopHomeKeyboard, ShopKeyboard, ShopOrderAdminKeyboard
 from app.telegram.utils import forms
 from app.telegram.utils.i18n import format_bytes, format_price, rich, t
@@ -192,6 +191,8 @@ async def receive_receipt(event: types.Message, db: AsyncSession, state: FSMCont
             price=format_price(plan.price_toman),
         )
         try:
+            from app.telegram import get_bot
+
             bot = get_bot()
             if bot:
                 await bot.send_photo(

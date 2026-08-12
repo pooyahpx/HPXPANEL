@@ -95,5 +95,12 @@ class DeckPanel(InlineKeyboardBuilder):
         )
         rows.append(1)
 
+        if admin and admin.is_owner:
+            self.button(
+                text=t(lang, "btn_promote_admin"),
+                callback_data=panel_cb(action=AdminPanelAction.promote_admin),
+            )
+            rows.append(1)
+
         if rows:
             self.adjust(*rows)

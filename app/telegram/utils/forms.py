@@ -51,3 +51,11 @@ class ShopAdminPlan(StatesGroup):
 
 class ShopBuy(StatesGroup):
     waiting_receipt = State()
+
+
+class PromoteAdmin(StatesGroup):
+    waiting_target = State()
+
+
+class ClaimOwner(StatesGroup):
+    waiting_password = State()

@@ -54,8 +54,14 @@ async def set_language(
         await event.message.delete()
     except TelegramBadRequest:
         pass
-    # Continue into start routing via a synthetic path
+    from app.db.crud.admin import build_admin_details, claim_owner_telegram_id
     from app.telegram.handlers.base import open_main_menu
+
+    if admin is None:
+        claimed = await claim_owner_telegram_id(db, event.from_user.id, force=False)
+        if claimed is not None:
+            admin = build_admin_details(claimed, include_loaded_metrics=True)
+            await event.message.answer(t(lang, "owner_claimed"))
 
     await open_main_menu(event.message, db, admin, lang)
 

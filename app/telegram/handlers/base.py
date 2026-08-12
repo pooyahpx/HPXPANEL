@@ -8,7 +8,7 @@ from app.models.admin import AdminDetails
 from app.operation import OperatorType
 from app.operation.system import SystemOperation
 from app.settings import telegram_settings
-from app.telegram.keyboards.admin import AdminPanel
+from app.telegram.keyboards.deck import DeckPanel
 from app.telegram.keyboards.base import CancelAction, CancelKeyboard
 from app.telegram.utils.shared import delete_messages
 from app.telegram.utils.texts import Message as Texts
@@ -39,22 +39,16 @@ async def command_start_handler(
 
     if admin:
         stats = await system_operator.get_system_stats(db, admin)
+        text = Texts.deck_home(stats, admin)
+        markup = DeckPanel(
+            admin=admin,
+            panel_url=settings.mini_app_web_url if settings.mini_app_login else None,
+        ).as_markup()
         if isinstance(event, types.CallbackQuery):
             try:
-                return await message.edit_text(
-                    text=Texts.start(stats),
-                    reply_markup=AdminPanel(
-                        admin=admin,
-                        panel_url=settings.mini_app_web_url if settings.mini_app_login else None,
-                    ).as_markup(),
-                )
+                return await message.edit_text(text=text, reply_markup=markup)
             except TelegramBadRequest:
                 pass
-        await message.answer(
-            text=Texts.start(stats),
-            reply_markup=AdminPanel(
-                admin=admin, panel_url=settings.mini_app_web_url if settings.mini_app_login else None
-            ).as_markup(),
-        )
+        await message.answer(text=text, reply_markup=markup)
     else:
-        await message.answer(f"Hello, {event.from_user.full_name}!")
+        await message.answer(Texts.guest_welcome(event.from_user.full_name or "there"))

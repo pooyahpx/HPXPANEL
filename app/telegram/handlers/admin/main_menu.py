@@ -10,6 +10,7 @@ from app.operation.node import NodeOperation
 from app.operation.system import SystemOperation
 from app.settings import telegram_settings
 from app.telegram.keyboards.admin import AdminPanel, AdminPanelAction
+from app.telegram.keyboards.deck import DeckPanel
 from app.telegram.utils.filters import HasPermission, IsAdminFilter
 from app.telegram.utils.texts import Message as Texts
 
@@ -23,10 +24,10 @@ async def _render_main_menu(event: CallbackQuery, db: AsyncSession, admin: Admin
     """Render the main admin panel with permission-aware keyboard."""
     stats = await system_operator.get_system_stats(db, admin)
     settings = await telegram_settings()
-    return AdminPanel(
+    return DeckPanel(
         admin=admin,
         panel_url=settings.mini_app_web_url if settings.mini_app_login else None,
-    ).as_markup(), Texts.start(stats)
+    ).as_markup(), Texts.deck_home(stats, admin)
 
 
 @router.callback_query(IsAdminFilter(), AdminPanel.Callback.filter(AdminPanelAction.refresh == F.action))

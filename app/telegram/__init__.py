@@ -179,7 +179,11 @@ class TelegramBotManager:
             return
 
         logger.info("Telegram bot starting")
-        session = AiohttpSession(proxy=settings.proxy_url)
+        proxy = (settings.proxy_url or "").strip() or None
+        if proxy and ("example.com" in proxy or "proxy.example" in proxy):
+            logger.warning("Ignoring placeholder Telegram proxy_url=%s", proxy)
+            proxy = None
+        session = AiohttpSession(proxy=proxy) if proxy else AiohttpSession()
         self._bot = Bot(token=settings.token, session=session, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 
         if not self._handlers_registered:

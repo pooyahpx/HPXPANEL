@@ -29,6 +29,7 @@ from app.telegram.keyboards.shop import ShopAdminAction, ShopAdminKeyboard, Shop
 from app.telegram.utils import forms
 from app.telegram.utils.filters import IsAdminFilter
 from app.telegram.utils.i18n import format_price, rich, t
+from app.telegram.utils.shop_helpers import card_note_preview, card_photos_count
 from app.telegram.utils.shared import add_to_messages_to_delete
 
 user_operator = UserOperation(OperatorType.TELEGRAM)
@@ -55,6 +56,8 @@ async def _render_admin_shop(event: types.Message | types.CallbackQuery, db: Asy
         enabled=t(lang, "yes") if enabled else t(lang, "no"),
         card=config.card_number if config and config.card_number else "—",
         holder=config.card_holder if config and config.card_holder else "—",
+        card_note=card_note_preview(config.card_note if config else None, lang),
+        card_photos=str(card_photos_count(config)),
         plans=sum(1 for p in plans if p.is_active),
         pending=len(pending),
     )
@@ -123,6 +126,71 @@ async def save_card_holder(event: types.Message, db: AsyncSession, state: FSMCon
     )
     await state.clear()
     await event.answer(t(lang, "admin_card_saved"))
+    await _render_admin_shop(event, db, admin)
+
+
+@router.callback_query(ShopAdminKeyboard.Callback.filter(ShopAdminAction.set_card_note == F.action))
+async def ask_card_note(event: types.CallbackQuery, db: AsyncSession, state: FSMContext):
+    lang = await _lang(db, event.from_user.id)
+    await state.set_state(forms.ShopAdminCardNote.waiting_text)
+    await state.update_data(lang=lang)
+    msg = await event.message.answer(t(lang, "admin_ask_card_note"))
+    await add_to_messages_to_delete(state, msg)
+    await event.answer()
+
+
+@router.message(forms.ShopAdminCardNote.waiting_text)
+async def save_card_note(event: types.Message, db: AsyncSession, state: FSMContext, admin: AdminDetails):
+    data = await state.get_data()
+    lang = data.get("lang", "fa")
+    raw = event.text.strip()
+    note = None if raw in ("-", "") else raw[:1000]
+    await upsert_shop_config(db, admin.id, card_note="" if note is None else note)
+    await state.clear()
+    await event.answer(t(lang, "admin_card_note_saved"))
+    await _render_admin_shop(event, db, admin)
+
+
+@router.callback_query(ShopAdminKeyboard.Callback.filter(ShopAdminAction.set_card_photos == F.action))
+async def ask_card_photos(event: types.CallbackQuery, db: AsyncSession, state: FSMContext, admin: AdminDetails):
+    lang = await _lang(db, event.from_user.id)
+    config = await get_shop_config_by_admin(db, admin.id)
+    existing = list(config.card_photos or []) if config else []
+    await state.set_state(forms.ShopAdminCardPhotos.waiting_photos)
+    await state.update_data(lang=lang, card_photos=existing)
+    msg = await event.message.answer(t(lang, "admin_ask_card_photos"))
+    await add_to_messages_to_delete(state, msg)
+    await event.answer()
+
+
+@router.message(forms.ShopAdminCardPhotos.waiting_photos, F.photo)
+async def collect_card_photo(event: types.Message, state: FSMContext):
+    data = await state.get_data()
+    lang = data.get("lang", "fa")
+    photos = list(data.get("card_photos") or [])
+    photos.append(event.photo[-1].file_id)
+    await state.update_data(card_photos=photos)
+    await event.answer(t(lang, "admin_card_photo_added", count=len(photos)))
+
+
+@router.message(forms.ShopAdminCardPhotos.waiting_photos, F.text)
+async def finish_card_photos(event: types.Message, db: AsyncSession, state: FSMContext, admin: AdminDetails):
+    data = await state.get_data()
+    lang = data.get("lang", "fa")
+    cmd = event.text.strip().lower()
+    if cmd == "/clear":
+        await upsert_shop_config(db, admin.id, card_photos=[])
+        await state.clear()
+        await event.answer(t(lang, "admin_card_photos_cleared"))
+        await _render_admin_shop(event, db, admin)
+        return
+    if cmd != "/done":
+        await event.answer(t(lang, "admin_ask_card_photos"))
+        return
+    photos = list(data.get("card_photos") or [])
+    await upsert_shop_config(db, admin.id, card_photos=photos)
+    await state.clear()
+    await event.answer(t(lang, "admin_card_photos_saved", count=len(photos)))
     await _render_admin_shop(event, db, admin)
 
 
@@ -379,3 +447,53 @@ async def reject_order(event: types.CallbackQuery, callback_data: ShopAdminKeybo
             await bot.send_message(order.buyer_telegram_id, t(buyer_lang, "order_rejected", id=order.id))
         except Exception:
             pass
+
+
+@router.callback_query(ShopAdminKeyboard.Callback.filter(ShopAdminAction.support_reply == F.action))
+async def support_reply_start(
+    event: types.CallbackQuery,
+    callback_data: ShopAdminKeyboard.Callback,
+    db: AsyncSession,
+    state: FSMContext,
+    admin: AdminDetails,
+):
+    lang = await _lang(db, event.from_user.id)
+    await state.set_state(forms.ShopSupportAdmin.waiting_reply)
+    await state.update_data(lang=lang, buyer_telegram_id=callback_data.id)
+    await event.answer()
+    msg = await event.message.answer(t(lang, "support_reply_prompt"))
+    await add_to_messages_to_delete(state, msg)
+
+
+@router.message(forms.ShopSupportAdmin.waiting_reply, F.text | F.photo)
+async def support_reply_send(event: types.Message, state: FSMContext, db: AsyncSession, admin: AdminDetails):
+    data = await state.get_data()
+    lang = data.get("lang", "fa")
+    buyer_id = data.get("buyer_telegram_id")
+    if not buyer_id:
+        await state.clear()
+        return
+
+    buyer_lang = (await get_telegram_lang(db, buyer_id)) or "fa"
+    from app.telegram import get_bot
+
+    bot = get_bot()
+    if not bot:
+        await state.clear()
+        return
+
+    try:
+        if event.photo:
+            caption = t(buyer_lang, "support_reply_received", message=event.caption or "")
+            await bot.send_photo(buyer_id, event.photo[-1].file_id, caption=caption)
+        else:
+            await bot.send_message(
+                buyer_id,
+                t(buyer_lang, "support_reply_received", message=event.text or ""),
+            )
+    except Exception as exc:
+        await event.answer(str(exc)[:180])
+        return
+
+    await state.clear()
+    await event.answer(t(lang, "support_reply_sent"))

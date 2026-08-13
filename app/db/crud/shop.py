@@ -60,6 +60,8 @@ async def upsert_shop_config(
     enabled: bool | None = None,
     card_number: str | None = None,
     card_holder: str | None = None,
+    card_note: str | None = None,
+    card_photos: list[str] | None = None,
     welcome_note: str | None = None,
 ) -> ShopConfig:
     config = await get_shop_config_by_admin(db, admin_id)
@@ -72,6 +74,10 @@ async def upsert_shop_config(
         config.card_number = card_number
     if card_holder is not None:
         config.card_holder = card_holder
+    if card_note is not None:
+        config.card_note = card_note or None
+    if card_photos is not None:
+        config.card_photos = card_photos
     if welcome_note is not None:
         config.welcome_note = welcome_note
     await db.commit()

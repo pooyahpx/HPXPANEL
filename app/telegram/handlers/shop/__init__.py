@@ -17,6 +17,7 @@ from app.models.admin import AdminDetails
 from app.telegram.keyboards.shop import LangKeyboard, ShopAction, ShopHomeKeyboard, ShopKeyboard, ShopOrderAdminKeyboard
 from app.telegram.utils import forms
 from app.telegram.utils.i18n import format_bytes, format_price, rich, t
+from app.telegram.utils.shop_helpers import build_pay_card_section, notify_shop_admin_support, send_card_photos
 from app.telegram.utils.shared import add_to_messages_to_delete
 
 router = Router(name="shop")
@@ -139,22 +140,75 @@ async def buy_plan(event: types.CallbackQuery, callback_data: ShopKeyboard.Callb
         days=days,
         price=format_price(plan.price_toman),
     )
-    if config.card_number:
-        text += rich(
-            lang,
-            "pay_card",
-            card=config.card_number,
-            holder=config.card_holder or "—",
-        )
-    else:
-        text += t(lang, "pay_no_card")
+    text += build_pay_card_section(lang, config)
 
     await state.set_state(forms.ShopBuy.waiting_receipt)
     await state.update_data(plan_id=plan.id, admin_id=config.admin_id, lang=lang)
     await event.message.edit_text(text)
+
+    from app.telegram import get_bot
+
+    bot = get_bot()
+    if bot:
+        await send_card_photos(bot, event.from_user.id, config)
+
     tip = await event.message.answer(t(lang, "send_receipt"))
     await add_to_messages_to_delete(state, tip)
     await event.answer()
+
+
+@router.callback_query(ShopKeyboard.Callback.filter(ShopAction.support == F.action))
+async def support_start(event: types.CallbackQuery, db: AsyncSession, state: FSMContext):
+    lang = await _lang(db, event.from_user.id)
+    config = await get_enabled_shop_config(db)
+    if not config or not config.enabled:
+        await event.answer(t(lang, "shop_disabled"), show_alert=True)
+        return
+    await state.set_state(forms.ShopSupport.waiting_message)
+    await state.update_data(admin_id=config.admin_id, lang=lang)
+    await event.message.edit_text(t(lang, "support_prompt"), reply_markup=ShopHomeKeyboard(lang).as_markup())
+    await event.answer()
+
+
+@router.message(forms.ShopSupport.waiting_message, F.text | F.photo)
+async def support_message(event: types.Message, db: AsyncSession, state: FSMContext):
+    data = await state.get_data()
+    lang = data.get("lang") or await _lang(db, event.from_user.id)
+    admin_id = data.get("admin_id")
+    if not admin_id:
+        await state.clear()
+        await event.answer(t(lang, "shop_disabled"))
+        return
+
+    from app.db.crud.admin import get_admin_by_id
+    from app.telegram import get_bot
+
+    shop_admin = await get_admin_by_id(db, admin_id, load_users=False, load_usage_logs=False)
+    bot = get_bot()
+    if shop_admin and shop_admin.telegram_id and bot:
+        admin_lang = (await get_telegram_lang(db, shop_admin.telegram_id)) or "fa"
+        buyer = event.from_user.username or str(event.from_user.id)
+        try:
+            await notify_shop_admin_support(
+                bot=bot,
+                admin_telegram_id=shop_admin.telegram_id,
+                admin_lang=admin_lang,
+                buyer_telegram_id=event.from_user.id,
+                buyer_label=buyer,
+                message=event,
+            )
+        except Exception:
+            pass
+
+    await state.clear()
+    await event.answer(t(lang, "support_sent"), reply_markup=ShopHomeKeyboard(lang).as_markup())
+
+
+@router.message(forms.ShopSupport.waiting_message)
+async def support_invalid(event: types.Message, state: FSMContext, db: AsyncSession):
+    data = await state.get_data()
+    lang = data.get("lang") or await _lang(db, event.from_user.id)
+    await event.answer(t(lang, "support_prompt"))
 
 
 @router.message(forms.ShopBuy.waiting_receipt, F.photo)

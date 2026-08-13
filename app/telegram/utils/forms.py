@@ -53,6 +53,22 @@ class ShopBuy(StatesGroup):
     waiting_receipt = State()
 
 
+class ShopSupport(StatesGroup):
+    waiting_message = State()
+
+
+class ShopSupportAdmin(StatesGroup):
+    waiting_reply = State()
+
+
+class ShopAdminCardNote(StatesGroup):
+    waiting_text = State()
+
+
+class ShopAdminCardPhotos(StatesGroup):
+    waiting_photos = State()
+
+
 class PromoteAdmin(StatesGroup):
     waiting_target = State()
 

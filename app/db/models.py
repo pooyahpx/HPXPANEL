@@ -994,6 +994,8 @@ class ShopConfig(Base, CreatedAtUTCMixin):
     enabled: Mapped[bool] = mapped_column(server_default="0", default=False)
     card_number: Mapped[str | None] = mapped_column(String(64), default=None)
     card_holder: Mapped[str | None] = mapped_column(String(128), default=None)
+    card_note: Mapped[str | None] = mapped_column(String(1000), default=None)
+    card_photos: Mapped[list[str] | None] = mapped_column(PostgresJSONB, default_factory=list)
     welcome_note: Mapped[str | None] = mapped_column(String(500), default=None)
 
 

@@ -112,6 +112,8 @@ async def create_shop_plan(
     expire_days: int,
     price_toman: int,
     group_ids: list[int] | None = None,
+    ip_limit: int | None = None,
+    hwid_limit: int | None = None,
 ) -> ShopPlan:
     plan = ShopPlan(
         admin_id=admin_id,
@@ -120,6 +122,8 @@ async def create_shop_plan(
         expire_days=expire_days,
         price_toman=price_toman,
         group_ids=group_ids or [],
+        ip_limit=ip_limit,
+        hwid_limit=hwid_limit,
         is_active=True,
     )
     db.add(plan)

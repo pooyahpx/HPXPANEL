@@ -1008,6 +1008,8 @@ class ShopPlan(Base, CreatedAtUTCMixin):
     expire_days: Mapped[int] = mapped_column(Integer, default=30)  # 0 = unlimited
     price_toman: Mapped[int] = mapped_column(BigInteger, default=0)
     group_ids: Mapped[list[int] | None] = mapped_column(PostgresJSONB, default_factory=list)
+    ip_limit: Mapped[int | None] = mapped_column(Integer, default=None)
+    hwid_limit: Mapped[int | None] = mapped_column(Integer, default=None)
     is_active: Mapped[bool] = mapped_column(server_default="1", default=True)
 
 

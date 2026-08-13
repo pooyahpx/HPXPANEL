@@ -47,6 +47,8 @@ class ShopAdminPlan(StatesGroup):
     days = State()
     price = State()
     groups = State()
+    ip_limit = State()
+    hwid_limit = State()
 
 
 class ShopBuy(StatesGroup):

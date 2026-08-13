@@ -1,5 +1,5 @@
-from datetime import UTC, datetime as dt, timedelta as td
 import secrets
+from datetime import UTC, datetime as dt, timedelta as td
 
 from aiogram import F, Router, types
 from aiogram.exceptions import TelegramBadRequest
@@ -29,8 +29,8 @@ from app.telegram.keyboards.shop import ShopAdminAction, ShopAdminKeyboard, Shop
 from app.telegram.utils import forms
 from app.telegram.utils.filters import IsAdminFilter
 from app.telegram.utils.i18n import format_price, rich, t
-from app.telegram.utils.shop_helpers import card_note_preview, card_photos_count
 from app.telegram.utils.shared import add_to_messages_to_delete
+from app.telegram.utils.shop_helpers import card_note_preview, card_photos_count, parse_optional_limit
 
 user_operator = UserOperation(OperatorType.TELEGRAM)
 router = Router(name="shop_admin")
@@ -262,7 +262,7 @@ async def plan_price(event: types.Message, state: FSMContext):
 
 
 @router.message(forms.ShopAdminPlan.groups)
-async def plan_groups(event: types.Message, db: AsyncSession, state: FSMContext, admin: AdminDetails):
+async def plan_groups(event: types.Message, state: FSMContext):
     data = await state.get_data()
     lang = data.get("lang", "fa")
     raw = event.text.strip()
@@ -273,6 +273,36 @@ async def plan_groups(event: types.Message, db: AsyncSession, state: FSMContext,
         except ValueError:
             await event.answer(t(lang, "invalid_number"))
             return
+    await state.update_data(group_ids=group_ids)
+    await state.set_state(forms.ShopAdminPlan.ip_limit)
+    await event.answer(t(lang, "admin_ask_plan_ip_limit"))
+
+
+@router.message(forms.ShopAdminPlan.ip_limit)
+async def plan_ip_limit(event: types.Message, state: FSMContext):
+    data = await state.get_data()
+    lang = data.get("lang", "fa")
+    try:
+        ip_limit = parse_optional_limit(event.text)
+        if ip_limit == 0:
+            raise ValueError
+    except ValueError:
+        await event.answer(t(lang, "invalid_number"))
+        return
+    await state.update_data(ip_limit=ip_limit)
+    await state.set_state(forms.ShopAdminPlan.hwid_limit)
+    await event.answer(t(lang, "admin_ask_plan_hwid_limit"))
+
+
+@router.message(forms.ShopAdminPlan.hwid_limit)
+async def plan_hwid_limit(event: types.Message, db: AsyncSession, state: FSMContext, admin: AdminDetails):
+    data = await state.get_data()
+    lang = data.get("lang", "fa")
+    try:
+        hwid_limit = parse_optional_limit(event.text)
+    except ValueError:
+        await event.answer(t(lang, "invalid_number"))
+        return
     plan = await create_shop_plan(
         db,
         admin_id=admin.id,
@@ -280,7 +310,9 @@ async def plan_groups(event: types.Message, db: AsyncSession, state: FSMContext,
         data_limit=data["data_limit"],
         expire_days=data["expire_days"],
         price_toman=data["price_toman"],
-        group_ids=group_ids,
+        group_ids=list(data.get("group_ids") or []),
+        ip_limit=data.get("ip_limit"),
+        hwid_limit=hwid_limit,
     )
     await state.clear()
     await event.answer(t(lang, "admin_plan_created", name=plan.name))
@@ -386,6 +418,8 @@ async def approve_order(event: types.CallbackQuery, callback_data: ShopAdminKeyb
         data_limit=plan.data_limit or None,
         expire=expire,
         group_ids=list(plan.group_ids or []),
+        ip_limit=plan.ip_limit,
+        hwid_limit=plan.hwid_limit,
         note=f"shop order #{order.id}",
     )
     try:

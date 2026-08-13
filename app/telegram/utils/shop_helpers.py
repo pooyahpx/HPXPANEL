@@ -22,6 +22,16 @@ def card_photos_count(config: ShopConfig | None) -> int:
     return len(config.card_photos)
 
 
+def parse_optional_limit(raw: str) -> int | None:
+    value = raw.strip().lower()
+    if value in ("", "-", "none", "نامحدود", "unlimited"):
+        return None
+    limit = int(value.replace(",", "").replace("٬", ""))
+    if limit < 0:
+        raise ValueError("negative limit")
+    return limit
+
+
 def build_pay_card_section(lang: str, config: ShopConfig) -> str:
     if config.card_number:
         text = rich(

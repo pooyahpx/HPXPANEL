@@ -1,5 +1,5 @@
 {
-  "pasarguard": "HPXPANEL",
+  "hpxpanel": "HPXPANEL",
   "dashboard": "داشبورد",
   "master": "کلی",
   "dashboardDescription": "داشبورد مدیریت HPXPANEL",
@@ -1473,7 +1473,7 @@
   "monitorServers": "نظارت بر سرورها و کاربران شما",
   "manageServers": "کنترل جزئیات سرور شما",
   "nodes.addHostForEveryInbound": "استفاده از این گره به عنوان هاست تمام ورودی‌ها",
-  "nodes.addNewPasarGuardNode": "افزودن گره HPXPANEL",
+  "nodes.addNewHpxpanelNode": "افزودن گره HPXPANEL",
   "nodes.addNode": "افزودن گره",
   "nodes.addNodeSuccess": "گره {{name}} با موفقیت افزوده شد",
   "nodes.apply": "ویرایش گره",

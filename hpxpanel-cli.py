@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-HPXPANEL CLI entrypoint (container binary name kept for compose compatibility).
+HPXPANEL CLI entrypoint.
 """
 
 import sys

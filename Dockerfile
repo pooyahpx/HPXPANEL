@@ -35,11 +35,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-COPY cli_wrapper.sh /usr/bin/pasarguard-cli
-RUN chmod +x /usr/bin/pasarguard-cli
+COPY cli_wrapper.sh /usr/bin/hpxpanel-cli
+RUN chmod +x /usr/bin/hpxpanel-cli
 
-COPY tui_wrapper.sh /usr/bin/pasarguard-tui
-RUN chmod +x /usr/bin/pasarguard-tui
+COPY tui_wrapper.sh /usr/bin/hpxpanel-tui
+RUN chmod +x /usr/bin/hpxpanel-tui
 
 # Copy healthcheck script
 COPY healthcheck.sh /code/healthcheck.sh

@@ -117,7 +117,7 @@ def _serialize_user_for_node(
             raise ValueError("ikev2 username and password are required for IKEv2/L2TP users")
     elif needs_ipsec_credentials and protocols_were_explicit:
         raise RuntimeError(
-            "Installed PasarGuardNodeBridge cannot serialize IKEv2/L2TP credentials; "
+            "Installed node bridge cannot serialize IKEv2/L2TP credentials; "
             "install a bridge release with an ikev2 Proxy field"
         )
 
@@ -130,7 +130,7 @@ def _serialize_user_for_node(
         proto_user.ip_limit = _uint32_limit(ip_limit, "ip_limit")
     elif ip_limit and protocols_were_explicit and needs_ipsec_credentials:
         raise RuntimeError(
-            "Installed PasarGuardNodeBridge cannot serialize user limits; "
+            "Installed node bridge cannot serialize user limits; "
             "install a bridge release with ip_limit and speed_limit fields"
         )
     if _has_proto_field(service.User, "speed_limit"):

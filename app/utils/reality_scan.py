@@ -617,7 +617,7 @@ def _h3_probe(host: str, ip: str, port: int, sni: str | None, timeout: float) ->
             tls.settimeout(timeout)
             request = (
                 f"GET / HTTP/1.1\r\nHost: {request_host}\r\n"
-                "User-Agent: PasarGuard-RealityScan/1.0\r\nAccept: */*\r\nConnection: close\r\n\r\n"
+                "User-Agent: HPXPANEL-RealityScan/1.0\r\nAccept: */*\r\nConnection: close\r\n\r\n"
             )
             tls.sendall(request.encode("ascii", "ignore"))
             data = b""

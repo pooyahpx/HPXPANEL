@@ -1,3 +1,3 @@
 #!/bin/bash
 
-echo "TUI has been removed; use Pasarguard CLI instead."
+echo "TUI has been removed; use hpxpanel CLI instead."

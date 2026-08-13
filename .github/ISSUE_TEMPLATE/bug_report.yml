@@ -1,5 +1,5 @@
 name: Bug report
-description: Report a reproducible problem in PasarGuard.
+description: Report a reproducible problem in HPXPANEL.
 title: "[Bug]: "
 labels: ["bug"]
 body:
@@ -15,13 +15,13 @@ body:
       options:
         - label: I searched existing issues and did not find the same problem.
           required: true
-        - label: I am using the latest available PasarGuard version, or I included the exact version below.
+        - label: I am using the latest available HPXPANEL version, or I included the exact version below.
           required: true
 
   - type: input
     id: version
     attributes:
-      label: PasarGuard version
+      label: HPXPANEL version
       description: Paste the exact version, Docker image tag, or commit hash.
       placeholder: "v1.2.3, latest, or commit hash"
     validations:

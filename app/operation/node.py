@@ -85,7 +85,7 @@ def _backend_type_for_core(core_type: CoreType):
     backend_type = getattr(service.BackendType, name, None)
     if backend_type is None:
         raise RuntimeError(
-            f"Installed PasarGuardNodeBridge does not support the {name} backend; "
+            f"Installed node bridge does not support the {name} backend; "
             "install a bridge release with IKEv2/L2TP support"
         )
     return backend_type

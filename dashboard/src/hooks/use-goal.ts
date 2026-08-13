@@ -29,7 +29,7 @@ export function useAllGoals() {
   return useQuery({
     queryKey: ['all-goals'],
     queryFn: async () => {
-      const response = await fetch('https://api.github.com/repos/pasarguard/ads/contents/goal.json', {
+      const response = await fetch('https://api.github.com/repos/pooyahpx/HPXPANEL/contents/goal.json', {
         method: 'GET',
         referrerPolicy: 'no-referrer',
         credentials: 'omit',

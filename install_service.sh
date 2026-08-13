@@ -1,8 +1,8 @@
 #!/bin/bash
 
-SERVICE_NAME="pasarguard"
-SERVICE_DESCRIPTION="PasarGuard Service"
-SERVICE_DOCUMENTATION="https://github.com/pasarguard/panel"
+SERVICE_NAME="hpxpanel"
+SERVICE_DESCRIPTION="HPXPANEL Service"
+SERVICE_DOCUMENTATION="https://github.com/pooyahpx/HPXPANEL"
 MAIN_PY_PATH="$PWD/main.py"
 SERVICE_FILE="/etc/systemd/system/$SERVICE_NAME.service"
 

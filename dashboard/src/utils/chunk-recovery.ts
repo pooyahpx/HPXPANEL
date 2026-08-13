@@ -1,6 +1,6 @@
 import { lazy, type ComponentType } from 'react'
 
-const CHUNK_RELOAD_KEY = 'pasarguard:chunk-reload-at'
+const CHUNK_RELOAD_KEY = 'hpxpanel:chunk-reload-at'
 const CHUNK_RELOAD_WINDOW_MS = 30_000
 
 function getErrorText(error: unknown): string {

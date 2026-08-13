@@ -21,7 +21,7 @@ venv*
 .venv*
 LICENSE
 install_service.sh
-PasarGuard.code-workspace
+hpxpanel.code-workspace
 scripts
 
 # Dev tooling / CI (not used at runtime)

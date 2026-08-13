@@ -1748,7 +1748,7 @@ hpxpanel_cli() {
         return 1
     fi
     # Engine binary name inside the image; CLI_PROG_NAME is what the user sees.
-    $COMPOSE -f $COMPOSE_FILE -p "$APP_NAME" exec -e CLI_PROG_NAME="hpxpanel cli" "$backend_service" pasarguard-cli "$@"
+    $COMPOSE -f $COMPOSE_FILE -p "$APP_NAME" exec -e CLI_PROG_NAME="hpxpanel cli" "$backend_service" hpxpanel-cli "$@"
 }
 
 hpxpanel_tui() {
@@ -1758,7 +1758,7 @@ hpxpanel_tui() {
         colorized_echo red "Could not detect HPXPANEL backend service in docker-compose."
         return 1
     fi
-    $COMPOSE -f $COMPOSE_FILE -p "$APP_NAME" exec -e TUI_PROG_NAME="hpxpanel tui" "$backend_service" pasarguard-tui "$@"
+    $COMPOSE -f $COMPOSE_FILE -p "$APP_NAME" exec -e TUI_PROG_NAME="hpxpanel tui" "$backend_service" hpxpanel-tui "$@"
 }
 
 

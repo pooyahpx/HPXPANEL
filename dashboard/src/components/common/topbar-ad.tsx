@@ -104,7 +104,7 @@ export default function TopbarAd() {
 
     const loadConfig = async () => {
       try {
-        const githubApiUrl = 'https://api.github.com/repos/pasarguard/ads/contents/config.json'
+        const githubApiUrl = 'https://api.github.com/repos/pooyahpx/HPXPANEL/contents/ads/config.json'
         const response = await fetch(githubApiUrl, {
           cache: 'no-cache',
           referrerPolicy: 'no-referrer',

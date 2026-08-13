@@ -1,5 +1,5 @@
 {
-  "pasarguard": "HPXPANEL",
+  "hpxpanel": "HPXPANEL",
   "dashboard": "Панель управления",
   "master": "Общее",
   "dashboardDescription": "Панель управления HPXPANEL",
@@ -1233,7 +1233,7 @@
   "monitorServers": "Следите за своими серверами и пользователями",
   "manageServers": "Управляйте данными вашего сервера",
   "nodes.addHostForEveryInbound": "Добавить этот узел, как новый хост для каждого inbound",
-  "nodes.addNewPasarGuardNode": "Добавить новый узел HPXPANEL",
+  "nodes.addNewHpxpanelNode": "Добавить новый узел HPXPANEL",
   "nodes.addNode": "Добавить узел",
   "nodes.addNodeSuccess": "Узел {{name}} успешно добавлен",
   "nodes.apply": "Настройки узла успешно обновлены",

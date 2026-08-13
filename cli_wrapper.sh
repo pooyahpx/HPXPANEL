@@ -1,2 +1,2 @@
 #!/bin/bash
-python /code/pasarguard-cli.py "$@"
+python /code/hpxpanel-cli.py "$@"

@@ -79,20 +79,20 @@ class DashboardSettings(EnvSettings):
 class NatsSettings(EnvSettings):
     enabled: bool = Field(default=False, validation_alias="NATS_ENABLED")
     url: str = Field(default="nats://localhost:4222", validation_alias="NATS_URL")
-    worker_sync_subject: str = Field(default="pasarguard.worker_sync", validation_alias="NATS_WORKER_SYNC_SUBJECT")
-    node_command_subject: str = Field(default="pasarguard.node.command", validation_alias="NATS_NODE_COMMAND_SUBJECT")
-    node_rpc_subject: str = Field(default="pasarguard.node.rpc", validation_alias="NATS_NODE_RPC_SUBJECT")
+    worker_sync_subject: str = Field(default="hpxpanel.worker_sync", validation_alias="NATS_WORKER_SYNC_SUBJECT")
+    node_command_subject: str = Field(default="hpxpanel.node.command", validation_alias="NATS_NODE_COMMAND_SUBJECT")
+    node_rpc_subject: str = Field(default="hpxpanel.node.rpc", validation_alias="NATS_NODE_RPC_SUBJECT")
     scheduler_rpc_subject: str = Field(
-        default="pasarguard.scheduler.rpc", validation_alias="NATS_SCHEDULER_RPC_SUBJECT"
+        default="hpxpanel.scheduler.rpc", validation_alias="NATS_SCHEDULER_RPC_SUBJECT"
     )
-    node_log_subject: str = Field(default="pasarguard.node.logs", validation_alias="NATS_NODE_LOG_SUBJECT")
+    node_log_subject: str = Field(default="hpxpanel.node.logs", validation_alias="NATS_NODE_LOG_SUBJECT")
     node_rpc_timeout: float = Field(default=30.0, validation_alias="NATS_NODE_RPC_TIMEOUT")
     scheduler_rpc_timeout: float = Field(default=5.0, validation_alias="NATS_SCHEDULER_RPC_TIMEOUT")
     node_command_max_payload_bytes: int = Field(default=900000, validation_alias="NATS_NODE_COMMAND_MAX_PAYLOAD_BYTES")
     node_update_users_batch_size: int = Field(default=100, validation_alias="NATS_NODE_UPDATE_USERS_BATCH_SIZE")
     core_pubsub_channel: str = Field(default="core_hosts_updates", validation_alias="CORE_PUBSUB_CHANNEL")
     host_pubsub_channel: str = Field(default="host_manager_updates", validation_alias="HOST_PUBSUB_CHANNEL")
-    telegram_kv_bucket: str = Field(default="pasarguard_telegram", validation_alias="NATS_TELEGRAM_KV_BUCKET")
+    telegram_kv_bucket: str = Field(default="hpxpanel_telegram", validation_alias="NATS_TELEGRAM_KV_BUCKET")
     notification_stream: str = Field(default="NOTIFICATIONS", validation_alias="NATS_NOTIFICATION_STREAM")
     notification_subject: str = Field(default="notifications.queue", validation_alias="NATS_NOTIFICATION_SUBJECT")
     notification_consumer: str = Field(default="notification_workers", validation_alias="NATS_NOTIFICATION_CONSUMER")
@@ -144,7 +144,7 @@ class TelegramEnvSettings(EnvSettings):
 
 class LoggingSettings(EnvSettings):
     save_to_file: bool = Field(default=False, validation_alias="SAVE_LOGS_TO_FILE")
-    file_path: str = Field(default="pasarguard.log", validation_alias="LOG_FILE_PATH")
+    file_path: str = Field(default="hpxpanel.log", validation_alias="LOG_FILE_PATH")
     backup_count: int = Field(default=72, validation_alias="LOG_BACKUP_COUNT")
     rotation_enabled: bool = Field(default=False, validation_alias="LOG_ROTATION_ENABLED")
     rotation_interval: int = Field(default=1, validation_alias="LOG_ROTATION_INTERVAL")

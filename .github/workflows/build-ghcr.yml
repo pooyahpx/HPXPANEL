@@ -14,7 +14,7 @@ on:
       - "start.sh"
       - "build_dashboard.sh"
       - "cli_wrapper.sh"
-      - "pasarguard-cli.py"
+      - "hpxpanel-cli.py"
       - "tui_wrapper.sh"
       - "healthcheck.sh"
       - "pyproject.toml"

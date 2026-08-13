@@ -1,6 +1,6 @@
-# Dashboard UI for pasarguard
+# Dashboard UI for HPXPANEL
 
-Web UI for [PasarGuard](https://github.com/PasarGuard/panel): large-scale proxy management that supports both [Xray-core](https://github.com/XTLS/Xray-core) and
+Web UI for [HPXPANEL](https://github.com/pooyahpx/HPXPANEL): large-scale proxy management that supports both [Xray-core](https://github.com/XTLS/Xray-core) and
 [WireGuard](https://www.wireguard.com/).
 
 ## Requirements
@@ -15,8 +15,8 @@ related to the node version, install Node with version >= v20
 ## Install
 
     Install the latest LTS version of Node.js
-    git clone https://github.com/PasarGuard/panel.git
-    `bash cd panel/dashboard`
+    git clone https://github.com/pooyahpx/HPXPANEL.git
+    `bash cd HPXPANEL/dashboard`
     `bash curl -fsSL https://bun.sh/install | bash`
     `bash bun install`
 
@@ -30,7 +30,7 @@ Copy `example.env` to `.env` then set the backend api address:
 
 | Name          | Description                                                                                 |
 | ------------- | ------------------------------------------------------------------------------------------- |
-| VITE_BASE_API | The api url of the deployed backend ([PasarGuard](https://github.com/PasarGuard/panel.git)) |
+| VITE_BASE_API | The api url of the deployed backend ([HPXPANEL](https://github.com/pooyahpx/HPXPANEL)) |
 
 ## Start development server
 
@@ -38,8 +38,4 @@ Copy `example.env` to `.env` then set the backend api address:
 
 ## Simple build for production
 
-    bun build
-
-## Contribution
-
-Feel free to contribute. Go on and fork the project. After commiting the changes, make a PR. It means a lot to us.
+    bun run build

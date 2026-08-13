@@ -1,5 +1,5 @@
 {
-  "pasarguard": "HPXPANEL",
+  "hpxpanel": "HPXPANEL",
   "dashboard": "Dashboard",
   "master": "Overall",
   "dashboardDescription": "HPXPANEL Management Dashboard",
@@ -1650,7 +1650,7 @@
   "monitorServers": "Monitor your servers and users",
   "manageServers": "Control your server details",
   "nodes.addHostForEveryInbound": "Add this node as a new host for every inbound",
-  "nodes.addNewPasarGuardNode": "Create New HPXPANEL Node",
+  "nodes.addNewHpxpanelNode": "Create New HPXPANEL Node",
   "nodes.addNodeSuccess": "Node {{name}} created successfully",
   "nodes.apply": "modifyNode",
   "nodes.certificate": "Certificate",

@@ -1,5 +1,5 @@
 name: Feature request
-description: Suggest an improvement or new behavior for PasarGuard.
+description: Suggest an improvement or new behavior for HPXPANEL.
 title: "[Feature]: "
 labels: ["enhancement"]
 body:
@@ -15,7 +15,7 @@ body:
       options:
         - label: I searched existing issues and did not find the same request.
           required: true
-        - label: This request is about PasarGuard itself, not support for my deployment.
+        - label: This request is about HPXPANEL itself, not support for my deployment.
           required: true
 
   - type: textarea

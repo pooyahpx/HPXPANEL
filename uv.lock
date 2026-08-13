@@ -562,6 +562,115 @@ wheels = [
 ]
 
 [[package]]
+name = "hpxpanel"
+version = "2.2.4"
+source = { virtual = "." }
+dependencies = [
+    { name = "aiocache" },
+    { name = "aiogram" },
+    { name = "aiohttp" },
+    { name = "aiohttp-socks" },
+    { name = "aiorwlock" },
+    { name = "aiosqlite" },
+    { name = "alembic" },
+    { name = "apscheduler" },
+    { name = "asyncmy", marker = "sys_platform != 'win32'" },
+    { name = "asyncpg" },
+    { name = "bcrypt" },
+    { name = "click" },
+    { name = "commentjson" },
+    { name = "cryptography" },
+    { name = "deprecated" },
+    { name = "fastapi" },
+    { name = "jdatetime" },
+    { name = "jinja2" },
+    { name = "nats-py" },
+    { name = "packaging" },
+    { name = "pasarguard-node-bridge" },
+    { name = "pip-system-certs" },
+    { name = "psutil" },
+    { name = "pydantic" },
+    { name = "pydantic-settings" },
+    { name = "pyjwt" },
+    { name = "python-dateutil" },
+    { name = "python-multipart" },
+    { name = "pyyaml" },
+    { name = "qrcode" },
+    { name = "rich" },
+    { name = "sqlalchemy", extra = ["asyncio"] },
+    { name = "sse-starlette" },
+    { name = "typer" },
+    { name = "uvicorn" },
+    { name = "uvloop", marker = "sys_platform != 'win32'" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "httpx" },
+    { name = "psycopg", extra = ["binary"] },
+    { name = "pymysql" },
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "pytest-watch" },
+    { name = "ruff" },
+    { name = "sqlalchemy-utils" },
+    { name = "watchfiles" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "aiocache", specifier = ">=0.12.3" },
+    { name = "aiogram", specifier = ">=3.30.0" },
+    { name = "aiohttp", specifier = ">=3.14.3" },
+    { name = "aiohttp-socks", specifier = ">=0.10.1" },
+    { name = "aiorwlock", specifier = ">=1.5.0" },
+    { name = "aiosqlite", specifier = ">=0.21.0" },
+    { name = "alembic", specifier = ">=1.18.5" },
+    { name = "apscheduler", specifier = ">=3.11.3" },
+    { name = "asyncmy", marker = "sys_platform != 'win32'", specifier = ">=0.2.10" },
+    { name = "asyncpg", specifier = ">=0.31.0" },
+    { name = "bcrypt", specifier = "==5.0.0" },
+    { name = "click", specifier = ">=8.4.2" },
+    { name = "commentjson", specifier = "==0.9.0" },
+    { name = "cryptography", specifier = "==49.0.0" },
+    { name = "deprecated", specifier = "==1.2.13" },
+    { name = "fastapi", specifier = ">=0.140.0" },
+    { name = "jdatetime", specifier = ">=6.0.1" },
+    { name = "jinja2", specifier = ">=3.1.6" },
+    { name = "nats-py", specifier = ">=2.15.0" },
+    { name = "packaging", specifier = ">=26.2" },
+    { name = "pasarguard-node-bridge", path = "vendor/pasarguard_node_bridge-0.9.0-py3-none-any.whl" },
+    { name = "pip-system-certs", specifier = ">=5.3" },
+    { name = "psutil", specifier = ">=7.2.2" },
+    { name = "pydantic", specifier = ">=2.13.4" },
+    { name = "pydantic-settings", specifier = ">=2.14.2" },
+    { name = "pyjwt", specifier = ">=2.10.1" },
+    { name = "python-dateutil", specifier = ">=2.8.2" },
+    { name = "python-multipart", specifier = ">=0.0.32" },
+    { name = "pyyaml", specifier = ">=6.0.2" },
+    { name = "qrcode", specifier = ">=8.1" },
+    { name = "rich", specifier = ">=15.0.0" },
+    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.51" },
+    { name = "sse-starlette", specifier = ">=3.4.6" },
+    { name = "typer", specifier = ">=0.27.0" },
+    { name = "uvicorn", specifier = "==0.51.0" },
+    { name = "uvloop", marker = "sys_platform != 'win32'", specifier = ">=0.22.1" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "httpx", specifier = ">=0.28.1" },
+    { name = "psycopg", extras = ["binary"], specifier = ">=3.3.4" },
+    { name = "pymysql", specifier = ">=1.2.0" },
+    { name = "pytest", specifier = ">=9.1.1" },
+    { name = "pytest-asyncio", specifier = ">=1.4.0" },
+    { name = "pytest-watch", specifier = ">=4.2.0" },
+    { name = "ruff", specifier = ">=0.16.0" },
+    { name = "sqlalchemy-utils", specifier = ">=0.41.2" },
+    { name = "watchfiles", specifier = ">=1.2.0" },
+]
+
+[[package]]
 name = "httpcore"
 version = "1.0.9"
 source = { registry = "https://pypi.org/simple" }
@@ -788,115 +897,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/d7/f1/e7a6dd94a8d4a5626c03e4e99c87f241ba9e350cd9e6d75123f992427270/packaging-26.2.tar.gz", hash = "sha256:ff452ff5a3e828ce110190feff1178bb1f2ea2281fa2075aadb987c2fb221661", size = 228134, upload-time = "2026-04-24T20:15:23.917Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/df/b2/87e62e8c3e2f4b32e5fe99e0b86d576da1312593b39f47d8ceef365e95ed/packaging-26.2-py3-none-any.whl", hash = "sha256:5fc45236b9446107ff2415ce77c807cee2862cb6fac22b8a73826d0693b0980e", size = 100195, upload-time = "2026-04-24T20:15:22.081Z" },
-]
-
-[[package]]
-name = "pasarguard"
-version = "5.2.0rc1"
-source = { virtual = "." }
-dependencies = [
-    { name = "aiocache" },
-    { name = "aiogram" },
-    { name = "aiohttp" },
-    { name = "aiohttp-socks" },
-    { name = "aiorwlock" },
-    { name = "aiosqlite" },
-    { name = "alembic" },
-    { name = "apscheduler" },
-    { name = "asyncmy", marker = "sys_platform != 'win32'" },
-    { name = "asyncpg" },
-    { name = "bcrypt" },
-    { name = "click" },
-    { name = "commentjson" },
-    { name = "cryptography" },
-    { name = "deprecated" },
-    { name = "fastapi" },
-    { name = "jdatetime" },
-    { name = "jinja2" },
-    { name = "nats-py" },
-    { name = "packaging" },
-    { name = "pasarguard-node-bridge" },
-    { name = "pip-system-certs" },
-    { name = "psutil" },
-    { name = "pydantic" },
-    { name = "pydantic-settings" },
-    { name = "pyjwt" },
-    { name = "python-dateutil" },
-    { name = "python-multipart" },
-    { name = "pyyaml" },
-    { name = "qrcode" },
-    { name = "rich" },
-    { name = "sqlalchemy", extra = ["asyncio"] },
-    { name = "sse-starlette" },
-    { name = "typer" },
-    { name = "uvicorn" },
-    { name = "uvloop", marker = "sys_platform != 'win32'" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "httpx" },
-    { name = "psycopg", extra = ["binary"] },
-    { name = "pymysql" },
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-    { name = "pytest-watch" },
-    { name = "ruff" },
-    { name = "sqlalchemy-utils" },
-    { name = "watchfiles" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "aiocache", specifier = ">=0.12.3" },
-    { name = "aiogram", specifier = ">=3.30.0" },
-    { name = "aiohttp", specifier = ">=3.14.3" },
-    { name = "aiohttp-socks", specifier = ">=0.10.1" },
-    { name = "aiorwlock", specifier = ">=1.5.0" },
-    { name = "aiosqlite", specifier = ">=0.21.0" },
-    { name = "alembic", specifier = ">=1.18.5" },
-    { name = "apscheduler", specifier = ">=3.11.3" },
-    { name = "asyncmy", marker = "sys_platform != 'win32'", specifier = ">=0.2.10" },
-    { name = "asyncpg", specifier = ">=0.31.0" },
-    { name = "bcrypt", specifier = "==5.0.0" },
-    { name = "click", specifier = ">=8.4.2" },
-    { name = "commentjson", specifier = "==0.9.0" },
-    { name = "cryptography", specifier = "==49.0.0" },
-    { name = "deprecated", specifier = "==1.2.13" },
-    { name = "fastapi", specifier = ">=0.140.0" },
-    { name = "jdatetime", specifier = ">=6.0.1" },
-    { name = "jinja2", specifier = ">=3.1.6" },
-    { name = "nats-py", specifier = ">=2.15.0" },
-    { name = "packaging", specifier = ">=26.2" },
-    { name = "pasarguard-node-bridge", path = "vendor/pasarguard_node_bridge-0.9.0-py3-none-any.whl" },
-    { name = "pip-system-certs", specifier = ">=5.3" },
-    { name = "psutil", specifier = ">=7.2.2" },
-    { name = "pydantic", specifier = ">=2.13.4" },
-    { name = "pydantic-settings", specifier = ">=2.14.2" },
-    { name = "pyjwt", specifier = ">=2.10.1" },
-    { name = "python-dateutil", specifier = ">=2.8.2" },
-    { name = "python-multipart", specifier = ">=0.0.32" },
-    { name = "pyyaml", specifier = ">=6.0.2" },
-    { name = "qrcode", specifier = ">=8.1" },
-    { name = "rich", specifier = ">=15.0.0" },
-    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.51" },
-    { name = "sse-starlette", specifier = ">=3.4.6" },
-    { name = "typer", specifier = ">=0.27.0" },
-    { name = "uvicorn", specifier = "==0.51.0" },
-    { name = "uvloop", marker = "sys_platform != 'win32'", specifier = ">=0.22.1" },
-]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "httpx", specifier = ">=0.28.1" },
-    { name = "psycopg", extras = ["binary"], specifier = ">=3.3.4" },
-    { name = "pymysql", specifier = ">=1.2.0" },
-    { name = "pytest", specifier = ">=9.1.1" },
-    { name = "pytest-asyncio", specifier = ">=1.4.0" },
-    { name = "pytest-watch", specifier = ">=4.2.0" },
-    { name = "ruff", specifier = ">=0.16.0" },
-    { name = "sqlalchemy-utils", specifier = ">=0.41.2" },
-    { name = "watchfiles", specifier = ">=1.2.0" },
 ]
 
 [[package]]

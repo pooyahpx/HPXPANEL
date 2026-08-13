@@ -190,7 +190,7 @@ def url_origin(url: str | None) -> str | None:
 
 
 def is_absolute_url(value: str) -> bool:
-    return value.startswith("http://") or value.startswith("https://")
+    return value.startswith(("http://", "https://"))
 
 
 def resolve_subscription_url_prefix(url_prefix: str, panel_base_url: str | None) -> str:

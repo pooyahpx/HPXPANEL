@@ -2,6 +2,7 @@ import html
 import json
 import re
 from datetime import UTC, datetime as dt, timezone as tz
+from urllib.parse import urlparse
 from uuid import UUID
 
 from pydantic import ValidationError
@@ -177,3 +178,61 @@ def escape_ds_markdown(text: str) -> str:
 def escape_ds_markdown_list(list: tuple[str]) -> tuple[str]:
     """Escapes markdown special characters for Discord."""
     return tuple(escape_ds_markdown(text) for text in list)
+
+
+def url_origin(url: str | None) -> str | None:
+    if not url:
+        return None
+    parsed = urlparse(url.strip())
+    if parsed.scheme and parsed.netloc:
+        return f"{parsed.scheme}://{parsed.netloc}".rstrip("/")
+    return None
+
+
+def is_absolute_url(value: str) -> bool:
+    return value.startswith("http://") or value.startswith("https://")
+
+
+def resolve_subscription_url_prefix(url_prefix: str, panel_base_url: str | None) -> str:
+    url_prefix = (url_prefix or "").strip().rstrip("/")
+    if is_absolute_url(url_prefix):
+        return url_prefix
+
+    if url_prefix and "." in url_prefix and "/" not in url_prefix:
+        return f"https://{url_prefix}"
+
+    if panel_base_url:
+        panel_base_url = panel_base_url.rstrip("/")
+        if not url_prefix:
+            return panel_base_url
+        if url_prefix.startswith("/"):
+            return f"{panel_base_url}{url_prefix}"
+        return f"{panel_base_url}/{url_prefix.lstrip('/')}"
+
+    return url_prefix
+
+
+async def resolve_panel_base_url() -> str | None:
+    from app.settings import subscription_settings, telegram_settings
+    from config import telegram_env_settings
+
+    settings = await telegram_settings()
+    for candidate in (
+        settings.panel_url,
+        settings.mini_app_web_url,
+        settings.webhook_url,
+        telegram_env_settings.panel_public_url,
+    ):
+        origin = url_origin(candidate)
+        if origin:
+            return origin
+
+    sub_settings = await subscription_settings()
+    if sub_settings.url_prefix:
+        origin = url_origin(sub_settings.url_prefix)
+        if origin:
+            return origin
+        if is_absolute_url(sub_settings.url_prefix.strip()):
+            return sub_settings.url_prefix.strip().rstrip("/")
+
+    return None

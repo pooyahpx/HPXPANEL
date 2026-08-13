@@ -105,7 +105,12 @@ from app.operation.permissions import (
     is_scope_all,
 )
 from app.settings import hwid_settings, subscription_settings
-from app.utils.helpers import fix_datetime_timezone
+from app.utils.helpers import (
+    fix_datetime_timezone,
+    is_absolute_url,
+    resolve_panel_base_url,
+    resolve_subscription_url_prefix,
+)
 from app.utils.hwid import resolve_effective_hwid_settings
 from app.utils.jwt import create_subscription_token
 from app.utils.logger import get_logger
@@ -217,11 +222,17 @@ class UserOperation(BaseOperation):
     async def generate_subscription_url(user: UserNotificationResponse):
         salt = secrets.token_hex(8)
         settings = await subscription_settings()
-        url_prefix = (
+        raw_prefix = (
             user.admin.sub_domain.replace("*", salt)
             if user.admin and user.admin.sub_domain
             else (settings.url_prefix).replace("*", salt)
         )
+        raw_prefix = raw_prefix.strip()
+        if is_absolute_url(raw_prefix):
+            url_prefix = raw_prefix.rstrip("/")
+        else:
+            panel_base = await resolve_panel_base_url()
+            url_prefix = resolve_subscription_url_prefix(raw_prefix, panel_base)
         token = await create_subscription_token(user.id)
         return f"{url_prefix}/{subscription_env_settings.path}/{token}"
 

@@ -58,6 +58,7 @@ const telegramSettingsSchema = z.object({
   proxy_url: z.string().url('Please enter a valid URL').optional().or(z.literal('')),
   mini_app_login: z.boolean().default(false),
   mini_app_url: z.string().url('Please enter a valid URL').optional().or(z.literal('')),
+  panel_url: z.string().url('Please enter a valid URL').optional().or(z.literal('')),
   for_admins_only: z.boolean().default(true),
 })
 
@@ -83,6 +84,7 @@ function mapTelegramFormToPayload(data: TelegramSettingsFormInput) {
     webhook_secret: data.webhook_secret?.trim() || undefined,
     proxy_url: data.proxy_url?.trim() || undefined,
     mini_app_web_url: data.mini_app_url?.trim() || undefined,
+    panel_url: data.panel_url?.trim() || undefined,
   }
   delete mapped.mini_app_url
   return { telegram: mapped }
@@ -111,6 +113,7 @@ export default function TelegramSettings() {
       proxy_url: '',
       mini_app_login: false,
       mini_app_url: '',
+      panel_url: '',
       for_admins_only: true,
     },
   })
@@ -135,6 +138,7 @@ export default function TelegramSettings() {
         proxy_url: telegramData.proxy_url || '',
         mini_app_login: telegramData.mini_app_login || false,
         mini_app_url: telegramData.mini_app_web_url || '',
+        panel_url: telegramData.panel_url || '',
         for_admins_only: telegramData.for_admins_only !== undefined ? telegramData.for_admins_only : true,
       })
     }
@@ -162,6 +166,7 @@ export default function TelegramSettings() {
         proxy_url: telegramData.proxy_url || '',
         mini_app_login: telegramData.mini_app_login || false,
         mini_app_url: telegramData.mini_app_web_url || '',
+        panel_url: telegramData.panel_url || '',
         for_admins_only: telegramData.for_admins_only !== undefined ? telegramData.for_admins_only : true,
       })
       toast.success(t('settings.telegram.cancelSuccess'))
@@ -309,6 +314,42 @@ export default function TelegramSettings() {
                       </FormItem>
                     )}
                   />
+
+                  {/* Panel URL - for long polling (subscription links in bot) */}
+                  {method === 'long-polling' && (
+                    <FormField
+                      control={form.control}
+                      name="panel_url"
+                      render={({ field }) => (
+                        <FormItem className="space-y-2 lg:col-span-2">
+                          <FormLabel className="flex items-center gap-2 text-xs font-medium sm:text-sm">
+                            <Globe className="h-4 w-4" />
+                            {t('settings.telegram.general.panelUrl')}
+                          </FormLabel>
+                          <div className="relative">
+                            <FormControl>
+                              <Input type="url" placeholder={t('settings.telegram.general.panelUrlPlaceholder')} {...field} className="pr-10 font-mono text-xs sm:text-sm" />
+                            </FormControl>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="hover:bg-accent absolute top-1/2 right-1 h-8 w-8 -translate-y-1/2"
+                              onClick={e => {
+                                e.preventDefault()
+                                field.onChange(getCurrentPanelUrl())
+                                toast.success(t('settings.telegram.general.panelUrlApplied'))
+                              }}
+                            >
+                              <RefreshCcw className="h-3 w-3" />
+                            </Button>
+                          </div>
+                          <FormDescription className="text-muted-foreground text-xs sm:text-sm">{t('settings.telegram.general.panelUrlDescription')}</FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
 
                   {/* Webhook URL - Only show when method is webhook */}
                   {method === 'webhook' && (

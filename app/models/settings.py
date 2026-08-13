@@ -48,12 +48,18 @@ class Telegram(BaseModel):
 
     mini_app_login: bool = Field(default=True)
     mini_app_web_url: str | None = Field(default="")
+    panel_url: str | None = Field(default="")
 
     for_admins_only: bool = Field(default=True)
 
     @field_validator("mini_app_web_url")
     @classmethod
     def validate_mini_app_web_url(cls, v):
+        return URLValidator.validate_url(v)
+
+    @field_validator("panel_url")
+    @classmethod
+    def validate_panel_url(cls, v):
         return URLValidator.validate_url(v)
 
     @field_validator("webhook_url")

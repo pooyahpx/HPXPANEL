@@ -139,6 +139,7 @@ class UserCleanupSettings(EnvSettings):
 
 class TelegramEnvSettings(EnvSettings):
     do_not_log_bot: bool = Field(default=True, validation_alias="DO_NOT_LOG_TELEGRAM_BOT")
+    panel_public_url: str = Field(default="", validation_alias="PANEL_PUBLIC_URL")
 
 
 class LoggingSettings(EnvSettings):

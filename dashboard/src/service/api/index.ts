@@ -1256,6 +1256,8 @@ export interface Token {
 
 export type TelegramMiniAppWebUrl = string | null
 
+export type TelegramPanelUrl = string | null
+
 export type TelegramProxyUrl = string | null
 
 export type TelegramWebhookSecret = string | null
@@ -1273,6 +1275,7 @@ export interface Telegram {
   method?: RunMethod
   mini_app_login?: boolean
   mini_app_web_url?: TelegramMiniAppWebUrl
+  panel_url?: TelegramPanelUrl
   for_admins_only?: boolean
 }
 

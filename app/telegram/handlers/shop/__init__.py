@@ -14,7 +14,7 @@ from app.db.crud.shop import (
 )
 from app.db.models import ShopOrderStatus
 from app.models.admin import AdminDetails
-from app.telegram.keyboards.shop import LangKeyboard, ShopAction, ShopHomeKeyboard, ShopKeyboard, ShopOrderAdminKeyboard
+from app.telegram.keyboards.shop import LangKeyboard, ShopAction, ShopHomeKeyboard, ShopKeyboard, ShopOrderAdminKeyboard, ShopPlansKeyboard
 from app.telegram.utils import forms
 from app.telegram.utils.i18n import format_bytes, format_price, rich, t
 from app.telegram.utils.shop_helpers import build_pay_card_section, notify_shop_admin_support, send_card_photos
@@ -27,17 +27,17 @@ async def _lang(db: AsyncSession, telegram_id: int) -> str:
     return (await get_telegram_lang(db, telegram_id)) or "fa"
 
 
+def _shop_home_text(lang: str, config) -> str:
+    note = f"\n\n{config.welcome_note}" if config and config.welcome_note else ""
+    return rich(lang, "shop_home") + note
+
+
 async def render_shop_home(message: types.Message, db: AsyncSession, lang: str):
     config = await get_enabled_shop_config(db)
     if not config or not config.enabled:
         await message.answer(t(lang, "shop_disabled"), reply_markup=ShopHomeKeyboard(lang).as_markup())
         return
-    plans = await list_active_plans(db, config.admin_id)
-    note = f"\n\n{config.welcome_note}" if config.welcome_note else ""
-    text = rich(lang, "shop_home") + note
-    if not plans:
-        text += f"\n\n{t(lang, 'shop_empty')}"
-    await message.answer(text, reply_markup=ShopKeyboard(lang, plans).as_markup())
+    await message.answer(_shop_home_text(lang, config), reply_markup=ShopHomeKeyboard(lang).as_markup())
 
 
 @router.callback_query(LangKeyboard.Callback.filter())
@@ -75,7 +75,6 @@ async def change_language(event: types.CallbackQuery, db: AsyncSession):
 
 
 @router.callback_query(ShopKeyboard.Callback.filter(ShopAction.plans == F.action))
-@router.callback_query(ShopKeyboard.Callback.filter(ShopAction.home == F.action))
 async def shop_plans(event: types.CallbackQuery, db: AsyncSession):
     lang = await _lang(db, event.from_user.id)
     config = await get_enabled_shop_config(db)
@@ -84,11 +83,22 @@ async def shop_plans(event: types.CallbackQuery, db: AsyncSession):
         await event.answer()
         return
     plans = await list_active_plans(db, config.admin_id)
-    note = f"\n\n{config.welcome_note}" if config.welcome_note else ""
-    text = rich(lang, "shop_home") + note
+    text = rich(lang, "shop_plans_prompt")
     if not plans:
         text += f"\n\n{t(lang, 'shop_empty')}"
-    await event.message.edit_text(text, reply_markup=ShopKeyboard(lang, plans).as_markup())
+    await event.message.edit_text(text, reply_markup=ShopPlansKeyboard(lang, plans).as_markup())
+    await event.answer()
+
+
+@router.callback_query(ShopKeyboard.Callback.filter(ShopAction.home == F.action))
+async def shop_home(event: types.CallbackQuery, db: AsyncSession):
+    lang = await _lang(db, event.from_user.id)
+    config = await get_enabled_shop_config(db)
+    if not config or not config.enabled:
+        await event.message.edit_text(t(lang, "shop_disabled"), reply_markup=ShopHomeKeyboard(lang).as_markup())
+        await event.answer()
+        return
+    await event.message.edit_text(_shop_home_text(lang, config), reply_markup=ShopHomeKeyboard(lang).as_markup())
     await event.answer()
 
 

@@ -33,24 +33,9 @@ class ShopAction(str, Enum):
     back = "back"
 
 
-class ShopKeyboard(InlineKeyboardBuilder):
-    class Callback(CallbackData, prefix="shop"):
-        action: ShopAction
-        plan_id: int = 0
-
-    def __init__(self, lang: str, plans: list[ShopPlan] | None = None, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        for plan in plans or []:
-            label = f"{plan.name} · {format_price(plan.price_toman)}T"
-            self.button(text=label, callback_data=self.Callback(action=ShopAction.buy, plan_id=plan.id))
-        self.button(text=t(lang, "btn_my_orders"), callback_data=self.Callback(action=ShopAction.my_orders))
-        self.button(text=t(lang, "btn_support"), callback_data=self.Callback(action=ShopAction.support))
-        self.button(text=t(lang, "btn_lang"), callback_data=self.Callback(action=ShopAction.lang))
-        n = len(plans or [])
-        if n:
-            self.adjust(*([1] * n), 2, 1)
-        else:
-            self.adjust(2, 1)
+class ShopKeyboardCallback(CallbackData, prefix="shop"):
+    action: ShopAction
+    plan_id: int = 0
 
 
 class ShopHomeKeyboard(InlineKeyboardBuilder):
@@ -59,12 +44,35 @@ class ShopHomeKeyboard(InlineKeyboardBuilder):
 
     def __init__(self, lang: str, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.button(text=t(lang, "btn_shop"), callback_data=ShopKeyboard.Callback(action=ShopAction.plans))
-        self.button(text=t(lang, "btn_my_orders"), callback_data=ShopKeyboard.Callback(action=ShopAction.my_orders))
-        self.button(text=t(lang, "btn_support"), callback_data=ShopKeyboard.Callback(action=ShopAction.support))
-        self.button(text=t(lang, "btn_lang"), callback_data=ShopKeyboard.Callback(action=ShopAction.lang))
+        cb = ShopKeyboardCallback
+        self.button(text=t(lang, "btn_plans"), callback_data=cb(action=ShopAction.plans))
+        self.button(text=t(lang, "btn_my_orders"), callback_data=cb(action=ShopAction.my_orders))
+        self.button(text=t(lang, "btn_support"), callback_data=cb(action=ShopAction.support))
+        self.button(text=t(lang, "btn_lang"), callback_data=cb(action=ShopAction.lang))
         self.adjust(1, 2, 1)
 
+
+class ShopPlansKeyboard(InlineKeyboardBuilder):
+    """Plan list with prices — shown after tapping Plans."""
+
+    def __init__(self, lang: str, plans: list[ShopPlan], *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        cb = ShopKeyboardCallback
+        for plan in plans:
+            label = f"{plan.name} · {format_price(plan.price_toman)}T"
+            self.button(text=label, callback_data=cb(action=ShopAction.buy, plan_id=plan.id))
+        self.button(text=t(lang, "btn_back"), callback_data=cb(action=ShopAction.home))
+        n = len(plans)
+        if n:
+            self.adjust(*([1] * n), 1)
+        else:
+            self.adjust(1)
+
+
+class ShopKeyboard:
+    """Backward-compatible namespace for shop callback filters."""
+
+    Callback = ShopKeyboardCallback
 
 class ShopAdminAction(str, Enum):
     home = "home"

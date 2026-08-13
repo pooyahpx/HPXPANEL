@@ -32,6 +32,17 @@ async def set_telegram_lang(db: AsyncSession, telegram_id: int, lang: str) -> Te
     return await get_or_create_telegram_profile(db, telegram_id, lang=lang)
 
 
+async def mark_join_notified(db: AsyncSession, telegram_id: int) -> bool:
+    profile = await get_or_create_telegram_profile(db, telegram_id)
+    if profile.join_notified:
+        return False
+    profile.join_notified = True
+    profile.updated_at = datetime.now(UTC)
+    await db.commit()
+    await db.refresh(profile)
+    return True
+
+
 async def get_owner_admin(db: AsyncSession) -> Admin | None:
     stmt = (
         select(Admin)

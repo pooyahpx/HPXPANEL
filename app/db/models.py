@@ -984,6 +984,7 @@ class TelegramProfile(Base):
 
     telegram_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     lang: Mapped[str] = mapped_column(String(8), default="fa")
+    join_notified: Mapped[bool] = mapped_column(server_default="0", default=False)
     updated_at: Mapped[dt] = mapped_column(DateTime(timezone=True), default_factory=lambda: dt.now(UTC), init=False)
 
 

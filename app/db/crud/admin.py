@@ -293,6 +293,15 @@ async def get_admin_by_telegram_id(
     return admin
 
 
+async def list_admins_with_telegram(db: AsyncSession) -> list[Admin]:
+    stmt = (
+        select(Admin)
+        .where(Admin.telegram_id.isnot(None), Admin.status != AdminStatus.disabled)
+        .order_by(Admin.id.asc())
+    )
+    return list((await db.execute(stmt)).scalars().all())
+
+
 async def find_admins_by_telegram_id(
     db: AsyncSession,
     telegram_id: int,

@@ -3,10 +3,26 @@
 from __future__ import annotations
 
 from aiogram import Bot
-from aiogram.types import Message
+from aiogram.types import Message, User as TgUser
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.db.crud.admin import list_admins_with_telegram
+from app.db.crud.shop import get_telegram_lang, mark_join_notified
 from app.db.models import ShopConfig
 from app.telegram.utils.i18n import rich, t
+
+
+def welcome_note_preview(note: str | None, lang: str) -> str:
+    if not note:
+        return t(lang, "welcome_default_hint")
+    preview = note.replace("\n", " ")[:40]
+    return preview + ("…" if len(note) > 40 else "")
+
+
+def shop_home_text(lang: str, config: ShopConfig | None) -> str:
+    if config and config.welcome_note:
+        return config.welcome_note
+    return rich(lang, "shop_home")
 
 
 def card_note_preview(note: str | None, lang: str) -> str:
@@ -92,3 +108,36 @@ async def notify_shop_admin_support(
         )
     else:
         await bot.send_message(chat_id=admin_telegram_id, text=header, reply_markup=markup)
+
+
+def _buyer_label(user: TgUser) -> tuple[str, str]:
+    name = (user.full_name or "").strip() or "—"
+    username = f"@{user.username}" if user.username else "—"
+    return name, username
+
+
+async def notify_admins_user_joined(db: AsyncSession, bot: Bot | None, user: TgUser) -> None:
+    if bot is None:
+        return
+    if not await mark_join_notified(db, user.id):
+        return
+
+    name, username = _buyer_label(user)
+    notified_ids: set[int] = set()
+    for panel_admin in await list_admins_with_telegram(db):
+        chat_id = panel_admin.telegram_id
+        if chat_id is None or chat_id in notified_ids or chat_id == user.id:
+            continue
+        admin_lang = (await get_telegram_lang(db, chat_id)) or "fa"
+        text = rich(
+            admin_lang,
+            "admin_user_joined",
+            name=name,
+            username=username,
+            id=user.id,
+        )
+        try:
+            await bot.send_message(chat_id, text)
+            notified_ids.add(chat_id)
+        except Exception:
+            pass

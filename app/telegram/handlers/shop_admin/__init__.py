@@ -30,7 +30,12 @@ from app.telegram.utils import forms
 from app.telegram.utils.filters import IsAdminFilter
 from app.telegram.utils.i18n import format_price, rich, t
 from app.telegram.utils.shared import add_to_messages_to_delete
-from app.telegram.utils.shop_helpers import card_note_preview, card_photos_count, parse_optional_limit
+from app.telegram.utils.shop_helpers import (
+    card_note_preview,
+    card_photos_count,
+    parse_optional_limit,
+    welcome_note_preview,
+)
 
 user_operator = UserOperation(OperatorType.TELEGRAM)
 router = Router(name="shop_admin")
@@ -57,6 +62,7 @@ async def _render_admin_shop(event: types.Message | types.CallbackQuery, db: Asy
         card=config.card_number if config and config.card_number else "—",
         holder=config.card_holder if config and config.card_holder else "—",
         card_note=card_note_preview(config.card_note if config else None, lang),
+        welcome=welcome_note_preview(config.welcome_note if config else None, lang),
         card_photos=str(card_photos_count(config)),
         plans=sum(1 for p in plans if p.is_active),
         pending=len(pending),
@@ -126,6 +132,28 @@ async def save_card_holder(event: types.Message, db: AsyncSession, state: FSMCon
     )
     await state.clear()
     await event.answer(t(lang, "admin_card_saved"))
+    await _render_admin_shop(event, db, admin)
+
+
+@router.callback_query(ShopAdminKeyboard.Callback.filter(ShopAdminAction.set_welcome == F.action))
+async def ask_welcome(event: types.CallbackQuery, db: AsyncSession, state: FSMContext):
+    lang = await _lang(db, event.from_user.id)
+    await state.set_state(forms.ShopAdminWelcome.waiting_text)
+    await state.update_data(lang=lang)
+    msg = await event.message.answer(t(lang, "admin_ask_welcome"))
+    await add_to_messages_to_delete(state, msg)
+    await event.answer()
+
+
+@router.message(forms.ShopAdminWelcome.waiting_text)
+async def save_welcome(event: types.Message, db: AsyncSession, state: FSMContext, admin: AdminDetails):
+    data = await state.get_data()
+    lang = data.get("lang", "fa")
+    raw = event.text.strip()
+    welcome = None if raw in ("-", "") else raw[:500]
+    await upsert_shop_config(db, admin.id, welcome_note="" if welcome is None else welcome)
+    await state.clear()
+    await event.answer(t(lang, "admin_welcome_saved"))
     await _render_admin_shop(event, db, admin)
 
 

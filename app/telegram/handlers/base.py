@@ -16,6 +16,7 @@ from app.telegram.keyboards.shop import LangKeyboard, ShopHomeKeyboard
 from app.telegram.utils import forms
 from app.telegram.utils.i18n import t
 from app.telegram.utils.shared import delete_messages
+from app.telegram.utils.shop_helpers import notify_admins_user_joined
 from app.telegram.utils.texts import Message as Texts
 
 system_operator = SystemOperation(OperatorType.TELEGRAM)
@@ -102,6 +103,12 @@ async def command_start_handler(
         if claimed is not None:
             admin = build_admin_details(claimed, include_loaded_metrics=True)
             await message.answer(t(lang, "owner_claimed"))
+
+    if admin is None and event.from_user:
+        from app.telegram import get_bot
+
+        bot = get_bot()
+        await notify_admins_user_joined(db, bot, event.from_user)
 
     await open_main_menu(message, db, admin, lang, edit=isinstance(event, types.CallbackQuery))
     if isinstance(event, types.CallbackQuery):

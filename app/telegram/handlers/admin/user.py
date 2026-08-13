@@ -36,8 +36,8 @@ from app.operation.subscription import SubscriptionOperation
 from app.operation.user import UserOperation
 from app.operation.user_template import UserTemplateOperation
 from app.telegram.keyboards.admin import AdminPanel, AdminPanelAction, InlineQuerySearch
-from app.telegram.keyboards.deck import DeckPanel
 from app.telegram.keyboards.base import CancelKeyboard
+from app.telegram.keyboards.deck import DeckPanel
 from app.telegram.keyboards.group import GroupsSelector, SelectGroupAction
 from app.telegram.keyboards.user import ChooseStatus, ChooseTemplate, RandomUsername, UserPanel, UserPanelAction
 from app.telegram.utils import forms

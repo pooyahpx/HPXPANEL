@@ -4,7 +4,7 @@ from aiogram.filters.callback_data import CallbackData
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from app.db.models import ShopOrder, ShopPlan
-from app.telegram.utils.i18n import format_bytes, format_price, t
+from app.telegram.utils.i18n import format_price, t
 
 
 class LangAction(str, Enum):
@@ -79,6 +79,7 @@ class ShopAdminAction(str, Enum):
     toggle = "toggle"
     set_card = "card"
     set_card_note = "cnote"
+    set_welcome = "welcome"
     set_card_photos = "cphotos"
     clear_card_photos = "cphclr"
     add_plan = "add"
@@ -103,13 +104,14 @@ class ShopAdminKeyboard(InlineKeyboardBuilder):
             callback_data=self.Callback(action=ShopAdminAction.toggle),
         )
         self.button(text=t(lang, "btn_set_card"), callback_data=self.Callback(action=ShopAdminAction.set_card))
+        self.button(text=t(lang, "btn_welcome"), callback_data=self.Callback(action=ShopAdminAction.set_welcome))
         self.button(text=t(lang, "btn_card_note"), callback_data=self.Callback(action=ShopAdminAction.set_card_note))
         self.button(text=t(lang, "btn_card_photos"), callback_data=self.Callback(action=ShopAdminAction.set_card_photos))
         self.button(text=t(lang, "btn_add_plan"), callback_data=self.Callback(action=ShopAdminAction.add_plan))
         self.button(text=t(lang, "btn_list_plans"), callback_data=self.Callback(action=ShopAdminAction.list_plans))
         self.button(text=t(lang, "btn_pending"), callback_data=self.Callback(action=ShopAdminAction.pending))
         self.button(text=t(lang, "btn_back"), callback_data=self.Callback(action=ShopAdminAction.home, id=-1))
-        self.adjust(2, 2, 2, 1, 1)
+        self.adjust(2, 2, 2, 2, 1)
 
 
 class ShopAdminPlansKeyboard(InlineKeyboardBuilder):

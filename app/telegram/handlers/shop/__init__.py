@@ -14,11 +14,24 @@ from app.db.crud.shop import (
 )
 from app.db.models import ShopOrderStatus
 from app.models.admin import AdminDetails
-from app.telegram.keyboards.shop import LangKeyboard, ShopAction, ShopHomeKeyboard, ShopKeyboard, ShopOrderAdminKeyboard, ShopPlansKeyboard
+from app.telegram.keyboards.shop import (
+    LangKeyboard,
+    ShopAction,
+    ShopHomeKeyboard,
+    ShopKeyboard,
+    ShopOrderAdminKeyboard,
+    ShopPlansKeyboard,
+)
 from app.telegram.utils import forms
 from app.telegram.utils.i18n import format_bytes, format_price, rich, t
-from app.telegram.utils.shop_helpers import build_pay_card_section, notify_shop_admin_support, send_card_photos
 from app.telegram.utils.shared import add_to_messages_to_delete
+from app.telegram.utils.shop_helpers import (
+    build_pay_card_section,
+    notify_admins_user_joined,
+    notify_shop_admin_support,
+    send_card_photos,
+    shop_home_text,
+)
 
 router = Router(name="shop")
 
@@ -28,8 +41,7 @@ async def _lang(db: AsyncSession, telegram_id: int) -> str:
 
 
 def _shop_home_text(lang: str, config) -> str:
-    note = f"\n\n{config.welcome_note}" if config and config.welcome_note else ""
-    return rich(lang, "shop_home") + note
+    return shop_home_text(lang, config)
 
 
 async def render_shop_home(message: types.Message, db: AsyncSession, lang: str):
@@ -63,6 +75,12 @@ async def set_language(
         if claimed is not None:
             admin = build_admin_details(claimed, include_loaded_metrics=True)
             await event.message.answer(t(lang, "owner_claimed"))
+
+    if admin is None and event.from_user:
+        from app.telegram import get_bot
+
+        bot = get_bot()
+        await notify_admins_user_joined(db, bot, event.from_user)
 
     await open_main_menu(event.message, db, admin, lang)
 

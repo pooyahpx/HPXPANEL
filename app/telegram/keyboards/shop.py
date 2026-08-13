@@ -89,6 +89,14 @@ class ShopAdminAction(str, Enum):
     reject = "no"
     toggle_plan = "tp"
     delete_plan = "dp"
+    edit_plan = "ep"
+    plan_set_name = "psn"
+    plan_set_gb = "psg"
+    plan_set_days = "psd"
+    plan_set_price = "psp"
+    plan_set_groups = "psgr"
+    plan_set_users = "psu"
+    plan_set_hwid = "psh"
     support_reply = "sreply"
 
 
@@ -117,25 +125,59 @@ class ShopAdminKeyboard(InlineKeyboardBuilder):
 class ShopAdminPlansKeyboard(InlineKeyboardBuilder):
     def __init__(self, lang: str, plans: list[ShopPlan], *args, **kwargs):
         super().__init__(*args, **kwargs)
+        cb = ShopAdminKeyboard.Callback
         for plan in plans:
             state = t(lang, "active") if plan.is_active else t(lang, "inactive")
             self.button(
-                text=f"{plan.name} ({state})",
-                callback_data=ShopAdminKeyboard.Callback(action=ShopAdminAction.toggle_plan, id=plan.id),
+                text=f"✏️ {plan.name} ({state})",
+                callback_data=cb(action=ShopAdminAction.edit_plan, id=plan.id),
+            )
+            self.button(
+                text=t(lang, "btn_toggle_plan"),
+                callback_data=cb(action=ShopAdminAction.toggle_plan, id=plan.id),
             )
             self.button(
                 text=t(lang, "btn_delete"),
-                callback_data=ShopAdminKeyboard.Callback(action=ShopAdminAction.delete_plan, id=plan.id),
+                callback_data=cb(action=ShopAdminAction.delete_plan, id=plan.id),
             )
-        self.button(text=t(lang, "btn_back"), callback_data=ShopAdminKeyboard.Callback(action=ShopAdminAction.home))
+        self.button(text=t(lang, "btn_back"), callback_data=cb(action=ShopAdminAction.home))
         if not plans:
             self.adjust(1)
             return
         rows: list[int] = []
         for _ in plans:
-            rows.extend([1, 1])
+            rows.extend([1, 2])
         rows.append(1)
         self.adjust(*rows)
+
+
+class ShopAdminPlanEditKeyboard(InlineKeyboardBuilder):
+    PLAN_FIELD_ACTIONS = (
+        ShopAdminAction.plan_set_name,
+        ShopAdminAction.plan_set_gb,
+        ShopAdminAction.plan_set_days,
+        ShopAdminAction.plan_set_price,
+        ShopAdminAction.plan_set_groups,
+        ShopAdminAction.plan_set_users,
+        ShopAdminAction.plan_set_hwid,
+    )
+
+    def __init__(self, lang: str, plan_id: int, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        cb = ShopAdminKeyboard.Callback
+        labels = (
+            "btn_edit_plan_name",
+            "btn_edit_plan_gb",
+            "btn_edit_plan_days",
+            "btn_edit_plan_price",
+            "btn_edit_plan_groups",
+            "btn_edit_plan_users",
+            "btn_edit_plan_hwid",
+        )
+        for action, label_key in zip(self.PLAN_FIELD_ACTIONS, labels, strict=True):
+            self.button(text=t(lang, label_key), callback_data=cb(action=action, id=plan_id))
+        self.button(text=t(lang, "btn_back"), callback_data=cb(action=ShopAdminAction.list_plans))
+        self.adjust(2, 2, 2, 1, 1)
 
 
 class ShopOrderAdminKeyboard(InlineKeyboardBuilder):

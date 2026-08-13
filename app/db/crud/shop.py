@@ -150,6 +150,14 @@ async def set_plan_active(db: AsyncSession, plan: ShopPlan, active: bool) -> Sho
     return plan
 
 
+async def update_shop_plan(db: AsyncSession, plan: ShopPlan, **fields) -> ShopPlan:
+    for key, value in fields.items():
+        setattr(plan, key, value)
+    await db.commit()
+    await db.refresh(plan)
+    return plan
+
+
 async def delete_shop_plan(db: AsyncSession, plan: ShopPlan) -> None:
     await db.delete(plan)
     await db.commit()

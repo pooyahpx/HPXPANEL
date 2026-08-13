@@ -51,6 +51,10 @@ class ShopAdminPlan(StatesGroup):
     hwid_limit = State()
 
 
+class ShopAdminPlanEdit(StatesGroup):
+    waiting_value = State()
+
+
 class ShopAdminWelcome(StatesGroup):
     waiting_text = State()
 

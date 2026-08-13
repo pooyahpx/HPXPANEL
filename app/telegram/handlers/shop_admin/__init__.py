@@ -18,6 +18,7 @@ from app.db.crud.shop import (
     list_plans_for_admin,
     set_plan_active,
     update_order_status,
+    update_shop_plan,
     upsert_shop_config,
 )
 from app.db.models import ShopOrderStatus, UserStatus
@@ -25,10 +26,15 @@ from app.models.admin import AdminDetails
 from app.models.user import UserCreate
 from app.operation import OperatorType
 from app.operation.user import UserOperation
-from app.telegram.keyboards.shop import ShopAdminAction, ShopAdminKeyboard, ShopAdminPlansKeyboard
+from app.telegram.keyboards.shop import (
+    ShopAdminAction,
+    ShopAdminKeyboard,
+    ShopAdminPlanEditKeyboard,
+    ShopAdminPlansKeyboard,
+)
 from app.telegram.utils import forms
 from app.telegram.utils.filters import IsAdminFilter
-from app.telegram.utils.i18n import format_price, rich, t
+from app.telegram.utils.i18n import format_bytes, format_price, rich, t
 from app.telegram.utils.shared import add_to_messages_to_delete
 from app.telegram.utils.shop_helpers import (
     card_note_preview,
@@ -43,6 +49,80 @@ router.message.filter(IsAdminFilter())
 router.callback_query.filter(IsAdminFilter())
 
 GB = 1024**3
+
+PLAN_EDIT_FIELDS: dict[ShopAdminAction, tuple[str, str]] = {
+    ShopAdminAction.plan_set_name: ("name", "admin_ask_edit_plan_name"),
+    ShopAdminAction.plan_set_gb: ("data_limit", "admin_ask_edit_plan_gb"),
+    ShopAdminAction.plan_set_days: ("expire_days", "admin_ask_edit_plan_days"),
+    ShopAdminAction.plan_set_price: ("price_toman", "admin_ask_edit_plan_price"),
+    ShopAdminAction.plan_set_groups: ("group_ids", "admin_ask_edit_plan_groups"),
+    ShopAdminAction.plan_set_users: ("ip_limit", "admin_ask_edit_plan_users"),
+    ShopAdminAction.plan_set_hwid: ("hwid_limit", "admin_ask_edit_plan_hwid"),
+}
+
+
+def _limit_label(lang: str, value: int | None, *, hwid: bool = False) -> str:
+    if value is None:
+        return t(lang, "limit_default" if hwid else "limit_unlimited")
+    if hwid and value == 0:
+        return t(lang, "limit_disabled")
+    return str(value)
+
+
+def _plan_groups_label(plan) -> str:
+    groups = plan.group_ids or []
+    return ",".join(str(g) for g in groups) if groups else "—"
+
+
+def _plan_field_current(lang: str, plan, field: str) -> str:
+    if field == "name":
+        return plan.name
+    if field == "data_limit":
+        return str(plan.data_limit // GB if plan.data_limit else 0)
+    if field == "expire_days":
+        return str(plan.expire_days)
+    if field == "price_toman":
+        return format_price(plan.price_toman)
+    if field == "group_ids":
+        return _plan_groups_label(plan)
+    if field == "ip_limit":
+        return _limit_label(lang, plan.ip_limit)
+    if field == "hwid_limit":
+        return _limit_label(lang, plan.hwid_limit, hwid=True)
+    return "—"
+
+
+def _plan_edit_text(lang: str, plan) -> str:
+    days = t(lang, "days_unlimited") if not plan.expire_days else str(plan.expire_days)
+    return rich(
+        lang,
+        "admin_plan_edit",
+        name=plan.name,
+        data=format_bytes(plan.data_limit),
+        days=days,
+        price=format_price(plan.price_toman),
+        users=_limit_label(lang, plan.ip_limit),
+        devices=_limit_label(lang, plan.hwid_limit, hwid=True),
+        groups=_plan_groups_label(plan),
+    )
+
+
+async def _render_plan_edit(event: types.Message | types.CallbackQuery, db: AsyncSession, admin: AdminDetails, plan_id: int):
+    lang = await _lang(db, event.from_user.id)
+    plan = await get_shop_plan(db, plan_id)
+    if not plan or plan.admin_id != admin.id:
+        return
+    text = _plan_edit_text(lang, plan)
+    markup = ShopAdminPlanEditKeyboard(lang, plan.id).as_markup()
+    message = event.message if isinstance(event, types.CallbackQuery) else event
+    if isinstance(event, types.CallbackQuery):
+        try:
+            await message.edit_text(text, reply_markup=markup)
+        except TelegramBadRequest:
+            await message.answer(text, reply_markup=markup)
+        await event.answer()
+    else:
+        await message.answer(text, reply_markup=markup)
 
 
 async def _lang(db: AsyncSession, telegram_id: int) -> str:
@@ -356,6 +436,90 @@ async def list_plans(event: types.CallbackQuery, db: AsyncSession, admin: AdminD
         text += f"\n\n{t(lang, 'shop_empty')}"
     await event.message.edit_text(text, reply_markup=ShopAdminPlansKeyboard(lang, plans).as_markup())
     await event.answer()
+
+
+@router.callback_query(ShopAdminKeyboard.Callback.filter(ShopAdminAction.edit_plan == F.action))
+async def edit_plan(event: types.CallbackQuery, callback_data: ShopAdminKeyboard.Callback, db: AsyncSession, admin: AdminDetails):
+    await _render_plan_edit(event, db, admin, callback_data.id)
+
+
+@router.callback_query(ShopAdminKeyboard.Callback.filter(F.action.in_(set(PLAN_EDIT_FIELDS))))
+async def ask_edit_plan_field(
+    event: types.CallbackQuery,
+    callback_data: ShopAdminKeyboard.Callback,
+    db: AsyncSession,
+    state: FSMContext,
+    admin: AdminDetails,
+):
+    lang = await _lang(db, event.from_user.id)
+    plan = await get_shop_plan(db, callback_data.id)
+    if not plan or plan.admin_id != admin.id:
+        await event.answer("!", show_alert=True)
+        return
+    field, prompt_key = PLAN_EDIT_FIELDS[callback_data.action]
+    await state.set_state(forms.ShopAdminPlanEdit.waiting_value)
+    await state.update_data(lang=lang, plan_id=plan.id, field=field)
+    current = _plan_field_current(lang, plan, field)
+    msg = await event.message.answer(t(lang, prompt_key, current=current))
+    await add_to_messages_to_delete(state, msg)
+    await event.answer()
+
+
+@router.message(forms.ShopAdminPlanEdit.waiting_value)
+async def save_edit_plan_field(event: types.Message, db: AsyncSession, state: FSMContext, admin: AdminDetails):
+    data = await state.get_data()
+    lang = data.get("lang", "fa")
+    plan = await get_shop_plan(db, data.get("plan_id"))
+    if not plan or plan.admin_id != admin.id:
+        await state.clear()
+        return
+    field = data.get("field")
+    raw = event.text.strip()
+    try:
+        updates = _parse_plan_field_update(field, raw)
+    except ValueError:
+        await event.answer(t(lang, "invalid_number"))
+        return
+    await update_shop_plan(db, plan, **updates)
+    await state.clear()
+    await event.answer(t(lang, "admin_plan_updated"))
+    await _render_plan_edit(event, db, admin, plan.id)
+
+
+def _parse_plan_field_update(field: str, raw: str) -> dict:
+    if field == "name":
+        name = raw.strip()
+        if not name:
+            raise ValueError
+        return {"name": name[:64]}
+    if field == "data_limit":
+        gb = int(raw.strip())
+        if gb < 0:
+            raise ValueError
+        return {"data_limit": gb * GB if gb else 0}
+    if field == "expire_days":
+        days = int(raw.strip())
+        if days < 0:
+            raise ValueError
+        return {"expire_days": days}
+    if field == "price_toman":
+        price = int(raw.strip().replace(",", "").replace("٬", ""))
+        if price < 0:
+            raise ValueError
+        return {"price_toman": price}
+    if field == "group_ids":
+        if raw in ("-", "0", ""):
+            return {"group_ids": []}
+        group_ids = [int(x.strip()) for x in raw.split(",") if x.strip()]
+        return {"group_ids": group_ids}
+    if field == "ip_limit":
+        ip_limit = parse_optional_limit(raw)
+        if ip_limit == 0:
+            raise ValueError
+        return {"ip_limit": ip_limit}
+    if field == "hwid_limit":
+        return {"hwid_limit": parse_optional_limit(raw)}
+    raise ValueError
 
 
 @router.callback_query(ShopAdminKeyboard.Callback.filter(ShopAdminAction.toggle_plan == F.action))

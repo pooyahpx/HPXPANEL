@@ -4,8 +4,9 @@ from datetime import UTC, datetime, timedelta
 from typing import Literal
 
 from sqlalchemy import and_, case, delete, desc, func, literal, not_, or_, select, update
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_object_session
 from sqlalchemy.orm import joinedload, noload, selectinload
+from sqlalchemy.orm.attributes import set_committed_value
 from sqlalchemy.sql import Select
 from sqlalchemy.sql.functions import coalesce
 
@@ -115,6 +116,14 @@ def _build_user_select_stmt(
     return stmt
 
 
+async def attach_user_group_quotas(user: User) -> None:
+    session = async_object_session(user)
+    if session is None or user.id is None:
+        return
+    quotas = await get_user_group_quotas(session, user.id)
+    set_committed_value(user, "group_quotas", quotas)
+
+
 async def load_user_attrs(
     user: User,
     *,
@@ -136,7 +145,7 @@ async def load_user_attrs(
     if load_groups:
         await user.awaitable_attrs.groups
     if load_group_quotas:
-        await user.awaitable_attrs.group_quotas
+        await attach_user_group_quotas(user)
 
 
 async def refresh_and_load_user(

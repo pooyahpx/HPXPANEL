@@ -219,7 +219,7 @@ class User(Base, CreatedAtUTCMixin):
     hwids: Mapped[list[UserHWID]] = relationship(back_populates="user", cascade="all, delete-orphan", init=False)
     groups: Mapped[list[Group]] = relationship(secondary=users_groups_association, back_populates="users", init=False)
     group_quotas: Mapped[list["UserGroupQuota"]] = relationship(
-        back_populates="user", cascade="all, delete-orphan", init=False
+        back_populates="user", cascade="all, delete-orphan", init=False, lazy="noload"
     )
     proxy_settings: Mapped[dict[str, Any]] = mapped_column(
         JSON(True), server_default=text("'{}'"), default_factory=dict

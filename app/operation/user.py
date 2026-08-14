@@ -7,7 +7,7 @@ from datetime import UTC, datetime, datetime as dt, timedelta as td
 
 from fastapi import HTTPException
 from pydantic import ValidationError
-from sqlalchemy.exc import DBAPIError, IntegrityError
+from sqlalchemy.exc import IntegrityError
 
 from app import notification
 from app.db import AsyncSession
@@ -41,6 +41,7 @@ from app.db.crud.user import (
     get_users_simple,
     get_users_sub_update_list,
     get_users_subscription_agent_counts,
+    attach_user_group_quotas,
     load_user_attrs,
     lock_admin_quota_row,
     modify_user as crud_modify_user,
@@ -430,12 +431,8 @@ class UserOperation(BaseOperation):
         await load_user_attrs(db_user, load_groups=True, load_group_quotas=False)
         user = UserNotificationResponse.model_validate(db_user)
         group_names = {group.id: group.name for group in db_user.groups}
-        quotas = []
-        try:
-            await db_user.awaitable_attrs.group_quotas
-            quotas = db_user.group_quotas or []
-        except DBAPIError:
-            quotas = []
+        await attach_user_group_quotas(db_user)
+        quotas = db_user.group_quotas or []
         if quotas:
             user.group_quotas = [
                 UserGroupQuotaResponse(

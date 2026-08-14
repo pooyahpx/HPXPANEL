@@ -78,6 +78,7 @@ from app.models.user import (
     ModifyUserByTemplate,
     RemoveUsersResponse,
     UserCreate,
+    UserGroupQuotaResponse,
     UserListQuery,
     UserModify,
     UsernameGenerationStrategy,
@@ -426,7 +427,20 @@ class UserOperation(BaseOperation):
         return [user.subscription_url for user in users_list]
 
     async def validate_user(self, db_user: User, include_subscription_url: bool = True) -> UserNotificationResponse:
+        await load_user_attrs(db_user, load_groups=True, load_group_quotas=True)
         user = UserNotificationResponse.model_validate(db_user)
+        group_names = {group.id: group.name for group in db_user.groups}
+        if db_user.group_quotas:
+            user.group_quotas = [
+                UserGroupQuotaResponse(
+                    group_id=quota.group_id,
+                    data_limit=quota.data_limit,
+                    used_traffic=quota.used_traffic,
+                    group_name=group_names.get(quota.group_id),
+                    is_limited=quota.is_limited,
+                )
+                for quota in db_user.group_quotas
+            ]
         if include_subscription_url:
             user.subscription_url = await self.generate_subscription_url(user)
         return user

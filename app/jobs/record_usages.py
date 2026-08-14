@@ -765,6 +765,26 @@ async def _record_user_usages_impl():
             total_records = sum(len(params) for params in filtered_node_params.values())
             logger.debug(f"Recorded {total_records} node user usage records across {len(filtered_node_params)} nodes")
 
+            from app.db.crud.user_group_quota import record_group_quota_usage
+            from app.node.sync import sync_users
+            from sqlalchemy.orm import selectinload
+
+            async with GetDB() as db:
+                users_to_sync = await record_group_quota_usage(
+                    db,
+                    node_params=filtered_node_params,
+                    usage_coefficient=usage_coefficient,
+                    valid_user_ids=valid_user_ids,
+                )
+                if users_to_sync:
+                    stmt = (
+                        select(User)
+                        .where(User.id.in_(users_to_sync))
+                        .options(selectinload(User.groups), selectinload(User.group_quotas))
+                    )
+                    users = list((await db.execute(stmt)).scalars().all())
+                    await sync_users(users)
+
         job_duration = time.time() - job_start_time
         logger.info(
             f"User usage recording completed in {job_duration:.2f}s: "

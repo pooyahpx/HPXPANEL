@@ -9,7 +9,7 @@ from sqlalchemy.orm import joinedload, selectinload
 from sqlalchemy.sql import Select
 from sqlalchemy.sql.functions import coalesce
 
-from app.db.compiles_types import DateDiff
+from app.db.crud.user_group_quota import get_user_group_quotas, reset_user_group_quotas, sync_user_group_quotas
 from app.db.models import (
     Admin,
     DataLimitResetStrategy,
@@ -122,6 +122,7 @@ async def load_user_attrs(
     load_next_plan: bool = True,
     load_usage_logs: bool = True,
     load_groups: bool = True,
+    load_group_quotas: bool = True,
 ):
     if load_admin:
         await user.awaitable_attrs.admin
@@ -133,6 +134,8 @@ async def load_user_attrs(
         await user.awaitable_attrs.usage_logs
     if load_groups:
         await user.awaitable_attrs.groups
+    if load_group_quotas:
+        await user.awaitable_attrs.group_quotas
 
 
 async def refresh_and_load_user(
@@ -144,6 +147,7 @@ async def refresh_and_load_user(
     load_next_plan: bool = True,
     load_usage_logs: bool = True,
     load_groups: bool = True,
+    load_group_quotas: bool = True,
 ):
     await db.refresh(user)
     await load_user_attrs(
@@ -874,7 +878,7 @@ async def create_user(
         User: Created user object.
     """
     db_user = User(
-        **new_user.model_dump(exclude={"group_ids", "expire", "proxy_settings", "next_plan", "on_hold_timeout"})
+        **new_user.model_dump(exclude={"group_ids", "group_quotas", "expire", "proxy_settings", "next_plan", "on_hold_timeout"})
     )
     db_user.admin = admin
     db_user.groups = groups
@@ -891,6 +895,12 @@ async def create_user(
     db.add(db_user)
     await db.flush()
     await sync_user_allocations(db, db_user, accessible_tags=await tags_from_groups(groups))
+    await sync_user_group_quotas(
+        db,
+        db_user.id,
+        {group.id for group in groups},
+        new_user.group_quotas,
+    )
 
     if new_user.next_plan:
         db_user.next_plan = NextPlan(user_id=db_user.id, **new_user.next_plan.model_dump())
@@ -913,7 +923,7 @@ async def create_users_bulk(
     db_users: list[User] = []
     for new_user in new_users:
         db_user = User(
-            **new_user.model_dump(exclude={"group_ids", "expire", "proxy_settings", "next_plan", "on_hold_timeout"})
+            **new_user.model_dump(exclude={"group_ids", "group_quotas", "expire", "proxy_settings", "next_plan", "on_hold_timeout"})
         )
         db_user.admin = admin
         db_user.groups = list(groups)
@@ -928,6 +938,10 @@ async def create_users_bulk(
     await db.flush()
     group_tags = await tags_from_groups(groups)
     await sync_users_allocations(db, db_users, tags_by_user={user.id: group_tags for user in db_users})
+    allowed = {group.id for group in groups}
+    for db_user, new_user in zip(db_users, new_users, strict=True):
+        if new_user.group_quotas:
+            await sync_user_group_quotas(db, db_user.id, allowed, new_user.group_quotas)
 
     next_plans: list[NextPlan] = []
     for db_user, new_user in zip(db_users, new_users):
@@ -1018,6 +1032,16 @@ async def modify_user(
     if modify.group_ids is not None:
         db_user.groups = groups or await get_groups_by_ids(db, modify.group_ids, load_users=False, load_inbounds=True)
         await sync_user_allocations(db, db_user, accessible_tags=await tags_from_groups(db_user.groups))
+        allowed = {group.id for group in db_user.groups}
+        if modify.group_quotas is not None:
+            await sync_user_group_quotas(db, db_user.id, allowed, modify.group_quotas)
+        else:
+            for quota in await get_user_group_quotas(db, db_user.id):
+                if quota.group_id not in allowed:
+                    await db.delete(quota)
+    elif modify.group_quotas is not None:
+        allowed = {group.id for group in db_user.groups}
+        await sync_user_group_quotas(db, db_user.id, allowed, modify.group_quotas)
 
     if modify.status is not None:
         if modify.status == UserStatus.active and db_user.status == UserStatus.disabled:
@@ -1141,6 +1165,7 @@ async def reset_user_data_usage(
         User: The updated user object.
     """
     await _reset_user_traffic_and_log(db, db_user)
+    await reset_user_group_quotas(db, db_user.id)
     await delete_user_passed_notification_reminders(db, db_user.id, ReminderType.data_usage, 0)
     if clean_chart_data:
         await clear_user_node_usages(db, db_user.id)
@@ -1169,6 +1194,7 @@ async def bulk_reset_user_data_usage(
     """
     for db_user in users:
         await _reset_user_traffic_and_log(db, db_user)
+        await reset_user_group_quotas(db, db_user.id)
         await delete_user_passed_notification_reminders(db, db_user.id, ReminderType.data_usage, 0)
         if clean_chart_data:
             await clear_user_node_usages(db, db_user.id)
@@ -1240,6 +1266,7 @@ async def reset_user_by_next(db: AsyncSession, db_user: User, *, clean_chart_dat
         db_user.data_limit_reset_strategy = db_user.next_plan.user_template.data_limit_reset_strategy
 
     await _reset_user_traffic_and_log(db, db_user)
+    await reset_user_group_quotas(db, db_user.id)
     await delete_user_passed_notification_reminders(db, db_user.id, ReminderType.data_usage, 0)
     if clean_chart_data:
         await clear_user_node_usages(db, db_user.id)

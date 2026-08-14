@@ -76,6 +76,7 @@ const userSharedSchemaShape = {
   auto_delete_in_days: z.number().optional(),
   next_plan: nextPlanModelSchema.optional(),
   template_id: z.number().optional(),
+  group_quota_gb: z.record(z.coerce.number(), z.number().min(0)).optional(),
 } satisfies z.ZodRawShape
 
 function refineOnHoldExpireDuration(data: { status?: string | null; on_hold_expire_duration?: number | null }, ctx: z.RefinementCtx) {
@@ -120,6 +121,7 @@ export const getDefaultUserForm = async () => {
     expire: '',
     note: '',
     group_ids: [],
+    group_quota_gb: {},
     proxy_settings: {
       vmess: {
         id: undefined,

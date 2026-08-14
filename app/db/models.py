@@ -218,6 +218,9 @@ class User(Base, CreatedAtUTCMixin):
     )
     hwids: Mapped[list[UserHWID]] = relationship(back_populates="user", cascade="all, delete-orphan", init=False)
     groups: Mapped[list[Group]] = relationship(secondary=users_groups_association, back_populates="users", init=False)
+    group_quotas: Mapped[list["UserGroupQuota"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan", init=False
+    )
     proxy_settings: Mapped[dict[str, Any]] = mapped_column(
         JSON(True), server_default=text("'{}'"), default_factory=dict
     )
@@ -285,13 +288,27 @@ class User(Base, CreatedAtUTCMixin):
         """Returns a flat list of all included inbound tags for enabled groups."""
         session = async_object_session(self)
         if session is not None:
+            limited_groups = (
+                select(UserGroupQuota.group_id)
+                .where(
+                    UserGroupQuota.user_id == self.id,
+                    UserGroupQuota.data_limit.isnot(None),
+                    UserGroupQuota.data_limit > 0,
+                    UserGroupQuota.used_traffic >= UserGroupQuota.data_limit,
+                )
+                .scalar_subquery()
+            )
             stmt = (
                 select(ProxyInbound.tag)
                 .select_from(users_groups_association)
                 .join(Group, users_groups_association.c.groups_id == Group.id)
                 .join(inbounds_groups_association, Group.id == inbounds_groups_association.c.group_id)
                 .join(ProxyInbound, inbounds_groups_association.c.inbound_id == ProxyInbound.id)
-                .where(users_groups_association.c.user_id == self.id, Group.is_disabled.is_(False))
+                .where(
+                    users_groups_association.c.user_id == self.id,
+                    Group.is_disabled.is_(False),
+                    Group.id.not_in(limited_groups),
+                )
                 .distinct()
             )
             result = await session.execute(stmt)
@@ -301,6 +318,8 @@ class User(Base, CreatedAtUTCMixin):
         included_tags = set()
         for group in self.__dict__.get("groups") or []:
             if group.is_disabled:
+                continue
+            if _group_is_quota_limited(self, group.id):
                 continue
             for inbound in group.__dict__.get("inbounds") or []:
                 included_tags.add(inbound.tag)
@@ -814,6 +833,33 @@ class Group(Base, IdMixin):
             .scalar_subquery()
             .label("total_users")
         )
+
+
+class UserGroupQuota(Base):
+    __tablename__ = "user_group_quotas"
+    __table_args__ = (UniqueConstraint("user_id", "group_id", name="uq_user_group_quotas_user_group"),)
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = fk_id_column("users.id", ondelete="CASCADE")
+    group_id: Mapped[int] = fk_id_column("groups.id", ondelete="CASCADE")
+    data_limit: Mapped[int | None] = mapped_column(BigInteger, default=None)
+    used_traffic: Mapped[int] = mapped_column(BigInteger, default=0, server_default="0")
+    user: Mapped[User] = relationship(back_populates="group_quotas", init=False)
+    group: Mapped[Group] = relationship(init=False)
+
+    @property
+    def is_limited(self) -> bool:
+        return bool(self.data_limit and self.data_limit > 0 and self.used_traffic >= self.data_limit)
+
+
+def _group_is_quota_limited(user: User, group_id: int) -> bool:
+    quotas = user.__dict__.get("group_quotas")
+    if not quotas:
+        return False
+    for quota in quotas:
+        if quota.group_id == group_id and quota.is_limited:
+            return True
+    return False
 
 
 class CoreType(str, Enum):

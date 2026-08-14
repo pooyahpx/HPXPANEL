@@ -380,6 +380,11 @@ const UsersTable = memo(() => {
       note: selectedUser?.note || '',
       data_limit_reset_strategy: selectedUser?.data_limit_reset_strategy || undefined,
       group_ids: selectedUser?.group_ids || [],
+      group_quota_gb: Object.fromEntries(
+        (selectedUser?.group_quotas || [])
+          .filter(q => q.data_limit)
+          .map(q => [q.group_id, bytesToFormGigabytes(Number(q.data_limit))]),
+      ),
       on_hold_expire_duration: selectedUser?.on_hold_expire_duration || undefined,
       on_hold_timeout: normalizeDatePickerValueForEditForm(selectedUser?.on_hold_timeout),
       proxy_settings: selectedUser?.proxy_settings || undefined,
@@ -406,6 +411,11 @@ const UsersTable = memo(() => {
         note: selectedUser.note || '',
         data_limit_reset_strategy: selectedUser.data_limit_reset_strategy || undefined,
         group_ids: selectedUser.group_ids || [],
+        group_quota_gb: Object.fromEntries(
+          (selectedUser.group_quotas || [])
+            .filter(q => q.data_limit)
+            .map(q => [q.group_id, bytesToFormGigabytes(Number(q.data_limit))]),
+        ),
         on_hold_expire_duration: selectedUser.on_hold_expire_duration || undefined,
         on_hold_timeout: normalizeDatePickerValueForEditForm(selectedUser.on_hold_timeout),
         proxy_settings: selectedUser.proxy_settings || undefined,

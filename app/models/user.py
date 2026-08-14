@@ -27,6 +27,18 @@ class NextPlanModel(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class UserGroupQuotaInput(BaseModel):
+    group_id: int
+    data_limit: int | None = Field(default=None, ge=0)
+
+
+class UserGroupQuotaResponse(UserGroupQuotaInput):
+    used_traffic: int = 0
+    group_name: str | None = None
+    is_limited: bool = False
+    model_config = ConfigDict(from_attributes=True)
+
+
 class User(BaseModel):
     proxy_settings: ProxyTable = Field(default_factory=ProxyTable)
     expire: dt | int | None = Field(default=None)
@@ -41,6 +53,7 @@ class User(BaseModel):
     )
     on_hold_timeout: dt | int | None = Field(default=None)
     group_ids: list[int] | None = Field(default_factory=list)
+    group_quotas: list[UserGroupQuotaInput] | None = Field(default=None)
     auto_delete_in_days: int | None = Field(default=None)
     hwid_limit: int | None = Field(default=None)
     ip_limit: int | None = Field(
@@ -96,6 +109,7 @@ class UserModify(UserWithValidator):
     status: UserStatus | None = Field(default=None)
     proxy_settings: ProxyTable | None = Field(default=None)
     group_ids: list[int] | None = Field(default=None)
+    group_quotas: list[UserGroupQuotaInput] | None = Field(default=None)
 
     @field_validator("status", mode="before", check_fields=False)
     def validate_status(cls, status, values):
@@ -125,7 +139,17 @@ class UserNotificationResponse(User):
     subscription_url: str = Field(default="")
     admin: AdminContactInfo | None = Field(default=None)
     group_names: list[str] | None = Field(default_factory=list)
+    group_quotas: list[UserGroupQuotaResponse] | None = Field(default_factory=list)
     model_config = ConfigDict(from_attributes=True)
+
+    @field_validator("group_quotas", mode="before")
+    @classmethod
+    def ignore_orm_group_quotas(cls, value):
+        if not value:
+            return []
+        if hasattr(value[0], "group_id") and hasattr(value[0], "used_traffic"):
+            return []
+        return value
 
     @field_validator("used_traffic", "lifetime_used_traffic", "data_limit", mode="before")
     @classmethod

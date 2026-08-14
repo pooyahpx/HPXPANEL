@@ -1002,6 +1002,14 @@ export type UserResponseDataLimitResetStrategy = DataLimitResetStrategy | null
  */
 export type UserResponseDataLimit = number | null
 
+export interface UserGroupQuotaResponse {
+  group_id: number
+  data_limit?: number | null
+  used_traffic?: number
+  group_name?: string | null
+  is_limited?: boolean
+}
+
 export type UserResponseExpire = string | number | null
 
 export interface UserResponse {
@@ -1020,6 +1028,7 @@ export interface UserResponse {
   /** Max concurrent unique IPs for this user. Empty = unlimited. Example: 2 blocks a 3rd IP. */
   ip_limit?: UserResponseIpLimit
   next_plan?: UserResponseNextPlan
+  group_quotas?: UserGroupQuotaResponse[]
   id: number
   username: string
   status: UserStatus
@@ -1093,6 +1102,7 @@ export interface UserModify {
   /** Max concurrent unique IPs for this user. Empty = unlimited. Example: 2 blocks a 3rd IP. */
   ip_limit?: UserModifyIpLimit
   next_plan?: UserModifyNextPlan
+  group_quotas?: UserGroupQuotaResponse[]
   status?: UserModifyStatus
 }
 
@@ -1179,6 +1189,7 @@ export interface UserCreate {
   on_hold_expire_duration?: UserCreateOnHoldExpireDuration
   on_hold_timeout?: UserCreateOnHoldTimeout
   group_ids?: UserCreateGroupIds
+  group_quotas?: UserGroupQuotaResponse[]
   auto_delete_in_days?: UserCreateAutoDeleteInDays
   hwid_limit?: UserCreateHwidLimit
   /** Max concurrent unique IPs for this user. Empty = unlimited. Example: 2 blocks a 3rd IP. */

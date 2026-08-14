@@ -528,7 +528,7 @@ function UserModal({ isDialogOpen, onOpenChange, form, editingUser, editingUserI
   }, [canUseNextPlan, form, nextPlanEnabled])
 
   // Prefetch lightweight groups while modal is open so the Groups tab can render immediately.
-  useGetGroupsSimple(
+  const { data: groupsSimpleData } = useGetGroupsSimple(
     { all: true },
     {
       query: {
@@ -541,6 +541,12 @@ function UserModal({ isDialogOpen, onOpenChange, form, editingUser, editingUserI
       },
     },
   )
+  const groupNameById = React.useMemo(
+    () => Object.fromEntries((groupsSimpleData?.groups || []).map(group => [group.id, group.name])),
+    [groupsSimpleData],
+  )
+  const watchedGroupIds = form.watch('group_ids') || []
+  const watchedGroupQuotaGb = form.watch('group_quota_gb') || {}
 
   const { data: generalSettings } = useQuery({
     queryKey: getGetGeneralSettingsQueryKey(),
@@ -1108,6 +1114,16 @@ function UserModal({ isDialogOpen, onOpenChange, form, editingUser, editingUserI
         if (!hasProxySettings) {
           delete sendValues.proxy_settings
         }
+
+        const groupQuotaGb = values.group_quota_gb || {}
+        const selectedGroupIds = new Set(sendValues.group_ids || [])
+        sendValues.group_quotas = Object.entries(groupQuotaGb)
+          .filter(([groupId, gb]) => selectedGroupIds.has(Number(groupId)) && Number(gb) > 0)
+          .map(([groupId, gb]) => ({
+            group_id: Number(groupId),
+            data_limit: gbToBytes(Number(gb)),
+          }))
+        delete sendValues.group_quota_gb
 
         // Make API calls to the backend
         if (editingUser && editingUserId) {
@@ -1769,6 +1785,38 @@ function UserModal({ isDialogOpen, onOpenChange, form, editingUser, editingUserI
                                   </FormItem>
                                 )}
                               />
+                            )}
+                            {watchedGroupIds.length > 0 && (
+                              <div className="border-border/70 space-y-3 border-t pt-4">
+                                <p className="text-muted-foreground text-sm">
+                                  {t('userDialog.groupQuotaHint', {
+                                    defaultValue: 'Optional per-group data caps (GB). When a group cap is reached, only that group is disabled.',
+                                  })}
+                                </p>
+                                {watchedGroupIds.map(groupId => (
+                                  <FormItem key={`group-quota-${groupId}`}>
+                                    <FormLabel>
+                                      {groupNameById[groupId] || `${t('groups.group', { defaultValue: 'Group' })} #${groupId}`}{' '}
+                                      ({t('userDialog.groupQuotaLabel', { defaultValue: 'GB limit' })})
+                                    </FormLabel>
+                                    <FormControl>
+                                      <DecimalInput
+                                        placeholder="0"
+                                        value={watchedGroupQuotaGb[groupId] ?? 0}
+                                        emptyValue={0}
+                                        zeroValue={0}
+                                        onValueChange={value => {
+                                          form.setValue(
+                                            'group_quota_gb',
+                                            { ...watchedGroupQuotaGb, [groupId]: value ?? 0 },
+                                            { shouldDirty: true },
+                                          )
+                                        }}
+                                      />
+                                    </FormControl>
+                                  </FormItem>
+                                ))}
+                              </div>
                             )}
                             <div className={cn('flex h-full min-w-0 items-start gap-4', showResetStrategy ? 'flex-1' : 'w-full lg:w-3/8')}>
                               {status === 'on_hold' ? (

@@ -11,6 +11,7 @@ from app.db.models import (
     Group,
     ProxyInbound,
     User,
+    UserGroupQuota,
     UserStatus,
     inbounds_groups_association,
     users_groups_association,
@@ -40,6 +41,10 @@ def _inbounds_from_loaded_groups(user: User) -> list[str] | None:
     tags: set[str] = set()
     for group in loaded_groups:
         if group.is_disabled:
+            continue
+        from app.db.models import _group_is_quota_limited
+
+        if _group_is_quota_limited(user, group.id):
             continue
 
         loaded_inbounds = group.__dict__.get("inbounds")
@@ -177,10 +182,25 @@ async def core_users(
                 ProxyInbound.tag.in_(inbound_tags) if inbound_tags else True,
             ),
         )
+        .outerjoin(
+            UserGroupQuota,
+            and_(
+                UserGroupQuota.user_id == User.id,
+                UserGroupQuota.group_id == Group.id,
+            ),
+        )
         # Exclude users whose admin role blocks user sync for the admin's current status.
         .outerjoin(Admin, Admin.id == User.admin_id)
         .outerjoin(AdminRole, AdminRole.id == Admin.role_id)
         .where(User.status.in_([UserStatus.active, UserStatus.on_hold]))
+        .where(
+            or_(
+                UserGroupQuota.id.is_(None),
+                UserGroupQuota.data_limit.is_(None),
+                UserGroupQuota.data_limit == 0,
+                UserGroupQuota.used_traffic < UserGroupQuota.data_limit,
+            )
+        )
         .where(
             or_(
                 Admin.id.is_(None),

@@ -51,10 +51,54 @@ def test_config_summary(config: ShopConfig | None, lang: str) -> str:
     )
 
 
+_DIGIT_TRANSLATE = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
+
+
+def normalize_group_ids(raw) -> list[int]:
+    """Accept JSON lists, comma strings, and Persian digits; return unique int IDs."""
+    if not raw:
+        return []
+    items: list = []
+    if isinstance(raw, (list, tuple, set)):
+        items = list(raw)
+    elif isinstance(raw, str):
+        items = [part.strip() for part in raw.replace(";", ",").split(",") if part.strip()]
+    else:
+        items = [raw]
+    ids: list[int] = []
+    seen: set[int] = set()
+    for item in items:
+        if isinstance(item, bool) or item is None:
+            continue
+        text = str(item).strip().translate(_DIGIT_TRANSLATE)
+        try:
+            group_id = int(text)
+        except ValueError:
+            continue
+        if group_id > 0 and group_id not in seen:
+            seen.add(group_id)
+            ids.append(group_id)
+    return ids
+
+
+def safe_error_text(exc: BaseException, limit: int = 180) -> str:
+    return str(exc).replace("{", "(").replace("}", ")")[:limit]
+
+
+async def format_groups_hint(db: AsyncSession) -> str:
+    from app.db.crud.group import get_groups_simple
+    from app.models.group import GroupSimpleListQuery
+
+    rows, _ = await get_groups_simple(db, GroupSimpleListQuery(all=True, limit=50))
+    if not rows:
+        return "—"
+    return "\n".join(f"{gid}: {str(name).replace('{', '(').replace('}', ')')}" for gid, name in rows[:30])
+
+
 async def buyer_show_test_button(db: AsyncSession, telegram_id: int, config: ShopConfig | None) -> bool:
     if not config or not config.test_enabled:
         return False
-    if not config.test_group_ids:
+    if not normalize_group_ids(config.test_group_ids):
         return False
     return not await has_test_claimed(db, telegram_id)
 

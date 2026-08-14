@@ -41,6 +41,8 @@ from app.telegram.utils.shop_helpers import (
     card_note_preview,
     card_photos_count,
     cards_summary,
+    format_groups_hint,
+    normalize_group_ids,
     notify_owner_order_approved,
     parse_optional_limit,
     shop_cards,
@@ -297,7 +299,7 @@ async def test_gb(event: types.Message, state: FSMContext):
 
 
 @router.message(forms.ShopAdminTest.days)
-async def test_days(event: types.Message, state: FSMContext):
+async def test_days(event: types.Message, state: FSMContext, db: AsyncSession):
     data = await state.get_data()
     lang = data.get("lang", "fa")
     try:
@@ -309,7 +311,8 @@ async def test_days(event: types.Message, state: FSMContext):
         return
     await state.update_data(test_expire_days=days)
     await state.set_state(forms.ShopAdminTest.groups)
-    await event.answer(t(lang, "admin_ask_test_groups"))
+    groups = await format_groups_hint(db)
+    await event.answer(t(lang, "admin_ask_test_groups", groups=groups))
 
 
 @router.message(forms.ShopAdminTest.groups)
@@ -319,13 +322,13 @@ async def test_groups(event: types.Message, db: AsyncSession, state: FSMContext,
     raw = event.text.strip()
     group_ids: list[int] = []
     if raw not in ("-", "0", ""):
-        try:
-            group_ids = [int(x.strip()) for x in raw.split(",") if x.strip()]
-        except ValueError:
+        group_ids = normalize_group_ids(raw)
+        if not group_ids:
             await event.answer(t(lang, "invalid_number"))
             return
     if not group_ids:
-        await event.answer(t(lang, "admin_ask_test_groups"))
+        groups = await format_groups_hint(db)
+        await event.answer(t(lang, "admin_ask_test_groups", groups=groups))
         return
     await upsert_shop_config(
         db,
@@ -726,7 +729,7 @@ async def approve_order(event: types.CallbackQuery, callback_data: ShopAdminKeyb
         expire = dt.now(UTC) + td(days=plan.expire_days)
 
     db_admin = await get_admin_by_id(db, admin.id, load_users=False, load_usage_logs=False)
-    admin_details = build_admin_details(db_admin, include_loaded_metrics=True)
+    admin_details = build_admin_details(db_admin, include_loaded_metrics=False)
 
     new_user = UserCreate(
         username=username,

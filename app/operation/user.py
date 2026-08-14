@@ -704,7 +704,7 @@ class UserOperation(BaseOperation):
         if new_user.next_plan is not None and new_user.next_plan.user_template_id is not None:
             await self.get_validated_user_template(db, new_user.next_plan.user_template_id)
 
-        all_groups = await self.validate_all_groups(db, new_user, admin)
+        all_groups = await self.validate_all_groups(db, new_user, None if skip_role_limits else admin)
         db_admin = await get_admin(db, admin.username, load_users=False, load_usage_logs=False)
         # peer IPs are never taken from input; the subnet pool assigns them at creation
         new_user.proxy_settings.wireguard.peer_ips = []

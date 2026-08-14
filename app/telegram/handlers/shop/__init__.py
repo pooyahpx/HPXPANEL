@@ -33,9 +33,11 @@ from app.telegram.utils.shared import add_to_messages_to_delete
 from app.telegram.utils.shop_helpers import (
     build_pay_card_section,
     buyer_show_test_button,
+    normalize_group_ids,
     notify_admins_user_joined,
     notify_all_admins_order,
     notify_all_admins_support,
+    safe_error_text,
     send_card_photos,
     shop_home_text,
 )
@@ -139,45 +141,53 @@ async def shop_home(event: types.CallbackQuery, db: AsyncSession):
 @router.callback_query(ShopKeyboard.Callback.filter(ShopAction.test == F.action))
 async def claim_test_config(event: types.CallbackQuery, db: AsyncSession, admin: AdminDetails | None):
     lang = await _lang(db, event.from_user.id)
+    await event.answer()
+
+    async def _fail(key: str, **kwargs):
+        await event.message.answer(t(lang, key, **kwargs))
+
     if admin is not None:
-        await event.answer("!", show_alert=True)
-        return
-    config = await get_enabled_shop_config(db)
-    if not config or not config.enabled or not config.test_enabled or not config.test_group_ids:
-        await event.answer(t(lang, "test_disabled"), show_alert=True)
-        return
-    if await has_test_claimed(db, event.from_user.id):
-        await event.answer(t(lang, "test_already_claimed"), show_alert=True)
+        await _fail("test_admin_blocked")
         return
 
-    from app.db.crud.admin import build_admin_details, get_admin_by_id
+    config = await get_enabled_shop_config(db)
+    group_ids = normalize_group_ids(config.test_group_ids if config else None)
+    if not config or not config.enabled or not config.test_enabled or not group_ids:
+        await _fail("test_disabled")
+        return
+    if await has_test_claimed(db, event.from_user.id):
+        await _fail("test_already_claimed")
+        return
+
     from datetime import UTC, datetime as dt, timedelta as td
     import secrets
 
-    db_admin = await get_admin_by_id(db, config.admin_id, load_users=False, load_usage_logs=False)
-    if not db_admin:
-        await event.answer(t(lang, "test_disabled"), show_alert=True)
-        return
-    admin_details = build_admin_details(db_admin, include_loaded_metrics=True)
+    from app.db.crud.admin import build_admin_details, get_admin_by_id
 
-    username = f"test{event.from_user.id}_{secrets.token_hex(2)}"
-    expire = None
-    if config.test_expire_days and config.test_expire_days > 0:
-        expire = dt.now(UTC) + td(days=config.test_expire_days)
-
-    data_limit = config.test_data_limit if config.test_data_limit and config.test_data_limit > 0 else None
-    new_user = UserCreate(
-        username=username,
-        status=UserStatus.active,
-        data_limit=data_limit,
-        expire=expire,
-        group_ids=[int(g) for g in (config.test_group_ids or [])],
-        note="shop test config",
-    )
     try:
+        db_admin = await get_admin_by_id(db, config.admin_id, load_users=False, load_usage_logs=False)
+        if not db_admin:
+            await _fail("test_disabled")
+            return
+        admin_details = build_admin_details(db_admin, include_loaded_metrics=False)
+
+        username = f"t{event.from_user.id}x{secrets.token_hex(2)}"
+        expire = None
+        if config.test_expire_days and config.test_expire_days > 0:
+            expire = dt.now(UTC) + td(days=config.test_expire_days)
+
+        data_limit = config.test_data_limit if config.test_data_limit and config.test_data_limit > 0 else None
+        new_user = UserCreate(
+            username=username,
+            status=UserStatus.active,
+            data_limit=data_limit,
+            expire=expire,
+            group_ids=group_ids,
+            note="shop test config",
+        )
         user = await user_operator.create_user(db, new_user, admin_details, skip_role_limits=True)
     except Exception as exc:
-        await event.answer(t(lang, "test_create_failed", error=str(exc)[:120]), show_alert=True)
+        await _fail("test_create_failed", error=safe_error_text(exc))
         return
 
     await mark_test_claimed(db, event.from_user.id)
@@ -188,8 +198,10 @@ async def claim_test_config(event: types.CallbackQuery, db: AsyncSession, admin:
         username=user.username,
         url=user.subscription_url,
     )
-    await event.message.edit_text(text, reply_markup=markup)
-    await event.answer()
+    try:
+        await event.message.edit_text(text, reply_markup=markup)
+    except TelegramBadRequest:
+        await event.message.answer(text, reply_markup=markup)
 
     from app.telegram import get_bot
 

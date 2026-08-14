@@ -10,6 +10,8 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { getUserById, type UserGroupQuotaResponse } from '@/service/api'
+import { formatBytes } from '@/utils/formatByte'
 import {
   downloadTextFile,
   encodeSubscriptionContentToBase64,
@@ -26,6 +28,7 @@ interface SubscriptionModalProps {
   subscribeUrl: string | null
   userId: number
   username: string
+  groupQuotas?: UserGroupQuotaResponse[]
   onCloseModal: () => void
 }
 
@@ -46,13 +49,14 @@ interface CopiedConfigState {
 const CONFIGS_PER_PAGE = 5
 const LINKS_FETCH_TIMEOUT_MS = 8000
 
-const SubscriptionModal: FC<SubscriptionModalProps> = memo(({ open, subscribeUrl, userId, username, onCloseModal }) => {
+const SubscriptionModal: FC<SubscriptionModalProps> = memo(({ open, subscribeUrl, userId, username, groupQuotas: initialGroupQuotas, onCloseModal }) => {
   const isOpen = open ?? subscribeUrl !== null
   const { t } = useTranslation()
   const dir = useDirDetection()
   const isRTL = dir === 'rtl'
 
   const [configs, setConfigs] = useState<ConfigItem[]>([])
+  const [groupQuotas, setGroupQuotas] = useState<UserGroupQuotaResponse[]>(initialGroupQuotas || [])
   const [currentPage, setCurrentPage] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -94,6 +98,13 @@ const SubscriptionModal: FC<SubscriptionModalProps> = memo(({ open, subscribeUrl
   useEffect(() => {
     fetchConfigs()
   }, [fetchConfigs])
+
+  useEffect(() => {
+    if (!isOpen || !userId) return
+    getUserById(userId)
+      .then(user => setGroupQuotas((user.group_quotas || []).filter(quota => quota.data_limit && quota.data_limit > 0)))
+      .catch(() => setGroupQuotas(initialGroupQuotas || []))
+  }, [isOpen, userId, initialGroupQuotas])
 
   useEffect(() => {
     if (isOpen) return
@@ -201,6 +212,22 @@ const SubscriptionModal: FC<SubscriptionModalProps> = memo(({ open, subscribeUrl
               <span>{t('subscriptionModal.title', { username, defaultValue: "{{username}}'s Subscription" })}</span>
             </DialogTitle>
           </DialogHeader>
+
+          {groupQuotas.length > 0 && (
+            <div className="border-border/60 bg-muted/20 space-y-2 rounded-md border p-3">
+              <span className="text-sm font-medium">{t('subscriptionModal.groupQuotas', { defaultValue: 'Per-group data limits' })}</span>
+              <div className="flex flex-col gap-2">
+                {groupQuotas.map(quota => (
+                  <div key={quota.group_id} className="border-border/50 flex items-center justify-between gap-3 rounded-md border bg-background/60 px-3 py-2 text-sm">
+                    <span className="font-medium">{quota.group_name || t('groups.group', { defaultValue: 'Group' })} #{quota.group_id}</span>
+                    <Badge variant={quota.is_limited ? 'destructive' : 'secondary'} className="font-mono text-xs">
+                      {formatBytes(quota.used_traffic || 0, 1, true, false)} / {formatBytes(quota.data_limit || 0, 1, true, false)}
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-2 lg:items-center">
             <div className="flex flex-col items-center gap-3">

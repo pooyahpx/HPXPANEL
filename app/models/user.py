@@ -144,7 +144,7 @@ class UserNotificationResponse(User):
 
     @field_validator("group_quotas", mode="before")
     @classmethod
-    def ignore_orm_group_quotas(cls, value):
+    def normalize_group_quotas(cls, value):
         if value is None:
             return []
         if isinstance(value, list):
@@ -152,15 +152,37 @@ class UserNotificationResponse(User):
                 return []
             first = value[0]
             if hasattr(first, "group_id") and hasattr(first, "used_traffic"):
-                return []
+                return [
+                    {
+                        "group_id": quota.group_id,
+                        "data_limit": quota.data_limit,
+                        "used_traffic": quota.used_traffic,
+                        "group_name": getattr(getattr(quota, "group", None), "name", None),
+                        "is_limited": quota.is_limited,
+                    }
+                    for quota in value
+                ]
             return value
         if hasattr(value, "__iter__"):
             try:
-                first = next(iter(value))
-            except StopIteration:
+                items = list(value)
+            except TypeError:
                 return []
+            if not items:
+                return []
+            first = items[0]
             if hasattr(first, "group_id") and hasattr(first, "used_traffic"):
-                return []
+                return [
+                    {
+                        "group_id": quota.group_id,
+                        "data_limit": quota.data_limit,
+                        "used_traffic": quota.used_traffic,
+                        "group_name": getattr(getattr(quota, "group", None), "name", None),
+                        "is_limited": quota.is_limited,
+                    }
+                    for quota in items
+                ]
+            return items
         return []
 
     @field_validator("used_traffic", "lifetime_used_traffic", "data_limit", mode="before")

@@ -42,6 +42,7 @@ from app.db.crud.user import (
     get_users_sub_update_list,
     get_users_subscription_agent_counts,
     attach_user_group_quotas,
+    attach_users_group_quotas,
     load_user_attrs,
     lock_admin_quota_row,
     modify_user as crud_modify_user,
@@ -1458,6 +1459,8 @@ class UserOperation(BaseOperation):
             query=query,
             return_with_count=True,
         )
+
+        await attach_users_group_quotas(db, users)
 
         if query.load_sub:
             tasks = [self.generate_subscription_url(user) for user in users]

@@ -1,4 +1,5 @@
 from collections.abc import Sequence
+from collections import defaultdict
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta
 from typing import Literal
@@ -21,6 +22,7 @@ from app.db.models import (
     NotificationReminder,
     ReminderType,
     User,
+    UserGroupQuota,
     UserStatus,
     UserSubscriptionUpdate,
     UserUsageResetLogs,
@@ -122,6 +124,25 @@ async def attach_user_group_quotas(user: User) -> None:
         return
     quotas = await get_user_group_quotas(session, user.id)
     set_committed_value(user, "group_quotas", quotas)
+
+
+async def attach_users_group_quotas(db: AsyncSession, users: list[User]) -> None:
+    if not users:
+        return
+    user_ids = [user.id for user in users if user.id is not None]
+    if not user_ids:
+        return
+    stmt = (
+        select(UserGroupQuota)
+        .where(UserGroupQuota.user_id.in_(user_ids))
+        .options(selectinload(UserGroupQuota.group))
+    )
+    rows = list((await db.execute(stmt)).scalars().all())
+    quotas_by_user: dict[int, list[UserGroupQuota]] = defaultdict(list)
+    for row in rows:
+        quotas_by_user[row.user_id].append(row)
+    for user in users:
+        set_committed_value(user, "group_quotas", quotas_by_user.get(user.id, []))
 
 
 async def load_user_attrs(

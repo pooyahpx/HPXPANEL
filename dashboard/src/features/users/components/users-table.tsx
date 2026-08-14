@@ -13,6 +13,7 @@ import {
   bulkEnableUsers,
   bulkResetUsersDataUsage,
   bulkRevokeUsersSubscription,
+  getUserById,
   useGetUsers,
   UserResponse,
   UserStatus,
@@ -44,7 +45,7 @@ import type { AdvanceSearchFormValue } from '@/features/users/forms/advance-sear
 import { BulkActionItem, BulkActionsBar } from '@/features/users/components/bulk-actions-bar'
 import { BulkActionAlertDialog } from '@/features/users/components/bulk-action-alert-dialog'
 import { Card, CardContent } from '@/components/ui/card'
-import { removeUsersFromUsersCache } from '@/utils/usersCache'
+import { removeUsersFromUsersCache, upsertUserInUsersCache } from '@/utils/usersCache'
 import { hasPermission, hasScopeAll } from '@/utils/rbac'
 
 // Helper function to get URL search params from hash
@@ -942,7 +943,7 @@ const UsersTable = memo(() => {
     setIsChangingPage(false)
   }
 
-  const handleEdit = (user: UserResponse) => {
+  const handleEdit = async (user: UserResponse) => {
     if (!canUpdateUsers) return
 
     if (clearSelectedUserTimeoutRef.current) {
@@ -950,18 +951,24 @@ const UsersTable = memo(() => {
       clearSelectedUserTimeoutRef.current = null
     }
 
-    const cachedData = queryClient.getQueriesData<UsersResponse>({
-      queryKey: ['/api/users'],
-      exact: false,
-    })
-
     let latestUser = user
-    for (const [, data] of cachedData) {
-      if (data?.users) {
-        const foundUser = data.users.find(u => u.id === user.id)
-        if (foundUser) {
-          latestUser = foundUser
-          break
+    if (user.id) {
+      try {
+        latestUser = await getUserById(user.id)
+        upsertUserInUsersCache(queryClient, latestUser)
+      } catch {
+        const cachedData = queryClient.getQueriesData<UsersResponse>({
+          queryKey: ['/api/users'],
+          exact: false,
+        })
+        for (const [, data] of cachedData) {
+          if (data?.users) {
+            const foundUser = data.users.find(u => u.id === user.id)
+            if (foundUser) {
+              latestUser = foundUser
+              break
+            }
+          }
         }
       }
     }

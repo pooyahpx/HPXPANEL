@@ -792,7 +792,16 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user, isModalHost = true, rende
       {isModalHost && (
         <div className="contents" onClick={e => e.stopPropagation()}>
           {/* Subscription Modal */}
-          {subscribeUrl && <SubscriptionModal open={showSubscriptionModal} subscribeUrl={subscribeUrl} userId={user.id} username={user.username} onCloseModal={onCloseSubscriptionModal} />}
+          {subscribeUrl && (
+            <SubscriptionModal
+              open={showSubscriptionModal}
+              subscribeUrl={subscribeUrl}
+              userId={user.id}
+              username={user.username}
+              groupQuotas={user.group_quotas}
+              onCloseModal={onCloseSubscriptionModal}
+            />
+          )}
 
           {/* Active Next Plan Confirm Dialog */}
           <AlertDialog open={isActiveNextPlanModalOpen} onOpenChange={setIsActiveNextPlanModalOpen}>

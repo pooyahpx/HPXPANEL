@@ -56,9 +56,7 @@ async def buyer_show_test_button(db: AsyncSession, telegram_id: int, config: Sho
         return False
     if not config.test_group_ids:
         return False
-    if await has_test_claimed(db, telegram_id):
-        return False
-    return True
+    return not await has_test_claimed(db, telegram_id)
 
 
 def welcome_note_preview(note: str | None, lang: str) -> str:

@@ -6,7 +6,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.core.manager import core_manager
 from app.db.models import Group, Node, ProxyInbound, UserGroupQuota, inbounds_groups_association
 from app.models.user import UserGroupQuotaInput
 
@@ -65,6 +64,8 @@ async def get_group_inbound_tags(db: AsyncSession) -> dict[int, set[str]]:
 async def get_node_inbound_tags(db: AsyncSession, node_ids: list[int]) -> dict[int, set[str]]:
     if not node_ids:
         return {}
+    from app.core.manager import core_manager
+
     stmt = select(Node.id, Node.core_config_id).where(Node.id.in_(node_ids))
     rows = (await db.execute(stmt)).all()
     core_ids = {core_id for _, core_id in rows if core_id is not None}

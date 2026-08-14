@@ -11,18 +11,20 @@ from app.db.crud.hwid import (
     get_user_hwid_count,
     register_user_hwid,
 )
-from app.db.crud.user import get_user_usages, user_sub_update
+from app.db.crud.user import attach_user_group_quotas, get_user_usages, load_user_attrs, user_sub_update
 from app.db.models import User
 from app.models.admin import AdminDetails
 from app.models.settings import Application, ConfigFormat, HWIDSettings, SubRule, Subscription as SubSettings
 from app.models.stats import UserUsageStatsList
 from app.models.subscription import SubscriptionUsageQuery
-from app.models.user import SubscriptionUserResponse, UsersResponseWithInbounds
+from app.models.user import SubscriptionUserResponse, UserGroupQuotaResponse, UsersResponseWithInbounds
 from app.settings import hwid_settings, subscription_settings
 from app.subscription.share import (
     apply_custom_format_variables,
+    build_inbound_group_quota_map,
     encode_title,
     generate_subscription,
+    generate_subscription_link_entries,
     get_effective_custom_variables,
     setup_format_variables,
 )
@@ -90,10 +92,30 @@ class SubscriptionOperation(BaseOperation):
 
     @staticmethod
     async def validated_user(db_user: User) -> UsersResponseWithInbounds:
-        user = UsersResponseWithInbounds.model_validate(db_user.__dict__)
+        await load_user_attrs(db_user, load_groups=True, load_group_quotas=False)
+        await attach_user_group_quotas(db_user)
+        for group in db_user.groups or []:
+            await group.awaitable_attrs.inbounds
+
+        user = UsersResponseWithInbounds.model_validate(db_user)
         user.inbounds = await db_user.inbounds()
         user.expire = db_user.expire
         user.lifetime_used_traffic = db_user.lifetime_used_traffic
+
+        quotas = db_user.group_quotas or []
+        if quotas:
+            group_names = {group.id: group.name for group in db_user.groups or []}
+            user.group_quotas = [
+                UserGroupQuotaResponse(
+                    group_id=quota.group_id,
+                    data_limit=quota.data_limit,
+                    used_traffic=quota.used_traffic,
+                    group_name=group_names.get(quota.group_id),
+                    is_limited=quota.is_limited,
+                )
+                for quota in quotas
+                if quota.data_limit and quota.data_limit > 0
+            ]
 
         return user
 
@@ -418,12 +440,15 @@ class SubscriptionOperation(BaseOperation):
             )
             is_allow_browser_config = sub_settings.allow_browser_config
             links = []
+            link_entries: list[dict[str, Any]] = []
             if is_allow_browser_config:
-                conf, media_type = await self.fetch_config(
+                quota_map = build_inbound_group_quota_map(db_user)
+                link_entries = await generate_subscription_link_entries(
                     user,
-                    ConfigFormat.links,
+                    inbound_group_quotas=quota_map,
+                    randomize_order=sub_settings.randomize_order,
                 )
-                links = conf.splitlines()
+                links = [entry["link"] for entry in link_entries]
 
             format_variables = await self.get_format_variables(user)
             formatted_announce = self._format_announce(sub_settings, format_variables)
@@ -432,7 +457,13 @@ class SubscriptionOperation(BaseOperation):
                 render_template(
                     template,
                     self._build_subscription_body_payload(
-                        user, links, formatted_announce, sub_settings, format_variables, is_hwid_enabled
+                        user,
+                        links,
+                        formatted_announce,
+                        sub_settings,
+                        format_variables,
+                        is_hwid_enabled,
+                        link_entries=link_entries,
                     ),
                 )
             )
@@ -564,10 +595,32 @@ class SubscriptionOperation(BaseOperation):
         sub_settings: SubSettings,
         format_variables: dict,
         is_hwid_enabled: bool,
+        link_entries: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
+        group_quota_rows = []
+        for quota in user.group_quotas or []:
+            if not quota.data_limit or quota.data_limit <= 0:
+                continue
+            used = int(quota.used_traffic or 0)
+            limit = int(quota.data_limit)
+            group_quota_rows.append(
+                {
+                    "group_name": quota.group_name or f"Group {quota.group_id}",
+                    "used_traffic": used,
+                    "data_limit": limit,
+                    "remaining": max(0, limit - used),
+                    "is_limited": bool(quota.is_limited),
+                }
+            )
+
+        if link_entries is None:
+            link_entries = [{"link": link, "remark": "", "protocol": "", "group_quotas": []} for link in links]
+
         return {
             "user": SubscriptionUserResponse.model_validate(user),
             "links": links,
+            "link_entries": link_entries,
+            "group_quotas": group_quota_rows,
             "announce": formatted_announce,
             "announce_url": sub_settings.announce_url,
             "apps": self._make_apps_import_urls(

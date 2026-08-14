@@ -3,12 +3,13 @@ import random
 import secrets
 from collections import defaultdict
 from datetime import UTC, datetime as dt, timedelta
+from typing import Any
 
 from jdatetime import date as jd
 
 from app.core.hosts import host_manager
 from app.db.crud.wireguard import pick_peer_ip_for_inbound
-from app.db.models import UserStatus
+from app.db.models import User, UserStatus
 from app.models.status_emojis import STATUS_EMOJIS
 from app.models.subscription import SubscriptionInboundData
 from app.models.user import UsersResponseWithInbounds
@@ -485,6 +486,98 @@ async def process_inbounds_and_tags(
             )
 
     return conf.render()
+
+
+def build_inbound_group_quota_map(db_user: User) -> dict[str, list[dict[str, Any]]]:
+    """Map inbound tag to per-group quota info for groups that include that inbound."""
+    quota_by_group = {
+        quota.group_id: quota for quota in (db_user.group_quotas or []) if quota.data_limit and quota.data_limit > 0
+    }
+    if not quota_by_group:
+        return {}
+
+    mapping: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for group in db_user.groups or []:
+        if group.is_disabled:
+            continue
+        quota = quota_by_group.get(group.id)
+        if quota is None:
+            continue
+        inbounds = group.__dict__.get("inbounds") or []
+        info = {
+            "group_id": group.id,
+            "group_name": group.name,
+            "used_traffic": int(quota.used_traffic or 0),
+            "data_limit": int(quota.data_limit or 0),
+            "remaining": max(0, int(quota.data_limit or 0) - int(quota.used_traffic or 0)),
+            "is_limited": bool(quota.is_limited),
+        }
+        for inbound in inbounds:
+            tag = getattr(inbound, "tag", None)
+            if tag:
+                mapping[tag].append(info)
+    return dict(mapping)
+
+
+async def generate_subscription_link_entries(
+    user: UsersResponseWithInbounds,
+    *,
+    inbound_group_quotas: dict[str, list[dict[str, Any]]] | None = None,
+    randomize_order: bool = False,
+) -> list[dict[str, Any]]:
+    """Build subscription links with optional per-group quota metadata for the web template."""
+    client_templates = await subscription_client_templates()
+    sub_settings = await subscription_settings()
+    custom_variables = get_effective_custom_variables(user, sub_settings.custom_variables)
+    format_variables = setup_format_variables(user, sub_settings.custom_variables)
+    proxy_settings = user.proxy_settings.dict()
+    proxy_settings["_user_id"] = user.id
+    hosts = await filter_hosts(list((await host_manager.get_hosts()).values()), user.status)
+    if randomize_order and len(hosts) > 1:
+        random.shuffle(hosts)
+
+    entries: list[dict[str, Any]] = []
+    quota_map = inbound_group_quotas or {}
+
+    for host_data in hosts:
+        result = await process_host(
+            host_data,
+            format_variables,
+            user.inbounds or [],
+            proxy_settings,
+            custom_variables,
+        )
+        if not result:
+            continue
+
+        inbound_copy, settings = result
+        remark = inbound_copy.remark.format_map(format_variables)
+        formatted_address = inbound_copy.address.format_map(format_variables)
+
+        link_conf = StandardLinks(
+            user_agent_template_content=client_templates["USER_AGENT_TEMPLATE"],
+            grpc_user_agent_template_content=client_templates["GRPC_USER_AGENT_TEMPLATE"],
+        )
+        link_conf.add(
+            remark=remark,
+            address=formatted_address,
+            inbound=inbound_copy,
+            settings=settings,
+        )
+        if not link_conf.links:
+            continue
+
+        entries.append(
+            {
+                "link": link_conf.links[-1],
+                "remark": remark,
+                "protocol": inbound_copy.protocol,
+                "inbound_tag": inbound_copy.inbound_tag,
+                "group_quotas": quota_map.get(inbound_copy.inbound_tag, []),
+            }
+        )
+
+    return entries
 
 
 def encode_title(text: str) -> str:

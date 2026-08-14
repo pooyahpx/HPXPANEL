@@ -122,6 +122,17 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid hsl(v
 .status-expired{--status:var(--warning)}
 .status-disabled{--status:var(--muted-fg)}
 .status-on_hold{--status:var(--hold)}
+.link-row{flex-wrap:wrap}
+.link-quota{width:100%;display:flex;flex-wrap:wrap;gap:6px;padding:0 4px 4px 52px}
+.quota-chip{display:inline-flex;align-items:center;gap:6px;padding:3px 8px;border:1px solid hsl(var(--border));background:hsl(var(--muted)/.55);font-family:"JetBrains Mono",ui-monospace,monospace;font-size:.65rem;font-weight:700;color:hsl(var(--fg))}
+.quota-chip.limited{border-color:hsl(var(--danger));color:hsl(var(--danger))}
+.quota-chip .remain{color:hsl(var(--success))}
+.group-quota-list{display:grid;gap:8px;margin-top:8px}
+.group-quota-item{padding:10px 12px;border:1px solid hsl(var(--border));background:hsl(var(--muted)/.35)}
+.group-quota-item .name{font-family:"Chakra Petch",sans-serif;font-size:.92rem;font-weight:700;margin-bottom:4px}
+.group-quota-item .stats{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:.68rem;color:hsl(var(--muted-fg))}
+.group-quota-item .stats strong{color:hsl(var(--success))}
+.per-group-note{margin-top:10px;padding:8px 10px;border:1px dashed hsl(var(--primary)/.45);background:hsl(var(--primary)/.08);font-size:.78rem;color:hsl(var(--muted-fg))}
 @media (max-width:900px){.grid-top,.grid-mid{grid-template-columns:1fr}}
 @media (max-width:640px){
   body{padding:16px 10px 36px}
@@ -213,6 +224,9 @@ var QRCode;!function(){function a(a){this.mode=c.MODE_8BIT_BYTE,this.data=a,this
           <div class="metric"><span class="k">Used traffic</span><span class="v">{{ used | bytesformat }}</span></div>
           <div class="metric"><span class="k">Total limit</span><span class="v">{% if not limit %}∞{% else %}{{ limit | bytesformat }}{% endif %}</span></div>
           <div class="metric"><span class="k">Remaining</span><span class="v remain">{% if remaining is none %}∞{% else %}{{ remaining | bytesformat }}{% endif %}</span></div>
+          {% if group_quotas %}
+          <div class="per-group-note">This account has separate data limits per server group. See details below each config link.</div>
+          {% endif %}
         </div>
       </div>
     </article>
@@ -236,6 +250,23 @@ var QRCode;!function(){function a(a){this.mode=c.MODE_8BIT_BYTE,this.data=a,this
         <div class="v">{% if user.online_at %}{{ user.online_at | datetime }}{% else %}—{% endif %}</div>
         <div class="sub">{% if online %}Signal live{% else %}No recent heartbeat{% endif %}</div>
       </div>
+      {% if group_quotas %}
+      <div class="rail-card">
+        <div class="k">04 / Group limits</div>
+        <div class="group-quota-list">
+          {% for quota in group_quotas %}
+          <div class="group-quota-item">
+            <div class="name">{{ quota.group_name }}</div>
+            <div class="stats">
+              {{ quota.used_traffic | bytesformat }} / {{ quota.data_limit | bytesformat }}
+              · <strong>{{ quota.remaining | bytesformat }} left</strong>
+              {% if quota.is_limited %} · limit reached{% endif %}
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
     </aside>
   </section>
 
@@ -247,7 +278,29 @@ var QRCode;!function(){function a(a){this.mode=c.MODE_8BIT_BYTE,this.data=a,this
       </div>
       <div class="links-body">
         {% if user.status.value in ('active', 'on_hold') %}
-          {% if links %}
+          {% if link_entries %}
+            {% for entry in link_entries %}
+            {% set proto = (entry.link.split('://')[0] if '://' in entry.link else entry.protocol or 'LINK') | upper %}
+            <div class="link-row">
+              <span class="proto">{{ proto[:8] }}</span>
+              <input class="link-input" type="text" value="{{ entry.link }}" readonly />
+              <button class="icon-btn" type="button" onclick="copyLink(this)" data-link="{{ entry.link }}">Copy</button>
+              <button class="icon-btn" type="button" onclick="showQr(this)" data-link="{{ entry.link }}">QR</button>
+              {% if entry.group_quotas %}
+              <div class="link-quota">
+                {% for gq in entry.group_quotas %}
+                <span class="quota-chip{% if gq.is_limited %} limited{% endif %}">
+                  {{ gq.group_name }}:
+                  <span class="remain">{{ gq.remaining | bytesformat }} left</span>
+                  / {{ gq.data_limit | bytesformat }}
+                </span>
+                {% endfor %}
+              </div>
+              {% endif %}
+            </div>
+            {% endfor %}
+            <button class="copy-all" type="button" onclick="copyAllLinks(this)">Copy all links</button>
+          {% elif links %}
             {% for link in links %}
             {% set proto = (link.split('://')[0] if '://' in link else 'LINK') | upper %}
             <div class="link-row">

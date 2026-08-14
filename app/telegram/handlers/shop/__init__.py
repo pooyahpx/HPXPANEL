@@ -34,7 +34,8 @@ from app.telegram.utils.shop_helpers import (
     build_pay_card_section,
     buyer_show_test_button,
     notify_admins_user_joined,
-    notify_shop_admin_support,
+    notify_all_admins_order,
+    notify_all_admins_support,
     send_card_photos,
     shop_home_text,
 )
@@ -164,18 +165,19 @@ async def claim_test_config(event: types.CallbackQuery, db: AsyncSession, admin:
     if config.test_expire_days and config.test_expire_days > 0:
         expire = dt.now(UTC) + td(days=config.test_expire_days)
 
+    data_limit = config.test_data_limit if config.test_data_limit and config.test_data_limit > 0 else None
     new_user = UserCreate(
         username=username,
         status=UserStatus.active,
-        data_limit=config.test_data_limit or None,
+        data_limit=data_limit,
         expire=expire,
-        group_ids=list(config.test_group_ids or []),
+        group_ids=[int(g) for g in (config.test_group_ids or [])],
         note="shop test config",
     )
     try:
-        user = await user_operator.create_user(db, new_user, admin_details)
+        user = await user_operator.create_user(db, new_user, admin_details, skip_role_limits=True)
     except Exception as exc:
-        await event.answer(str(exc)[:180], show_alert=True)
+        await event.answer(t(lang, "test_create_failed", error=str(exc)[:120]), show_alert=True)
         return
 
     await mark_test_claimed(db, event.from_user.id)
@@ -290,19 +292,15 @@ async def support_message(event: types.Message, db: AsyncSession, state: FSMCont
         await event.answer(t(lang, "shop_disabled"))
         return
 
-    from app.db.crud.admin import get_admin_by_id
     from app.telegram import get_bot
 
-    shop_admin = await get_admin_by_id(db, admin_id, load_users=False, load_usage_logs=False)
     bot = get_bot()
-    if shop_admin and shop_admin.telegram_id and bot:
-        admin_lang = (await get_telegram_lang(db, shop_admin.telegram_id)) or "fa"
-        buyer = event.from_user.username or str(event.from_user.id)
+    buyer = event.from_user.username or str(event.from_user.id)
+    if bot:
         try:
-            await notify_shop_admin_support(
+            await notify_all_admins_support(
+                db,
                 bot=bot,
-                admin_telegram_id=shop_admin.telegram_id,
-                admin_lang=admin_lang,
                 buyer_telegram_id=event.from_user.id,
                 buyer_label=buyer,
                 message=event,
@@ -347,32 +345,25 @@ async def receive_receipt(event: types.Message, db: AsyncSession, state: FSMCont
     await state.clear()
     await event.answer(t(lang, "order_created", id=order.id))
 
-    # Notify shop admin if they have telegram_id
-    from app.db.crud.admin import get_admin_by_id
+    # Notify all linked panel admins
+    from app.telegram import get_bot
 
-    shop_admin = await get_admin_by_id(db, admin_id, load_users=False, load_usage_logs=False)
-    if shop_admin and shop_admin.telegram_id:
-        admin_lang = (await get_telegram_lang(db, shop_admin.telegram_id)) or "fa"
+    bot = get_bot()
+    if bot:
         buyer = event.from_user.username or str(event.from_user.id)
-        caption = t(
-            admin_lang,
-            "admin_new_order",
-            id=order.id,
-            buyer=buyer,
-            plan=plan.name,
-            price=format_price(plan.price_toman),
-        )
         try:
-            from app.telegram import get_bot
-
-            bot = get_bot()
-            if bot:
-                await bot.send_photo(
-                    chat_id=shop_admin.telegram_id,
-                    photo=file_id,
-                    caption=caption,
-                    reply_markup=ShopOrderAdminKeyboard(admin_lang, order).as_markup(),
-                )
+            await notify_all_admins_order(
+                db,
+                bot=bot,
+                buyer_telegram_id=event.from_user.id,
+                shop_admin_id=admin_id,
+                order_id=order.id,
+                buyer_label=buyer,
+                plan_name=plan.name,
+                price=format_price(plan.price_toman),
+                file_id=file_id,
+                reply_markup_factory=lambda admin_lang: ShopOrderAdminKeyboard(admin_lang, order).as_markup(),
+            )
         except Exception:
             pass
 

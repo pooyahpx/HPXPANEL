@@ -739,7 +739,7 @@ async def approve_order(event: types.CallbackQuery, callback_data: ShopAdminKeyb
         note=f"shop order #{order.id}",
     )
     try:
-        user = await user_operator.create_user(db, new_user, admin_details)
+        user = await user_operator.create_user(db, new_user, admin_details, skip_role_limits=True)
     except Exception as exc:
         await event.answer(str(exc)[:180], show_alert=True)
         return

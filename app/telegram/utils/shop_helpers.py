@@ -173,6 +173,76 @@ async def notify_shop_admin_support(
         await bot.send_message(chat_id=admin_telegram_id, text=header, reply_markup=markup)
 
 
+async def notify_all_admins_support(
+    db: AsyncSession,
+    *,
+    bot: Bot,
+    buyer_telegram_id: int,
+    buyer_label: str,
+    message: Message,
+) -> None:
+    """Forward a buyer support message to every panel admin linked to Telegram."""
+    notified_ids: set[int] = set()
+    for panel_admin in await list_admins_with_telegram(db):
+        chat_id = panel_admin.telegram_id
+        if chat_id is None or chat_id in notified_ids or chat_id == buyer_telegram_id:
+            continue
+        admin_lang = (await get_telegram_lang(db, chat_id)) or "fa"
+        try:
+            await notify_shop_admin_support(
+                bot=bot,
+                admin_telegram_id=chat_id,
+                admin_lang=admin_lang,
+                buyer_telegram_id=buyer_telegram_id,
+                buyer_label=buyer_label,
+                message=message,
+            )
+            notified_ids.add(chat_id)
+        except Exception:
+            pass
+
+
+async def notify_all_admins_order(
+    db: AsyncSession,
+    *,
+    bot: Bot,
+    buyer_telegram_id: int,
+    shop_admin_id: int,
+    order_id: int,
+    buyer_label: str,
+    plan_name: str,
+    price: str,
+    file_id: str,
+    reply_markup_factory,
+) -> None:
+    """Notify every linked panel admin about a new shop order."""
+    notified_ids: set[int] = set()
+    for panel_admin in await list_admins_with_telegram(db):
+        chat_id = panel_admin.telegram_id
+        if chat_id is None or chat_id in notified_ids or chat_id == buyer_telegram_id:
+            continue
+        admin_lang = (await get_telegram_lang(db, chat_id)) or "fa"
+        caption = t(
+            admin_lang,
+            "admin_new_order",
+            id=order_id,
+            buyer=buyer_label,
+            plan=plan_name,
+            price=price,
+        )
+        markup = reply_markup_factory(admin_lang) if panel_admin.id == shop_admin_id else None
+        try:
+            await bot.send_photo(
+                chat_id=chat_id,
+                photo=file_id,
+                caption=caption,
+                reply_markup=markup,
+            )
+            notified_ids.add(chat_id)
+        except Exception:
+            pass
+
+
 def _buyer_label(user: TgUser) -> tuple[str, str]:
     name = (user.full_name or "").strip() or "—"
     username = f"@{user.username}" if user.username else "—"

@@ -25,7 +25,7 @@ async def sync_user_group_quotas(
     allowed_group_ids: set[int],
     quotas: list[UserGroupQuotaInput] | None,
 ) -> None:
-    if not quotas:
+    if quotas is None:
         return
 
     existing = {q.group_id: q for q in await get_user_group_quotas(db, user_id)}

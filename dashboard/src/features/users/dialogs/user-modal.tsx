@@ -872,6 +872,14 @@ function UserModal({ isDialogOpen, onOpenChange, form, editingUser, editingUserI
     }
   }
 
+  useEffect(() => {
+    if (!isDialogOpen || !editingUser) return
+    const values = form.getValues()
+    if (values.username && Array.isArray(values.group_ids) && values.group_ids.length > 0 && values.status) {
+      setIsFormValid(validateAllFields(values, {}, true))
+    }
+  }, [isDialogOpen, editingUser, editingUserData, form])
+
   // Update template selection handlers to use number type
   const handleTemplateSelect = React.useCallback(
     (val: string) => {
@@ -1098,12 +1106,17 @@ function UserModal({ isDialogOpen, onOpenChange, form, editingUser, editingUserI
 
         const groupQuotaGb = values.group_quota_gb || {}
         const selectedGroupIds = new Set(sendValues.group_ids || [])
-        sendValues.group_quotas = Object.entries(groupQuotaGb)
+        const groupQuotaEntries = Object.entries(groupQuotaGb)
           .filter(([groupId, gb]) => selectedGroupIds.has(Number(groupId)) && Number(gb) > 0)
           .map(([groupId, gb]) => ({
             group_id: Number(groupId),
-            data_limit: gbToBytes(Number(gb)),
+            data_limit: gbToBytes(Number(gb)) ?? 0,
           }))
+        if (groupQuotaEntries.length > 0) {
+          sendValues.group_quotas = groupQuotaEntries
+        } else if (editingUser) {
+          sendValues.group_quotas = []
+        }
         delete sendValues.group_quota_gb
 
         // Make API calls to the backend
@@ -2559,11 +2572,9 @@ function UserModal({ isDialogOpen, onOpenChange, form, editingUser, editingUserI
                               showGroupQuotas
                               groupQuotaGb={watchedGroupQuotaGb}
                               onGroupQuotaChange={(groupId, value) => {
-                                form.setValue(
-                                  'group_quota_gb',
-                                  { ...watchedGroupQuotaGb, [groupId]: value },
-                                  { shouldDirty: true },
-                                )
+                                const nextQuotas = { ...watchedGroupQuotaGb, [groupId]: value ?? 0 }
+                                form.setValue('group_quota_gb', nextQuotas, { shouldDirty: true })
+                                handleFieldChange('group_quota_gb', nextQuotas)
                               }}
                               onGroupsChange={groups => {
                                 field.onChange(groups)

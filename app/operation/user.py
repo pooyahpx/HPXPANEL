@@ -7,7 +7,7 @@ from datetime import UTC, datetime, datetime as dt, timedelta as td
 
 from fastapi import HTTPException
 from pydantic import ValidationError
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import DBAPIError, IntegrityError
 
 from app import notification
 from app.db import AsyncSession
@@ -427,10 +427,16 @@ class UserOperation(BaseOperation):
         return [user.subscription_url for user in users_list]
 
     async def validate_user(self, db_user: User, include_subscription_url: bool = True) -> UserNotificationResponse:
-        await load_user_attrs(db_user, load_groups=True, load_group_quotas=True)
+        await load_user_attrs(db_user, load_groups=True, load_group_quotas=False)
         user = UserNotificationResponse.model_validate(db_user)
         group_names = {group.id: group.name for group in db_user.groups}
-        if db_user.group_quotas:
+        quotas = []
+        try:
+            await db_user.awaitable_attrs.group_quotas
+            quotas = db_user.group_quotas or []
+        except DBAPIError:
+            quotas = []
+        if quotas:
             user.group_quotas = [
                 UserGroupQuotaResponse(
                     group_id=quota.group_id,
@@ -439,7 +445,7 @@ class UserOperation(BaseOperation):
                     group_name=group_names.get(quota.group_id),
                     is_limited=quota.is_limited,
                 )
-                for quota in db_user.group_quotas
+                for quota in quotas
             ]
         if include_subscription_url:
             user.subscription_url = await self.generate_subscription_url(user)

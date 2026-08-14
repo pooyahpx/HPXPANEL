@@ -5,7 +5,7 @@ from typing import Literal
 
 from sqlalchemy import and_, case, delete, desc, func, literal, not_, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload, selectinload
+from sqlalchemy.orm import joinedload, noload, selectinload
 from sqlalchemy.sql import Select
 from sqlalchemy.sql.functions import coalesce
 
@@ -148,7 +148,7 @@ async def refresh_and_load_user(
     load_next_plan: bool = True,
     load_usage_logs: bool = True,
     load_groups: bool = True,
-    load_group_quotas: bool = True,
+    load_group_quotas: bool = False,
 ):
     await db.refresh(user)
     await load_user_attrs(
@@ -158,6 +158,7 @@ async def refresh_and_load_user(
         load_next_plan=load_next_plan,
         load_usage_logs=load_usage_logs,
         load_groups=load_groups,
+        load_group_quotas=load_group_quotas,
     )
 
 
@@ -337,6 +338,7 @@ async def get_users(
         selectinload(User.next_plan),
         selectinload(User.usage_logs),
         selectinload(User.groups),
+        noload(User.group_quotas),
     )
 
     filters = []

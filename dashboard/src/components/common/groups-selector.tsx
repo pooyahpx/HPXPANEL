@@ -1,4 +1,5 @@
 import { Checkbox } from '@/components/ui/checkbox'
+import { DecimalInput } from '@/components/common/decimal-input'
 import { FormItem, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -16,9 +17,20 @@ interface GroupsSelectorProps<T extends FieldValues> {
   name: FieldPath<T>
   onGroupsChange?: (groups: number[]) => void
   disabled?: boolean
+  showGroupQuotas?: boolean
+  groupQuotaGb?: Record<number, number>
+  onGroupQuotaChange?: (groupId: number, value: number) => void
 }
 
-export default function GroupsSelector<T extends FieldValues>({ control, name, onGroupsChange, disabled = false }: GroupsSelectorProps<T>) {
+export default function GroupsSelector<T extends FieldValues>({
+  control,
+  name,
+  onGroupsChange,
+  disabled = false,
+  showGroupQuotas = false,
+  groupQuotaGb = {},
+  onGroupQuotaChange,
+}: GroupsSelectorProps<T>) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const [searchQuery, setSearchQuery] = useState('')
@@ -125,20 +137,48 @@ export default function GroupsSelector<T extends FieldValues>({ control, name, o
               </span>
             </div>
           ) : (
-            filteredGroups.map((group: any) => (
-              <label key={group.id} className="hover:bg-accent flex cursor-pointer items-center gap-2 rounded-md p-2">
-                <Checkbox checked={selectedGroups.includes(group.id)} onCheckedChange={checked => handleGroupChange(!!checked, group.id)} disabled={disabled} />
-                <span className="text-sm">{group.name}</span>
-              </label>
-            ))
+            filteredGroups.map((group: any) => {
+              const isSelected = selectedGroups.includes(group.id)
+              return (
+                <div key={group.id} className="hover:bg-accent rounded-md p-2">
+                  <label className="flex cursor-pointer items-center gap-2">
+                    <Checkbox checked={isSelected} onCheckedChange={checked => handleGroupChange(!!checked, group.id)} disabled={disabled} />
+                    <span className="min-w-0 flex-1 text-sm">{group.name}</span>
+                    {showGroupQuotas && isSelected && (
+                      <div className="ms-auto flex shrink-0 items-center gap-1.5" onClick={e => e.preventDefault()}>
+                        <DecimalInput
+                          placeholder="0"
+                          value={groupQuotaGb[group.id] ?? 0}
+                          emptyValue={0}
+                          zeroValue={0}
+                          className="h-8 w-20 text-xs"
+                          disabled={disabled}
+                          onValueChange={value => onGroupQuotaChange?.(group.id, value ?? 0)}
+                        />
+                        <span className="text-muted-foreground text-xs">GB</span>
+                      </div>
+                    )}
+                  </label>
+                </div>
+              )
+            })
           )}
         </div>
         {selectedGroups.length > 0 && (
-          <div className="text-muted-foreground text-sm">
-            {t('userDialog.selectedGroups', {
-              count: selectedGroups.length,
-              defaultValue: '{{count}} groups selected',
-            })}
+          <div className="space-y-1">
+            <div className="text-muted-foreground text-sm">
+              {t('userDialog.selectedGroups', {
+                count: selectedGroups.length,
+                defaultValue: '{{count}} groups selected',
+              })}
+            </div>
+            {showGroupQuotas && (
+              <p className="text-muted-foreground text-xs">
+                {t('userDialog.groupQuotaHint', {
+                  defaultValue: 'Optional GB limit per group. When reached, only that group is disabled.',
+                })}
+              </p>
+            )}
           </div>
         )}
       </div>

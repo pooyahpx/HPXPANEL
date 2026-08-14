@@ -32,7 +32,6 @@ import {
   setUserDisabledById,
   useCreateUser,
   useCreateUserFromTemplate,
-  useGetGroupsSimple,
   useGetUserTemplatesSimple,
   useModifyUserById,
   useModifyUserWithTemplateById,
@@ -528,24 +527,6 @@ function UserModal({ isDialogOpen, onOpenChange, form, editingUser, editingUserI
   }, [canUseNextPlan, form, nextPlanEnabled])
 
   // Prefetch lightweight groups while modal is open so the Groups tab can render immediately.
-  const { data: groupsSimpleData } = useGetGroupsSimple(
-    { all: true },
-    {
-      query: {
-        staleTime: 5 * 60 * 1000,
-        gcTime: 10 * 60 * 1000,
-        refetchOnWindowFocus: true,
-        refetchOnMount: true,
-        refetchOnReconnect: true,
-        enabled: isDialogOpen,
-      },
-    },
-  )
-  const groupNameById = React.useMemo(
-    () => Object.fromEntries((groupsSimpleData?.groups || []).map(group => [group.id, group.name])),
-    [groupsSimpleData],
-  )
-  const watchedGroupIds = form.watch('group_ids') || []
   const watchedGroupQuotaGb = form.watch('group_quota_gb') || {}
 
   const { data: generalSettings } = useQuery({
@@ -1786,38 +1767,6 @@ function UserModal({ isDialogOpen, onOpenChange, form, editingUser, editingUserI
                                 )}
                               />
                             )}
-                            {watchedGroupIds.length > 0 && (
-                              <div className="border-border/70 space-y-3 border-t pt-4">
-                                <p className="text-muted-foreground text-sm">
-                                  {t('userDialog.groupQuotaHint', {
-                                    defaultValue: 'Optional per-group data caps (GB). When a group cap is reached, only that group is disabled.',
-                                  })}
-                                </p>
-                                {watchedGroupIds.map(groupId => (
-                                  <FormItem key={`group-quota-${groupId}`}>
-                                    <FormLabel>
-                                      {groupNameById[groupId] || `${t('groups.group', { defaultValue: 'Group' })} #${groupId}`}{' '}
-                                      ({t('userDialog.groupQuotaLabel', { defaultValue: 'GB limit' })})
-                                    </FormLabel>
-                                    <FormControl>
-                                      <DecimalInput
-                                        placeholder="0"
-                                        value={watchedGroupQuotaGb[groupId] ?? 0}
-                                        emptyValue={0}
-                                        zeroValue={0}
-                                        onValueChange={value => {
-                                          form.setValue(
-                                            'group_quota_gb',
-                                            { ...watchedGroupQuotaGb, [groupId]: value ?? 0 },
-                                            { shouldDirty: true },
-                                          )
-                                        }}
-                                      />
-                                    </FormControl>
-                                  </FormItem>
-                                ))}
-                              </div>
-                            )}
                             <div className={cn('flex h-full min-w-0 items-start gap-4', showResetStrategy ? 'flex-1' : 'w-full lg:w-3/8')}>
                               {status === 'on_hold' ? (
                                 <FormField
@@ -2607,9 +2556,25 @@ function UserModal({ isDialogOpen, onOpenChange, form, editingUser, editingUserI
                             <GroupsSelector
                               control={form.control}
                               name="group_ids"
+                              showGroupQuotas
+                              groupQuotaGb={watchedGroupQuotaGb}
+                              onGroupQuotaChange={(groupId, value) => {
+                                form.setValue(
+                                  'group_quota_gb',
+                                  { ...watchedGroupQuotaGb, [groupId]: value },
+                                  { shouldDirty: true },
+                                )
+                              }}
                               onGroupsChange={groups => {
                                 field.onChange(groups)
                                 handleFieldChange('group_ids', groups)
+
+                                const nextQuotas = Object.fromEntries(
+                                  Object.entries(watchedGroupQuotaGb).filter(([id]) => groups.includes(Number(id))),
+                                )
+                                if (Object.keys(nextQuotas).length !== Object.keys(watchedGroupQuotaGb).length) {
+                                  form.setValue('group_quota_gb', nextQuotas, { shouldDirty: true })
+                                }
 
                                 // Clear template selection when groups are selected
                                 if (groups.length > 0 && selectedTemplateId) {

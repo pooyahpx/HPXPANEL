@@ -842,7 +842,7 @@ class UserGroupQuota(Base):
         Index("ix_user_group_quotas_user_id", "user_id"),
     )
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, init=False, autoincrement=True)
     user_id: Mapped[int] = fk_id_column("users.id", ondelete="CASCADE")
     group_id: Mapped[int] = fk_id_column("groups.id", ondelete="CASCADE")
     data_limit: Mapped[int | None] = mapped_column(BigInteger, default=None)

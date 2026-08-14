@@ -389,6 +389,29 @@ def test_user_create_expire_timezone_offset_normalized_to_utc(access_token):
         cleanup_groups(access_token, core, groups)
 
 
+def test_modify_user_with_group_quota(access_token):
+    core, groups = setup_groups(access_token, 2)
+    group_a, group_b = groups
+    user = create_user(access_token, group_ids=[group_a["id"], group_b["id"]])
+    five_gb = 5 * 1024 * 1024 * 1024
+    try:
+        response = client.put(
+            f"/api/user/{user['username']}",
+            headers=auth_headers(access_token),
+            json={
+                "group_ids": [group_a["id"], group_b["id"]],
+                "group_quotas": [{"group_id": group_b["id"], "data_limit": five_gb}],
+            },
+        )
+        assert response.status_code == status.HTTP_200_OK
+        quotas = {item["group_id"]: item for item in response.json()["group_quotas"]}
+        assert quotas[group_b["id"]]["data_limit"] == five_gb
+        assert group_a["id"] not in quotas
+    finally:
+        delete_user(access_token, user["username"])
+        cleanup_groups(access_token, core, groups)
+
+
 def test_user_create_on_hold(access_token):
     """Test that the user create on hold route is accessible."""
     core, groups = setup_groups(access_token, 2)

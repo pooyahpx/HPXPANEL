@@ -41,6 +41,12 @@ class ShopAdminCard(StatesGroup):
     card_holder = State()
 
 
+class ShopAdminTest(StatesGroup):
+    gb = State()
+    days = State()
+    groups = State()
+
+
 class ShopAdminPlan(StatesGroup):
     name = State()
     gb = State()

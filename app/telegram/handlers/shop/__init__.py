@@ -8,12 +8,17 @@ from app.db.crud.shop import (
     get_enabled_shop_config,
     get_shop_plan,
     get_telegram_lang,
+    has_test_claimed,
     list_active_plans,
     list_buyer_orders,
+    mark_test_claimed,
     set_telegram_lang,
 )
-from app.db.models import ShopOrderStatus
+from app.db.models import ShopOrderStatus, UserStatus
 from app.models.admin import AdminDetails
+from app.models.user import UserCreate
+from app.operation import OperatorType
+from app.operation.user import UserOperation
 from app.telegram.keyboards.shop import (
     LangKeyboard,
     ShopAction,
@@ -27,11 +32,14 @@ from app.telegram.utils.i18n import format_bytes, format_price, rich, t
 from app.telegram.utils.shared import add_to_messages_to_delete
 from app.telegram.utils.shop_helpers import (
     build_pay_card_section,
+    buyer_show_test_button,
     notify_admins_user_joined,
     notify_shop_admin_support,
     send_card_photos,
     shop_home_text,
 )
+
+user_operator = UserOperation(OperatorType.TELEGRAM)
 
 router = Router(name="shop")
 
@@ -44,12 +52,18 @@ def _shop_home_text(lang: str, config) -> str:
     return shop_home_text(lang, config)
 
 
+async def _home_markup(db: AsyncSession, lang: str, telegram_id: int, config):
+    show_test = await buyer_show_test_button(db, telegram_id, config)
+    return ShopHomeKeyboard(lang, show_test=show_test).as_markup()
+
+
 async def render_shop_home(message: types.Message, db: AsyncSession, lang: str):
     config = await get_enabled_shop_config(db)
     if not config or not config.enabled:
         await message.answer(t(lang, "shop_disabled"), reply_markup=ShopHomeKeyboard(lang).as_markup())
         return
-    await message.answer(_shop_home_text(lang, config), reply_markup=ShopHomeKeyboard(lang).as_markup())
+    markup = await _home_markup(db, lang, message.chat.id, config)
+    await message.answer(_shop_home_text(lang, config), reply_markup=markup)
 
 
 @router.callback_query(LangKeyboard.Callback.filter())
@@ -116,8 +130,75 @@ async def shop_home(event: types.CallbackQuery, db: AsyncSession):
         await event.message.edit_text(t(lang, "shop_disabled"), reply_markup=ShopHomeKeyboard(lang).as_markup())
         await event.answer()
         return
-    await event.message.edit_text(_shop_home_text(lang, config), reply_markup=ShopHomeKeyboard(lang).as_markup())
+    markup = await _home_markup(db, lang, event.from_user.id, config)
+    await event.message.edit_text(_shop_home_text(lang, config), reply_markup=markup)
     await event.answer()
+
+
+@router.callback_query(ShopKeyboard.Callback.filter(ShopAction.test == F.action))
+async def claim_test_config(event: types.CallbackQuery, db: AsyncSession, admin: AdminDetails | None):
+    lang = await _lang(db, event.from_user.id)
+    if admin is not None:
+        await event.answer("!", show_alert=True)
+        return
+    config = await get_enabled_shop_config(db)
+    if not config or not config.enabled or not config.test_enabled or not config.test_group_ids:
+        await event.answer(t(lang, "test_disabled"), show_alert=True)
+        return
+    if await has_test_claimed(db, event.from_user.id):
+        await event.answer(t(lang, "test_already_claimed"), show_alert=True)
+        return
+
+    from app.db.crud.admin import build_admin_details, get_admin_by_id
+    from datetime import UTC, datetime as dt, timedelta as td
+    import secrets
+
+    db_admin = await get_admin_by_id(db, config.admin_id, load_users=False, load_usage_logs=False)
+    if not db_admin:
+        await event.answer(t(lang, "test_disabled"), show_alert=True)
+        return
+    admin_details = build_admin_details(db_admin, include_loaded_metrics=True)
+
+    username = f"test{event.from_user.id}_{secrets.token_hex(2)}"
+    expire = None
+    if config.test_expire_days and config.test_expire_days > 0:
+        expire = dt.now(UTC) + td(days=config.test_expire_days)
+
+    new_user = UserCreate(
+        username=username,
+        status=UserStatus.active,
+        data_limit=config.test_data_limit or None,
+        expire=expire,
+        group_ids=list(config.test_group_ids or []),
+        note="shop test config",
+    )
+    try:
+        user = await user_operator.create_user(db, new_user, admin_details)
+    except Exception as exc:
+        await event.answer(str(exc)[:180], show_alert=True)
+        return
+
+    await mark_test_claimed(db, event.from_user.id)
+    markup = await _home_markup(db, lang, event.from_user.id, config)
+    text = rich(
+        lang,
+        "test_claim_ok",
+        username=user.username,
+        url=user.subscription_url,
+    )
+    await event.message.edit_text(text, reply_markup=markup)
+    await event.answer()
+
+    from app.telegram import get_bot
+
+    bot = get_bot()
+    if bot:
+        try:
+            from app.telegram.utils.qr import subscription_qr_file
+
+            await bot.send_photo(event.from_user.id, subscription_qr_file(user.subscription_url, user.username))
+        except Exception:
+            pass
 
 
 @router.callback_query(ShopKeyboard.Callback.filter(ShopAction.my_orders == F.action))
@@ -146,7 +227,8 @@ async def my_orders(event: types.CallbackQuery, db: AsyncSession):
                 )
             )
         text = "\n".join(lines)
-    await event.message.edit_text(text, reply_markup=ShopHomeKeyboard(lang).as_markup())
+    config = await get_enabled_shop_config(db)
+    await event.message.edit_text(text, reply_markup=await _home_markup(db, lang, event.from_user.id, config))
     await event.answer()
 
 
@@ -194,7 +276,7 @@ async def support_start(event: types.CallbackQuery, db: AsyncSession, state: FSM
         return
     await state.set_state(forms.ShopSupport.waiting_message)
     await state.update_data(admin_id=config.admin_id, lang=lang)
-    await event.message.edit_text(t(lang, "support_prompt"), reply_markup=ShopHomeKeyboard(lang).as_markup())
+    await event.message.edit_text(t(lang, "support_prompt"), reply_markup=await _home_markup(db, lang, event.from_user.id, config))
     await event.answer()
 
 
@@ -229,7 +311,9 @@ async def support_message(event: types.Message, db: AsyncSession, state: FSMCont
             pass
 
     await state.clear()
-    await event.answer(t(lang, "support_sent"), reply_markup=ShopHomeKeyboard(lang).as_markup())
+    config = await get_enabled_shop_config(db)
+    markup = await _home_markup(db, lang, event.from_user.id, config) if config else ShopHomeKeyboard(lang).as_markup()
+    await event.answer(t(lang, "support_sent"), reply_markup=markup)
 
 
 @router.message(forms.ShopSupport.waiting_message)

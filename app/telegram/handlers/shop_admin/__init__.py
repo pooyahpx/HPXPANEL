@@ -37,9 +37,14 @@ from app.telegram.utils.filters import IsAdminFilter
 from app.telegram.utils.i18n import format_bytes, format_price, rich, t
 from app.telegram.utils.shared import add_to_messages_to_delete
 from app.telegram.utils.shop_helpers import (
+    MAX_SHOP_CARDS,
     card_note_preview,
     card_photos_count,
+    cards_summary,
+    notify_owner_order_approved,
     parse_optional_limit,
+    shop_cards,
+    test_config_summary,
     welcome_note_preview,
 )
 
@@ -139,11 +144,11 @@ async def _render_admin_shop(event: types.Message | types.CallbackQuery, db: Asy
         lang,
         "admin_shop_home",
         enabled=t(lang, "yes") if enabled else t(lang, "no"),
-        card=config.card_number if config and config.card_number else "—",
-        holder=config.card_holder if config and config.card_holder else "—",
+        cards=cards_summary(config, lang),
         card_note=card_note_preview(config.card_note if config else None, lang),
         welcome=welcome_note_preview(config.welcome_note if config else None, lang),
         card_photos=str(card_photos_count(config)),
+        test=test_config_summary(config, lang),
         plans=sum(1 for p in plans if p.is_active),
         pending=len(pending),
     )
@@ -182,20 +187,45 @@ async def toggle_shop(event: types.CallbackQuery, db: AsyncSession, admin: Admin
 
 
 @router.callback_query(ShopAdminKeyboard.Callback.filter(ShopAdminAction.set_card == F.action))
-async def ask_card(event: types.CallbackQuery, db: AsyncSession, state: FSMContext):
+async def ask_card(event: types.CallbackQuery, db: AsyncSession, state: FSMContext, admin: AdminDetails):
     lang = await _lang(db, event.from_user.id)
+    config = await get_shop_config_by_admin(db, admin.id)
+    existing = shop_cards(config)
     await state.set_state(forms.ShopAdminCard.card_number)
-    await state.update_data(lang=lang)
+    await state.update_data(lang=lang, cards=existing)
     msg = await event.message.answer(t(lang, "admin_ask_card"))
     await add_to_messages_to_delete(state, msg)
     await event.answer()
 
 
-@router.message(forms.ShopAdminCard.card_number)
-async def save_card_number(event: types.Message, state: FSMContext):
+async def _save_cards(event: types.Message, db: AsyncSession, state: FSMContext, admin: AdminDetails, cards: list[dict[str, str]]):
     data = await state.get_data()
     lang = data.get("lang", "fa")
-    await state.update_data(card_number=event.text.strip())
+    await upsert_shop_config(db, admin.id, cards=cards)
+    await state.clear()
+    await event.answer(t(lang, "admin_card_saved", count=len(cards)))
+    await _render_admin_shop(event, db, admin)
+
+
+@router.message(forms.ShopAdminCard.card_number)
+async def save_card_number(event: types.Message, db: AsyncSession, state: FSMContext, admin: AdminDetails):
+    data = await state.get_data()
+    lang = data.get("lang", "fa")
+    cmd = event.text.strip().lower()
+    cards = list(data.get("cards") or [])
+    if cmd == "/clear":
+        await upsert_shop_config(db, admin.id, cards=[])
+        await state.clear()
+        await event.answer(t(lang, "admin_cards_cleared"))
+        await _render_admin_shop(event, db, admin)
+        return
+    if cmd == "/done":
+        if not cards:
+            await event.answer(t(lang, "admin_ask_card"))
+            return
+        await _save_cards(event, db, state, admin, cards)
+        return
+    await state.update_data(pending_number=event.text.strip())
     await state.set_state(forms.ShopAdminCard.card_holder)
     await event.answer(t(lang, "admin_ask_holder"))
 
@@ -204,14 +234,111 @@ async def save_card_number(event: types.Message, state: FSMContext):
 async def save_card_holder(event: types.Message, db: AsyncSession, state: FSMContext, admin: AdminDetails):
     data = await state.get_data()
     lang = data.get("lang", "fa")
+    cmd = event.text.strip().lower()
+    cards = list(data.get("cards") or [])
+    if cmd == "/clear":
+        await upsert_shop_config(db, admin.id, cards=[])
+        await state.clear()
+        await event.answer(t(lang, "admin_cards_cleared"))
+        await _render_admin_shop(event, db, admin)
+        return
+    if cmd == "/done":
+        if not cards:
+            await event.answer(t(lang, "admin_ask_card"))
+            return
+        await _save_cards(event, db, state, admin, cards)
+        return
+    number = data.get("pending_number")
+    if not number:
+        await state.set_state(forms.ShopAdminCard.card_number)
+        await event.answer(t(lang, "admin_ask_card"))
+        return
+    cards.append({"number": number, "holder": event.text.strip()})
+    if len(cards) >= MAX_SHOP_CARDS:
+        await _save_cards(event, db, state, admin, cards)
+        return
+    await state.update_data(cards=cards, pending_number=None)
+    await state.set_state(forms.ShopAdminCard.card_number)
+    await event.answer(t(lang, "admin_ask_card_next", count=len(cards), max=MAX_SHOP_CARDS))
+
+
+@router.callback_query(ShopAdminKeyboard.Callback.filter(ShopAdminAction.toggle_test == F.action))
+async def toggle_test(event: types.CallbackQuery, db: AsyncSession, admin: AdminDetails):
+    lang = await _lang(db, event.from_user.id)
+    config = await get_shop_config_by_admin(db, admin.id)
+    enabled = not bool(config and config.test_enabled)
+    await upsert_shop_config(db, admin.id, test_enabled=enabled)
+    await event.answer(t(lang, "admin_test_enabled_on" if enabled else "admin_test_enabled_off"))
+    await _render_admin_shop(event, db, admin)
+
+
+@router.callback_query(ShopAdminKeyboard.Callback.filter(ShopAdminAction.set_test == F.action))
+async def ask_test_config(event: types.CallbackQuery, db: AsyncSession, state: FSMContext):
+    lang = await _lang(db, event.from_user.id)
+    await state.set_state(forms.ShopAdminTest.gb)
+    await state.update_data(lang=lang)
+    msg = await event.message.answer(t(lang, "admin_ask_test_gb"))
+    await add_to_messages_to_delete(state, msg)
+    await event.answer()
+
+
+@router.message(forms.ShopAdminTest.gb)
+async def test_gb(event: types.Message, state: FSMContext):
+    data = await state.get_data()
+    lang = data.get("lang", "fa")
+    try:
+        gb = int(event.text.strip())
+        if gb < 0:
+            raise ValueError
+    except ValueError:
+        await event.answer(t(lang, "invalid_number"))
+        return
+    await state.update_data(test_data_limit=gb * GB)
+    await state.set_state(forms.ShopAdminTest.days)
+    await event.answer(t(lang, "admin_ask_test_days"))
+
+
+@router.message(forms.ShopAdminTest.days)
+async def test_days(event: types.Message, state: FSMContext):
+    data = await state.get_data()
+    lang = data.get("lang", "fa")
+    try:
+        days = int(event.text.strip())
+        if days < 0:
+            raise ValueError
+    except ValueError:
+        await event.answer(t(lang, "invalid_number"))
+        return
+    await state.update_data(test_expire_days=days)
+    await state.set_state(forms.ShopAdminTest.groups)
+    await event.answer(t(lang, "admin_ask_test_groups"))
+
+
+@router.message(forms.ShopAdminTest.groups)
+async def test_groups(event: types.Message, db: AsyncSession, state: FSMContext, admin: AdminDetails):
+    data = await state.get_data()
+    lang = data.get("lang", "fa")
+    raw = event.text.strip()
+    group_ids: list[int] = []
+    if raw not in ("-", "0", ""):
+        try:
+            group_ids = [int(x.strip()) for x in raw.split(",") if x.strip()]
+        except ValueError:
+            await event.answer(t(lang, "invalid_number"))
+            return
+    if not group_ids:
+        await event.answer(t(lang, "admin_ask_test_groups"))
+        return
     await upsert_shop_config(
         db,
         admin.id,
-        card_number=data.get("card_number"),
-        card_holder=event.text.strip(),
+        test_data_limit=data.get("test_data_limit", GB),
+        test_expire_days=data.get("test_expire_days", 1),
+        test_group_ids=group_ids,
+        test_enabled=True,
     )
     await state.clear()
-    await event.answer(t(lang, "admin_card_saved"))
+    await event.answer(t(lang, "admin_test_saved"))
     await _render_admin_shop(event, db, admin)
 
 
@@ -649,6 +776,17 @@ async def approve_order(event: types.CallbackQuery, callback_data: ShopAdminKeyb
                 await bot.send_message(order.buyer_telegram_id, text)
             except Exception:
                 pass
+
+        buyer_label = order.buyer_username or str(order.buyer_telegram_id)
+        await notify_owner_order_approved(
+            db=db,
+            bot=bot,
+            approver=admin,
+            order_id=order.id,
+            buyer_label=buyer_label,
+            plan_name=plan.name,
+            username=user.username,
+        )
 
 
 @router.callback_query(ShopAdminKeyboard.Callback.filter(ShopAdminAction.reject == F.action))

@@ -43,6 +43,19 @@ async def mark_join_notified(db: AsyncSession, telegram_id: int) -> bool:
     return True
 
 
+async def has_test_claimed(db: AsyncSession, telegram_id: int) -> bool:
+    profile = await db.get(TelegramProfile, telegram_id)
+    return bool(profile and profile.test_claimed)
+
+
+async def mark_test_claimed(db: AsyncSession, telegram_id: int) -> None:
+    profile = await get_or_create_telegram_profile(db, telegram_id)
+    profile.test_claimed = True
+    profile.updated_at = datetime.now(UTC)
+    await db.commit()
+    await db.refresh(profile)
+
+
 async def get_owner_admin(db: AsyncSession) -> Admin | None:
     stmt = (
         select(Admin)
@@ -74,6 +87,11 @@ async def upsert_shop_config(
     card_note: str | None = None,
     card_photos: list[str] | None = None,
     welcome_note: str | None = None,
+    cards: list[dict[str, str]] | None = None,
+    test_enabled: bool | None = None,
+    test_data_limit: int | None = None,
+    test_expire_days: int | None = None,
+    test_group_ids: list[int] | None = None,
 ) -> ShopConfig:
     config = await get_shop_config_by_admin(db, admin_id)
     if config is None:
@@ -91,6 +109,22 @@ async def upsert_shop_config(
         config.card_photos = card_photos
     if welcome_note is not None:
         config.welcome_note = welcome_note
+    if cards is not None:
+        config.cards = cards
+        if cards:
+            config.card_number = cards[0].get("number")
+            config.card_holder = cards[0].get("holder") or None
+        else:
+            config.card_number = None
+            config.card_holder = None
+    if test_enabled is not None:
+        config.test_enabled = test_enabled
+    if test_data_limit is not None:
+        config.test_data_limit = test_data_limit
+    if test_expire_days is not None:
+        config.test_expire_days = test_expire_days
+    if test_group_ids is not None:
+        config.test_group_ids = test_group_ids
     await db.commit()
     await db.refresh(config)
     return config

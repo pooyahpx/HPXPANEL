@@ -7,9 +7,58 @@ from aiogram.types import Message, User as TgUser
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.crud.admin import list_admins_with_telegram
-from app.db.crud.shop import get_telegram_lang, mark_join_notified
+from app.db.crud.shop import get_owner_admin, get_telegram_lang, has_test_claimed, mark_join_notified
 from app.db.models import ShopConfig
+from app.models.admin import AdminDetails
 from app.telegram.utils.i18n import rich, t
+
+MAX_SHOP_CARDS = 3
+
+
+def shop_cards(config: ShopConfig | None) -> list[dict[str, str]]:
+    if not config:
+        return []
+    if config.cards:
+        return [{"number": c.get("number", ""), "holder": c.get("holder", "")} for c in config.cards if c.get("number")]
+    if config.card_number:
+        return [{"number": config.card_number, "holder": config.card_holder or ""}]
+    return []
+
+
+def cards_summary(config: ShopConfig | None, lang: str) -> str:
+    cards = shop_cards(config)
+    if not cards:
+        return "—"
+    if len(cards) == 1:
+        card = cards[0]
+        return f"{card['number']} ({card['holder'] or '—'})"
+    return t(lang, "admin_cards_count", count=len(cards))
+
+
+def test_config_summary(config: ShopConfig | None, lang: str) -> str:
+    if not config or not config.test_enabled:
+        return t(lang, "no")
+    from app.telegram.utils.i18n import format_bytes
+
+    days = t(lang, "days_unlimited") if not config.test_expire_days else str(config.test_expire_days)
+    groups = ",".join(str(g) for g in (config.test_group_ids or [])) or "—"
+    return rich(
+        lang,
+        "admin_test_summary",
+        data=format_bytes(config.test_data_limit),
+        days=days,
+        groups=groups,
+    )
+
+
+async def buyer_show_test_button(db: AsyncSession, telegram_id: int, config: ShopConfig | None) -> bool:
+    if not config or not config.test_enabled:
+        return False
+    if not config.test_group_ids:
+        return False
+    if await has_test_claimed(db, telegram_id):
+        return False
+    return True
 
 
 def welcome_note_preview(note: str | None, lang: str) -> str:
@@ -49,15 +98,31 @@ def parse_optional_limit(raw: str) -> int | None:
 
 
 def build_pay_card_section(lang: str, config: ShopConfig) -> str:
-    if config.card_number:
+    cards = shop_cards(config)
+    if not cards:
+        text = t(lang, "pay_no_card")
+    elif len(cards) == 1:
+        card = cards[0]
         text = rich(
             lang,
             "pay_card",
-            card=config.card_number,
-            holder=config.card_holder or "—",
+            card=card["number"],
+            holder=card["holder"] or "—",
         )
     else:
-        text = t(lang, "pay_no_card")
+        lines = [t(lang, "pay_cards_header")]
+        for index, card in enumerate(cards, start=1):
+            lines.append(
+                rich(
+                    lang,
+                    "pay_card_item",
+                    index=index,
+                    card=card["number"],
+                    holder=card["holder"] or "—",
+                )
+            )
+        lines.append(t(lang, "pay_cards_footer"))
+        text = "\n".join(lines)
     if config.card_note:
         text += f"\n\n{config.card_note}"
     return text
@@ -141,3 +206,34 @@ async def notify_admins_user_joined(db: AsyncSession, bot: Bot | None, user: TgU
             notified_ids.add(chat_id)
         except Exception:
             pass
+
+
+async def notify_owner_order_approved(
+    *,
+    db: AsyncSession,
+    bot: Bot | None,
+    approver: AdminDetails,
+    order_id: int,
+    buyer_label: str,
+    plan_name: str,
+    username: str,
+) -> None:
+    if bot is None or approver.is_owner:
+        return
+    owner = await get_owner_admin(db)
+    if owner is None or not owner.telegram_id or owner.telegram_id == approver.telegram_id:
+        return
+    owner_lang = (await get_telegram_lang(db, owner.telegram_id)) or "fa"
+    text = rich(
+        owner_lang,
+        "admin_order_approved_by_other",
+        id=order_id,
+        admin=approver.username,
+        buyer=buyer_label,
+        plan=plan_name,
+        username=username,
+    )
+    try:
+        await bot.send_message(owner.telegram_id, text)
+    except Exception:
+        pass

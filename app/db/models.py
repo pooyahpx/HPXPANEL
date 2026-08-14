@@ -985,6 +985,7 @@ class TelegramProfile(Base):
     telegram_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     lang: Mapped[str] = mapped_column(String(8), default="fa")
     join_notified: Mapped[bool] = mapped_column(server_default="0", default=False)
+    test_claimed: Mapped[bool] = mapped_column(server_default="0", default=False)
     updated_at: Mapped[dt] = mapped_column(DateTime(timezone=True), default_factory=lambda: dt.now(UTC), init=False)
 
 
@@ -998,6 +999,11 @@ class ShopConfig(Base, CreatedAtUTCMixin):
     card_note: Mapped[str | None] = mapped_column(String(1000), default=None)
     card_photos: Mapped[list[str] | None] = mapped_column(PostgresJSONB, default_factory=list)
     welcome_note: Mapped[str | None] = mapped_column(String(500), default=None)
+    cards: Mapped[list[dict[str, str]] | None] = mapped_column(PostgresJSONB, default_factory=list)
+    test_enabled: Mapped[bool] = mapped_column(server_default="0", default=False)
+    test_data_limit: Mapped[int] = mapped_column(BigInteger, default=1024**3)
+    test_expire_days: Mapped[int] = mapped_column(Integer, default=1)
+    test_group_ids: Mapped[list[int] | None] = mapped_column(PostgresJSONB, default_factory=list)
 
 
 class ShopPlan(Base, CreatedAtUTCMixin):

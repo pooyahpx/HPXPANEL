@@ -30,6 +30,7 @@ class ShopAction(str, Enum):
     my_orders = "orders"
     lang = "lang"
     support = "support"
+    test = "test"
     back = "back"
 
 
@@ -42,14 +43,19 @@ class ShopHomeKeyboard(InlineKeyboardBuilder):
     class Callback(CallbackData, prefix="shophome"):
         action: ShopAction
 
-    def __init__(self, lang: str, *args, **kwargs):
+    def __init__(self, lang: str, show_test: bool = False, *args, **kwargs):
         super().__init__(*args, **kwargs)
         cb = ShopKeyboardCallback
         self.button(text=t(lang, "btn_plans"), callback_data=cb(action=ShopAction.plans))
+        if show_test:
+            self.button(text=t(lang, "btn_test"), callback_data=cb(action=ShopAction.test))
         self.button(text=t(lang, "btn_my_orders"), callback_data=cb(action=ShopAction.my_orders))
         self.button(text=t(lang, "btn_support"), callback_data=cb(action=ShopAction.support))
         self.button(text=t(lang, "btn_lang"), callback_data=cb(action=ShopAction.lang))
-        self.adjust(1, 2, 1)
+        if show_test:
+            self.adjust(1, 1, 2, 1)
+        else:
+            self.adjust(1, 2, 1)
 
 
 class ShopPlansKeyboard(InlineKeyboardBuilder):
@@ -98,6 +104,8 @@ class ShopAdminAction(str, Enum):
     plan_set_users = "psu"
     plan_set_hwid = "psh"
     support_reply = "sreply"
+    toggle_test = "ttest"
+    set_test = "stest"
 
 
 class ShopAdminKeyboard(InlineKeyboardBuilder):
@@ -115,11 +123,13 @@ class ShopAdminKeyboard(InlineKeyboardBuilder):
         self.button(text=t(lang, "btn_welcome"), callback_data=self.Callback(action=ShopAdminAction.set_welcome))
         self.button(text=t(lang, "btn_card_note"), callback_data=self.Callback(action=ShopAdminAction.set_card_note))
         self.button(text=t(lang, "btn_card_photos"), callback_data=self.Callback(action=ShopAdminAction.set_card_photos))
+        self.button(text=t(lang, "btn_test_settings"), callback_data=self.Callback(action=ShopAdminAction.set_test))
+        self.button(text=t(lang, "btn_toggle_test"), callback_data=self.Callback(action=ShopAdminAction.toggle_test))
         self.button(text=t(lang, "btn_add_plan"), callback_data=self.Callback(action=ShopAdminAction.add_plan))
         self.button(text=t(lang, "btn_list_plans"), callback_data=self.Callback(action=ShopAdminAction.list_plans))
         self.button(text=t(lang, "btn_pending"), callback_data=self.Callback(action=ShopAdminAction.pending))
         self.button(text=t(lang, "btn_back"), callback_data=self.Callback(action=ShopAdminAction.home, id=-1))
-        self.adjust(2, 2, 2, 2, 1)
+        self.adjust(2, 2, 2, 2, 2, 1)
 
 
 class ShopAdminPlansKeyboard(InlineKeyboardBuilder):

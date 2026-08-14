@@ -97,7 +97,7 @@ class SubscriptionOperation(BaseOperation):
         for group in db_user.groups or []:
             await group.awaitable_attrs.inbounds
 
-        user = UsersResponseWithInbounds.model_validate(db_user)
+        user = UsersResponseWithInbounds.model_validate(db_user.__dict__)
         user.inbounds = await db_user.inbounds()
         user.expire = db_user.expire
         user.lifetime_used_traffic = db_user.lifetime_used_traffic

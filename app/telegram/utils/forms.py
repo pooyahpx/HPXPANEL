@@ -87,6 +87,7 @@ class ShopAdminCardPhotos(StatesGroup):
 
 class PromoteAdmin(StatesGroup):
     waiting_target = State()
+    waiting_username = State()
 
 
 class ClaimOwner(StatesGroup):

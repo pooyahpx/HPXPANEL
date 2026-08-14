@@ -4,9 +4,8 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.crud.admin import get_admin_by_telegram_id
-from app.db.crud.admin_role import get_role_by_name
-from app.models.admin import AdminCreate, AdminDetails
+from app.db.crud.admin import get_admin, get_admin_by_telegram_id
+from app.models.admin import AdminDetails, AdminModify
 from app.models.node import NodeListQuery
 from app.operation import OperatorType
 from app.operation.admin import AdminOperation
@@ -96,21 +95,48 @@ async def promote_admin_target(event: Message, db: AsyncSession, state: FSMConte
         await event.answer(t(lang, "promote_exists", username=existing.username))
         return
 
-    role = await get_role_by_name(db, "administrator")
-    if role is None:
-        role = await get_role_by_name(db, "operator")
-    if role is None:
+    await state.update_data(target_telegram_id=target_id)
+    await state.set_state(forms.PromoteAdmin.waiting_username)
+    msg = await event.message.answer(t(lang, "promote_ask_username"))
+    await add_to_messages_to_delete(state, msg)
+
+
+@router.message(IsOwnerFilter(), forms.PromoteAdmin.waiting_username)
+async def promote_admin_username(event: Message, db: AsyncSession, state: FSMContext, admin: AdminDetails):
+    data = await state.get_data()
+    lang = data.get("lang", "fa")
+    target_id = data.get("target_telegram_id")
+
+    if not target_id or not event.text:
         await state.clear()
-        await event.answer(t(lang, "promote_fail", error="role missing"))
+        await event.answer(t(lang, "promote_fail", error="missing data"))
         return
 
-    username = f"tg{target_id}"
-    # Meets PasswordValidator rules
-    password = f"HpX1Adm!{target_id % 10000:04d}aB"
+    username = event.text.strip()
+    if not username:
+        await event.answer(t(lang, "promote_panel_not_found"))
+        return
+
+    panel_admin = await get_admin(db, username, load_users=False, load_usage_logs=False)
+    if panel_admin is None:
+        await event.answer(t(lang, "promote_panel_not_found"))
+        return
+
+    if panel_admin.role_id == 1:
+        await state.clear()
+        await event.answer(t(lang, "promote_owner_forbidden"))
+        return
+
+    if panel_admin.telegram_id is not None:
+        await state.clear()
+        await event.answer(t(lang, "promote_panel_linked"))
+        return
+
     try:
-        await admin_operator.create_admin(
+        await admin_operator.modify_admin_by_id(
             db,
-            AdminCreate(username=username, password=password, role_id=role.id, telegram_id=target_id),
+            panel_admin.id,
+            AdminModify(telegram_id=int(target_id)),
             admin,
         )
     except Exception as exc:
@@ -119,7 +145,7 @@ async def promote_admin_target(event: Message, db: AsyncSession, state: FSMConte
         return
 
     await state.clear()
-    await event.answer(rich(lang, "promote_ok", username=username, password=password))
+    await event.answer(rich(lang, "promote_ok", username=panel_admin.username))
 
 
 @router.callback_query(

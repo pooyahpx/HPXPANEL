@@ -5,6 +5,7 @@ import ApplyTemplateModal from '@/features/templates/dialogs/apply-template-moda
 import { DataTable } from '@/features/users/components/data-table'
 import { Filters } from '@/features/users/components/filters'
 import { type UseEditFormValues } from '@/features/users/forms/user-form'
+import { buildUserEditFormValues } from '@/features/users/utils/user-form-values'
 import useDirDetection from '@/hooks/use-dir-detection'
 import {
   getGetUsersQueryOptions,
@@ -30,7 +31,6 @@ import {
   setUsersShowSelectionCheckbox,
 } from '@/utils/userPreferenceStorage'
 import { bytesToFormGigabytes, gbToBytes } from '@/utils/formatByte'
-import { normalizeDatePickerValueForEditForm } from '@/utils/userEditDateUtils'
 import { useQueryClient, useMutation } from '@tanstack/react-query'
 import { endOfDay, startOfDay } from 'date-fns'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -371,65 +371,12 @@ const UsersTable = memo(() => {
   }) as any
 
   const userForm = useForm<UseEditFormValues>({
-    defaultValues: {
-      username: selectedUser?.username,
-      status: selectedUser?.status === 'active' || selectedUser?.status === 'on_hold' || selectedUser?.status === 'disabled' ? selectedUser?.status : 'active',
-      data_limit: selectedUser?.data_limit ? bytesToFormGigabytes(Number(selectedUser.data_limit)) : undefined,
-      hwid_limit: selectedUser?.hwid_limit ?? null,
-      ip_limit: selectedUser?.ip_limit ?? null,
-      expire: normalizeDatePickerValueForEditForm(selectedUser?.expire),
-      note: selectedUser?.note || '',
-      data_limit_reset_strategy: selectedUser?.data_limit_reset_strategy || undefined,
-      group_ids: selectedUser?.group_ids || [],
-      group_quota_gb: Object.fromEntries(
-        (selectedUser?.group_quotas || [])
-          .filter(q => q.data_limit)
-          .map(q => [q.group_id, bytesToFormGigabytes(Number(q.data_limit))]),
-      ),
-      on_hold_expire_duration: selectedUser?.on_hold_expire_duration || undefined,
-      on_hold_timeout: normalizeDatePickerValueForEditForm(selectedUser?.on_hold_timeout),
-      proxy_settings: selectedUser?.proxy_settings || undefined,
-      next_plan: selectedUser?.next_plan
-        ? {
-            user_template_id: selectedUser?.next_plan.user_template_id ? Number(selectedUser?.next_plan.user_template_id) : undefined,
-            data_limit: selectedUser?.next_plan.data_limit ? Math.round(Number(selectedUser?.next_plan.data_limit)) : undefined,
-            expire: selectedUser?.next_plan.expire ? Math.round(Number(selectedUser?.next_plan.expire)) : undefined,
-            add_remaining_traffic: selectedUser?.next_plan.add_remaining_traffic || false,
-          }
-        : undefined,
-    },
+    defaultValues: selectedUser ? buildUserEditFormValues(selectedUser) : undefined,
   })
 
   useEffect(() => {
     if (selectedUser) {
-      const values: UseEditFormValues = {
-        username: selectedUser.username,
-        status: selectedUser.status === 'active' || selectedUser.status === 'on_hold' || selectedUser.status === 'disabled' ? selectedUser.status : 'active',
-        data_limit: selectedUser.data_limit ? bytesToFormGigabytes(Number(selectedUser.data_limit)) : 0,
-        hwid_limit: selectedUser.hwid_limit ?? null,
-        ip_limit: selectedUser.ip_limit ?? null,
-        expire: normalizeDatePickerValueForEditForm(selectedUser.expire),
-        note: selectedUser.note || '',
-        data_limit_reset_strategy: selectedUser.data_limit_reset_strategy || undefined,
-        group_ids: selectedUser.group_ids || [],
-        group_quota_gb: Object.fromEntries(
-          (selectedUser.group_quotas || [])
-            .filter(q => q.data_limit)
-            .map(q => [q.group_id, bytesToFormGigabytes(Number(q.data_limit))]),
-        ),
-        on_hold_expire_duration: selectedUser.on_hold_expire_duration || undefined,
-        on_hold_timeout: normalizeDatePickerValueForEditForm(selectedUser.on_hold_timeout),
-        proxy_settings: selectedUser.proxy_settings || undefined,
-        next_plan: selectedUser.next_plan
-          ? {
-              user_template_id: selectedUser.next_plan.user_template_id ? Number(selectedUser.next_plan.user_template_id) : undefined,
-              data_limit: selectedUser.next_plan.data_limit ? Math.round(Number(selectedUser.next_plan.data_limit)) : undefined,
-              expire: selectedUser.next_plan.expire ? Math.round(Number(selectedUser.next_plan.expire)) : undefined,
-              add_remaining_traffic: selectedUser.next_plan.add_remaining_traffic || false,
-            }
-          : undefined,
-      }
-      userForm.reset(values)
+      userForm.reset(buildUserEditFormValues(selectedUser))
     }
   }, [selectedUser, userForm])
 

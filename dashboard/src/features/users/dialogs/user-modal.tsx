@@ -7,6 +7,7 @@ import UserAllIPsModal from '@/features/users/dialogs/user-all-ips-modal'
 import { UserHwidsModal } from '@/features/users/dialogs/user-hwids-modal'
 import { UserSubscriptionClientsModal } from '@/features/users/dialogs/user-subscription-clients-modal'
 import { type UseEditFormValues, type UseFormValues, userCreateObjectSchema, userCreateSchema, userEditObjectSchema, userEditSchema } from '@/features/users/forms/user-form'
+import { buildGroupQuotaGbFromUser } from '@/features/users/utils/user-form-values'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
@@ -28,6 +29,7 @@ import {
   getGeneralSettings,
   getGetGeneralSettingsQueryKey,
   getGetGroupsSimpleQueryKey,
+  getUserById,
   modifyUserById,
   setUserDisabledById,
   useCreateUser,
@@ -528,6 +530,35 @@ function UserModal({ isDialogOpen, onOpenChange, form, editingUser, editingUserI
 
   // Prefetch lightweight groups while modal is open so the Groups tab can render immediately.
   const watchedGroupQuotaGb = form.watch('group_quota_gb') || {}
+
+  useEffect(() => {
+    if (!isDialogOpen || !editingUser || !editingUserId) return
+
+    let cancelled = false
+
+    const applyGroupQuotas = (user: UserResponse) => {
+      form.setValue('group_quota_gb', buildGroupQuotaGbFromUser(user), {
+        shouldDirty: false,
+        shouldValidate: false,
+      })
+    }
+
+    getUserById(editingUserId)
+      .then(user => {
+        if (cancelled) return
+        upsertUserInUsersCache(queryClient, user)
+        applyGroupQuotas(user)
+      })
+      .catch(() => {
+        if (!cancelled && editingUserData) {
+          applyGroupQuotas(editingUserData)
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [isDialogOpen, editingUser, editingUserId, editingUserData, form, queryClient])
 
   const { data: generalSettings } = useQuery({
     queryKey: getGetGeneralSettingsQueryKey(),

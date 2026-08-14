@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button'
 import { useClipboard } from '@/hooks/use-clipboard'
 import useDirDetection from '@/hooks/use-dir-detection'
 import { type UseEditFormValues } from '@/features/users/forms/user-form'
-import { useActiveNextPlanById, useGetCurrentAdmin, useRemoveUserById, useResetUserDataUsageById, useRevokeUserSubscriptionById, UserResponse, UsersResponse } from '@/service/api'
+import { getUserById, useActiveNextPlanById, useGetCurrentAdmin, useRemoveUserById, useResetUserDataUsageById, useRevokeUserSubscriptionById, UserResponse, UsersResponse } from '@/service/api'
 import { useQueryClient } from '@tanstack/react-query'
 import { Cat, Check, Copy, EllipsisVertical, Fingerprint, GlobeLock, Hash, Link2Off, ListStart, ListTree, Network, Pencil, PieChart, QrCode, RefreshCcw, Trash2, UserCog, Users } from 'lucide-react'
 import { WireguardIcon, XrayIcon, SingboxIcon, MihomoIcon } from '@/components/icons/format-icons'
@@ -13,8 +13,7 @@ import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { CopyButton } from '@/components/common/copy-button'
-import { bytesToFormGigabytes } from '@/utils/formatByte'
-import { normalizeDatePickerValueForEditForm } from '@/utils/userEditDateUtils'
+import { buildUserEditFormValues } from '@/features/users/utils/user-form-values'
 import SubscriptionModal from '@/features/subscriptions/dialogs/subscription-modal'
 import SetOwnerModal from '@/features/users/dialogs/set-owner-modal'
 import UsageModal from '@/features/users/dialogs/usage-modal'
@@ -193,28 +192,6 @@ const updateModalState = (userId: number, updater: (prev: ActionButtonsModalStat
   actionButtonsModalStateListeners.get(userId)?.forEach(listener => listener())
   notifyGlobalListeners()
 }
-
-const buildUserEditFormValues = (user: UserResponse): UseEditFormValues => ({
-  username: user.username,
-  status: user.status === 'active' || user.status === 'on_hold' || user.status === 'disabled' ? (user.status as UseEditFormValues['status']) : 'active',
-  data_limit: user.data_limit ? bytesToFormGigabytes(Number(user.data_limit)) : 0,
-  hwid_limit: user.hwid_limit ?? null,
-  expire: normalizeDatePickerValueForEditForm(user.expire),
-  note: user.note || '',
-  data_limit_reset_strategy: user.data_limit_reset_strategy || undefined,
-  group_ids: user.group_ids || [],
-  on_hold_expire_duration: user.on_hold_expire_duration || undefined,
-  on_hold_timeout: normalizeDatePickerValueForEditForm(user.on_hold_timeout),
-  proxy_settings: user.proxy_settings || undefined,
-  next_plan: user.next_plan
-    ? {
-        user_template_id: user.next_plan.user_template_id ? Number(user.next_plan.user_template_id) : undefined,
-        data_limit: user.next_plan.data_limit ? Math.round(Number(user.next_plan.data_limit)) : 0,
-        expire: user.next_plan.expire ? Math.round(Number(user.next_plan.expire)) : 0,
-        add_remaining_traffic: user.next_plan.add_remaining_traffic || false,
-      }
-    : undefined,
-})
 
 const ActionButtons: FC<ActionButtonsProps> = ({ user, isModalHost = true, renderActions = true }) => {
   const [isEditModalOpen, setEditModalOpen] = useState(false)
@@ -398,29 +375,34 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user, isModalHost = true, rende
   }, [subscribeLinks])
 
   // Handlers for menu items
-  const handleEdit = () => {
+  const handleEdit = async () => {
     if (clearSelectedUserTimeoutRef.current) {
       clearTimeout(clearSelectedUserTimeoutRef.current)
       clearSelectedUserTimeoutRef.current = null
     }
 
-    const cachedData = queryClient.getQueriesData<UsersResponse>({
-      queryKey: ['/api/users'],
-      exact: false,
-    })
-
     let latestUser = user
-    for (const [, data] of cachedData) {
-      if (data?.users) {
-        const foundUser = data.users.find(u => u.id === user.id)
-        if (foundUser) {
-          latestUser = foundUser
-          break
+    if (user.id) {
+      try {
+        latestUser = await getUserById(user.id)
+        upsertUserInUsersCache(queryClient, latestUser)
+      } catch {
+        const cachedData = queryClient.getQueriesData<UsersResponse>({
+          queryKey: ['/api/users'],
+          exact: false,
+        })
+        for (const [, data] of cachedData) {
+          if (data?.users) {
+            const foundUser = data.users.find(u => u.id === user.id)
+            if (foundUser) {
+              latestUser = foundUser
+              break
+            }
+          }
         }
       }
     }
 
-    // Update form with latest user data
     userForm.reset(buildUserEditFormValues(latestUser))
     setSelectedUser(latestUser)
     setEditModalOpen(true)

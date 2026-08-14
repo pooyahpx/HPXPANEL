@@ -417,6 +417,14 @@ def test_modify_user_with_group_quota(access_token):
         listed = list_response.json()["users"][0]
         listed_quotas = {item["group_id"]: item for item in listed.get("group_quotas") or []}
         assert listed_quotas[group_b["id"]]["data_limit"] == five_gb
+
+        by_id_response = client.get(
+            f"/api/user/by-id/{user['id']}",
+            headers=auth_headers(access_token),
+        )
+        assert by_id_response.status_code == status.HTTP_200_OK
+        by_id_quotas = {item["group_id"]: item for item in by_id_response.json().get("group_quotas") or []}
+        assert by_id_quotas[group_b["id"]]["data_limit"] == five_gb
     finally:
         delete_user(access_token, user["username"])
         cleanup_groups(access_token, core, groups)

@@ -835,14 +835,13 @@ class Group(Base, IdMixin):
         )
 
 
-class UserGroupQuota(Base):
+class UserGroupQuota(Base, IdMixin):
     __tablename__ = "user_group_quotas"
     __table_args__ = (
         UniqueConstraint("user_id", "group_id", name="uq_user_group_quotas_user_group"),
         Index("ix_user_group_quotas_user_id", "user_id"),
     )
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, init=False, autoincrement=True)
     user_id: Mapped[int] = fk_id_column("users.id", ondelete="CASCADE")
     group_id: Mapped[int] = fk_id_column("groups.id", ondelete="CASCADE")
     data_limit: Mapped[int | None] = mapped_column(BigInteger, default=None)

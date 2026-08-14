@@ -215,7 +215,7 @@ async def update_admin(db: AsyncSession, db_admin: Admin, modified_admin: AdminM
         db_admin.permission_overrides = modified_admin.permission_overrides.model_dump()
     if modified_admin.access_overrides is not None:
         db_admin.access_overrides = modified_admin.access_overrides.model_dump()
-    if modified_admin.telegram_id is not None:
+    if "telegram_id" in modified_admin.model_fields_set:
         db_admin.telegram_id = modified_admin.telegram_id
     if modified_admin.discord_webhook is not None:
         db_admin.discord_webhook = modified_admin.discord_webhook

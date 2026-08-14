@@ -17,6 +17,7 @@ class AdminPanelAction(str, Enum):
     bulk_actions = "bulk_actions"
     shop_manage = "shop_manage"
     promote_admin = "promote_admin"
+    demote_admin = "demote_admin"
 
 
 def _has_permission(admin: AdminDetails | None, resource: str, action: str) -> bool:
@@ -33,6 +34,7 @@ def _has_permission(admin: AdminDetails | None, resource: str, action: str) -> b
 class AdminPanel(InlineKeyboardBuilder):
     class Callback(CallbackData, prefix="panel"):
         action: AdminPanelAction
+        id: int = 0
 
     def __init__(self, admin: AdminDetails | None = None, panel_url: str | None = None, *args, **kwargs):
         super().__init__(*args, **kwargs)

@@ -100,7 +100,11 @@ class DeckPanel(InlineKeyboardBuilder):
                 text=t(lang, "btn_promote_admin"),
                 callback_data=panel_cb(action=AdminPanelAction.promote_admin),
             )
-            rows.append(1)
+            self.button(
+                text=t(lang, "btn_demote_admin"),
+                callback_data=panel_cb(action=AdminPanelAction.demote_admin),
+            )
+            rows.append(2)
 
         if rows:
             self.adjust(*rows)

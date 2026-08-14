@@ -2,9 +2,10 @@ from aiogram import F, Router
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.crud.admin import get_admin, get_admin_by_telegram_id
+from app.db.crud.admin import get_admin, get_admin_by_id, get_admin_by_telegram_id, list_admins_with_telegram
 from app.models.admin import AdminDetails, AdminModify
 from app.models.node import NodeListQuery
 from app.operation import OperatorType
@@ -146,6 +147,49 @@ async def promote_admin_username(event: Message, db: AsyncSession, state: FSMCon
 
     await state.clear()
     await event.answer(rich(lang, "promote_ok", username=panel_admin.username))
+
+
+@router.callback_query(IsOwnerFilter(), AdminPanel.Callback.filter(AdminPanelAction.demote_admin == F.action))
+async def demote_admin(event: CallbackQuery, db: AsyncSession, admin: AdminDetails, callback_data: AdminPanel.Callback):
+    lang = await _lang(db, event.from_user.id)
+
+    if callback_data.id:
+        panel_admin = await get_admin_by_id(db, callback_data.id, load_users=False, load_usage_logs=False)
+        if panel_admin is None or panel_admin.telegram_id is None:
+            await event.answer(t(lang, "demote_not_found"), show_alert=True)
+            return
+        if panel_admin.role_id == 1:
+            await event.answer(t(lang, "demote_owner_forbidden"), show_alert=True)
+            return
+
+        try:
+            await admin_operator.modify_admin_by_id(
+                db,
+                panel_admin.id,
+                AdminModify(telegram_id=None),
+                admin,
+            )
+        except Exception as exc:
+            await event.answer(t(lang, "demote_fail", error=str(exc)), show_alert=True)
+            return
+
+        await event.answer(rich(lang, "demote_ok", username=panel_admin.username))
+        return
+
+    linked = [a for a in await list_admins_with_telegram(db) if a.role_id != 1]
+    if not linked:
+        await event.answer(t(lang, "demote_empty"), show_alert=True)
+        return
+
+    kb = InlineKeyboardBuilder()
+    for panel_admin in linked:
+        kb.button(
+            text=f"{panel_admin.username} ({panel_admin.telegram_id})",
+            callback_data=AdminPanel.Callback(action=AdminPanelAction.demote_admin, id=panel_admin.id),
+        )
+    kb.adjust(1)
+    await event.message.answer(t(lang, "demote_pick_admin"), reply_markup=kb.as_markup())
+    await event.answer()
 
 
 @router.callback_query(

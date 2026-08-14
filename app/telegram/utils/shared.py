@@ -5,6 +5,20 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 
+GB_BYTES = 1024**3
+
+
+def parse_gb_input(text: str) -> int:
+    """Parse a GB value (supports decimals like 0.1) into bytes. 0 means unlimited."""
+    raw = text.strip().replace(",", ".").replace("٬", ".")
+    gb = float(raw)
+    if gb < 0:
+        raise ValueError("negative")
+    if gb == 0:
+        return 0
+    return int(gb * GB_BYTES)
+
+
 def readable_size(size_bytes: int):
     if int(size_bytes) == 0:
         return "0 Bytes"

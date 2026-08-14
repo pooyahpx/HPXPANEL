@@ -35,7 +35,7 @@ from app.telegram.keyboards.shop import (
 from app.telegram.utils import forms
 from app.telegram.utils.filters import IsAdminFilter
 from app.telegram.utils.i18n import format_bytes, format_price, rich, t
-from app.telegram.utils.shared import add_to_messages_to_delete
+from app.telegram.utils.shared import add_to_messages_to_delete, parse_gb_input
 from app.telegram.utils.shop_helpers import (
     MAX_SHOP_CARDS,
     card_note_preview,
@@ -287,13 +287,11 @@ async def test_gb(event: types.Message, state: FSMContext):
     data = await state.get_data()
     lang = data.get("lang", "fa")
     try:
-        gb = int(event.text.strip())
-        if gb < 0:
-            raise ValueError
+        test_data_limit = parse_gb_input(event.text)
     except ValueError:
         await event.answer(t(lang, "invalid_number"))
         return
-    await state.update_data(test_data_limit=gb * GB)
+    await state.update_data(test_data_limit=test_data_limit)
     await state.set_state(forms.ShopAdminTest.days)
     await event.answer(t(lang, "admin_ask_test_days"))
 
@@ -453,13 +451,11 @@ async def plan_gb(event: types.Message, state: FSMContext):
     data = await state.get_data()
     lang = data.get("lang", "fa")
     try:
-        gb = int(event.text.strip())
-        if gb < 0:
-            raise ValueError
+        data_limit = parse_gb_input(event.text)
     except ValueError:
         await event.answer(t(lang, "invalid_number"))
         return
-    await state.update_data(data_limit=gb * GB)
+    await state.update_data(data_limit=data_limit)
     await state.set_state(forms.ShopAdminPlan.days)
     await event.answer(t(lang, "admin_ask_plan_days"))
 
@@ -620,10 +616,11 @@ def _parse_plan_field_update(field: str, raw: str) -> dict:
             raise ValueError
         return {"name": name[:64]}
     if field == "data_limit":
-        gb = int(raw.strip())
-        if gb < 0:
+        try:
+            data_limit = parse_gb_input(raw)
+        except ValueError:
             raise ValueError
-        return {"data_limit": gb * GB if gb else 0}
+        return {"data_limit": data_limit}
     if field == "expire_days":
         days = int(raw.strip())
         if days < 0:

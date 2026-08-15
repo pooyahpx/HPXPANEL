@@ -1,10 +1,10 @@
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.db.models import Admin, AdminRole, ShopConfig, ShopOrder, ShopOrderStatus, ShopPlan, TelegramProfile
+from app.db.models import Admin, AdminRole, ShopConfig, ShopOrder, ShopOrderStatus, ShopPlan, TelegramProfile, User
 
 
 async def get_or_create_telegram_profile(db: AsyncSession, telegram_id: int, lang: str | None = None) -> TelegramProfile:
@@ -259,3 +259,54 @@ async def update_order_status(
     await db.commit()
     await db.refresh(order)
     return order
+
+
+async def get_shop_bot_stats(db: AsyncSession, admin_id: int) -> dict[str, int]:
+    """Aggregate join / test / order stats for shop admin overview."""
+    total_buyers = int((await db.execute(select(func.count()).select_from(TelegramProfile))).scalar_one() or 0)
+    joined = int(
+        (
+            await db.execute(select(func.count()).select_from(TelegramProfile).where(TelegramProfile.join_notified.is_(True)))
+        ).scalar_one()
+        or 0
+    )
+    test_claimed = int(
+        (
+            await db.execute(select(func.count()).select_from(TelegramProfile).where(TelegramProfile.test_claimed.is_(True)))
+        ).scalar_one()
+        or 0
+    )
+
+    test_row = (
+        await db.execute(
+            select(
+                func.count(User.id),
+                func.coalesce(func.sum(User.used_traffic), 0),
+            ).where(User.note == "shop test config")
+        )
+    ).one()
+    test_accounts = int(test_row[0] or 0)
+    test_used_bytes = int(test_row[1] or 0)
+
+    async def _order_count(status: ShopOrderStatus) -> int:
+        return int(
+            (
+                await db.execute(
+                    select(func.count())
+                    .select_from(ShopOrder)
+                    .where(ShopOrder.admin_id == admin_id, ShopOrder.status == status)
+                )
+            ).scalar_one()
+            or 0
+        )
+
+    return {
+        "total_buyers": total_buyers,
+        "joined": joined,
+        "test_claimed": test_claimed,
+        "test_accounts": test_accounts,
+        "test_used_bytes": test_used_bytes,
+        "orders_pending": await _order_count(ShopOrderStatus.pending),
+        "orders_approved": await _order_count(ShopOrderStatus.approved),
+        "orders_rejected": await _order_count(ShopOrderStatus.rejected),
+    }

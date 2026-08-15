@@ -84,6 +84,10 @@ class ShopAdminAction(str, Enum):
     home = "home"
     toggle = "toggle"
     set_card = "card"
+    add_card = "acard"
+    delete_card = "dcard"
+    edit_card = "ecard"
+    clear_cards = "ccard"
     set_card_note = "cnote"
     set_welcome = "welcome"
     set_card_photos = "cphotos"
@@ -106,6 +110,7 @@ class ShopAdminAction(str, Enum):
     support_reply = "sreply"
     toggle_test = "ttest"
     set_test = "stest"
+    stats = "stats"
 
 
 class ShopAdminKeyboard(InlineKeyboardBuilder):
@@ -120,6 +125,7 @@ class ShopAdminKeyboard(InlineKeyboardBuilder):
             callback_data=self.Callback(action=ShopAdminAction.toggle),
         )
         self.button(text=t(lang, "btn_set_card"), callback_data=self.Callback(action=ShopAdminAction.set_card))
+        self.button(text=t(lang, "btn_stats"), callback_data=self.Callback(action=ShopAdminAction.stats))
         self.button(text=t(lang, "btn_welcome"), callback_data=self.Callback(action=ShopAdminAction.set_welcome))
         self.button(text=t(lang, "btn_card_note"), callback_data=self.Callback(action=ShopAdminAction.set_card_note))
         self.button(text=t(lang, "btn_card_photos"), callback_data=self.Callback(action=ShopAdminAction.set_card_photos))
@@ -129,7 +135,34 @@ class ShopAdminKeyboard(InlineKeyboardBuilder):
         self.button(text=t(lang, "btn_list_plans"), callback_data=self.Callback(action=ShopAdminAction.list_plans))
         self.button(text=t(lang, "btn_pending"), callback_data=self.Callback(action=ShopAdminAction.pending))
         self.button(text=t(lang, "btn_back"), callback_data=self.Callback(action=ShopAdminAction.home, id=-1))
-        self.adjust(2, 2, 2, 2, 2, 1)
+        self.adjust(2, 2, 2, 2, 2, 1, 1)
+
+
+class ShopAdminCardsKeyboard(InlineKeyboardBuilder):
+    def __init__(self, lang: str, cards: list[dict[str, str]], *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        cb = ShopAdminKeyboard.Callback
+        for index, card in enumerate(cards):
+            number = card.get("number", "")
+            label = f"{index + 1}. {number}"
+            if len(label) > 28:
+                label = label[:25] + "…"
+            self.button(text=label, callback_data=cb(action=ShopAdminAction.edit_card, id=index))
+            self.button(text=t(lang, "btn_delete"), callback_data=cb(action=ShopAdminAction.delete_card, id=index))
+        if len(cards) < 3:
+            self.button(text=t(lang, "btn_add_card"), callback_data=cb(action=ShopAdminAction.add_card))
+        if cards:
+            self.button(text=t(lang, "btn_clear_cards"), callback_data=cb(action=ShopAdminAction.clear_cards))
+        self.button(text=t(lang, "btn_back"), callback_data=cb(action=ShopAdminAction.home))
+        rows: list[int] = []
+        for _ in cards:
+            rows.append(2)
+        if len(cards) < 3:
+            rows.append(1)
+        if cards:
+            rows.append(1)
+        rows.append(1)
+        self.adjust(*rows)
 
 
 class ShopAdminPlansKeyboard(InlineKeyboardBuilder):

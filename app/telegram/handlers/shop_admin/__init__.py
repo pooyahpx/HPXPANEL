@@ -10,6 +10,7 @@ from app.db.crud.admin import build_admin_details, get_admin_by_id
 from app.db.crud.shop import (
     create_shop_plan,
     delete_shop_plan,
+    get_shop_bot_stats,
     get_shop_config_by_admin,
     get_shop_order,
     get_shop_plan,
@@ -28,6 +29,7 @@ from app.operation import OperatorType
 from app.operation.user import UserOperation
 from app.telegram.keyboards.shop import (
     ShopAdminAction,
+    ShopAdminCardsKeyboard,
     ShopAdminKeyboard,
     ShopAdminPlanEditKeyboard,
     ShopAdminPlansKeyboard,
@@ -189,15 +191,100 @@ async def toggle_shop(event: types.CallbackQuery, db: AsyncSession, admin: Admin
 
 
 @router.callback_query(ShopAdminKeyboard.Callback.filter(ShopAdminAction.set_card == F.action))
+async def list_cards(event: types.CallbackQuery, db: AsyncSession, admin: AdminDetails):
+    await _render_cards_list(event, db, admin)
+
+
+async def _render_cards_list(event: types.Message | types.CallbackQuery, db: AsyncSession, admin: AdminDetails):
+    lang = await _lang(db, event.from_user.id)
+    config = await get_shop_config_by_admin(db, admin.id)
+    cards = shop_cards(config)
+    if cards:
+        lines = [rich(lang, "admin_cards_list_title"), ""]
+        for index, card in enumerate(cards, start=1):
+            lines.append(
+                rich(
+                    lang,
+                    "admin_card_row",
+                    index=index,
+                    number=card.get("number", "—"),
+                    holder=card.get("holder") or "—",
+                )
+            )
+        text = "\n".join(lines)
+    else:
+        text = t(lang, "admin_cards_empty")
+    markup = ShopAdminCardsKeyboard(lang, cards).as_markup()
+    message = event.message if isinstance(event, types.CallbackQuery) else event
+    if isinstance(event, types.CallbackQuery):
+        try:
+            await message.edit_text(text, reply_markup=markup)
+        except TelegramBadRequest:
+            await message.answer(text, reply_markup=markup)
+        await event.answer()
+    else:
+        await message.answer(text, reply_markup=markup)
+
+
+@router.callback_query(ShopAdminKeyboard.Callback.filter(ShopAdminAction.add_card == F.action))
 async def ask_card(event: types.CallbackQuery, db: AsyncSession, state: FSMContext, admin: AdminDetails):
     lang = await _lang(db, event.from_user.id)
     config = await get_shop_config_by_admin(db, admin.id)
     existing = shop_cards(config)
+    if len(existing) >= MAX_SHOP_CARDS:
+        await event.answer(t(lang, "admin_cards_full"), show_alert=True)
+        return
     await state.set_state(forms.ShopAdminCard.card_number)
-    await state.update_data(lang=lang, cards=existing)
+    await state.update_data(lang=lang, cards=existing, edit_index=None)
     msg = await event.message.answer(t(lang, "admin_ask_card"))
     await add_to_messages_to_delete(state, msg)
     await event.answer()
+
+
+@router.callback_query(ShopAdminKeyboard.Callback.filter(ShopAdminAction.edit_card == F.action))
+async def edit_card_start(
+    event: types.CallbackQuery, callback_data: ShopAdminKeyboard.Callback, db: AsyncSession, state: FSMContext, admin: AdminDetails
+):
+    lang = await _lang(db, event.from_user.id)
+    config = await get_shop_config_by_admin(db, admin.id)
+    cards = shop_cards(config)
+    index = callback_data.id
+    if index < 0 or index >= len(cards):
+        await event.answer("!", show_alert=True)
+        return
+    current = cards[index]
+    await state.set_state(forms.ShopAdminCard.card_number)
+    await state.update_data(lang=lang, cards=cards, edit_index=index)
+    msg = await event.message.answer(
+        rich(lang, "admin_ask_edit_card", number=current.get("number", "—"), holder=current.get("holder") or "—")
+    )
+    await add_to_messages_to_delete(state, msg)
+    await event.answer()
+
+
+@router.callback_query(ShopAdminKeyboard.Callback.filter(ShopAdminAction.delete_card == F.action))
+async def delete_card(
+    event: types.CallbackQuery, callback_data: ShopAdminKeyboard.Callback, db: AsyncSession, admin: AdminDetails
+):
+    lang = await _lang(db, event.from_user.id)
+    config = await get_shop_config_by_admin(db, admin.id)
+    cards = shop_cards(config)
+    index = callback_data.id
+    if index < 0 or index >= len(cards):
+        await event.answer("!", show_alert=True)
+        return
+    removed = cards.pop(index)
+    await upsert_shop_config(db, admin.id, cards=cards)
+    await event.answer(t(lang, "admin_card_deleted", number=removed.get("number", "")), show_alert=True)
+    await _render_cards_list(event, db, admin)
+
+
+@router.callback_query(ShopAdminKeyboard.Callback.filter(ShopAdminAction.clear_cards == F.action))
+async def clear_cards(event: types.CallbackQuery, db: AsyncSession, admin: AdminDetails):
+    lang = await _lang(db, event.from_user.id)
+    await upsert_shop_config(db, admin.id, cards=[])
+    await event.answer(t(lang, "admin_cards_cleared"), show_alert=True)
+    await _render_cards_list(event, db, admin)
 
 
 async def _save_cards(event: types.Message, db: AsyncSession, state: FSMContext, admin: AdminDetails, cards: list[dict[str, str]]):
@@ -206,7 +293,7 @@ async def _save_cards(event: types.Message, db: AsyncSession, state: FSMContext,
     await upsert_shop_config(db, admin.id, cards=cards)
     await state.clear()
     await event.answer(t(lang, "admin_card_saved", count=len(cards)))
-    await _render_admin_shop(event, db, admin)
+    await _render_cards_list(event, db, admin)
 
 
 @router.message(forms.ShopAdminCard.card_number)
@@ -215,13 +302,18 @@ async def save_card_number(event: types.Message, db: AsyncSession, state: FSMCon
     lang = data.get("lang", "fa")
     cmd = event.text.strip().lower()
     cards = list(data.get("cards") or [])
+    edit_index = data.get("edit_index")
     if cmd == "/clear":
         await upsert_shop_config(db, admin.id, cards=[])
         await state.clear()
         await event.answer(t(lang, "admin_cards_cleared"))
-        await _render_admin_shop(event, db, admin)
+        await _render_cards_list(event, db, admin)
         return
     if cmd == "/done":
+        if edit_index is not None:
+            await state.clear()
+            await _render_cards_list(event, db, admin)
+            return
         if not cards:
             await event.answer(t(lang, "admin_ask_card"))
             return
@@ -238,13 +330,18 @@ async def save_card_holder(event: types.Message, db: AsyncSession, state: FSMCon
     lang = data.get("lang", "fa")
     cmd = event.text.strip().lower()
     cards = list(data.get("cards") or [])
+    edit_index = data.get("edit_index")
     if cmd == "/clear":
         await upsert_shop_config(db, admin.id, cards=[])
         await state.clear()
         await event.answer(t(lang, "admin_cards_cleared"))
-        await _render_admin_shop(event, db, admin)
+        await _render_cards_list(event, db, admin)
         return
     if cmd == "/done":
+        if edit_index is not None:
+            await state.clear()
+            await _render_cards_list(event, db, admin)
+            return
         if not cards:
             await event.answer(t(lang, "admin_ask_card"))
             return
@@ -255,13 +352,46 @@ async def save_card_holder(event: types.Message, db: AsyncSession, state: FSMCon
         await state.set_state(forms.ShopAdminCard.card_number)
         await event.answer(t(lang, "admin_ask_card"))
         return
-    cards.append({"number": number, "holder": event.text.strip()})
+    card = {"number": number, "holder": event.text.strip()}
+    if edit_index is not None and 0 <= int(edit_index) < len(cards):
+        cards[int(edit_index)] = card
+        await _save_cards(event, db, state, admin, cards)
+        return
+    cards.append(card)
     if len(cards) >= MAX_SHOP_CARDS:
         await _save_cards(event, db, state, admin, cards)
         return
-    await state.update_data(cards=cards, pending_number=None)
+    await state.update_data(cards=cards, pending_number=None, edit_index=None)
     await state.set_state(forms.ShopAdminCard.card_number)
     await event.answer(t(lang, "admin_ask_card_next", count=len(cards), max=MAX_SHOP_CARDS))
+
+
+@router.callback_query(ShopAdminKeyboard.Callback.filter(ShopAdminAction.stats == F.action))
+async def shop_stats(event: types.CallbackQuery, db: AsyncSession, admin: AdminDetails):
+    lang = await _lang(db, event.from_user.id)
+    stats = await get_shop_bot_stats(db, admin.id)
+    text = rich(
+        lang,
+        "admin_shop_stats",
+        buyers=stats["total_buyers"],
+        joined=stats["joined"],
+        test_claimed=stats["test_claimed"],
+        test_accounts=stats["test_accounts"],
+        test_used=format_bytes(stats["test_used_bytes"]),
+        pending=stats["orders_pending"],
+        approved=stats["orders_approved"],
+        rejected=stats["orders_rejected"],
+    )
+    from aiogram.utils.keyboard import InlineKeyboardBuilder
+
+    kb = InlineKeyboardBuilder()
+    kb.button(text=t(lang, "btn_back"), callback_data=ShopAdminKeyboard.Callback(action=ShopAdminAction.home))
+    kb.adjust(1)
+    try:
+        await event.message.edit_text(text, reply_markup=kb.as_markup())
+    except TelegramBadRequest:
+        await event.message.answer(text, reply_markup=kb.as_markup())
+    await event.answer()
 
 
 @router.callback_query(ShopAdminKeyboard.Callback.filter(ShopAdminAction.toggle_test == F.action))

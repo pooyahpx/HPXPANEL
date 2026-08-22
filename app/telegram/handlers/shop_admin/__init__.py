@@ -917,6 +917,16 @@ async def approve_order(event: types.CallbackQuery, callback_data: ShopAdminKeyb
             plan_name=plan.name,
             username=user.username,
         )
+        from app.telegram.utils.sub_delivery import record_sub_delivery
+
+        await record_sub_delivery(
+            db,
+            user_id=user.id,
+            buyer_telegram_id=order.buyer_telegram_id,
+            source_type="order",
+            source_id=order.id,
+            panel_username=user.username,
+        )
 
 
 @router.callback_query(ShopAdminKeyboard.Callback.filter(ShopAdminAction.reject == F.action))
@@ -952,8 +962,37 @@ async def support_reply_start(
     admin: AdminDetails,
 ):
     lang = await _lang(db, event.from_user.id)
+    buyer_id = callback_data.id
+    from app.db.crud.shop import claim_support_ticket, support_reply_allowed
+
+    allowed, handler_username = await support_reply_allowed(db, buyer_id, admin.id)
+    if not allowed:
+        if handler_username:
+            await event.answer(t(lang, "support_already_handled", admin=handler_username), show_alert=True)
+        else:
+            await event.answer(t(lang, "support_closed"), show_alert=True)
+        return
+
+    claimed = await claim_support_ticket(
+        db,
+        buyer_id,
+        admin_id=admin.id,
+        admin_username=admin.username,
+    )
+    if claimed is None:
+        await event.answer(t(lang, "support_already_handled", admin=handler_username or "?"), show_alert=True)
+        return
+
+    from app.telegram import get_bot
+
+    bot = get_bot()
+    if bot:
+        from app.telegram.utils.shop_helpers import notify_admins_support_claimed
+
+        await notify_admins_support_claimed(db, bot=bot, buyer_telegram_id=buyer_id, handler=admin)
+
     await state.set_state(forms.ShopSupportAdmin.waiting_reply)
-    await state.update_data(lang=lang, buyer_telegram_id=callback_data.id)
+    await state.update_data(lang=lang, buyer_telegram_id=buyer_id)
     await event.answer()
     msg = await event.message.answer(t(lang, "support_reply_prompt"))
     await add_to_messages_to_delete(state, msg)
@@ -988,6 +1027,20 @@ async def support_reply_send(event: types.Message, state: FSMContext, db: AsyncS
     except Exception as exc:
         await event.answer(str(exc)[:180])
         return
+
+    from app.db.crud.admin import build_admin_details, get_admin_by_id
+    from app.db.crud.shop import close_support_ticket
+    from app.telegram.utils.shop_helpers import notify_admins_support_closed
+
+    db_admin = await get_admin_by_id(db, admin.id, load_users=False, load_usage_logs=False)
+    admin_details = build_admin_details(db_admin, include_loaded_metrics=False)
+    await close_support_ticket(
+        db,
+        buyer_id,
+        admin_id=admin.id,
+        admin_username=admin.username,
+    )
+    await notify_admins_support_closed(db, bot=bot, buyer_telegram_id=buyer_id, handler=admin_details)
 
     await state.clear()
     await event.answer(t(lang, "support_reply_sent"))

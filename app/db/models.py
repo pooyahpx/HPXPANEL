@@ -1037,6 +1037,30 @@ class TelegramProfile(Base):
     updated_at: Mapped[dt] = mapped_column(DateTime(timezone=True), default_factory=lambda: dt.now(UTC), init=False)
 
 
+class TelegramSupportTicket(Base):
+    __tablename__ = "telegram_support_tickets"
+
+    buyer_telegram_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    status: Mapped[str] = mapped_column(String(16), default="open", server_default="open")
+    handler_admin_id: Mapped[int | None] = mapped_column(BigInteger, default=None)
+    handler_username: Mapped[str | None] = mapped_column(String(64), default=None)
+    updated_at: Mapped[dt] = mapped_column(DateTime(timezone=True), default_factory=lambda: dt.now(UTC), init=False)
+
+
+class TelegramSubDelivery(Base):
+    __tablename__ = "telegram_sub_deliveries"
+    __table_args__ = (Index("ix_telegram_sub_deliveries_buyer", "buyer_telegram_id"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = fk_id_column("users.id", ondelete="CASCADE", unique=True)
+    buyer_telegram_id: Mapped[int] = mapped_column(BigInteger, index=True)
+    source_type: Mapped[str] = mapped_column(String(16))  # order | test
+    source_id: Mapped[int | None] = mapped_column(Integer, default=None)
+    panel_username: Mapped[str] = mapped_column(String(128))
+    sub_version: Mapped[str] = mapped_column(String(64))
+    updated_at: Mapped[dt] = mapped_column(DateTime(timezone=True), default_factory=lambda: dt.now(UTC), init=False)
+
+
 class ShopConfig(Base, CreatedAtUTCMixin):
     __tablename__ = "shop_configs"
 

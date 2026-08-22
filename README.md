@@ -21,6 +21,12 @@
   <img alt="dev" src="https://img.shields.io/badge/dev-hpx-0ea5e9?style=flat-square&logo=github">
 </p>
 
+<p align="center">
+  <img alt="version" src="https://img.shields.io/badge/version-v2.5.0-8b5cf6?style=flat-square">
+  <img alt="telegram bot" src="https://img.shields.io/badge/Telegram%20Bot-built--in-26A5E4?style=flat-square&logo=telegram&logoColor=white">
+  <img alt="shop" src="https://img.shields.io/badge/Shop%20%26%20Support-native-10b981?style=flat-square">
+</p>
+
 ---
 
 ## Why this exists
@@ -29,6 +35,38 @@ Most panels stop at “create user → copy link.”
 **HPXPANEL** is built for operators who run real fleets on **[Xray-core](https://github.com/XTLS/Xray-core)** — with modern tunnels and native VPN in the same console.
 
 Python / FastAPI backend. React command-deck UI. One place for users, nodes, cores, and subscriptions.
+
+---
+
+## The first panel with a native Telegram command center
+
+Most panels stop at “paste a bot token and hope.”  
+**HPXPANEL** ships a **built-in Telegram layer** — shop, support, owner controls, and subscription lifecycle automation in the same stack as your panel. No third-party reseller bot. No duct tape.
+
+<p align="center">
+  <b>🛍 Sell · 💬 Support · 🛡 Govern · 📡 Auto-deliver subs — from one bot.</b>
+</p>
+
+### What you get out of the box
+
+| Feature | What it does |
+| --- | --- |
+| **🛍 Native shop** | Plans, card-to-card payment, receipt flow, test configs, QR delivery |
+| **👑 Owner sovereignty** | Promote/demote admins, **fine-grained role permissions** (nodes, settings, user create/delete) |
+| **💬 Smart support** | Buyer messages all admins; **first reply wins** — ticket locks for everyone else |
+| **📋 Owner audit log** | Instant Telegram alerts when a non-owner admin creates a user (group, volume, expiry) |
+| **📡 Sold-sub registry** | Owner sees every sub sold via bot — buyer, plan, live link |
+| **🔄 Auto sub refresh** | Panel detects subscription changes (revoke, config drift) → **new link + QR to buyer only** → owner notified |
+
+### Why operators care
+
+- **Buyers stay in Telegram** — order, pay, receive config, get updated subs without opening the panel  
+- **Admins can't go rogue** — owner toggles who can restart nodes, change settings, or wipe users  
+- **Support without chaos** — one admin owns each ticket; no duplicate replies  
+- **Revoke ≠ support nightmare** — sub rotation is detected and pushed automatically  
+
+> **v2.5.0** — subscription fingerprint tracking, auto buyer delivery, owner sold-sub dashboard  
+> **v2.4.0** — admin permission bot UI, support ticket locking, owner create-user audit  
 
 ---
 

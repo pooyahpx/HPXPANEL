@@ -213,6 +213,16 @@ async def claim_test_config(event: types.CallbackQuery, db: AsyncSession, admin:
             await bot.send_photo(event.from_user.id, subscription_qr_file(user.subscription_url, user.username))
         except Exception:
             pass
+        from app.telegram.utils.sub_delivery import record_sub_delivery
+
+        await record_sub_delivery(
+            db,
+            user_id=user.id,
+            buyer_telegram_id=event.from_user.id,
+            source_type="test",
+            source_id=None,
+            panel_username=user.username,
+        )
 
 
 @router.callback_query(ShopKeyboard.Callback.filter(ShopAction.my_orders == F.action))
@@ -308,6 +318,9 @@ async def support_message(event: types.Message, db: AsyncSession, state: FSMCont
 
     bot = get_bot()
     buyer = event.from_user.username or str(event.from_user.id)
+    from app.db.crud.shop import open_support_ticket
+
+    await open_support_ticket(db, event.from_user.id)
     if bot:
         try:
             await notify_all_admins_support(

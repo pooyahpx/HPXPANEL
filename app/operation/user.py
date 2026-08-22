@@ -189,6 +189,33 @@ def _resolve_enabled_user_status(user: User) -> UserStatus:
     return UserStatus.active
 
 
+async def _notify_owner_user_created(user, admin: AdminDetails) -> None:
+    from app.db import GetDB
+    from app.telegram import get_bot
+    from app.telegram.utils.shop_helpers import notify_owner_user_created
+
+    bot = get_bot()
+    if bot is None:
+        return
+    async with GetDB() as db:
+        groups = ", ".join(user.group_names or []) or "—"
+        await notify_owner_user_created(
+            db=db,
+            bot=bot,
+            creator=admin,
+            username=user.username,
+            groups=groups,
+            data_limit=user.data_limit,
+            expire=user.expire,
+        )
+
+
+async def _notify_telegram_sub_revoked(user_id: int) -> None:
+    from app.telegram.utils.sub_delivery import notify_telegram_sub_if_changed
+
+    await notify_telegram_sub_if_changed(user_id, reason="revoke")
+
+
 class UserOperation(BaseOperation):
     @staticmethod
     def _is_non_blocking_sync_operator(operator_type: OperatorType) -> bool:
@@ -722,6 +749,8 @@ class UserOperation(BaseOperation):
         logger.info(f'New user "{db_user.username}" with id "{db_user.id}" added by admin "{admin.username}"')
 
         asyncio.create_task(notification.create_user(user, admin))
+        if not skip_role_limits and not admin.is_owner:
+            asyncio.create_task(_notify_owner_user_created(user, admin))
 
         return user
 
@@ -1121,6 +1150,7 @@ class UserOperation(BaseOperation):
         user = await self.update_user(db_user)
 
         asyncio.create_task(notification.user_subscription_revoked(user, admin))
+        asyncio.create_task(_notify_telegram_sub_revoked(user.id))
         logger.info(f'User "{db_user.username}" subscription was revoked by admin "{admin.username}"')
 
         return user
@@ -1157,6 +1187,7 @@ class UserOperation(BaseOperation):
         users = [await self.validate_user(db_user) for db_user in db_users]
         for user in users:
             asyncio.create_task(notification.user_subscription_revoked(user, admin))
+            asyncio.create_task(_notify_telegram_sub_revoked(user.id))
             logger.info(f'User "{user.username}" subscription was revoked by admin "{admin.username}"')
 
         return self._build_bulk_action_response(users)

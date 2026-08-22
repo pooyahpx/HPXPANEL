@@ -4,7 +4,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.db.models import Admin, AdminRole, ShopConfig, ShopOrder, ShopOrderStatus, ShopPlan, TelegramProfile, User
+from app.db.models import Admin, AdminRole, ShopConfig, ShopOrder, ShopOrderStatus, ShopPlan, TelegramProfile, TelegramSubDelivery, TelegramSupportTicket, User
 
 
 async def get_or_create_telegram_profile(db: AsyncSession, telegram_id: int, lang: str | None = None) -> TelegramProfile:
@@ -54,6 +54,73 @@ async def mark_test_claimed(db: AsyncSession, telegram_id: int) -> None:
     profile.updated_at = datetime.now(UTC)
     await db.commit()
     await db.refresh(profile)
+
+
+async def open_support_ticket(db: AsyncSession, buyer_telegram_id: int) -> TelegramSupportTicket:
+    ticket = await db.get(TelegramSupportTicket, buyer_telegram_id)
+    if ticket is None:
+        ticket = TelegramSupportTicket(buyer_telegram_id=buyer_telegram_id, status="open")
+        db.add(ticket)
+    else:
+        ticket.status = "open"
+        ticket.handler_admin_id = None
+        ticket.handler_username = None
+        ticket.updated_at = datetime.now(UTC)
+    await db.commit()
+    await db.refresh(ticket)
+    return ticket
+
+
+async def get_support_ticket(db: AsyncSession, buyer_telegram_id: int) -> TelegramSupportTicket | None:
+    return await db.get(TelegramSupportTicket, buyer_telegram_id)
+
+
+async def claim_support_ticket(
+    db: AsyncSession,
+    buyer_telegram_id: int,
+    *,
+    admin_id: int,
+    admin_username: str,
+) -> TelegramSupportTicket | None:
+    ticket = await db.get(TelegramSupportTicket, buyer_telegram_id)
+    if ticket is None or ticket.status != "open":
+        return None
+    if ticket.handler_admin_id is not None and ticket.handler_admin_id != admin_id:
+        return None
+    ticket.handler_admin_id = admin_id
+    ticket.handler_username = admin_username
+    ticket.updated_at = datetime.now(UTC)
+    await db.commit()
+    await db.refresh(ticket)
+    return ticket
+
+
+async def close_support_ticket(
+    db: AsyncSession,
+    buyer_telegram_id: int,
+    *,
+    admin_id: int,
+    admin_username: str,
+) -> TelegramSupportTicket | None:
+    ticket = await db.get(TelegramSupportTicket, buyer_telegram_id)
+    if ticket is None:
+        return None
+    ticket.status = "closed"
+    ticket.handler_admin_id = admin_id
+    ticket.handler_username = admin_username
+    ticket.updated_at = datetime.now(UTC)
+    await db.commit()
+    await db.refresh(ticket)
+    return ticket
+
+
+async def support_reply_allowed(db: AsyncSession, buyer_telegram_id: int, admin_id: int) -> tuple[bool, str | None]:
+    ticket = await get_support_ticket(db, buyer_telegram_id)
+    if ticket is None or ticket.status != "open":
+        return False, None
+    if ticket.handler_admin_id is not None and ticket.handler_admin_id != admin_id:
+        return False, ticket.handler_username
+    return True, ticket.handler_username
 
 
 async def get_owner_admin(db: AsyncSession) -> Admin | None:
@@ -310,3 +377,70 @@ async def get_shop_bot_stats(db: AsyncSession, admin_id: int) -> dict[str, int]:
         "orders_approved": await _order_count(ShopOrderStatus.approved),
         "orders_rejected": await _order_count(ShopOrderStatus.rejected),
     }
+
+
+async def get_sub_delivery_by_user_id(db: AsyncSession, user_id: int) -> TelegramSubDelivery | None:
+    stmt = select(TelegramSubDelivery).where(TelegramSubDelivery.user_id == user_id).limit(1)
+    return (await db.execute(stmt)).scalar_one_or_none()
+
+
+async def get_sub_delivery(db: AsyncSession, delivery_id: int) -> TelegramSubDelivery | None:
+    return await db.get(TelegramSubDelivery, delivery_id)
+
+
+async def upsert_sub_delivery(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    buyer_telegram_id: int,
+    source_type: str,
+    source_id: int | None,
+    panel_username: str,
+    sub_version: str,
+) -> TelegramSubDelivery:
+    delivery = await get_sub_delivery_by_user_id(db, user_id)
+    if delivery is None:
+        delivery = TelegramSubDelivery(
+            user_id=user_id,
+            buyer_telegram_id=buyer_telegram_id,
+            source_type=source_type,
+            source_id=source_id,
+            panel_username=panel_username,
+            sub_version=sub_version,
+        )
+        db.add(delivery)
+    else:
+        delivery.buyer_telegram_id = buyer_telegram_id
+        delivery.source_type = source_type
+        delivery.source_id = source_id
+        delivery.panel_username = panel_username
+        delivery.sub_version = sub_version
+        delivery.updated_at = datetime.now(UTC)
+    await db.commit()
+    await db.refresh(delivery)
+    return delivery
+
+
+async def update_sub_delivery_version(db: AsyncSession, delivery: TelegramSubDelivery, sub_version: str) -> TelegramSubDelivery:
+    delivery.sub_version = sub_version
+    delivery.updated_at = datetime.now(UTC)
+    await db.commit()
+    await db.refresh(delivery)
+    return delivery
+
+
+async def list_sub_deliveries(db: AsyncSession, *, offset: int = 0, limit: int = 10) -> tuple[list[TelegramSubDelivery], int]:
+    total = int((await db.execute(select(func.count()).select_from(TelegramSubDelivery))).scalar_one() or 0)
+    stmt = (
+        select(TelegramSubDelivery)
+        .order_by(TelegramSubDelivery.id.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+    rows = list((await db.execute(stmt)).scalars().all())
+    return rows, total
+
+
+async def list_sub_deliveries_for_check(db: AsyncSession) -> list[TelegramSubDelivery]:
+    stmt = select(TelegramSubDelivery).order_by(TelegramSubDelivery.id.asc())
+    return list((await db.execute(stmt)).scalars().all())

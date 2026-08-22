@@ -187,6 +187,7 @@ async def notify_shop_admin_support(
     buyer_telegram_id: int,
     buyer_label: str,
     message: Message,
+    allow_reply: bool = True,
 ) -> None:
     from app.telegram.keyboards.shop import SupportReplyKeyboard
 
@@ -196,7 +197,7 @@ async def notify_shop_admin_support(
         buyer=buyer_label,
         id=buyer_telegram_id,
     )
-    markup = SupportReplyKeyboard(admin_lang, buyer_telegram_id).as_markup()
+    markup = SupportReplyKeyboard(admin_lang, buyer_telegram_id).as_markup() if allow_reply else None
     if message.photo:
         caption = header
         if message.caption:
@@ -226,6 +227,10 @@ async def notify_all_admins_support(
     message: Message,
 ) -> None:
     """Forward a buyer support message to every panel admin linked to Telegram."""
+    from app.db.crud.shop import get_support_ticket
+
+    ticket = await get_support_ticket(db, buyer_telegram_id)
+    allow_reply = ticket is not None and ticket.status == "open" and ticket.handler_admin_id is None
     notified_ids: set[int] = set()
     for panel_admin in await list_admins_with_telegram(db):
         chat_id = panel_admin.telegram_id
@@ -240,6 +245,7 @@ async def notify_all_admins_support(
                 buyer_telegram_id=buyer_telegram_id,
                 buyer_label=buyer_label,
                 message=message,
+                allow_reply=allow_reply,
             )
             notified_ids.add(chat_id)
         except Exception:
@@ -344,6 +350,104 @@ async def notify_owner_order_approved(
         buyer=buyer_label,
         plan=plan_name,
         username=username,
+    )
+    try:
+        await bot.send_message(owner.telegram_id, text)
+    except Exception:
+        pass
+
+
+async def notify_admins_support_claimed(
+    db: AsyncSession,
+    *,
+    bot: Bot | None,
+    buyer_telegram_id: int,
+    handler: AdminDetails,
+) -> None:
+    if bot is None:
+        return
+    notified_ids: set[int] = set()
+    for panel_admin in await list_admins_with_telegram(db):
+        chat_id = panel_admin.telegram_id
+        if chat_id is None or chat_id in notified_ids or chat_id == buyer_telegram_id:
+            continue
+        if panel_admin.id == handler.id:
+            continue
+        admin_lang = (await get_telegram_lang(db, chat_id)) or "fa"
+        text = rich(
+            admin_lang,
+            "support_claimed_by_other",
+            admin=handler.username,
+            id=buyer_telegram_id,
+        )
+        try:
+            await bot.send_message(chat_id, text)
+            notified_ids.add(chat_id)
+        except Exception:
+            pass
+
+
+async def notify_admins_support_closed(
+    db: AsyncSession,
+    *,
+    bot: Bot | None,
+    buyer_telegram_id: int,
+    handler: AdminDetails,
+) -> None:
+    if bot is None:
+        return
+    notified_ids: set[int] = set()
+    for panel_admin in await list_admins_with_telegram(db):
+        chat_id = panel_admin.telegram_id
+        if chat_id is None or chat_id in notified_ids or chat_id == buyer_telegram_id:
+            continue
+        if panel_admin.id == handler.id:
+            continue
+        admin_lang = (await get_telegram_lang(db, chat_id)) or "fa"
+        text = rich(
+            admin_lang,
+            "support_closed_by_other",
+            admin=handler.username,
+            id=buyer_telegram_id,
+        )
+        try:
+            await bot.send_message(chat_id, text)
+            notified_ids.add(chat_id)
+        except Exception:
+            pass
+
+
+async def notify_owner_user_created(
+    *,
+    db: AsyncSession,
+    bot: Bot | None,
+    creator: AdminDetails,
+    username: str,
+    groups: str,
+    data_limit: int | None,
+    expire,
+) -> None:
+    if bot is None or creator.is_owner:
+        return
+    owner = await get_owner_admin(db)
+    if owner is None or not owner.telegram_id:
+        return
+    from app.telegram.utils.i18n import format_bytes, t
+
+    owner_lang = (await get_telegram_lang(db, owner.telegram_id)) or "fa"
+    data_str = format_bytes(data_limit) if data_limit else t(owner_lang, "limit_unlimited")
+    if expire:
+        expire_str = expire.strftime("%Y-%m-%d %H:%M")
+    else:
+        expire_str = t(owner_lang, "days_unlimited")
+    text = rich(
+        owner_lang,
+        "owner_log_user_created",
+        admin=creator.username,
+        username=username,
+        groups=groups or "—",
+        data=data_str,
+        expire=expire_str,
     )
     try:
         await bot.send_message(owner.telegram_id, text)

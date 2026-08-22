@@ -1051,13 +1051,13 @@ class TelegramSubDelivery(Base):
     __tablename__ = "telegram_sub_deliveries"
     __table_args__ = (Index("ix_telegram_sub_deliveries_buyer", "buyer_telegram_id"),)
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, init=False)
     user_id: Mapped[int] = fk_id_column("users.id", ondelete="CASCADE", unique=True)
     buyer_telegram_id: Mapped[int] = mapped_column(BigInteger, index=True)
     source_type: Mapped[str] = mapped_column(String(16))  # order | test
-    source_id: Mapped[int | None] = mapped_column(Integer, default=None)
     panel_username: Mapped[str] = mapped_column(String(128))
     sub_version: Mapped[str] = mapped_column(String(64))
+    source_id: Mapped[int | None] = mapped_column(Integer, default=None)
     updated_at: Mapped[dt] = mapped_column(DateTime(timezone=True), default_factory=lambda: dt.now(UTC), init=False)
 
 

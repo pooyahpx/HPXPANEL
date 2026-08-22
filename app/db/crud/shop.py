@@ -444,3 +444,15 @@ async def list_sub_deliveries(db: AsyncSession, *, offset: int = 0, limit: int =
 async def list_sub_deliveries_for_check(db: AsyncSession) -> list[TelegramSubDelivery]:
     stmt = select(TelegramSubDelivery).order_by(TelegramSubDelivery.id.asc())
     return list((await db.execute(stmt)).scalars().all())
+
+
+async def list_approved_orders(
+    db: AsyncSession, *, offset: int = 0, limit: int = 10
+) -> tuple[list[ShopOrder], int]:
+    base = select(ShopOrder).where(
+        ShopOrder.status == ShopOrderStatus.approved,
+        ShopOrder.created_user_id.isnot(None),
+    )
+    total = int((await db.execute(select(func.count()).select_from(base.subquery()))).scalar_one() or 0)
+    stmt = base.order_by(ShopOrder.id.desc()).offset(offset).limit(limit)
+    return list((await db.execute(stmt)).scalars().all()), total

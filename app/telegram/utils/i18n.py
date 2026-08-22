@@ -28,7 +28,8 @@ def rich(lang: str, key: str, **kwargs) -> str:
         .replace("{/c}", "</code>")
     )
     if kwargs:
-        text = text.format(**kwargs)
+        safe = {k: escape(str(v)) for k, v in kwargs.items()}
+        text = text.format(**safe)
     return text
 
 
@@ -138,10 +139,11 @@ STRINGS: dict[str, dict[str, str]] = {
         "support_claimed_by_other": "ℹ️ پیام پشتیبانی (آیدی {c}{id}{/c}) توسط {admin} دریافت شد",
         "support_closed_by_other": "✅ تیکت پشتیبانی (آیدی {c}{id}{/c}) توسط {admin} بسته شد",
         "owner_log_user_created": "📋 {b}ساخت کاربر توسط ادمین{/b}\n\n👤 ادمین: {c}{admin}{/c}\n🔑 یوزر: {c}{username}{/c}\n👥 گروه: {groups}\n📶 حجم: {data}\n📅 انقضا: {expire}",
+        "btn_copy_sub": "🔗 کپی لینک ساب",
         "btn_sold_subs": "📡 ساب‌های فروخته‌شده",
-        "sold_subs_home": "📡 {b}ساب‌های فروخته‌شده از بات{/b}\nتعداد: {total}",
-        "sold_sub_row": "• {c}{username}{/c} ← {buyer} ({source})",
-        "sold_sub_detail": "📡 {b}جزئیات ساب{/b}\n\n🔑 یوزر: {c}{username}{/c}\n👤 خریدار: {buyer}\n📦 منبع: {source}\n📋 پلن: {plan}\n🕐 آخرین به‌روزرسانی: {updated}\n\n🔗 ساب فعلی:\n{url}",
+        "sold_subs_home": "📡 {b}سفارش‌های تأییدشده و ساب{/b}\nتعداد: {total}",
+        "sold_sub_row": "• #{order_id} · {c}{username}{/c} ← {buyer} · {plan}",
+        "sold_sub_detail": "📡 {b}جزئیات ساب{/b}\n\n🧾 سفارش: #{order_id}\n🔑 یوزر: {c}{username}{/c}\n👤 خریدار: {buyer}\n📦 پلن: {plan}\n🕐 تاریخ: {created}\n\n🔗 ساب:\n{c}{url}{/c}",
         "sub_updated_buyer": "🔄 {b}اشتراک شما به‌روز شد{/b}\n\n👤 یوزر: {c}{username}{/c}\n🔗 لینک جدید:\n{url}",
         "owner_log_sub_updated": "🔄 {b}ساب تغییر کرد و ارسال شد{/b}\n\n🔑 یوزر: {c}{username}{/c}\n👤 خریدار: {buyer}\n📦 منبع: {source}\n📌 علت: {reason}",
         "sub_source_test": "تست رایگان",
@@ -331,10 +333,11 @@ STRINGS: dict[str, dict[str, str]] = {
         "support_claimed_by_other": "ℹ️ Support message (ID {c}{id}{/c}) claimed by {admin}",
         "support_closed_by_other": "✅ Support ticket (ID {c}{id}{/c}) closed by {admin}",
         "owner_log_user_created": "📋 {b}User created by admin{/b}\n\n👤 Admin: {c}{admin}{/c}\n🔑 User: {c}{username}{/c}\n👥 Groups: {groups}\n📶 Data: {data}\n📅 Expiry: {expire}",
+        "btn_copy_sub": "🔗 Copy sub link",
         "btn_sold_subs": "📡 Sold subscriptions",
-        "sold_subs_home": "📡 {b}Subscriptions sold via bot{/b}\nTotal: {total}",
-        "sold_sub_row": "• {c}{username}{/c} ← {buyer} ({source})",
-        "sold_sub_detail": "📡 {b}Subscription details{/b}\n\n🔑 User: {c}{username}{/c}\n👤 Buyer: {buyer}\n📦 Source: {source}\n📋 Plan: {plan}\n🕐 Last update: {updated}\n\n🔗 Current sub:\n{url}",
+        "sold_subs_home": "📡 {b}Approved orders & subs{/b}\nTotal: {total}",
+        "sold_sub_row": "• #{order_id} · {c}{username}{/c} ← {buyer} · {plan}",
+        "sold_sub_detail": "📡 {b}Subscription details{/b}\n\n🧾 Order: #{order_id}\n🔑 User: {c}{username}{/c}\n👤 Buyer: {buyer}\n📦 Plan: {plan}\n🕐 Date: {created}\n\n🔗 Sub:\n{c}{url}{/c}",
         "sub_updated_buyer": "🔄 {b}Your subscription was updated{/b}\n\n👤 User: {c}{username}{/c}\n🔗 New link:\n{url}",
         "owner_log_sub_updated": "🔄 {b}Sub changed and sent{/b}\n\n🔑 User: {c}{username}{/c}\n👤 Buyer: {buyer}\n📦 Source: {source}\n📌 Reason: {reason}",
         "sub_source_test": "Free test",

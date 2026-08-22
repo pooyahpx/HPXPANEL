@@ -45,6 +45,19 @@ async def _load_user(db: AsyncSession, user_id: int) -> User | None:
     return (await db.execute(stmt)).scalar_one_or_none()
 
 
+async def resolve_user_subscription_url(db: AsyncSession, user_id: int) -> str | None:
+    user = await _load_user(db, user_id)
+    if user is None:
+        return None
+    try:
+        resp = await user_operator.update_user(user)
+        url = (resp.subscription_url or "").strip()
+        return url or None
+    except Exception as exc:
+        logger.warning("Failed to generate subscription url for user %s: %s", user_id, exc)
+        return None
+
+
 async def record_sub_delivery(
     db: AsyncSession,
     *,

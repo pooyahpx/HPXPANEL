@@ -1049,7 +1049,6 @@ class TelegramSupportTicket(Base):
 
 class TelegramSubDelivery(Base):
     __tablename__ = "telegram_sub_deliveries"
-    __table_args__ = (Index("ix_telegram_sub_deliveries_buyer", "buyer_telegram_id"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, init=False)
     user_id: Mapped[int] = fk_id_column("users.id", ondelete="CASCADE", unique=True)

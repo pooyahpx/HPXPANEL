@@ -12,7 +12,7 @@ export function getDocsUrl(pagePath: string): string {
   const normalizedLocale = ['en', 'fa', 'ru'].includes(locale.split('-')[0]) ? locale.split('-')[0] : 'en'
   const base = `${docsBase()}/${normalizedLocale}`
 
-  if (pagePath.startsWith('/nodes')) {
+  if (pagePath.startsWith('/hpx-tunnel') || pagePath.startsWith('/nodes')) {
     return `${base}/protocols/overview`
   }
   if (pagePath.startsWith('/users') || pagePath.startsWith('/admins') || pagePath.startsWith('/admin-roles')) {

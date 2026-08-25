@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router'
 import type { LucideIcon } from 'lucide-react'
-import { Group, LayoutDashboardIcon, LayoutTemplate, ListTodo, Palette, PieChart, Settings2, Share2Icon, UserCog, UsersIcon, Key, Layers, Bell, Database, Cpu, Search } from 'lucide-react'
+import { Group, LayoutDashboardIcon, LayoutTemplate, ListTodo, Palette, PieChart, Radar, Settings2, Share2Icon, UserCog, UsersIcon, Key, Layers, Bell, Database, Cpu, Search } from 'lucide-react'
 import { useAdmin } from '@/hooks/use-admin'
 import { cn } from '@/lib/utils'
 import { canReadResourcePage, hasPermission, isOwner } from '@/utils/rbac'
@@ -44,6 +44,9 @@ function useQuestItems(): QuestItem[] {
     }
     if (canReadResourcePage(admin, 'nodes')) {
       items.push({ id: 'nodes', title: 'nodes.title', url: '/nodes', icon: Share2Icon, keywords: 'servers' })
+    }
+    if (canReadResourcePage(admin, 'hpx_tunnels')) {
+      items.push({ id: 'hpx-tunnel', title: 'hpxTunnel.title', url: '/hpx-tunnel', icon: Radar, keywords: 'icmp tunnel ping' })
     }
     if (canReadResourcePage(admin, 'cores')) {
       items.push({ id: 'cores', title: 'settings.cores.title', url: '/nodes/cores', icon: Cpu })

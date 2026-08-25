@@ -100,15 +100,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           },
         ]
       : []),
-    ...(canReadHpxTunnels
-      ? [
-          {
-            title: 'hpxTunnel.title',
-            url: '/nodes/hpx-tunnel',
-            icon: Radar,
-          },
-        ]
-      : []),
     ...(canReadNodeLogs
       ? [
           {
@@ -227,6 +218,15 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               title: 'statistics',
               url: '/statistics',
               icon: PieChart,
+            },
+          ]
+        : []),
+      ...(canReadHpxTunnels
+        ? [
+            {
+              title: 'hpxTunnel.title',
+              url: '/hpx-tunnel',
+              icon: Radar,
             },
           ]
         : []),

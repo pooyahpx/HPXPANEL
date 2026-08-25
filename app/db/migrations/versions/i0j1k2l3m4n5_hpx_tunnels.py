@@ -18,7 +18,7 @@ depends_on = None
 def upgrade() -> None:
     op.create_table(
         "hpx_tunnels",
-        sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
+        sa.Column("id", sa.BigInteger(), autoincrement=True, nullable=False),
         sa.Column("name", sa.String(length=128), nullable=False),
         sa.Column("role", sa.Enum("iran", "foreign", name="hpxtunnelrole"), nullable=False),
         sa.Column(

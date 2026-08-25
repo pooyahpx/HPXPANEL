@@ -1,0 +1,126 @@
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
+import { cn } from '@/lib/utils'
+import type { HpxTunnelResponse } from '@/service/api/hpx-tunnels'
+import { formatBytes } from '@/utils/formatByte'
+import { Activity, Globe, Play, RefreshCw, Shield, Square, Zap } from 'lucide-react'
+import type { ComponentType } from 'react'
+import { useTranslation } from 'react-i18next'
+
+interface HpxTunnelCardProps {
+  tunnel: HpxTunnelResponse
+  onEdit: (tunnel: HpxTunnelResponse) => void
+  onStart: (id: number) => void
+  onStop: (id: number) => void
+  onRestart: (id: number) => void
+  actionLoading?: boolean
+}
+
+const statusTone: Record<string, string> = {
+  running: 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30',
+  stopped: 'bg-muted text-muted-foreground border-border',
+  starting: 'bg-blue-500/15 text-blue-600 border-blue-500/30',
+  stopping: 'bg-amber-500/15 text-amber-600 border-amber-500/30',
+  error: 'bg-destructive/15 text-destructive border-destructive/30',
+  unhealthy: 'bg-orange-500/15 text-orange-600 border-orange-500/30',
+}
+
+export default function HpxTunnelCard({ tunnel, onEdit, onStart, onStop, onRestart, actionLoading }: HpxTunnelCardProps) {
+  const { t } = useTranslation()
+  const isRunning = tunnel.status === 'running'
+
+  return (
+    <Card className="overflow-hidden border-border/70 bg-gradient-to-br from-card via-card to-muted/20 p-0 shadow-sm">
+      <div className="border-b border-border/60 bg-muted/20 px-4 py-3">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="truncate text-base font-semibold">{tunnel.name}</h3>
+              <Badge variant="outline" className={cn('text-xs capitalize', statusTone[tunnel.status])}>
+                {t(`hpxTunnel.status.${tunnel.status}`, { defaultValue: tunnel.status })}
+              </Badge>
+              <Badge variant="secondary" className="text-xs uppercase">
+                {tunnel.role === 'iran' ? t('hpxTunnel.role.iran', { defaultValue: 'IRAN' }) : t('hpxTunnel.role.foreign', { defaultValue: 'FOREIGN' })}
+              </Badge>
+            </div>
+            <p className="text-muted-foreground mt-1 text-xs">
+              {tunnel.role === 'iran'
+                ? t('hpxTunnel.remoteTarget', { ip: tunnel.remote_ip || '—', defaultValue: 'Remote: {{ip}}' })
+                : t('hpxTunnel.listenTarget', { addr: tunnel.server_listen, defaultValue: 'Listen: {{addr}}' })}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {!isRunning ? (
+              <Button size="sm" variant="default" disabled={actionLoading} onClick={() => onStart(tunnel.id)}>
+                <Play className="size-3.5" />
+                {t('hpxTunnel.start', { defaultValue: 'Start' })}
+              </Button>
+            ) : (
+              <Button size="sm" variant="outline" disabled={actionLoading} onClick={() => onStop(tunnel.id)}>
+                <Square className="size-3.5" />
+                {t('hpxTunnel.stop', { defaultValue: 'Stop' })}
+              </Button>
+            )}
+            <Button size="sm" variant="outline" disabled={actionLoading} onClick={() => onRestart(tunnel.id)}>
+              <RefreshCw className="size-3.5" />
+              {t('hpxTunnel.restart', { defaultValue: 'Restart' })}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => onEdit(tunnel)}>
+              {t('edit', { defaultValue: 'Edit' })}
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-4">
+        <Metric icon={Activity} label={t('hpxTunnel.latency', { defaultValue: 'Latency' })} value={tunnel.latency_ms != null ? `${tunnel.latency_ms.toFixed(1)} ms` : '—'} />
+        <Metric
+          icon={Zap}
+          label={t('hpxTunnel.packetLoss', { defaultValue: 'Packet loss' })}
+          value={tunnel.packet_loss_pct != null ? `${tunnel.packet_loss_pct.toFixed(0)}%` : '—'}
+          tone={tunnel.packet_loss_pct != null && tunnel.packet_loss_pct > 10 ? 'danger' : undefined}
+        />
+        <Metric icon={Globe} label={t('hpxTunnel.interface', { defaultValue: 'Interface' })} value={`${tunnel.interface} · ${tunnel.local_ip}`} mono />
+        <Metric icon={Shield} label={t('hpxTunnel.traffic', { defaultValue: 'Traffic' })} value={`↑ ${formatBytes(tunnel.bytes_up)} · ↓ ${formatBytes(tunnel.bytes_down)}`} />
+      </div>
+
+      {(tunnel.auto_failover || tunnel.message) && (
+        <div className="border-t border-border/60 px-4 py-3 text-xs">
+          {tunnel.auto_failover && (
+            <Badge variant="outline" className="me-2">
+              {t('hpxTunnel.failoverEnabled', { defaultValue: 'Auto-failover' })}
+            </Badge>
+          )}
+          {tunnel.message && <span className="text-muted-foreground">{tunnel.message}</span>}
+        </div>
+      )}
+    </Card>
+  )
+}
+
+function Metric({
+  icon: Icon,
+  label,
+  value,
+  mono,
+  tone,
+}: {
+  icon: ComponentType<{ className?: string }>
+  label: string
+  value: string
+  mono?: boolean
+  tone?: 'danger'
+}) {
+  return (
+    <div className={cn('rounded-lg border bg-background/60 px-3 py-2.5', tone === 'danger' && 'border-destructive/30 bg-destructive/5')}>
+      <div className="text-muted-foreground flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide">
+        <Icon className="size-3.5" />
+        {label}
+      </div>
+      <div className={cn('mt-1 truncate text-sm font-semibold', mono && 'font-mono')} title={value}>
+        {value}
+      </div>
+    </div>
+  )
+}

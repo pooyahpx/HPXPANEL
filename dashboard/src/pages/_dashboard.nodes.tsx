@@ -3,8 +3,8 @@ import PageTransition from '@/components/layout/page-transition'
 import { SectorTabBar, type SectorTab } from '@/components/layout/sector-tab-bar'
 import { useAdmin } from '@/hooks/use-admin'
 import { getDocsUrl } from '@/utils/docs-url'
-import { hasPermission } from '@/utils/rbac'
-import { Cpu, Share2, Plus, Logs, Network } from 'lucide-react'
+import { hasPermission, canReadResourcePage } from '@/utils/rbac'
+import { Cpu, Share2, Plus, Logs, Network, Radar } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router'
 
@@ -12,6 +12,7 @@ const tabs: SectorTab[] = [
   { id: 'nodes.title', label: 'nodes.title', icon: Share2, url: '/nodes' },
   { id: 'core', label: 'core', mobileLabel: 'settings.cores.title', icon: Cpu, url: '/nodes/cores' },
   { id: 'nodes.wireguard.title', label: 'nodes.wireguard.title', icon: Network, url: '/nodes/wireguard' },
+  { id: 'hpxTunnel.title', label: 'hpxTunnel.title', icon: Radar, url: '/nodes/hpx-tunnel' },
   { id: 'nodes.logs.title', label: 'nodes.logs.title', icon: Logs, url: '/nodes/logs' },
 ]
 
@@ -23,11 +24,13 @@ const Settings = () => {
   const canCreateNodes = hasPermission(admin, 'nodes', 'create')
   const canReadCores = hasPermission(admin, 'cores', 'read')
   const canCreateCores = hasPermission(admin, 'cores', 'create')
-  const canReadNodeLogs = hasPermission(admin, 'nodes', 'logs')
+  const canReadHpxTunnels = canReadResourcePage(admin, 'hpx_tunnels')
+  const canCreateHpxTunnels = hasPermission(admin, 'hpx_tunnels', 'create')
   const visibleTabs = tabs.filter(tab => {
     if (tab.url === '/nodes') return canReadNodes
     if (tab.url === '/nodes/cores') return canReadCores
     if (tab.url === '/nodes/wireguard') return canReadCores
+    if (tab.url === '/nodes/hpx-tunnel') return canReadHpxTunnels
     if (tab.url === '/nodes/logs') return canReadNodeLogs
     return false
   })
@@ -63,6 +66,19 @@ const Settings = () => {
         onButtonClick: canCreateCores
           ? () => {
               navigate('/nodes/cores/new')
+            }
+          : undefined,
+      }
+    }
+    if (location.pathname === '/nodes/hpx-tunnel') {
+      return {
+        title: 'hpxTunnel.title',
+        description: 'hpxTunnel.description',
+        buttonIcon: canCreateHpxTunnels ? Plus : undefined,
+        buttonText: canCreateHpxTunnels ? 'hpxTunnel.addTunnel' : undefined,
+        onButtonClick: canCreateHpxTunnels
+          ? () => {
+              window.dispatchEvent(new CustomEvent('openHpxTunnelDialog'))
             }
           : undefined,
       }

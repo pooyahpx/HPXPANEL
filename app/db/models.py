@@ -1047,6 +1047,61 @@ class TelegramSupportTicket(Base):
     updated_at: Mapped[dt] = mapped_column(DateTime(timezone=True), default_factory=lambda: dt.now(UTC), init=False)
 
 
+class HpxTunnelRole(str, Enum):
+    iran = "iran"
+    foreign = "foreign"
+
+
+class HpxTunnelStatus(str, Enum):
+    running = "running"
+    stopped = "stopped"
+    starting = "starting"
+    stopping = "stopping"
+    error = "error"
+    unhealthy = "unhealthy"
+
+
+class HpxTunnel(Base, CreatedAtUTCMixin):
+    __tablename__ = "hpx_tunnels"
+
+    name: Mapped[str] = mapped_column(String(128), unique=True)
+    role: Mapped[HpxTunnelRole] = mapped_column(SQLEnum(HpxTunnelRole), nullable=False)
+    password_encrypted: Mapped[str] = mapped_column(String(512), nullable=False)
+    status: Mapped[HpxTunnelStatus] = mapped_column(
+        SQLEnum(HpxTunnelStatus),
+        default=HpxTunnelStatus.stopped,
+        server_default=HpxTunnelStatus.stopped.name,
+    )
+    enabled: Mapped[bool] = mapped_column(server_default="1", default=True)
+    remote_ip: Mapped[str | None] = mapped_column(String(45), default=None)
+    server_listen: Mapped[str] = mapped_column(String(45), default="0.0.0.0", server_default="0.0.0.0")
+    interface: Mapped[str] = mapped_column(String(32), default="hpx0", server_default="hpx0")
+    local_ip: Mapped[str] = mapped_column(String(45), default="10.200.200.2", server_default="10.200.200.2")
+    subnet: Mapped[str] = mapped_column(String(64), default="10.200.200.0/24", server_default="10.200.200.0/24")
+    mtu: Mapped[int | None] = mapped_column(Integer, default=1500)
+    keepalive: Mapped[int] = mapped_column(Integer, default=5, server_default="5")
+    dscp_mark: Mapped[int | None] = mapped_column(Integer, default=None)
+    bandwidth_limit: Mapped[str | None] = mapped_column(String(32), default=None)
+    operating_mode: Mapped[str | None] = mapped_column(String(64), default=None)
+    port_forwards: Mapped[list[dict] | None] = mapped_column(PostgresJSONB, default_factory=list)
+    docker_image: Mapped[str] = mapped_column(String(128), default="ghcr.io/pooyahpx/hpx-icmp:0.0.3")
+    container_name: Mapped[str] = mapped_column(String(128), default="")
+    backup_tunnel_id: Mapped[int | None] = fk_id_column(
+        "hpx_tunnels.id", ondelete="SET NULL", default=None, nullable=True
+    )
+    auto_failover: Mapped[bool] = mapped_column(server_default="0", default=False)
+    priority: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    alert_on_down: Mapped[bool] = mapped_column(server_default="1", default=True)
+    note: Mapped[str | None] = mapped_column(String(512), default=None)
+    last_health_check: Mapped[dt | None] = mapped_column(DateTime(timezone=True), default=None)
+    latency_ms: Mapped[float | None] = mapped_column(Float, default=None)
+    packet_loss_pct: Mapped[float | None] = mapped_column(Float, default=None)
+    message: Mapped[str | None] = mapped_column(String(1024), default=None)
+    bytes_up: Mapped[int] = mapped_column(BigInteger, default=0, server_default="0")
+    bytes_down: Mapped[int] = mapped_column(BigInteger, default=0, server_default="0")
+    last_status_change: Mapped[dt | None] = mapped_column(DateTime(timezone=True), default=None)
+
+
 class TelegramSubDelivery(Base):
     __tablename__ = "telegram_sub_deliveries"
 

@@ -42,6 +42,7 @@ import {
   Network,
   Palette,
   PieChart,
+  Radar,
   Send,
   Settings,
   Settings2,
@@ -70,6 +71,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const canReadCores = canReadResourcePage(admin, 'cores')
   const canReadTemplates = canReadResourcePage(admin, 'templates')
   const canReadClientTemplates = canReadResourcePage(admin, 'client_templates')
+  const canReadHpxTunnels = canReadResourcePage(admin, 'hpx_tunnels')
   const canReadNodeLogs = hasPermission(admin, 'nodes', 'logs')
   const canBulkCreateFromTemplate = hasPermission(admin, 'users', 'create') && canReadTemplates
   const canBulkUpdateUsers = hasScopeAll(admin, 'users', 'update')
@@ -95,6 +97,15 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             title: 'nodes.wireguard.title',
             url: '/nodes/wireguard',
             icon: Network,
+          },
+        ]
+      : []),
+    ...(canReadHpxTunnels
+      ? [
+          {
+            title: 'hpxTunnel.title',
+            url: '/nodes/hpx-tunnel',
+            icon: Radar,
           },
         ]
       : []),

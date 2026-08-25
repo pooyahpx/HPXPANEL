@@ -135,3 +135,20 @@ def verify_api_key(raw_api_key: str, stored_hash: str) -> bool:
         return False
 
     return hmac.compare_digest(_sha256_api_key_digest(raw_api_key), hash_hex)
+
+
+def _fernet_key(secret: str) -> bytes:
+    digest = hashlib.sha256(secret.encode("utf-8")).digest()
+    return base64.urlsafe_b64encode(digest)
+
+
+def encrypt_secret(plaintext: str, secret: str) -> str:
+    from cryptography.fernet import Fernet
+
+    return Fernet(_fernet_key(secret)).encrypt(plaintext.encode("utf-8")).decode("utf-8")
+
+
+def decrypt_secret(ciphertext: str, secret: str) -> str:
+    from cryptography.fernet import Fernet
+
+    return Fernet(_fernet_key(secret)).decrypt(ciphertext.encode("utf-8")).decode("utf-8")

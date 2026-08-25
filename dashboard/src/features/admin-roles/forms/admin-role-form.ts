@@ -82,6 +82,20 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     ],
   },
   {
+    labelKey: 'hpxTunnel.title',
+    actions: [
+      { resource: 'hpx_tunnels', action: 'read' },
+      { resource: 'hpx_tunnels', action: 'create' },
+      { resource: 'hpx_tunnels', action: 'update' },
+      { resource: 'hpx_tunnels', action: 'delete' },
+      { resource: 'hpx_tunnels', action: 'start' },
+      { resource: 'hpx_tunnels', action: 'stop' },
+      { resource: 'hpx_tunnels', action: 'restart' },
+      { resource: 'hpx_tunnels', action: 'stats' },
+      { resource: 'hpx_tunnels', action: 'logs' },
+    ],
+  },
+  {
     labelKey: 'coreHosts',
     actions: [
       { resource: 'cores', action: 'read' },

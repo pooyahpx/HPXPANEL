@@ -243,6 +243,10 @@ async def get_interface_ip(interface: str) -> str | None:
 
 
 async def get_interface_stats(interface: str) -> tuple[int, int, bool]:
+    return await asyncio.to_thread(_read_interface_stats, interface)
+
+
+def _read_interface_stats(interface: str) -> tuple[int, int, bool]:
     path = f"/sys/class/net/{interface}/statistics/rx_bytes"
     try:
         with open(path, encoding="utf-8") as rx_file:
@@ -268,7 +272,7 @@ async def get_container_uptime(container_name: str) -> int | None:
     from datetime import UTC, datetime as dt
 
     try:
-        started = dt.fromisoformat(result.stdout.replace("Z", "+00:00"))
+        started = dt.fromisoformat(result.stdout)
         return max(0, int((dt.now(UTC) - started).total_seconds()))
     except ValueError:
         return None

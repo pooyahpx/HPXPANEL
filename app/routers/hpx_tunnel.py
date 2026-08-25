@@ -34,7 +34,7 @@ hpx_tunnel_operator = HpxTunnelOperation(operator_type=OperatorType.API)
     "",
     response_model=HpxTunnelActionResponse,
     status_code=status.HTTP_201_CREATED,
-    responses={409: responses._409, 422: responses._422},
+    responses={409: responses._409},
 )
 async def create_hpx_tunnel(
     model: HpxTunnelCreate,

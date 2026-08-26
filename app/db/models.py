@@ -1129,6 +1129,9 @@ class HpxPulse(Base, CreatedAtUTCMixin):
     __tablename__ = "hpx_pulses"
 
     name: Mapped[str] = mapped_column(String(40), unique=True)
+    token_encrypted: Mapped[str] = mapped_column(String(512), nullable=False)
+    iran_public_ip: Mapped[str] = mapped_column(String(45), nullable=False)
+    abroad_public_ip: Mapped[str] = mapped_column(String(45), nullable=False)
     status: Mapped[HpxPulseStatus] = mapped_column(
         SQLEnum(HpxPulseStatus),
         default=HpxPulseStatus.pending_claim,
@@ -1141,9 +1144,6 @@ class HpxPulse(Base, CreatedAtUTCMixin):
     tunnel_mode: Mapped[str] = mapped_column(String(32), default="direct_l3", server_default="direct_l3")
     carrier: Mapped[str | None] = mapped_column(String(16), default="pck")
     preset: Mapped[str] = mapped_column(String(16), default="balance", server_default="balance")
-    token_encrypted: Mapped[str] = mapped_column(String(512), nullable=False)
-    iran_public_ip: Mapped[str] = mapped_column(String(45), nullable=False)
-    abroad_public_ip: Mapped[str] = mapped_column(String(45), nullable=False)
     control_port: Mapped[int] = mapped_column(Integer, default=9067, server_default="9067")
     local_ip_iran: Mapped[str] = mapped_column(String(45), default="10.10.0.1/30", server_default="10.10.0.1/30")
     local_ip_abroad: Mapped[str] = mapped_column(String(45), default="10.10.0.2/30", server_default="10.10.0.2/30")

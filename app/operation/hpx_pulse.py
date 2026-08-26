@@ -377,9 +377,8 @@ class HpxPulseOperation(BaseOperation):
             "packet_loss_pct": model.packet_loss_pct,
             "message": model.message,
         }
-        if model.status in {HpxPulseStatus.running.value, "running"}:
-            if db_pulse.iran_agent_key_hash and db_pulse.abroad_agent_key_hash:
-                update_data["status"] = HpxPulseStatus.running
+        if model.status in {HpxPulseStatus.running.value, "running"} and db_pulse.iran_agent_key_hash and db_pulse.abroad_agent_key_hash:
+            update_data["status"] = HpxPulseStatus.running
         db_pulse = await update_hpx_pulse(db, db_pulse, update_data)
         await db.commit()
         return self._agent_config(db_pulse, side, token)

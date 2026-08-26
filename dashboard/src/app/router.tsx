@@ -28,6 +28,7 @@ const Nodes = lazyWithChunkRecovery(() => import('../pages/_dashboard.nodes'))
 const NodesPage = lazyWithChunkRecovery(() => import('../pages/_dashboard.nodes._index'))
 const NodeLogs = lazyWithChunkRecovery(() => import('../pages/_dashboard.nodes.logs'))
 const NodeWireGuard = lazyWithChunkRecovery(() => import('../pages/_dashboard.nodes.wireguard'))
+const HpxTunnelPage = lazyWithChunkRecovery(() => import('../pages/_dashboard.hpx-tunnel'))
 const Settings = lazyWithChunkRecovery(() => import('../pages/_dashboard.settings'))
 const CleanupSettings = lazyWithChunkRecovery(() => import('../pages/_dashboard.settings.cleanup'))
 const GeneralSettings = lazyWithChunkRecovery(() => import('../pages/_dashboard.settings.general'))
@@ -111,6 +112,14 @@ export const router = createHashRouter([
         ),
       },
       {
+        path: '/hpx-tunnel',
+        element: (
+          <Suspense fallback={<LoadingSpinner />}>
+            <HpxTunnelPage />
+          </Suspense>
+        ),
+      },
+      {
         path: '/hosts',
         element: (
           <Suspense fallback={<LoadingSpinner />}>
@@ -175,6 +184,10 @@ export const router = createHashRouter([
                 <NodeWireGuard />
               </Suspense>
             ),
+          },
+          {
+            path: '/nodes/hpx-tunnel',
+            element: <Navigate to="/hpx-tunnel" replace />,
           },
         ],
       },

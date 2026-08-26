@@ -1,9 +1,12 @@
 services:
-  hpxpanel:
+    hpxpanel:
     image: ghcr.io/pooyahpx/hpxpanel:latest
     restart: always
     env_file: .env
     network_mode: host
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
     volumes:
       - /var/lib/hpxpanel:/var/lib/hpxpanel
       - /var/run/docker.sock:/var/run/docker.sock

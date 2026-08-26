@@ -192,12 +192,44 @@ async def stop_containers_using_interface(interface: str, keep_name: str | None 
         await run_command("ip", "link", "delete", interface, timeout=10)
 
 
+async def _host_ip(*ip_args: str, timeout: float = 15.0) -> CommandResult:
+    """
+    Run ``ip`` on the host network namespace.
+
+    Panel may lack CAP_NET_ADMIN even with network_mode=host; fall back to a
+    short-lived privileged helper via the mounted docker.sock.
+    """
+    direct = await run_command("ip", *ip_args, timeout=timeout)
+    if direct.returncode == 0:
+        return direct
+    err = f"{direct.stderr or ''} {direct.stdout or ''}".lower()
+    if "operation not permitted" not in err and "permission denied" not in err:
+        return direct
+
+    helper = await run_command(
+        "docker",
+        "run",
+        "--rm",
+        "--network",
+        "host",
+        "--cap-add",
+        "NET_ADMIN",
+        "--cap-add",
+        "NET_RAW",
+        "alpine:3.20",
+        "ip",
+        *ip_args,
+        timeout=max(timeout, 60.0),
+    )
+    return helper
+
+
 async def wait_for_interface(interface: str, timeout: float = 20.0) -> bool:
     import time
 
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
-        link = await run_command("ip", "link", "show", "dev", interface, timeout=5)
+        link = await _host_ip("link", "show", "dev", interface, timeout=5)
         if link.returncode == 0:
             return True
         await asyncio.sleep(0.5)
@@ -216,22 +248,25 @@ async def _assign_interface_ip(
         return f"tunnel interface {interface} did not appear — check docker logs"
 
     cidr = local_ip if "/" in local_ip else f"{local_ip}/24"
-    # Replace any previous address on this TAP, then add ours.
-    await run_command("ip", "addr", "flush", "dev", interface, timeout=10)
-    add = await run_command("ip", "addr", "add", cidr, "dev", interface, timeout=10)
+    await _host_ip("addr", "flush", "dev", interface, timeout=10)
+    add = await _host_ip("addr", "add", cidr, "dev", interface, timeout=10)
     if add.returncode != 0 and "File exists" not in (add.stderr or ""):
-        # Retry once without flush failure noise.
-        add = await run_command("ip", "addr", "add", cidr, "dev", interface, timeout=10)
+        add = await _host_ip("addr", "add", cidr, "dev", interface, timeout=10)
         if add.returncode != 0 and "File exists" not in (add.stderr or ""):
             return add.stderr or add.stdout or f"failed to assign {cidr} on {interface}"
 
     if mtu:
-        await run_command("ip", "link", "set", "dev", interface, "mtu", str(mtu), timeout=10)
-    await run_command("ip", "link", "set", interface, "up", timeout=10)
+        await _host_ip("link", "set", "dev", interface, "mtu", str(mtu), timeout=10)
+    up = await _host_ip("link", "set", "dev", interface, "up", timeout=10)
+    if up.returncode != 0 and "Operation not permitted" in (up.stderr or ""):
+        return up.stderr or "failed to bring interface up (need NET_ADMIN)"
 
     assigned = await get_interface_ip(interface)
     if not assigned:
-        return f"interface {interface} is up but has no IPv4 address"
+        # get_interface_ip uses local ip; retry via helper output
+        shown = await _host_ip("-4", "-o", "addr", "show", "dev", interface, timeout=5)
+        if "inet " not in (shown.stdout or ""):
+            return f"interface {interface} is up but has no IPv4 address"
     return None
 
 

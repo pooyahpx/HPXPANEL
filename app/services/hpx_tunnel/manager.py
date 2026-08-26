@@ -420,6 +420,28 @@ async def resolve_panel_public_ip(panel_url: str | None = None) -> tuple[str | N
     return None, None
 
 
+async def resolve_server_listen(requested: str | None) -> str:
+    """
+    Narnia SERVER must be 0.0.0.0 or an IP present on this host.
+
+    Binding ICMP to a remote/Iran/panel IP yields:
+      listen ip4:icmp X.X.X.X: bind: cannot assign requested address
+    """
+    listen = (requested or "0.0.0.0").strip() or "0.0.0.0"
+    if listen in {"0.0.0.0", "*"}:
+        return "0.0.0.0"
+    # Confirm the address exists on a local interface.
+    shown = await run_command("ip", "-4", "-o", "addr", "show", timeout=5)
+    if shown.returncode == 0 and listen in (shown.stdout or ""):
+        return listen
+    logger.warning(
+        "SERVER=%s is not assigned on this host — falling back to 0.0.0.0 "
+        "(fixes: cannot assign requested address)",
+        listen,
+    )
+    return "0.0.0.0"
+
+
 async def start_tunnel(tunnel: HpxTunnel, password: str) -> tuple[bool, str | None]:
     if not is_linux_host():
         return False, "HPX tunnel control requires a Linux host with Docker"
@@ -448,7 +470,8 @@ async def start_tunnel(tunnel: HpxTunnel, password: str) -> tuple[bool, str | No
         if tunnel.dscp_mark is not None:
             env_args.extend(["-e", f"DSCP_MARK={tunnel.dscp_mark}"])
     else:
-        env_args.extend(["-e", f"SERVER={tunnel.server_listen or '0.0.0.0'}"])
+        server_listen = await resolve_server_listen(tunnel.server_listen)
+        env_args.extend(["-e", f"SERVER={server_listen}"])
         if tunnel.operating_mode:
             env_args.extend(["-e", f"OPERATING_MODE={tunnel.operating_mode}"])
         if tunnel.bandwidth_limit:

@@ -465,7 +465,16 @@ start_tunnel_from_config() {
 
   local env_args=(-e "INTERFACE=${iface}" -e "PASSWORD=${password}" -e "KEEPALIVE=${keepalive}")
   if [ "$role" = "foreign" ]; then
-    env_args+=(-e "SERVER=${server_listen:-0.0.0.0}")
+    # SERVER must be 0.0.0.0 or an IP on THIS host. Binding Iran/panel IP → cannot assign requested address.
+    if [ -n "$server_listen" ] && [ "$server_listen" != "null" ] && [ "$server_listen" != "0.0.0.0" ] && [ "$server_listen" != "*" ]; then
+      if ! ip -4 -o addr show 2>/dev/null | grep -qw "$server_listen"; then
+        warn "SERVER=${server_listen} is not on this host — using 0.0.0.0"
+        server_listen="0.0.0.0"
+      fi
+    else
+      server_listen="0.0.0.0"
+    fi
+    env_args+=(-e "SERVER=${server_listen}")
     [ -n "$op_mode" ] && [ "$op_mode" != "null" ] && env_args+=(-e "OPERATING_MODE=${op_mode}")
     [ -n "$bw" ] && [ "$bw" != "null" ] && env_args+=(-e "BANDWIDTH_LIMIT=${bw}")
   else

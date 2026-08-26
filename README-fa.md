@@ -46,6 +46,22 @@
 
 ---
 
+## v3.3.0 — ویزارد تونل + Auto-Heal
+
+**ICMP = بدون پورت.** تونل HPX فقط بسته‌های ping رمزنگاری‌شده بین دو IP عمومی رد و بدل می‌کند — نیازی به باز کردن TCP/UDP نیست.
+
+**FOREIGN روی سرور پنل** اجرا می‌شود (Docker از داخل کانتینر پنل + `docker.sock`). **IRAN** فقط با agent روی VPS ایران.
+
+| قابلیت جدید | توضیح |
+| --- | --- |
+| **ویزارد ۳ مرحله‌ای** | FOREIGN (همین سرور) → IRAN (join token) → Done |
+| **Auto-heal قانون‌محور** | container down، iface busy، keepalive، agent stale — بدون LLM |
+| **Diagnose & Repair** | دکمه روی کارت تونل + badge آخرین تعمیر |
+| **Preflight** | بررسی Linux · Docker · docker.sock · NET_ADMIN قبل از استارت |
+| **پیش‌فرض‌ها** | MTU=1000 · Keepalive=30 · `icmp_echo_ignore_all=1` روی هر دو سرور |
+
+---
+
 ## v3.1.0 — تونل HPX ICMP
 
 **پنلی که تونل ping رمزنگاری‌شده را مثل هر asset زیرساختی مدیریت می‌کند.**
@@ -129,6 +145,7 @@ alembic upgrade head   # شامل hpx_tunnels (v3.1.0+)
 
 | نسخه | |
 | --- | --- |
+| **v3.3.0** | **ویزارد تونل ICMP** · auto-heal · diagnose/repair · preflight |
 | **v3.1.0** | **تونل HPX ICMP** — مدیریت از پنل، health، failover، RBAC |
 | v2.5.x | رجیستری ساب فروخته · تحویل خودکار · fingerprint |
 | v2.4.x | دسترسی ادمین در بات · قفل تیکت · لاگ مالک |

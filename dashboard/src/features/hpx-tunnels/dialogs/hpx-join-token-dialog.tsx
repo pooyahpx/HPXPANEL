@@ -91,6 +91,11 @@ export default function HpxJoinTokenDialog({ open, onOpenChange, payload }: HpxJ
           )}
 
           <p className="text-muted-foreground text-xs">
+            {t('hpxTunnel.agent.icmpNoPort', {
+              defaultValue: 'No port is required — only ICMP between the two public IPs.',
+            })}
+          </p>
+          <p className="text-muted-foreground text-xs">
             {t('hpxTunnel.agent.shownOnce', {
               defaultValue: 'Token is shown once. If lost, regenerate it from the tunnel card.',
             })}

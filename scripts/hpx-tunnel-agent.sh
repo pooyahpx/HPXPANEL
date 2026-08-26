@@ -250,6 +250,7 @@ assign_interface_ip() {
   local iface="$1" local_ip="$2" mtu="${3:-}"
   local cidr="$local_ip" i
   [[ "$cidr" == */* ]] || cidr="${local_ip}/24"
+  sysctl -w net.ipv4.icmp_echo_ignore_all=1 >/dev/null 2>&1 || true
   sysctl -w net.ipv4.ip_forward=1 >/dev/null 2>&1 || true
 
   for i in $(seq 1 40); do
@@ -395,6 +396,7 @@ start_tunnel_from_config() {
 
   stop_tunnel_container "$container"
   stop_conflicting_tunnels "$container" "$iface"
+  sysctl -w net.ipv4.icmp_echo_ignore_all=1 >/dev/null 2>&1 || true
 
   local env_args=(-e "INTERFACE=${iface}" -e "PASSWORD=${password}" -e "KEEPALIVE=${keepalive}" -e "REMOTE_IP=${remote_ip}")
   [ -n "$mtu" ] && [ "$mtu" != "null" ] && env_args+=(-e "MTU=${mtu}")
@@ -558,8 +560,8 @@ wizard_manual() {
   password=$(ask_secret "Shared tunnel password (same as FOREIGN side)")
   iface=$(ask_val "Tunnel interface name" "hpx0")
   local_ip=$(ask_val "Local tunnel IP on this Iran server" "10.200.200.2")
-  keepalive=$(ask_val "Keepalive seconds" "5")
-  mtu=$(ask_val "MTU" "1200")
+  keepalive=$(ask_val "Keepalive seconds" "30")
+  mtu=$(ask_val "MTU" "1000")
   image=$(ask_val "Docker image" "$DEFAULT_IMAGE")
   container=$(ask_val "Container name" "hpx_tunnel_iran")
 
@@ -681,6 +683,7 @@ cmd_sync() {
   fi
 
   if [ "$need_restart" -eq 1 ]; then
+    stop_conflicting_tunnels "$(echo "$cfg" | jq -r '.container_name')" "$(echo "$cfg" | jq -r '.interface')"
     start_tunnel_from_config "$cfg"
     ack_command "${command:-restart}" "running" "synced"
   fi

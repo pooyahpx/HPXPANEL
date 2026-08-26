@@ -275,6 +275,96 @@ async def _enable_ip_forward() -> None:
     await run_command("sysctl", "-w", "net.ipv4.ip_forward=1", timeout=5)
 
 
+async def apply_icmp_kernel_hardening() -> tuple[bool, str | None]:
+    """Prevent duplicate kernel ICMP replies that break tunnel keepalive."""
+    result = await run_command("sysctl", "-w", "net.ipv4.icmp_echo_ignore_all=1", timeout=5)
+    if result.returncode == 0:
+        return True, None
+    helper = await run_command(
+        "docker",
+        "run",
+        "--rm",
+        "--network",
+        "host",
+        "--cap-add",
+        "SYS_ADMIN",
+        "alpine:3.20",
+        "sysctl",
+        "-w",
+        "net.ipv4.icmp_echo_ignore_all=1",
+        timeout=15,
+    )
+    if helper.returncode == 0:
+        return True, None
+    return False, helper.stderr or helper.stdout or result.stderr or "sysctl icmp_echo_ignore_all failed"
+
+
+async def host_has_net_admin() -> bool:
+    probe = await _host_ip("link", "show", timeout=5)
+    if probe.returncode == 0:
+        return True
+    err = f"{probe.stderr or ''} {probe.stdout or ''}".lower()
+    return "operation not permitted" not in err and "permission denied" not in err
+
+
+async def preflight_panel_host() -> dict:
+    import os
+
+    linux = is_linux_host()
+    sock = os.path.exists("/var/run/docker.sock")
+    docker_ok = await docker_available() if linux else False
+    net_admin = await host_has_net_admin() if linux else False
+    ready = linux and docker_ok and sock and net_admin
+    message = None
+    if not linux:
+        message = "HPX FOREIGN tunnels require a Linux panel host"
+    elif not sock:
+        message = "Mount /var/run/docker.sock into the panel container"
+    elif not docker_ok:
+        message = await docker_unavailable_reason()
+    elif not net_admin:
+        message = "Panel container needs cap_add: NET_ADMIN on the host compose file"
+    return {
+        "linux": linux,
+        "docker": docker_ok,
+        "docker_sock": sock,
+        "net_admin": net_admin,
+        "ready": ready,
+        "message": message,
+    }
+
+
+async def resolve_panel_public_ip(panel_url: str | None = None) -> tuple[str | None, str | None]:
+    import ipaddress
+    import socket
+    from urllib.parse import urlparse
+
+    if panel_url:
+        host = urlparse(panel_url).hostname
+        if host:
+            try:
+                ipaddress.ip_address(host)
+                return host, "panel_url"
+            except ValueError:
+                try:
+                    resolved = socket.gethostbyname(host)
+                    ipaddress.ip_address(resolved)
+                    if not ipaddress.ip_address(resolved).is_private:
+                        return resolved, "panel_url_dns"
+                except (OSError, ValueError):
+                    pass
+
+    for svc in ("https://api.ipify.org", "https://ifconfig.me/ip"):
+        result = await run_command("curl", "-fsS", "--max-time", "4", svc, timeout=6)
+        if result.returncode == 0 and result.stdout.strip():
+            try:
+                ipaddress.ip_address(result.stdout.strip())
+                return result.stdout.strip(), "external_lookup"
+            except ValueError:
+                continue
+    return None, None
+
+
 async def start_tunnel(tunnel: HpxTunnel, password: str) -> tuple[bool, str | None]:
     if not is_linux_host():
         return False, "HPX tunnel control requires a Linux host with Docker"
@@ -284,6 +374,7 @@ async def start_tunnel(tunnel: HpxTunnel, password: str) -> tuple[bool, str | No
     container_name = tunnel.container_name or container_name_for_tunnel(tunnel.id)
     await stop_container(container_name)
     await stop_containers_using_interface(tunnel.interface, keep_name=container_name)
+    await apply_icmp_kernel_hardening()
 
     image, err = await ensure_tunnel_image(tunnel.docker_image or DEFAULT_IMAGE)
     if err:
@@ -341,6 +432,7 @@ async def start_tunnel(tunnel: HpxTunnel, password: str) -> tuple[bool, str | No
         )
         detail = logs.stderr or logs.stdout or ""
         return False, f"{assign_err}. {detail}".strip()
+    await _host_ip("neigh", "flush", "dev", tunnel.interface, timeout=10)
     if tunnel.role == HpxTunnelRole.iran and tunnel.port_forwards:
         await apply_port_forwards(tunnel)
 

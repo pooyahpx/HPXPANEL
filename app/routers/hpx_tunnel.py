@@ -19,6 +19,10 @@ from app.models.hpx_tunnel import (
     HpxTunnelStatsResponse,
     HpxTunnelUpdate,
     RemoveHpxTunnelsResponse,
+    HpxTunnelDiagnoseResponse,
+    HpxTunnelRepairResponse,
+    HpxPreflightResponse,
+    HpxPanelPublicIpResponse,
 )
 from app.operation import OperatorType
 from app.operation.hpx_tunnel import HpxTunnelOperation
@@ -77,6 +81,25 @@ async def bulk_delete_hpx_tunnels(
     admin: AdminDetails = Depends(require_permission("hpx_tunnels", "delete")),
 ):
     return await hpx_tunnel_operator.bulk_delete_tunnels(db, admin=admin, bulk=bulk)
+
+
+@router.get("/preflight", response_model=HpxPreflightResponse)
+async def hpx_tunnel_preflight(
+    db: AsyncSession = Depends(get_db),
+    admin: AdminDetails = Depends(require_permission("hpx_tunnels", "read")),
+):
+    return await hpx_tunnel_operator.get_preflight(db, admin=admin)
+
+
+@router.get("/panel-public-ip", response_model=HpxPanelPublicIpResponse)
+async def hpx_tunnel_panel_public_ip(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    admin: AdminDetails = Depends(require_permission("hpx_tunnels", "read")),
+):
+    return await hpx_tunnel_operator.get_panel_public_ip(
+        db, admin=admin, panel_url=_request_base_url(request)
+    )
 
 
 @router.post(
@@ -208,6 +231,24 @@ async def get_hpx_tunnel_stats(
     admin: AdminDetails = Depends(require_permission("hpx_tunnels", "stats")),
 ):
     return await hpx_tunnel_operator.get_tunnel_stats(db, admin=admin, tunnel_id=tunnel_id)
+
+
+@router.post("/{tunnel_id}/diagnose", response_model=HpxTunnelDiagnoseResponse, responses={404: responses._404})
+async def diagnose_hpx_tunnel(
+    tunnel_id: int,
+    db: AsyncSession = Depends(get_db),
+    admin: AdminDetails = Depends(require_permission("hpx_tunnels", "read")),
+):
+    return await hpx_tunnel_operator.diagnose_tunnel(db, admin=admin, tunnel_id=tunnel_id)
+
+
+@router.post("/{tunnel_id}/repair", response_model=HpxTunnelRepairResponse, responses={404: responses._404})
+async def repair_hpx_tunnel(
+    tunnel_id: int,
+    db: AsyncSession = Depends(get_db),
+    admin: AdminDetails = Depends(require_permission("hpx_tunnels", "start")),
+):
+    return await hpx_tunnel_operator.repair_tunnel(db, admin=admin, tunnel_id=tunnel_id)
 
 
 @router.get("/{tunnel_id}/logs", response_class=PlainTextResponse, responses={404: responses._404})

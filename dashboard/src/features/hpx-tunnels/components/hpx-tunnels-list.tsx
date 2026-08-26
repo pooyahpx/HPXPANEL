@@ -13,9 +13,10 @@ import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useAdmin } from '@/hooks/use-admin'
 import useDirDetection from '@/hooks/use-dir-detection'
-import HpxTunnelCard from '@/features/hpx-tunnels/components/hpx-tunnel-card'
+import HpxTunnelCard, { HpxTunnelLogsDialog } from '@/features/hpx-tunnels/components/hpx-tunnel-card'
 import HpxJoinTokenDialog, { type JoinTokenPayload } from '@/features/hpx-tunnels/dialogs/hpx-join-token-dialog'
 import HpxTunnelModal from '@/features/hpx-tunnels/dialogs/hpx-tunnel-modal'
+import HpxTunnelWizard from '@/features/hpx-tunnels/wizard/hpx-tunnel-wizard'
 import { hpxTunnelFormDefaultValues } from '@/features/hpx-tunnels/forms/hpx-tunnel-form'
 import {
   type HpxTunnelResponse,
@@ -25,6 +26,8 @@ import {
   useRestartHpxTunnel,
   useStartHpxTunnel,
   useStopHpxTunnel,
+  useRepairHpxTunnel,
+  getHpxTunnelLogs,
 } from '@/service/api/hpx-tunnels'
 import { hasPermission } from '@/utils/rbac'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -49,7 +52,13 @@ export default function HpxTunnelsList() {
   const restartMutation = useRestartHpxTunnel()
   const deleteMutation = useDeleteHpxTunnel()
   const joinTokenMutation = useRegenerateHpxTunnelJoinToken()
+  const repairMutation = useRepairHpxTunnel()
+  const [logsOpen, setLogsOpen] = useState(false)
+  const [logsTunnel, setLogsTunnel] = useState<HpxTunnelResponse | null>(null)
+  const [logsText, setLogsText] = useState('')
+  const [logsLoading, setLogsLoading] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [wizardOpen, setWizardOpen] = useState(false)
   const [editingTunnel, setEditingTunnel] = useState<HpxTunnelResponse | null>(null)
   const [joinPayload, setJoinPayload] = useState<JoinTokenPayload | null>(null)
   const [joinOpen, setJoinOpen] = useState(false)
@@ -63,8 +72,7 @@ export default function HpxTunnelsList() {
   useEffect(() => {
     const handler = () => {
       setEditingTunnel(null)
-      form.reset(hpxTunnelFormDefaultValues())
-      setDialogOpen(true)
+      setWizardOpen(true)
     }
     window.addEventListener('openHpxTunnelDialog', handler)
     return () => window.removeEventListener('openHpxTunnelDialog', handler)
@@ -80,7 +88,7 @@ export default function HpxTunnelsList() {
   }, [data?.tunnels])
 
   const actionLoading =
-    startMutation.isPending || stopMutation.isPending || restartMutation.isPending || joinTokenMutation.isPending || deleteMutation.isPending
+    startMutation.isPending || stopMutation.isPending || restartMutation.isPending || joinTokenMutation.isPending || deleteMutation.isPending || repairMutation.isPending
 
   const runAction = async (label: string, fn: () => Promise<{ message?: string | null }>) => {
     try {
@@ -126,6 +134,43 @@ export default function HpxTunnelsList() {
     }
   }
 
+  const diagnoseRepair = async (id: number) => {
+    try {
+      const result = await repairMutation.mutateAsync(id)
+      if (result.repaired) {
+        toast.success(t('hpxTunnel.repairSuccess', { defaultValue: 'Repair applied' }), {
+          description: result.message || result.actions_taken.join(', '),
+        })
+      } else if (result.issues.length === 0) {
+        toast.info(t('hpxTunnel.diagnoseOk', { defaultValue: 'No issues detected' }))
+      } else {
+        toast.warning(t('hpxTunnel.repairSkipped', { defaultValue: 'Could not repair' }), {
+          description: result.message || result.issues.map(i => i.message).join('; '),
+        })
+      }
+      await refetch()
+    } catch (error: any) {
+      toast.error(t('hpxTunnel.diagnoseRepair', { defaultValue: 'Diagnose & Repair' }), {
+        description: error?.data?.detail || error?.message,
+      })
+    }
+  }
+
+  const viewLogs = async (tunnel: HpxTunnelResponse) => {
+    setLogsTunnel(tunnel)
+    setLogsOpen(true)
+    setLogsLoading(true)
+    setLogsText('')
+    try {
+      const text = await getHpxTunnelLogs(tunnel.id)
+      setLogsText(text)
+    } catch (error: any) {
+      setLogsText(error?.data?.detail || error?.message || 'Failed to load logs')
+    } finally {
+      setLogsLoading(false)
+    }
+  }
+
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 p-4 md:p-6">
       <div className="grid gap-3 md:grid-cols-3">
@@ -146,8 +191,7 @@ export default function HpxTunnelsList() {
               size="sm"
               onClick={() => {
                 setEditingTunnel(null)
-                form.reset(hpxTunnelFormDefaultValues())
-                setDialogOpen(true)
+                setWizardOpen(true)
               }}
             >
               <Plus className="size-4" />
@@ -205,12 +249,16 @@ export default function HpxTunnelsList() {
               onRestart={id => runAction(t('hpxTunnel.restart', { defaultValue: 'Restart' }), () => restartMutation.mutateAsync(id))}
               onDelete={setTunnelToDelete}
               onRegenerateJoinToken={regenerateJoinToken}
+              onDiagnoseRepair={diagnoseRepair}
+              onViewLogs={viewLogs}
             />
           ))}
         </div>
       )}
 
       <HpxTunnelModal open={dialogOpen} onOpenChange={setDialogOpen} form={form} editingTunnel={editingTunnel} onSuccess={() => refetch()} />
+      <HpxTunnelWizard open={wizardOpen} onOpenChange={setWizardOpen} onSuccess={() => refetch()} />
+      <HpxTunnelLogsDialog open={logsOpen} onOpenChange={setLogsOpen} tunnel={logsTunnel} logs={logsText} loading={logsLoading} />
       <HpxJoinTokenDialog open={joinOpen} onOpenChange={setJoinOpen} payload={joinPayload} />
 
       <AlertDialog open={!!tunnelToDelete} onOpenChange={open => !open && setTunnelToDelete(null)}>

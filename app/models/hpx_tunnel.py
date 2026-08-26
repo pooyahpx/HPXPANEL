@@ -22,8 +22,8 @@ class HpxTunnelBase(BaseModel):
     interface: str = Field(default="hpx0", max_length=32)
     local_ip: str = Field(default="10.200.200.2", max_length=45)
     subnet: str = Field(default="10.200.200.0/24", max_length=64)
-    mtu: int | None = Field(default=1200, ge=576, le=9000)
-    keepalive: int = Field(default=5, ge=1, le=300)
+    mtu: int | None = Field(default=1000, ge=576, le=9000)
+    keepalive: int = Field(default=30, ge=1, le=300)
     dscp_mark: int | None = Field(default=None, ge=0, le=63)
     bandwidth_limit: str | None = Field(default=None, max_length=32)
     operating_mode: str | None = Field(default=None, max_length=64)
@@ -72,6 +72,7 @@ class HpxTunnelUpdate(BaseModel):
     priority: int | None = Field(default=None, ge=0, le=100)
     alert_on_down: bool | None = None
     note: str | None = Field(default=None, max_length=512)
+    auto_heal_enabled: bool | None = None
 
 
 class HpxTunnelResponse(HpxTunnelBase):
@@ -92,6 +93,9 @@ class HpxTunnelResponse(HpxTunnelBase):
     bytes_down: int = 0
     created_at: dt
     last_status_change: dt | None = None
+    auto_heal_enabled: bool = True
+    last_heal_at: dt | None = None
+    last_heal_action: str | None = None
 
 
 class HpxTunnelsResponse(BaseModel):
@@ -209,3 +213,39 @@ class HpxTunnelAgentAckRequest(BaseModel):
     command: str = Field(min_length=1, max_length=16)
     status: HpxTunnelStatus | None = None
     message: str | None = Field(default=None, max_length=1024)
+
+
+class HpxHealIssueResponse(BaseModel):
+    code: str
+    message: str
+    suggested_action: str
+
+
+class HpxTunnelDiagnoseResponse(BaseModel):
+    tunnel_id: int
+    issues: list[HpxHealIssueResponse]
+    auto_heal_enabled: bool
+    last_heal_at: dt | None = None
+    last_heal_action: str | None = None
+
+
+class HpxTunnelRepairResponse(BaseModel):
+    tunnel: HpxTunnelResponse
+    repaired: bool
+    actions_taken: list[str]
+    issues: list[HpxHealIssueResponse]
+    message: str | None = None
+
+
+class HpxPreflightResponse(BaseModel):
+    linux: bool
+    docker: bool
+    docker_sock: bool
+    net_admin: bool
+    ready: bool
+    message: str | None = None
+
+
+class HpxPanelPublicIpResponse(BaseModel):
+    ip: str | None = None
+    source: str | None = None

@@ -48,6 +48,9 @@ export interface HpxTunnelResponse {
   bytes_down: number
   created_at: string
   last_status_change?: string | null
+  auto_heal_enabled?: boolean
+  last_heal_at?: string | null
+  last_heal_action?: string | null
 }
 
 export interface HpxTunnelsResponse {
@@ -111,6 +114,42 @@ export interface HpxTunnelStatsResponse {
   message?: string | null
 }
 
+export interface HpxHealIssue {
+  code: string
+  message: string
+  suggested_action: string
+}
+
+export interface HpxTunnelDiagnoseResponse {
+  tunnel_id: number
+  issues: HpxHealIssue[]
+  auto_heal_enabled: boolean
+  last_heal_at?: string | null
+  last_heal_action?: string | null
+}
+
+export interface HpxTunnelRepairResponse {
+  tunnel: HpxTunnelResponse
+  repaired: boolean
+  actions_taken: string[]
+  issues: HpxHealIssue[]
+  message?: string | null
+}
+
+export interface HpxPreflightResponse {
+  linux: boolean
+  docker: boolean
+  docker_sock: boolean
+  net_admin: boolean
+  ready: boolean
+  message?: string | null
+}
+
+export interface HpxPanelPublicIpResponse {
+  ip?: string | null
+  source?: string | null
+}
+
 const BASE = '/api/hpx_tunnel'
 
 export const getHpxTunnelsQueryKey = (params?: Record<string, unknown>) => ['hpx-tunnels', params] as const
@@ -141,6 +180,16 @@ export const regenerateHpxTunnelJoinToken = (id: number) =>
 export const getHpxTunnelStats = (id: number) => fetcher<HpxTunnelStatsResponse>(`${BASE}/${id}/stats`)
 
 export const getHpxTunnelLogs = (id: number) => fetcher<string>(`${BASE}/${id}/logs`)
+
+export const diagnoseHpxTunnel = (id: number) =>
+  fetcher<HpxTunnelDiagnoseResponse>(`${BASE}/${id}/diagnose`, { method: 'POST' })
+
+export const repairHpxTunnel = (id: number) =>
+  fetcher<HpxTunnelRepairResponse>(`${BASE}/${id}/repair`, { method: 'POST' })
+
+export const getHpxTunnelPreflight = () => fetcher<HpxPreflightResponse>(`${BASE}/preflight`)
+
+export const getHpxPanelPublicIp = () => fetcher<HpxPanelPublicIpResponse>(`${BASE}/panel-public-ip`)
 
 export function useGetHpxTunnels(params?: Record<string, unknown>, options?: { refetchInterval?: number }) {
   return useQuery({
@@ -223,5 +272,29 @@ export function useGetHpxTunnelStats(id: number, enabled = true) {
     queryFn: () => getHpxTunnelStats(id),
     enabled: enabled && id > 0,
     refetchInterval: 15000,
+  })
+}
+
+export function useDiagnoseHpxTunnel() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: diagnoseHpxTunnel,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['hpx-tunnels'] }),
+  })
+}
+
+export function useRepairHpxTunnel() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: repairHpxTunnel,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['hpx-tunnels'] }),
+  })
+}
+
+export function useGetHpxTunnelLogs(id: number, enabled = false) {
+  return useQuery({
+    queryKey: ['hpx-tunnel-logs', id],
+    queryFn: () => getHpxTunnelLogs(id),
+    enabled: enabled && id > 0,
   })
 }

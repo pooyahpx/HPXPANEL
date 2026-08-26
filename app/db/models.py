@@ -1108,6 +1108,10 @@ class HpxTunnel(Base, CreatedAtUTCMixin):
     bytes_up: Mapped[int] = mapped_column(BigInteger, default=0, server_default="0")
     bytes_down: Mapped[int] = mapped_column(BigInteger, default=0, server_default="0")
     last_status_change: Mapped[dt | None] = mapped_column(DateTime(timezone=True), default=None)
+    auto_heal_enabled: Mapped[bool] = mapped_column(server_default="1", default=True)
+    last_heal_at: Mapped[dt | None] = mapped_column(DateTime(timezone=True), default=None)
+    last_heal_action: Mapped[str | None] = mapped_column(String(256), default=None)
+    heal_count_window: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
 
 
 class TelegramSubDelivery(Base):

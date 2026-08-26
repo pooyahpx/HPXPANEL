@@ -37,6 +37,11 @@ from app.models.hpx_tunnel import (
     HpxTunnelsResponse,
     HpxTunnelStatsResponse,
     HpxTunnelUpdate,
+    HpxHealIssueResponse,
+    HpxTunnelDiagnoseResponse,
+    HpxTunnelRepairResponse,
+    HpxPreflightResponse,
+    HpxPanelPublicIpResponse,
     RemoveHpxTunnelsResponse,
 )
 from app.operation import BaseOperation
@@ -48,9 +53,12 @@ from app.services.hpx_tunnel.manager import (
     inspect_runtime,
     is_linux_host,
     ping_host,
+    preflight_panel_host,
+    resolve_panel_public_ip,
     start_tunnel,
     stop_container,
 )
+from app.services.hpx_tunnel.healer import diagnose_tunnel as diagnose_tunnel_issues, evaluate_and_repair
 from app.utils.crypto import decrypt_secret, encrypt_secret, hash_api_key
 from app.utils.helpers import resolve_panel_base_url
 from app.utils.logger import get_logger
@@ -680,3 +688,78 @@ class HpxTunnelOperation(BaseOperation):
         await db.commit()
         password = await self._decrypt_password(db, db_tunnel)
         return self._agent_config_response(db_tunnel, password)
+
+    async def get_preflight(self, db: AsyncSession, *, admin: AdminDetails) -> HpxPreflightResponse:
+        _ = db, admin
+        data = await preflight_panel_host()
+        return HpxPreflightResponse(**data)
+
+    async def get_panel_public_ip(
+        self, db: AsyncSession, *, admin: AdminDetails, panel_url: str | None = None
+    ) -> HpxPanelPublicIpResponse:
+        _ = db, admin
+        resolved = await self._panel_url(panel_url)
+        ip, source = await resolve_panel_public_ip(resolved)
+        return HpxPanelPublicIpResponse(ip=ip, source=source)
+
+    async def diagnose_tunnel(
+        self, db: AsyncSession, *, admin: AdminDetails, tunnel_id: int
+    ) -> HpxTunnelDiagnoseResponse:
+        db_tunnel = await get_hpx_tunnel_by_id(db, tunnel_id)
+        if db_tunnel is None:
+            await self.raise_error(message="Tunnel not found", code=404)
+
+        runtime = None
+        logs = ""
+        if db_tunnel.role == HpxTunnelRole.foreign and not is_agent_managed(db_tunnel):
+            runtime = await inspect_runtime(db_tunnel)
+            logs = await get_container_logs(db_tunnel.container_name, tail=40)
+
+        from app.services.hpx_tunnel.healer import _EmptyRuntime
+
+        issues = diagnose_tunnel_issues(db_tunnel, runtime or _EmptyRuntime(), logs)
+        return HpxTunnelDiagnoseResponse(
+            tunnel_id=db_tunnel.id,
+            issues=[
+                HpxHealIssueResponse(
+                    code=i.code,
+                    message=i.message,
+                    suggested_action=i.suggested_action.value,
+                )
+                for i in issues
+            ],
+            auto_heal_enabled=db_tunnel.auto_heal_enabled,
+            last_heal_at=db_tunnel.last_heal_at,
+            last_heal_action=db_tunnel.last_heal_action,
+        )
+
+    async def repair_tunnel(
+        self, db: AsyncSession, *, admin: AdminDetails, tunnel_id: int
+    ) -> HpxTunnelRepairResponse:
+        db_tunnel = await get_hpx_tunnel_by_id(db, tunnel_id)
+        if db_tunnel is None:
+            await self.raise_error(message="Tunnel not found", code=404)
+
+        password = None
+        if db_tunnel.role == HpxTunnelRole.foreign and not is_agent_managed(db_tunnel):
+            password = await self._decrypt_password(db, db_tunnel)
+
+        result = await evaluate_and_repair(db_tunnel, password=password, auto=False)
+        if result.repaired:
+            db_tunnel = await self._refresh_runtime(db, db_tunnel)
+        await db.commit()
+
+        return HpxTunnelRepairResponse(
+            tunnel=_to_response(db_tunnel),
+            repaired=result.repaired,
+            actions_taken=result.actions_taken,
+            issues=[
+                HpxHealIssueResponse(
+                    code=i.code,
+                    message=i.message,
+                    suggested_action=i.suggested_action.value,
+                )
+                for i in result.issues
+            ],
+            message=result.actions_taken[-1] if result.actions_taken else result.skipped_reason,
+        )

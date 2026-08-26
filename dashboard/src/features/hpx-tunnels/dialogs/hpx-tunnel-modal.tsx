@@ -86,6 +86,16 @@ export default function HpxTunnelModal({ open, onOpenChange, form, editingTunnel
           </DialogDescription>
         </DialogHeader>
 
+        {role === 'foreign' && (
+          <div className="rounded-lg border border-blue-500/30 bg-blue-500/5 px-4 py-3 text-sm">
+            <p className="font-medium text-blue-700 dark:text-blue-300">
+              {t('hpxTunnel.foreignPanelBanner', {
+                defaultValue: 'FOREIGN runs on this panel server — ICMP only, no TCP/UDP port to open.',
+              })}
+            </p>
+          </div>
+        )}
+
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
@@ -193,7 +203,7 @@ export default function HpxTunnelModal({ open, onOpenChange, form, editingTunnel
                       <FormLabel>MTU</FormLabel>
                       <FormControl><Input {...field} value={field.value ?? ''} type="number" /></FormControl>
                       <p className="text-muted-foreground text-[11px]">
-                        {t('hpxTunnel.mtuHint', { defaultValue: 'Use 1200 for ICMP tunnels (1500 usually breaks ping/traffic).' })}
+                        {t('hpxTunnel.mtuHint', { defaultValue: 'Use 1000 for ICMP tunnels (recommended).' })}
                       </p>
                       <FormMessage />
                     </FormItem>

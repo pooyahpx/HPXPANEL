@@ -1,10 +1,17 @@
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 import type { HpxTunnelResponse } from '@/service/api/hpx-tunnels'
 import { formatBytes } from '@/utils/formatByte'
-import { Activity, Globe, KeyRound, Play, RefreshCw, Shield, Square, Trash2, Zap } from 'lucide-react'
+import { Activity, Globe, KeyRound, Play, RefreshCw, Shield, Square, Stethoscope, Trash2, Zap, ScrollText } from 'lucide-react'
 import type { ComponentType } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -16,6 +23,8 @@ interface HpxTunnelCardProps {
   onRestart: (id: number) => void
   onDelete?: (tunnel: HpxTunnelResponse) => void
   onRegenerateJoinToken?: (id: number) => void
+  onDiagnoseRepair?: (id: number) => void
+  onViewLogs?: (tunnel: HpxTunnelResponse) => void
   actionLoading?: boolean
   canDelete?: boolean
 }
@@ -38,6 +47,8 @@ export default function HpxTunnelCard({
   onRestart,
   onDelete,
   onRegenerateJoinToken,
+  onDiagnoseRepair,
+  onViewLogs,
   actionLoading,
   canDelete,
 }: HpxTunnelCardProps) {
@@ -45,6 +56,7 @@ export default function HpxTunnelCard({
   const isRunning = tunnel.status === 'running'
   const isPendingClaim = tunnel.status === 'pending_claim' || (tunnel.role === 'iran' && !tunnel.agent_claimed)
   const isIranAgent = tunnel.role === 'iran'
+  const isForeignPanel = tunnel.role === 'foreign'
 
   return (
     <Card className="overflow-hidden border-border/70 bg-gradient-to-br from-card via-card to-muted/20 p-0 shadow-sm">
@@ -59,6 +71,11 @@ export default function HpxTunnelCard({
               <Badge variant="secondary" className="text-xs uppercase">
                 {tunnel.role === 'iran' ? t('hpxTunnel.role.iran', { defaultValue: 'IRAN' }) : t('hpxTunnel.role.foreign', { defaultValue: 'FOREIGN' })}
               </Badge>
+              {tunnel.auto_heal_enabled !== false && (
+                <Badge variant="outline" className="text-xs">
+                  {t('hpxTunnel.autoHealOn', { defaultValue: 'Auto-heal on' })}
+                </Badge>
+              )}
               {isIranAgent && tunnel.agent_claimed && (
                 <Badge variant="outline" className="text-xs">
                   {t('hpxTunnel.agent.claimed', { defaultValue: 'Agent claimed' })}
@@ -73,6 +90,18 @@ export default function HpxTunnelCard({
             </p>
           </div>
           <div className="flex flex-wrap gap-1.5">
+            {onDiagnoseRepair && (
+              <Button size="sm" variant="secondary" disabled={actionLoading} onClick={() => onDiagnoseRepair(tunnel.id)}>
+                <Stethoscope className="size-3.5" />
+                {t('hpxTunnel.diagnoseRepair', { defaultValue: 'Diagnose & Repair' })}
+              </Button>
+            )}
+            {isForeignPanel && onViewLogs && (
+              <Button size="sm" variant="outline" disabled={actionLoading} onClick={() => onViewLogs(tunnel)}>
+                <ScrollText className="size-3.5" />
+                {t('hpxTunnel.viewLogs', { defaultValue: 'View logs' })}
+              </Button>
+            )}
             {isIranAgent && onRegenerateJoinToken && (
               <Button size="sm" variant="secondary" disabled={actionLoading} onClick={() => onRegenerateJoinToken(tunnel.id)}>
                 <KeyRound className="size-3.5" />
@@ -136,12 +165,17 @@ export default function HpxTunnelCard({
         <Metric icon={Shield} label={t('hpxTunnel.traffic', { defaultValue: 'Traffic' })} value={`↑ ${formatBytes(tunnel.bytes_up)} · ↓ ${formatBytes(tunnel.bytes_down)}`} />
       </div>
 
-      {(tunnel.auto_failover || tunnel.message || tunnel.agent_last_seen) && (
+      {(tunnel.auto_failover || tunnel.message || tunnel.agent_last_seen || tunnel.last_heal_action) && (
         <div className="border-t border-border/60 px-4 py-3 text-xs">
           {tunnel.auto_failover && (
             <Badge variant="outline" className="me-2">
               {t('hpxTunnel.failoverEnabled', { defaultValue: 'Auto-failover' })}
             </Badge>
+          )}
+          {tunnel.last_heal_action && (
+            <span className="text-muted-foreground me-2">
+              {t('hpxTunnel.lastHeal', { defaultValue: 'Last repair: {{action}}', action: tunnel.last_heal_action })}
+            </span>
           )}
           {tunnel.agent_last_seen && (
             <span className="text-muted-foreground me-2">
@@ -181,5 +215,35 @@ function Metric({
         {value}
       </div>
     </div>
+  )
+}
+
+export function HpxTunnelLogsDialog({
+  open,
+  onOpenChange,
+  tunnel,
+  logs,
+  loading,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  tunnel: HpxTunnelResponse | null
+  logs: string
+  loading?: boolean
+}) {
+  const { t } = useTranslation()
+  if (!tunnel) return null
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[85vh] sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>{t('hpxTunnel.logsTitle', { defaultValue: 'Tunnel logs' })} — {tunnel.name}</DialogTitle>
+          <DialogDescription>{t('hpxTunnel.logsDescription', { defaultValue: 'Recent Docker container output (FOREIGN on panel host).' })}</DialogDescription>
+        </DialogHeader>
+        <pre className="bg-muted/40 max-h-[60vh] overflow-auto rounded-md border p-3 font-mono text-[11px] leading-relaxed whitespace-pre-wrap" dir="ltr">
+          {loading ? t('loading', { defaultValue: 'Loading…' }) : logs || '—'}
+        </pre>
+      </DialogContent>
+    </Dialog>
   )
 }

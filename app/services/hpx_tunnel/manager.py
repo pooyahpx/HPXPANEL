@@ -10,7 +10,10 @@ from app.utils.logger import get_logger
 
 logger = get_logger("hpx-tunnel-manager")
 
-DEFAULT_IMAGE = "pooyahpx/hpx-icmp:0.0.3"
+# Local brand name only — no Docker Hub account / push required.
+DEFAULT_IMAGE = "hpx-icmp:0.0.3"
+# Upstream runtime (pulled automatically, then retagged as DEFAULT_IMAGE).
+UPSTREAM_IMAGE = "stormotron/narnia:0.0.3"
 _CONTAINER_PREFIX = "hpx_tunnel_"
 
 
@@ -74,6 +77,41 @@ async def pull_image(image: str) -> tuple[bool, str | None]:
     return True, None
 
 
+async def image_exists(image: str) -> bool:
+    result = await run_command("docker", "image", "inspect", image, timeout=10)
+    return result.returncode == 0
+
+
+async def ensure_tunnel_image(wanted: str | None = None) -> tuple[str, str | None]:
+    """
+    Ensure a locally-named HPX image exists.
+
+    Pulls upstream automatically and retags as hpx-icmp — no registry login/push.
+    """
+    # Always run under the local brand name; ignore remote registry paths from older configs.
+    target = DEFAULT_IMAGE
+    _ = wanted  # kept for API compatibility with callers
+
+    if await image_exists(target):
+        return target, None
+
+    if await image_exists(UPSTREAM_IMAGE):
+        await run_command("docker", "tag", UPSTREAM_IMAGE, target, timeout=30)
+        return target, None
+
+    logger.info("Pulling HPX tunnel runtime from upstream…")
+    ok, err = await pull_image(UPSTREAM_IMAGE)
+    if not ok:
+        return target, (
+            err
+            or "failed to download tunnel runtime image. "
+            "Check Docker Hub access on this server."
+        )
+
+    await run_command("docker", "tag", UPSTREAM_IMAGE, target, timeout=30)
+    return target, None
+
+
 async def container_is_running(container_name: str) -> bool:
     result = await run_command(
         "docker",
@@ -117,8 +155,8 @@ async def start_tunnel(tunnel: HpxTunnel, password: str) -> tuple[bool, str | No
     container_name = tunnel.container_name or container_name_for_tunnel(tunnel.id)
     await stop_container(container_name)
 
-    ok, err = await pull_image(tunnel.docker_image or DEFAULT_IMAGE)
-    if not ok:
+    image, err = await ensure_tunnel_image(tunnel.docker_image or DEFAULT_IMAGE)
+    if err:
         return False, err
 
     env_args: list[str] = []
@@ -156,7 +194,7 @@ async def start_tunnel(tunnel: HpxTunnel, password: str) -> tuple[bool, str | No
         "--name",
         container_name,
         "-d",
-        tunnel.docker_image or DEFAULT_IMAGE,
+        image,
     ]
     result = await run_command(*cmd, timeout=60)
     if result.returncode != 0:

@@ -41,6 +41,7 @@ from app.models.hpx_tunnel import (
 )
 from app.operation import BaseOperation
 from app.services.hpx_tunnel.manager import (
+    DEFAULT_IMAGE,
     derive_status,
     get_container_logs,
     inspect_runtime,
@@ -78,6 +79,14 @@ def _build_join_command(panel_url: str | None, token: str) -> str:
     return f"curl -fsSL {AGENT_SCRIPT_URL} | sudo bash"
 
 
+def _resolved_docker_image(raw: str | None) -> str:
+    """Always ship the local HPX brand tag — no registry login/push for operators."""
+    value = (raw or "").strip()
+    if not value or "/" in value or value.startswith("ghcr.io/"):
+        return DEFAULT_IMAGE
+    return value
+
+
 def _config_payload(db_tunnel: HpxTunnel, password: str) -> dict:
     port_forwards = db_tunnel.port_forwards or []
     return {
@@ -93,7 +102,7 @@ def _config_payload(db_tunnel: HpxTunnel, password: str) -> dict:
         "keepalive": db_tunnel.keepalive,
         "dscp_mark": db_tunnel.dscp_mark,
         "port_forwards": port_forwards,
-        "docker_image": db_tunnel.docker_image,
+        "docker_image": _resolved_docker_image(db_tunnel.docker_image),
         "container_name": db_tunnel.container_name,
         "enabled": db_tunnel.enabled,
     }
@@ -170,7 +179,7 @@ class HpxTunnelOperation(BaseOperation):
             keepalive=db_tunnel.keepalive,
             dscp_mark=db_tunnel.dscp_mark,
             port_forwards=[HpxPortForward.model_validate(item) for item in (db_tunnel.port_forwards or [])],
-            docker_image=db_tunnel.docker_image,
+            docker_image=_resolved_docker_image(db_tunnel.docker_image),
             container_name=db_tunnel.container_name,
             config_hash=_config_hash(payload),
             desired_status=_desired_status(db_tunnel),
@@ -246,6 +255,7 @@ class HpxTunnelOperation(BaseOperation):
 
         try:
             encrypted = await self._encrypt_password(db, model.password)
+            model.docker_image = _resolved_docker_image(model.docker_image)
             db_tunnel = await create_hpx_tunnel(db, model=model, password_encrypted=encrypted)
             await db.commit()
         except IntegrityError:
@@ -351,6 +361,8 @@ class HpxTunnelOperation(BaseOperation):
         if model.password:
             update_data["password_encrypted"] = await self._encrypt_password(db, model.password)
         update_data.pop("password", None)
+        if "docker_image" in update_data:
+            update_data["docker_image"] = _resolved_docker_image(update_data.get("docker_image"))
         if "port_forwards" in update_data and update_data["port_forwards"] is not None:
             update_data["port_forwards"] = [item.model_dump() for item in model.port_forwards or []]
 

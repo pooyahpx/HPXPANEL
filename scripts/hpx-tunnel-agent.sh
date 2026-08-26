@@ -24,11 +24,10 @@ BIN_LINK="${BIN_LINK:-/usr/local/bin/hpx-tunnel-agent}"
 SERVICE_NAME="${SERVICE_NAME:-hpx-tunnel-agent}"
 TIMER_NAME="${TIMER_NAME:-hpx-tunnel-agent.timer}"
 SCRIPT_SRC="${BASH_SOURCE[0]:-$0}"
-DEFAULT_IMAGE="${DEFAULT_IMAGE:-pooyahpx/hpx-icmp:0.0.3}"
-FALLBACK_IMAGE="${FALLBACK_IMAGE:-pooyahpx/hpx-icmp:0.0.3}"
-# Silent upstream source only if branded image is missing (never shown as default).
+DEFAULT_IMAGE="${DEFAULT_IMAGE:-hpx-icmp:0.0.3}"
+# Upstream runtime — pulled automatically and retagged locally as hpx-icmp.
+# No Docker Hub account / docker push required.
 UPSTREAM_IMAGE="${UPSTREAM_IMAGE:-stormotron/narnia:0.0.3}"
-BRANDED_IMAGE="${BRANDED_IMAGE:-pooyahpx/hpx-icmp:0.0.3}"
 
 if [ -t 1 ]; then
   c_grn='\033[0;32m'; c_yel='\033[0;33m'; c_red='\033[0;31m'
@@ -262,58 +261,42 @@ stop_tunnel_container() {
 }
 
 pull_image() {
-  local wanted="$1"
-  local candidate
+  local wanted="${1:-$DEFAULT_IMAGE}"
+  wanted="$(echo "$wanted" | tr -d '\r\n' | awk '{print $1}')"
+  [ -n "$wanted" ] || wanted="$DEFAULT_IMAGE"
 
-  # Prefer an image that already exists locally (e.g. after manual tag).
-  for candidate in "$wanted" "$BRANDED_IMAGE" "$FALLBACK_IMAGE" "$DEFAULT_IMAGE" "$UPSTREAM_IMAGE"; do
-    [ -n "$candidate" ] || continue
-    if docker image inspect "$candidate" >/dev/null 2>&1; then
-      log "using local image ${candidate}"
-      # Always expose as HPX-branded name when possible.
-      if [ "$candidate" != "$wanted" ]; then
-        docker tag "$candidate" "$wanted" 2>/dev/null || true
-      fi
-      if [ "$wanted" != "$BRANDED_IMAGE" ]; then
-        docker tag "$wanted" "$BRANDED_IMAGE" 2>/dev/null || true
-      fi
-      echo "$wanted"
-      return 0
-    fi
-  done
+  # Always prefer the local HPX brand name for running containers.
+  local run_as="$DEFAULT_IMAGE"
 
-  for candidate in "$wanted" "$BRANDED_IMAGE" "$FALLBACK_IMAGE" "$DEFAULT_IMAGE" "$UPSTREAM_IMAGE"; do
-    [ -n "$candidate" ] || continue
-    log "pulling ${candidate}"
-    if docker pull "$candidate" >/dev/null 2>&1; then
-      docker tag "$candidate" "$wanted" 2>/dev/null || true
-      docker tag "$candidate" "$BRANDED_IMAGE" 2>/dev/null || true
-      if [ "$candidate" != "$wanted" ]; then
-        log "tagged as ${wanted}"
-      fi
-      echo "$wanted"
-      return 0
-    fi
-    warn "pull denied/failed: ${candidate}"
-  done
+  if docker image inspect "$run_as" >/dev/null 2>&1; then
+    log "using local image ${run_as}"
+    echo "$run_as"
+    return 0
+  fi
 
-  die "Cannot download HPX tunnel image.
+  if docker image inspect "$wanted" >/dev/null 2>&1; then
+    docker tag "$wanted" "$run_as" 2>/dev/null || true
+    log "using local image ${wanted} (tagged as ${run_as})"
+    echo "$run_as"
+    return 0
+  fi
 
-On a server that CAN pull Docker Hub, build/publish the branded image once:
+  if docker image inspect "$UPSTREAM_IMAGE" >/dev/null 2>&1; then
+    docker tag "$UPSTREAM_IMAGE" "$run_as" 2>/dev/null || true
+    log "using cached runtime (tagged as ${run_as})"
+    echo "$run_as"
+    return 0
+  fi
 
-  docker pull ${UPSTREAM_IMAGE}
-  docker tag ${UPSTREAM_IMAGE} ${BRANDED_IMAGE}
-  docker push ${BRANDED_IMAGE}
-
-Or on this Iran server (one-time):
-
-  docker pull ${UPSTREAM_IMAGE}
-  docker tag ${UPSTREAM_IMAGE} ${BRANDED_IMAGE}
-  docker tag ${UPSTREAM_IMAGE} ${wanted}
-
-Then set panel Docker image to: ${BRANDED_IMAGE}
-and join again with a NEW token.
-"
+  log "downloading tunnel runtime (one-time)…"
+  if ! docker pull "$UPSTREAM_IMAGE" >/dev/null 2>&1; then
+    die "Cannot download tunnel runtime image.
+Check Docker Hub access on this server, then retry.
+No Docker account or docker push is required."
+  fi
+  docker tag "$UPSTREAM_IMAGE" "$run_as"
+  log "ready: ${run_as}"
+  echo "$run_as"
 }
 
 start_tunnel_from_config() {

@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { fetcher } from '@/service/http'
 
 export type HpxTunnelRole = 'iran' | 'foreign'
-export type HpxTunnelStatus = 'running' | 'stopped' | 'starting' | 'stopping' | 'error' | 'unhealthy'
+export type HpxTunnelStatus = 'running' | 'stopped' | 'starting' | 'stopping' | 'error' | 'unhealthy' | 'pending_claim'
 
 export interface HpxPortForward {
   external_port: number
@@ -35,6 +35,11 @@ export interface HpxTunnelResponse {
   alert_on_down: boolean
   note?: string | null
   has_password: boolean
+  agent_claimed?: boolean
+  agent_host?: string | null
+  agent_last_seen?: string | null
+  agent_claimed_at?: string | null
+  join_token_expires_at?: string | null
   last_health_check?: string | null
   latency_ms?: number | null
   packet_loss_pct?: number | null
@@ -80,6 +85,16 @@ export interface HpxTunnelUpdate extends Partial<Omit<HpxTunnelCreate, 'start_af
 export interface HpxTunnelActionResponse {
   tunnel: HpxTunnelResponse
   message?: string | null
+  join_token?: string | null
+  join_command?: string | null
+  join_expires_at?: string | null
+}
+
+export interface HpxTunnelJoinTokenResponse {
+  tunnel_id: number
+  join_token: string
+  join_command: string
+  join_expires_at: string
 }
 
 export interface HpxTunnelStatsResponse {
@@ -119,6 +134,9 @@ export const startHpxTunnel = (id: number) => fetcher<HpxTunnelActionResponse>(`
 export const stopHpxTunnel = (id: number) => fetcher<HpxTunnelActionResponse>(`${BASE}/${id}/stop`, { method: 'POST' })
 
 export const restartHpxTunnel = (id: number) => fetcher<HpxTunnelActionResponse>(`${BASE}/${id}/restart`, { method: 'POST' })
+
+export const regenerateHpxTunnelJoinToken = (id: number) =>
+  fetcher<HpxTunnelJoinTokenResponse>(`${BASE}/${id}/join-token`, { method: 'POST' })
 
 export const getHpxTunnelStats = (id: number) => fetcher<HpxTunnelStatsResponse>(`${BASE}/${id}/stats`)
 
@@ -187,6 +205,14 @@ export function useRestartHpxTunnel() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: restartHpxTunnel,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['hpx-tunnels'] }),
+  })
+}
+
+export function useRegenerateHpxTunnelJoinToken() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: regenerateHpxTunnelJoinToken,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['hpx-tunnels'] }),
   })
 }

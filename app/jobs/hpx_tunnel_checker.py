@@ -2,7 +2,7 @@ from datetime import UTC, datetime as dt, timedelta as td
 
 from app import scheduler
 from app.db import GetDB
-from app.db.crud.hpx_tunnel import get_hpx_tunnel_by_id, list_enabled_tunnels, update_hpx_tunnel
+from app.db.crud.hpx_tunnel import get_hpx_tunnel_by_id, is_agent_managed, list_enabled_tunnels, update_hpx_tunnel
 from app.db.models import HpxTunnelRole, HpxTunnelStatus
 from app.operation import OperatorType
 from app.operation.hpx_tunnel import HpxTunnelOperation
@@ -39,6 +39,8 @@ async def _attempt_failover(db, db_tunnel) -> None:
     backup = await get_hpx_tunnel_by_id(db, db_tunnel.backup_tunnel_id)
     if backup is None or backup.id == db_tunnel.id:
         return
+    if is_agent_managed(backup) or backup.role == HpxTunnelRole.iran:
+        return
 
     logger.warning("Failover: stopping tunnel %s, starting backup %s", db_tunnel.name, backup.name)
     await stop_container(db_tunnel.container_name)
@@ -51,7 +53,15 @@ async def _attempt_failover(db, db_tunnel) -> None:
         backup.status = HpxTunnelStatus.error
         backup.message = err
     backup.last_status_change = dt.now(UTC)
-    await update_hpx_tunnel(db, backup, {"status": backup.status, "message": backup.message, "last_status_change": backup.last_status_change})
+    await update_hpx_tunnel(
+        db,
+        backup,
+        {
+            "status": backup.status,
+            "message": backup.message,
+            "last_status_change": backup.last_status_change,
+        },
+    )
 
 
 async def hpx_tunnel_checker_job():
@@ -59,7 +69,11 @@ async def hpx_tunnel_checker_job():
         async with GetDB() as db:
             tunnels = await list_enabled_tunnels(db)
             for db_tunnel in tunnels:
-                if db_tunnel.status in {HpxTunnelStatus.stopped, HpxTunnelStatus.stopping}:
+                if db_tunnel.status in {
+                    HpxTunnelStatus.stopped,
+                    HpxTunnelStatus.stopping,
+                    HpxTunnelStatus.pending_claim,
+                }:
                     continue
 
                 previous_status = db_tunnel.status
@@ -71,7 +85,8 @@ async def hpx_tunnel_checker_job():
                 }:
                     if db_tunnel.alert_on_down:
                         await _notify_tunnel_down(db_tunnel.name, db_tunnel.message)
-                    await _attempt_failover(db, db_tunnel)
+                    if not is_agent_managed(db_tunnel):
+                        await _attempt_failover(db, db_tunnel)
 
                 if db_tunnel.role == HpxTunnelRole.iran and db_tunnel.remote_ip:
                     latency, loss = await ping_host(db_tunnel.remote_ip)

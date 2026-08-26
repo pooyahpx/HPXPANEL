@@ -4,7 +4,7 @@ import { Card } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import type { HpxTunnelResponse } from '@/service/api/hpx-tunnels'
 import { formatBytes } from '@/utils/formatByte'
-import { Activity, Globe, Play, RefreshCw, Shield, Square, Zap } from 'lucide-react'
+import { Activity, Globe, KeyRound, Play, RefreshCw, Shield, Square, Zap } from 'lucide-react'
 import type { ComponentType } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -14,6 +14,7 @@ interface HpxTunnelCardProps {
   onStart: (id: number) => void
   onStop: (id: number) => void
   onRestart: (id: number) => void
+  onRegenerateJoinToken?: (id: number) => void
   actionLoading?: boolean
 }
 
@@ -24,11 +25,22 @@ const statusTone: Record<string, string> = {
   stopping: 'bg-amber-500/15 text-amber-600 border-amber-500/30',
   error: 'bg-destructive/15 text-destructive border-destructive/30',
   unhealthy: 'bg-orange-500/15 text-orange-600 border-orange-500/30',
+  pending_claim: 'bg-violet-500/15 text-violet-600 border-violet-500/30',
 }
 
-export default function HpxTunnelCard({ tunnel, onEdit, onStart, onStop, onRestart, actionLoading }: HpxTunnelCardProps) {
+export default function HpxTunnelCard({
+  tunnel,
+  onEdit,
+  onStart,
+  onStop,
+  onRestart,
+  onRegenerateJoinToken,
+  actionLoading,
+}: HpxTunnelCardProps) {
   const { t } = useTranslation()
   const isRunning = tunnel.status === 'running'
+  const isPendingClaim = tunnel.status === 'pending_claim' || (tunnel.role === 'iran' && !tunnel.agent_claimed)
+  const isIranAgent = tunnel.role === 'iran'
 
   return (
     <Card className="overflow-hidden border-border/70 bg-gradient-to-br from-card via-card to-muted/20 p-0 shadow-sm">
@@ -43,35 +55,64 @@ export default function HpxTunnelCard({ tunnel, onEdit, onStart, onStop, onResta
               <Badge variant="secondary" className="text-xs uppercase">
                 {tunnel.role === 'iran' ? t('hpxTunnel.role.iran', { defaultValue: 'IRAN' }) : t('hpxTunnel.role.foreign', { defaultValue: 'FOREIGN' })}
               </Badge>
+              {isIranAgent && tunnel.agent_claimed && (
+                <Badge variant="outline" className="text-xs">
+                  {t('hpxTunnel.agent.claimed', { defaultValue: 'Agent claimed' })}
+                </Badge>
+              )}
             </div>
             <p className="text-muted-foreground mt-1 text-xs">
               {tunnel.role === 'iran'
                 ? t('hpxTunnel.remoteTarget', { ip: tunnel.remote_ip || '—', defaultValue: 'Remote: {{ip}}' })
                 : t('hpxTunnel.listenTarget', { addr: tunnel.server_listen, defaultValue: 'Listen: {{addr}}' })}
+              {tunnel.agent_host ? ` · ${tunnel.agent_host}` : ''}
             </p>
           </div>
           <div className="flex flex-wrap gap-1.5">
-            {!isRunning ? (
-              <Button size="sm" variant="default" disabled={actionLoading} onClick={() => onStart(tunnel.id)}>
-                <Play className="size-3.5" />
-                {t('hpxTunnel.start', { defaultValue: 'Start' })}
-              </Button>
-            ) : (
-              <Button size="sm" variant="outline" disabled={actionLoading} onClick={() => onStop(tunnel.id)}>
-                <Square className="size-3.5" />
-                {t('hpxTunnel.stop', { defaultValue: 'Stop' })}
+            {isIranAgent && onRegenerateJoinToken && (
+              <Button size="sm" variant="secondary" disabled={actionLoading} onClick={() => onRegenerateJoinToken(tunnel.id)}>
+                <KeyRound className="size-3.5" />
+                {t('hpxTunnel.agent.regenerateToken', { defaultValue: 'Join token' })}
               </Button>
             )}
-            <Button size="sm" variant="outline" disabled={actionLoading} onClick={() => onRestart(tunnel.id)}>
-              <RefreshCw className="size-3.5" />
-              {t('hpxTunnel.restart', { defaultValue: 'Restart' })}
-            </Button>
+            {!isPendingClaim && (
+              <>
+                {!isRunning ? (
+                  <Button size="sm" variant="default" disabled={actionLoading} onClick={() => onStart(tunnel.id)}>
+                    <Play className="size-3.5" />
+                    {t('hpxTunnel.start', { defaultValue: 'Start' })}
+                  </Button>
+                ) : (
+                  <Button size="sm" variant="outline" disabled={actionLoading} onClick={() => onStop(tunnel.id)}>
+                    <Square className="size-3.5" />
+                    {t('hpxTunnel.stop', { defaultValue: 'Stop' })}
+                  </Button>
+                )}
+                <Button size="sm" variant="outline" disabled={actionLoading} onClick={() => onRestart(tunnel.id)}>
+                  <RefreshCw className="size-3.5" />
+                  {t('hpxTunnel.restart', { defaultValue: 'Restart' })}
+                </Button>
+              </>
+            )}
             <Button size="sm" variant="ghost" onClick={() => onEdit(tunnel)}>
               {t('edit', { defaultValue: 'Edit' })}
             </Button>
           </div>
         </div>
       </div>
+
+      {isPendingClaim && (
+        <div className="border-b border-violet-500/20 bg-violet-500/5 px-4 py-3 text-sm">
+          <p className="font-medium text-violet-700 dark:text-violet-300">
+            {t('hpxTunnel.agent.waitingClaim', { defaultValue: 'Waiting for Iran agent…' })}
+          </p>
+          <p className="text-muted-foreground mt-1 text-xs">
+            {t('hpxTunnel.agent.waitingClaimHint', {
+              defaultValue: 'Generate/copy the join token and run it on the Iran VPS. The panel will not run Docker for IRAN tunnels.',
+            })}
+          </p>
+        </div>
+      )}
 
       <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-4">
         <Metric icon={Activity} label={t('hpxTunnel.latency', { defaultValue: 'Latency' })} value={tunnel.latency_ms != null ? `${tunnel.latency_ms.toFixed(1)} ms` : '—'} />
@@ -85,12 +126,20 @@ export default function HpxTunnelCard({ tunnel, onEdit, onStart, onStop, onResta
         <Metric icon={Shield} label={t('hpxTunnel.traffic', { defaultValue: 'Traffic' })} value={`↑ ${formatBytes(tunnel.bytes_up)} · ↓ ${formatBytes(tunnel.bytes_down)}`} />
       </div>
 
-      {(tunnel.auto_failover || tunnel.message) && (
+      {(tunnel.auto_failover || tunnel.message || tunnel.agent_last_seen) && (
         <div className="border-t border-border/60 px-4 py-3 text-xs">
           {tunnel.auto_failover && (
             <Badge variant="outline" className="me-2">
               {t('hpxTunnel.failoverEnabled', { defaultValue: 'Auto-failover' })}
             </Badge>
+          )}
+          {tunnel.agent_last_seen && (
+            <span className="text-muted-foreground me-2">
+              {t('hpxTunnel.agent.lastSeen', {
+                defaultValue: 'Agent last seen: {{when}}',
+                when: new Date(tunnel.agent_last_seen).toLocaleString(),
+              })}
+            </span>
           )}
           {tunnel.message && <span className="text-muted-foreground">{tunnel.message}</span>}
         </div>

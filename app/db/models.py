@@ -1059,6 +1059,7 @@ class HpxTunnelStatus(str, Enum):
     stopping = "stopping"
     error = "error"
     unhealthy = "unhealthy"
+    pending_claim = "pending_claim"
 
 
 class HpxTunnel(Base, CreatedAtUTCMixin):
@@ -1093,6 +1094,13 @@ class HpxTunnel(Base, CreatedAtUTCMixin):
     priority: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     alert_on_down: Mapped[bool] = mapped_column(server_default="1", default=True)
     note: Mapped[str | None] = mapped_column(String(512), default=None)
+    join_token_hash: Mapped[str | None] = mapped_column(String(128), unique=True, default=None)
+    join_token_expires_at: Mapped[dt | None] = mapped_column(DateTime(timezone=True), default=None)
+    agent_key_hash: Mapped[str | None] = mapped_column(String(128), unique=True, default=None)
+    agent_claimed_at: Mapped[dt | None] = mapped_column(DateTime(timezone=True), default=None)
+    agent_last_seen: Mapped[dt | None] = mapped_column(DateTime(timezone=True), default=None)
+    agent_host: Mapped[str | None] = mapped_column(String(255), default=None)
+    agent_command: Mapped[str | None] = mapped_column(String(16), default=None)
     last_health_check: Mapped[dt | None] = mapped_column(DateTime(timezone=True), default=None)
     latency_ms: Mapped[float | None] = mapped_column(Float, default=None)
     packet_loss_pct: Mapped[float | None] = mapped_column(Float, default=None)

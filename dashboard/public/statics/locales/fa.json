@@ -2080,7 +2080,8 @@
       "starting": "در حال استارت",
       "stopping": "در حال توقف",
       "error": "خطا",
-      "unhealthy": "ناپایدار"
+      "unhealthy": "ناپایدار",
+      "pending_claim": "منتظر agent"
     },
     "section": {
       "network": "شبکه",
@@ -2091,6 +2092,21 @@
       "total": "تونل‌ها",
       "running": "فعال",
       "unhealthy": "مشکل"
+    },
+    "agent": {
+      "joinTitle": "توکن اتصال Agent ایران",
+      "joinDescription": "این دستور را روی سرور ایران اجرا کن. تنظیمات خودکار اعمال می‌شود — نیازی به ستاپ دوباره در پنل نیست.",
+      "secretToken": "سکرت توکن",
+      "oneLiner": "دستور سرور ایران",
+      "copyCommand": "کپی دستور",
+      "expiresAt": "انقضا: {{when}}",
+      "shownOnce": "توکن فقط یک‌بار نمایش داده می‌شود. اگر گم شد از کارت تونل دوباره بساز.",
+      "regenerateToken": "Join token",
+      "waitingClaim": "منتظر Agent ایران…",
+      "waitingClaimHint": "توکن را کپی کن و روی VPS ایران اجرا کن. پنل برای تونل IRAN داکر لوکال اجرا نمی‌کند.",
+      "claimed": "Agent وصل شده",
+      "lastSeen": "آخرین بازدید Agent: {{when}}",
+      "joinHint": "بعد از ساخت، یک join token برای Agent سرور ایران نمایش داده می‌شود."
     }
   },
   "success": "موفق",

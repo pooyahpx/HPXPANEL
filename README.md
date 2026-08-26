@@ -68,7 +68,21 @@ Most ICMP tunnel tools are CLI-only, single-instance, zero observability.
 | **RBAC** | Granular `hpx_tunnels` permissions per admin role |
 | **Branded core** | `ghcr.io/pooyahpx/hpx-icmp` · interface `hpx0` · container `hpx_tunnel_*` |
 
-**Route:** `Nodes → HPX ICMP` · **API:** `/api/hpx_tunnel`
+**Route:** `HPX ICMP` (sidebar) · **API:** `/api/hpx_tunnel`
+
+### Iran agent (no full panel on Iran)
+
+1. In the panel, create an **IRAN** tunnel (set FOREIGN remote IP + shared password).
+2. Copy the **join token / one-liner** shown once.
+3. On the Iran VPS (Docker only — no HPXPANEL UI):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/pooyahpx/HPXPANEL/main/scripts/hpx-tunnel-agent.sh \
+  | sudo bash -s -- join <TOKEN> --panel-url https://YOUR_PANEL
+```
+
+The agent claims the token, pulls full config, starts `hpx-icmp`, and syncs every ~30s. **FOREIGN** tunnels still run via Docker on the panel host.
+
 
 ---
 

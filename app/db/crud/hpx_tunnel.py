@@ -1,4 +1,4 @@
-from datetime import UTC, datetime as dt
+from datetime import datetime as dt
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.models import HpxTunnel, HpxTunnelRole, HpxTunnelStatus
 from app.models.hpx_tunnel import HpxTunnelCreate, HpxTunnelUpdate
 from app.services.hpx_tunnel.manager import container_name_for_tunnel
+from app.utils.crypto import hash_api_key
 
 
 async def create_hpx_tunnel(
@@ -52,6 +53,16 @@ async def create_hpx_tunnel(
 
 async def get_hpx_tunnel_by_id(db: AsyncSession, tunnel_id: int) -> HpxTunnel | None:
     return await db.get(HpxTunnel, tunnel_id)
+
+
+async def get_hpx_tunnel_by_join_token_hash(db: AsyncSession, token_hash: str) -> HpxTunnel | None:
+    stmt = select(HpxTunnel).where(HpxTunnel.join_token_hash == token_hash)
+    return (await db.execute(stmt)).scalar_one_or_none()
+
+
+async def get_hpx_tunnel_by_agent_key_hash(db: AsyncSession, key_hash: str) -> HpxTunnel | None:
+    stmt = select(HpxTunnel).where(HpxTunnel.agent_key_hash == key_hash)
+    return (await db.execute(stmt)).scalar_one_or_none()
 
 
 async def get_hpx_tunnels_by_ids(db: AsyncSession, tunnel_ids: list[int]) -> list[HpxTunnel]:
@@ -117,3 +128,12 @@ async def apply_tunnel_update(db: AsyncSession, db_tunnel: HpxTunnel, model: Hpx
 async def list_enabled_tunnels(db: AsyncSession) -> list[HpxTunnel]:
     stmt = select(HpxTunnel).where(HpxTunnel.enabled.is_(True)).order_by(HpxTunnel.priority.desc())
     return list((await db.execute(stmt)).scalars().all())
+
+
+def is_agent_managed(db_tunnel: HpxTunnel) -> bool:
+    return db_tunnel.role == HpxTunnelRole.iran and bool(db_tunnel.agent_key_hash)
+
+
+def set_join_token(db_tunnel: HpxTunnel, *, token: str, expires_at: dt) -> None:
+    db_tunnel.join_token_hash = hash_api_key(token)
+    db_tunnel.join_token_expires_at = expires_at

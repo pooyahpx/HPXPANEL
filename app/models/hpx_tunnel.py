@@ -79,6 +79,11 @@ class HpxTunnelResponse(HpxTunnelBase):
     status: HpxTunnelStatus
     container_name: str
     has_password: bool = True
+    agent_claimed: bool = False
+    agent_host: str | None = None
+    agent_last_seen: dt | None = None
+    agent_claimed_at: dt | None = None
+    join_token_expires_at: dt | None = None
     last_health_check: dt | None = None
     latency_ms: float | None = None
     packet_loss_pct: float | None = None
@@ -129,3 +134,78 @@ class HpxTunnelStatsResponse(BaseModel):
 class HpxTunnelActionResponse(BaseModel):
     tunnel: HpxTunnelResponse
     message: str | None = None
+    join_token: str | None = None
+    join_command: str | None = None
+    join_expires_at: dt | None = None
+
+
+class HpxTunnelJoinTokenResponse(BaseModel):
+    tunnel_id: int
+    join_token: str
+    join_command: str
+    join_expires_at: dt
+
+
+class HpxTunnelAgentClaimRequest(BaseModel):
+    join_token: str = Field(min_length=16, max_length=128)
+    host: str | None = Field(default=None, max_length=255)
+
+
+class HpxTunnelAgentBootstrap(BaseModel):
+    tunnel_id: int
+    name: str
+    role: HpxTunnelRole
+    password: str
+    remote_ip: str | None = None
+    interface: str
+    local_ip: str
+    subnet: str
+    mtu: int | None = None
+    keepalive: int
+    dscp_mark: int | None = None
+    port_forwards: list[HpxPortForward] = Field(default_factory=list)
+    docker_image: str
+    container_name: str
+    agent_key: str
+    config_hash: str
+    desired_status: HpxTunnelStatus
+    agent_command: str | None = None
+
+
+class HpxTunnelAgentConfigResponse(BaseModel):
+    tunnel_id: int
+    name: str
+    role: HpxTunnelRole
+    password: str
+    remote_ip: str | None = None
+    interface: str
+    local_ip: str
+    subnet: str
+    mtu: int | None = None
+    keepalive: int
+    dscp_mark: int | None = None
+    port_forwards: list[HpxPortForward] = Field(default_factory=list)
+    docker_image: str
+    container_name: str
+    config_hash: str
+    desired_status: HpxTunnelStatus
+    agent_command: str | None = None
+    enabled: bool = True
+
+
+class HpxTunnelAgentHeartbeatRequest(BaseModel):
+    status: HpxTunnelStatus
+    host: str | None = Field(default=None, max_length=255)
+    latency_ms: float | None = None
+    packet_loss_pct: float | None = None
+    bytes_up: int = 0
+    bytes_down: int = 0
+    message: str | None = Field(default=None, max_length=1024)
+    container_running: bool = False
+    interface_up: bool = False
+
+
+class HpxTunnelAgentAckRequest(BaseModel):
+    command: str = Field(min_length=1, max_length=16)
+    status: HpxTunnelStatus | None = None
+    message: str | None = Field(default=None, max_length=1024)

@@ -68,7 +68,21 @@
 | **RBAC** | دسترسی `hpx_tunnels` برای هر نقش ادمین |
 | **برند HPX** | `ghcr.io/pooyahpx/hpx-icmp` · اینترفیس `hpx0` |
 
-**مسیر:** `Nodes → HPX ICMP` · **API:** `/api/hpx_tunnel`
+**مسیر:** `HPX ICMP` (سایدبار) · **API:** `/api/hpx_tunnel`
+
+### Agent ایران (بدون پنل سنگین روی ایران)
+
+1. در پنل یک تونل **IRAN** بساز (IP سرور FOREIGN + رمز مشترک).
+2. **join token / دستور یک‌خطی** را کپی کن.
+3. روی VPS ایران (فقط Docker — بدون UI پنل):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/pooyahpx/HPXPANEL/main/scripts/hpx-tunnel-agent.sh \
+  | sudo bash -s -- join <TOKEN> --panel-url https://YOUR_PANEL
+```
+
+Agent توکن را claim می‌کند، کل تنظیمات را می‌گیرد، `hpx-icmp` را استارت می‌زند و هر ~۳۰ثانیه sync می‌کند. تونل‌های **FOREIGN** همچنان با Docker روی هاست پنل اجرا می‌شوند.
+
 
 ---
 

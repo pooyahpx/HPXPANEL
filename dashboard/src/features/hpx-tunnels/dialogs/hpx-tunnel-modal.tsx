@@ -15,12 +15,14 @@ import {
   hpxTunnelFormToUpdatePayload,
   type HpxTunnelFormValues,
 } from '@/features/hpx-tunnels/forms/hpx-tunnel-form'
-import { type HpxTunnelResponse, useCreateHpxTunnel, useUpdateHpxTunnel } from '@/service/api/hpx-tunnels'
+import { type HpxTunnelActionResponse, type HpxTunnelResponse, useCreateHpxTunnel, useUpdateHpxTunnel } from '@/service/api/hpx-tunnels'
 import { cn } from '@/lib/utils'
 import { Plus, Trash2 } from 'lucide-react'
+import { useState } from 'react'
 import { UseFormReturn } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
+import HpxJoinTokenDialog, { type JoinTokenPayload } from '@/features/hpx-tunnels/dialogs/hpx-join-token-dialog'
 
 interface HpxTunnelModalProps {
   open: boolean
@@ -38,6 +40,8 @@ export default function HpxTunnelModal({ open, onOpenChange, form, editingTunnel
   const updateMutation = useUpdateHpxTunnel()
   const isEditing = !!editingTunnel
   const role = form.watch('role')
+  const [joinPayload, setJoinPayload] = useState<JoinTokenPayload | null>(null)
+  const [joinOpen, setJoinOpen] = useState(false)
 
   const onSubmit = async (values: HpxTunnelFormValues) => {
     try {
@@ -46,27 +50,38 @@ export default function HpxTunnelModal({ open, onOpenChange, form, editingTunnel
         toast.success(t('success', { defaultValue: 'Success' }), {
           description: t('hpxTunnel.updateSuccess', { defaultValue: 'Tunnel updated.' }),
         })
+        onOpenChange(false)
+        onSuccess?.()
       } else {
-        const result = await createMutation.mutateAsync(hpxTunnelFormToCreatePayload(values) as any)
+        const result: HpxTunnelActionResponse = await createMutation.mutateAsync(hpxTunnelFormToCreatePayload(values) as any)
         toast.success(t('success', { defaultValue: 'Success' }), {
           description: result.message || t('hpxTunnel.createSuccess', { defaultValue: 'Tunnel created.' }),
         })
+        onOpenChange(false)
+        onSuccess?.()
+        if (result.join_token && result.join_command) {
+          setJoinPayload({
+            join_token: result.join_token,
+            join_command: result.join_command,
+            join_expires_at: result.join_expires_at,
+          })
+          setJoinOpen(true)
+        }
       }
-      onOpenChange(false)
-      onSuccess?.()
     } catch (error) {
       handleError(error)
     }
   }
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent dir={dir} className={cn('max-h-[90vh] overflow-y-auto sm:max-w-2xl', dir === 'rtl' && 'text-right')}>
         <DialogHeader>
           <DialogTitle>{isEditing ? t('hpxTunnel.editTunnel', { defaultValue: 'Edit tunnel' }) : t('hpxTunnel.addTunnel', { defaultValue: 'Add tunnel' })}</DialogTitle>
           <DialogDescription>
             {t('hpxTunnel.modalDescription', {
-              defaultValue: 'Configure ChaCha20-encrypted ICMP tunnel. IRAN connects to a remote FOREIGN server.',
+              defaultValue: 'Configure ChaCha20-encrypted ICMP tunnel. IRAN connects via a lightweight agent join token — FOREIGN runs on the panel host.',
             })}
           </DialogDescription>
         </DialogHeader>
@@ -209,10 +224,17 @@ export default function HpxTunnelModal({ open, onOpenChange, form, editingTunnel
                     <FormField control={form.control} name="alert_on_down" render={({ field }) => (
                       <FormItem className="flex items-center gap-2 space-y-0"><FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel>{t('hpxTunnel.alertOnDown', { defaultValue: 'Telegram alert on down' })}</FormLabel></FormItem>
                     )} />
-                    {!isEditing && (
+                    {!isEditing && role === 'foreign' && (
                       <FormField control={form.control} name="start_after_create" render={({ field }) => (
                         <FormItem className="flex items-center gap-2 space-y-0"><FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel>{t('hpxTunnel.startAfterCreate', { defaultValue: 'Start after create' })}</FormLabel></FormItem>
                       )} />
+                    )}
+                    {!isEditing && role === 'iran' && (
+                      <p className="text-muted-foreground text-xs">
+                        {t('hpxTunnel.agent.joinHint', {
+                          defaultValue: 'After create, a join token is shown for the Iran server agent.',
+                        })}
+                      </p>
                     )}
                   </div>
                   <FormField control={form.control} name="note" render={({ field }) => (
@@ -272,5 +294,7 @@ export default function HpxTunnelModal({ open, onOpenChange, form, editingTunnel
         </Form>
       </DialogContent>
     </Dialog>
+    <HpxJoinTokenDialog open={joinOpen} onOpenChange={setJoinOpen} payload={joinPayload} />
+    </>
   )
 }

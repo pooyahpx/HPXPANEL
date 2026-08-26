@@ -3,11 +3,13 @@ import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useAdmin } from '@/hooks/use-admin'
 import HpxTunnelCard from '@/features/hpx-tunnels/components/hpx-tunnel-card'
+import HpxJoinTokenDialog, { type JoinTokenPayload } from '@/features/hpx-tunnels/dialogs/hpx-join-token-dialog'
 import HpxTunnelModal from '@/features/hpx-tunnels/dialogs/hpx-tunnel-modal'
 import { hpxTunnelFormDefaultValues } from '@/features/hpx-tunnels/forms/hpx-tunnel-form'
 import {
   type HpxTunnelResponse,
   useGetHpxTunnels,
+  useRegenerateHpxTunnelJoinToken,
   useRestartHpxTunnel,
   useStartHpxTunnel,
   useStopHpxTunnel,
@@ -31,8 +33,11 @@ export default function HpxTunnelsList() {
   const startMutation = useStartHpxTunnel()
   const stopMutation = useStopHpxTunnel()
   const restartMutation = useRestartHpxTunnel()
+  const joinTokenMutation = useRegenerateHpxTunnelJoinToken()
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingTunnel, setEditingTunnel] = useState<HpxTunnelResponse | null>(null)
+  const [joinPayload, setJoinPayload] = useState<JoinTokenPayload | null>(null)
+  const [joinOpen, setJoinOpen] = useState(false)
 
   const form = useForm<HpxTunnelFormValues>({
     resolver: zodResolver(hpxTunnelFormSchema),
@@ -58,7 +63,7 @@ export default function HpxTunnelsList() {
     }
   }, [data?.tunnels])
 
-  const actionLoading = startMutation.isPending || stopMutation.isPending || restartMutation.isPending
+  const actionLoading = startMutation.isPending || stopMutation.isPending || restartMutation.isPending || joinTokenMutation.isPending
 
   const runAction = async (label: string, fn: () => Promise<{ message?: string | null }>) => {
     try {
@@ -67,6 +72,23 @@ export default function HpxTunnelsList() {
       await refetch()
     } catch (error: any) {
       toast.error(label, { description: error?.data?.detail || error?.message })
+    }
+  }
+
+  const regenerateJoinToken = async (id: number) => {
+    try {
+      const result = await joinTokenMutation.mutateAsync(id)
+      setJoinPayload({
+        join_token: result.join_token,
+        join_command: result.join_command,
+        join_expires_at: result.join_expires_at,
+      })
+      setJoinOpen(true)
+      await refetch()
+    } catch (error: any) {
+      toast.error(t('hpxTunnel.agent.regenerateToken', { defaultValue: 'Join token' }), {
+        description: error?.data?.detail || error?.message,
+      })
     }
   }
 
@@ -146,12 +168,14 @@ export default function HpxTunnelsList() {
               onStart={id => runAction(t('hpxTunnel.start', { defaultValue: 'Start' }), () => startMutation.mutateAsync(id))}
               onStop={id => runAction(t('hpxTunnel.stop', { defaultValue: 'Stop' }), () => stopMutation.mutateAsync(id))}
               onRestart={id => runAction(t('hpxTunnel.restart', { defaultValue: 'Restart' }), () => restartMutation.mutateAsync(id))}
+              onRegenerateJoinToken={regenerateJoinToken}
             />
           ))}
         </div>
       )}
 
       <HpxTunnelModal open={dialogOpen} onOpenChange={setDialogOpen} form={form} editingTunnel={editingTunnel} onSuccess={() => refetch()} />
+      <HpxJoinTokenDialog open={joinOpen} onOpenChange={setJoinOpen} payload={joinPayload} />
     </div>
   )
 }

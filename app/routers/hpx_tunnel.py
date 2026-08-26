@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Header, Request, status
 from starlette.responses import PlainTextResponse, Response
 
 from app.db import AsyncSession, get_db
@@ -6,7 +6,13 @@ from app.models.admin import AdminDetails
 from app.models.hpx_tunnel import (
     BulkHpxTunnelSelection,
     HpxTunnelActionResponse,
+    HpxTunnelAgentAckRequest,
+    HpxTunnelAgentBootstrap,
+    HpxTunnelAgentClaimRequest,
+    HpxTunnelAgentConfigResponse,
+    HpxTunnelAgentHeartbeatRequest,
     HpxTunnelCreate,
+    HpxTunnelJoinTokenResponse,
     HpxTunnelResponse,
     HpxTunnelsQuery,
     HpxTunnelsResponse,
@@ -30,6 +36,10 @@ router = APIRouter(
 hpx_tunnel_operator = HpxTunnelOperation(operator_type=OperatorType.API)
 
 
+def _request_base_url(request: Request) -> str:
+    return str(request.base_url).rstrip("/")
+
+
 @router.post(
     "",
     response_model=HpxTunnelActionResponse,
@@ -38,10 +48,13 @@ hpx_tunnel_operator = HpxTunnelOperation(operator_type=OperatorType.API)
 )
 async def create_hpx_tunnel(
     model: HpxTunnelCreate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     admin: AdminDetails = Depends(require_permission("hpx_tunnels", "create")),
 ):
-    return await hpx_tunnel_operator.create_tunnel(db, admin=admin, model=model)
+    return await hpx_tunnel_operator.create_tunnel(
+        db, admin=admin, model=model, panel_url=_request_base_url(request)
+    )
 
 
 @router.get("s", response_model=HpxTunnelsResponse)
@@ -64,6 +77,56 @@ async def bulk_delete_hpx_tunnels(
     admin: AdminDetails = Depends(require_permission("hpx_tunnels", "delete")),
 ):
     return await hpx_tunnel_operator.bulk_delete_tunnels(db, admin=admin, bulk=bulk)
+
+
+@router.post(
+    "/agent/claim",
+    response_model=HpxTunnelAgentBootstrap,
+    responses={401: responses._401},
+)
+async def claim_hpx_tunnel_agent(
+    model: HpxTunnelAgentClaimRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    return await hpx_tunnel_operator.claim_agent(db, model=model)
+
+
+@router.get(
+    "/agent/config",
+    response_model=HpxTunnelAgentConfigResponse,
+    responses={401: responses._401},
+)
+async def get_hpx_tunnel_agent_config(
+    db: AsyncSession = Depends(get_db),
+    x_hpx_agent_key: str = Header(..., alias="X-HPX-Agent-Key"),
+):
+    return await hpx_tunnel_operator.get_agent_config(db, agent_key=x_hpx_agent_key)
+
+
+@router.post(
+    "/agent/heartbeat",
+    response_model=HpxTunnelAgentConfigResponse,
+    responses={401: responses._401},
+)
+async def hpx_tunnel_agent_heartbeat(
+    model: HpxTunnelAgentHeartbeatRequest,
+    db: AsyncSession = Depends(get_db),
+    x_hpx_agent_key: str = Header(..., alias="X-HPX-Agent-Key"),
+):
+    return await hpx_tunnel_operator.agent_heartbeat(db, agent_key=x_hpx_agent_key, model=model)
+
+
+@router.post(
+    "/agent/ack",
+    response_model=HpxTunnelAgentConfigResponse,
+    responses={401: responses._401},
+)
+async def hpx_tunnel_agent_ack(
+    model: HpxTunnelAgentAckRequest,
+    db: AsyncSession = Depends(get_db),
+    x_hpx_agent_key: str = Header(..., alias="X-HPX-Agent-Key"),
+):
+    return await hpx_tunnel_operator.agent_ack(db, agent_key=x_hpx_agent_key, model=model)
 
 
 @router.get("/{tunnel_id}", response_model=HpxTunnelResponse, responses={404: responses._404})
@@ -93,6 +156,22 @@ async def remove_hpx_tunnel(
 ):
     await hpx_tunnel_operator.delete_tunnel(db, admin=admin, tunnel_id=tunnel_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post(
+    "/{tunnel_id}/join-token",
+    response_model=HpxTunnelJoinTokenResponse,
+    responses={404: responses._404},
+)
+async def regenerate_hpx_tunnel_join_token(
+    tunnel_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    admin: AdminDetails = Depends(require_permission("hpx_tunnels", "update")),
+):
+    return await hpx_tunnel_operator.regenerate_join_token(
+        db, admin=admin, tunnel_id=tunnel_id, panel_url=_request_base_url(request)
+    )
 
 
 @router.post("/{tunnel_id}/start", response_model=HpxTunnelActionResponse, responses={404: responses._404})

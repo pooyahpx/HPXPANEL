@@ -44,11 +44,18 @@ def is_linux_host() -> bool:
 
 
 async def run_command(*args: str, timeout: float = 30.0) -> CommandResult:
-    proc = await asyncio.create_subprocess_exec(
-        *args,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *args,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+    except FileNotFoundError:
+        missing = args[0] if args else "command"
+        return CommandResult(returncode=127, stdout="", stderr=f"{missing}: command not found")
+    except OSError as exc:
+        return CommandResult(returncode=1, stdout="", stderr=str(exc))
+
     try:
         stdout_bytes, stderr_bytes = await asyncio.wait_for(proc.communicate(), timeout=timeout)
     except TimeoutError:

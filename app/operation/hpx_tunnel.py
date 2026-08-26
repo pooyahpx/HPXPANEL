@@ -53,9 +53,11 @@ from app.services.hpx_tunnel.manager import (
 )
 from app.utils.crypto import decrypt_secret, encrypt_secret, hash_api_key
 from app.utils.helpers import resolve_panel_base_url
+from app.utils.logger import get_logger
 
 JOIN_TOKEN_TTL_HOURS = 24
 AGENT_SCRIPT_URL = "https://raw.githubusercontent.com/pooyahpx/HPXPANEL/main/scripts/hpx-tunnel-agent.sh"
+logger = get_logger("hpx-tunnel-operation")
 
 
 def _to_response(db_tunnel: HpxTunnel) -> HpxTunnelResponse:
@@ -443,12 +445,27 @@ class HpxTunnelOperation(BaseOperation):
 
         password = await self._decrypt_password(db, db_tunnel)
         db_tunnel.status = HpxTunnelStatus.starting
+        db_tunnel.message = "Starting tunnel…"
+        db_tunnel.last_status_change = dt.now(UTC)
         await db.commit()
 
-        ok, err = await start_tunnel(db_tunnel, password)
+        try:
+            ok, err = await start_tunnel(db_tunnel, password)
+        except Exception as exc:
+            logger.exception("HPX tunnel start failed for %s", db_tunnel.name)
+            db_tunnel.status = HpxTunnelStatus.error
+            db_tunnel.message = str(exc) or "start failed"
+            db_tunnel.last_status_change = dt.now(UTC)
+            await db.commit()
+            return HpxTunnelActionResponse(
+                tunnel=_to_response(db_tunnel),
+                message=db_tunnel.message,
+            )
+
         if not ok:
             db_tunnel.status = HpxTunnelStatus.error
             db_tunnel.message = err
+            db_tunnel.last_status_change = dt.now(UTC)
             await db.commit()
             return HpxTunnelActionResponse(tunnel=_to_response(db_tunnel), message=err)
 

@@ -95,6 +95,21 @@ need_root() {
   [ "$(id -u)" -eq 0 ] || die "run as root (sudo)"
 }
 
+# Fix "sudo: unable to resolve host <name>" (common on Iran VPS like g4).
+fix_hostname_resolution() {
+  local hn short
+  hn="$(hostname 2>/dev/null || true)"
+  [ -n "$hn" ] || return 0
+  short="${hn%%.*}"
+  if ! grep -Eq "(^|[[:space:]])${hn}([[:space:]]|$)" /etc/hosts 2>/dev/null; then
+    echo "127.0.1.1 ${hn}" >> /etc/hosts
+    log "added ${hn} to /etc/hosts (fixes sudo hostname warning)"
+  fi
+  if [ "$short" != "$hn" ] && ! grep -Eq "(^|[[:space:]])${short}([[:space:]]|$)" /etc/hosts 2>/dev/null; then
+    echo "127.0.1.1 ${short}" >> /etc/hosts
+  fi
+}
+
 banner() {
   clear 2>/dev/null || true
   echo
@@ -104,13 +119,14 @@ banner() {
   echo -e "${c_bld}${c_mag}  ██╔══██║██╔═══╝  ██╔██╗ ${c_off}"
   echo -e "${c_bld}${c_mag}  ██║  ██║██║     ██╔╝ ██╗${c_off}"
   echo -e "${c_bld}${c_mag}  ╚═╝  ╚═╝╚═╝     ╚═╝  ╚═╝${c_off}"
-  echo -e "  ${c_cyn}ICMP Tunnel Agent${c_off}  ${c_dim}// Iran side only${c_off}"
+  echo -e "  ${c_cyn}ICMP Tunnel Agent${c_off}  ${c_dim}// IRAN agent · FOREIGN on Node${c_off}"
   hr
-  echo -e "  ${c_dim}No full panel UI on this server — just the tunnel.${c_off}"
+  echo -e "  ${c_dim}Docker-only ICMP tunnel (Narnia-compatible). No full panel UI here.${c_off}"
   echo
 }
 
 ensure_deps() {
+  fix_hostname_resolution
   has curl || die "curl is required"
   if ! has docker; then
     warn "Docker not found."
@@ -131,6 +147,16 @@ ensure_deps() {
       yum install -y -q jq >/dev/null
     else
       die "please install jq"
+    fi
+  fi
+  if ! has ip || ! has iptables; then
+    warn "installing iproute2 / iptables..."
+    if has apt-get; then
+      apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq iproute2 iptables >/dev/null
+    elif has dnf; then
+      dnf install -y -q iproute iptables >/dev/null
+    elif has yum; then
+      yum install -y -q iproute iptables >/dev/null
     fi
   fi
 }
@@ -229,20 +255,48 @@ EOF
   fi
 }
 
+# Narnia.sh apply_firewall parity — required for reliable tunnel + forwarded traffic.
+apply_tunnel_firewall() {
+  local role="${1:-iran}" iface="${2:-}"
+  local default_if
+  sysctl -w net.ipv4.ip_forward=1 >/dev/null 2>&1 || true
+  if ! grep -q '^net.ipv4.ip_forward' /etc/sysctl.conf 2>/dev/null; then
+    echo 'net.ipv4.ip_forward=1' >> /etc/sysctl.conf
+  else
+    sed -i 's/^net.ipv4.ip_forward.*/net.ipv4.ip_forward=1/' /etc/sysctl.conf 2>/dev/null || true
+  fi
+  default_if=$(ip -4 route show default 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="dev"){print $(i+1); exit}}')
+  if [ -n "$default_if" ]; then
+    iptables -t nat -C POSTROUTING -o "$default_if" -j MASQUERADE 2>/dev/null \
+      || iptables -t nat -A POSTROUTING -o "$default_if" -j MASQUERADE || true
+  fi
+  if [ "$role" = "iran" ] && [ -n "$iface" ] && [ -n "$default_if" ]; then
+    iptables -t nat -C POSTROUTING -o "$iface" -j MASQUERADE 2>/dev/null \
+      || iptables -t nat -A POSTROUTING -o "$iface" -j MASQUERADE || true
+    iptables -C FORWARD -i "$default_if" -o "$iface" -j ACCEPT 2>/dev/null \
+      || iptables -I FORWARD -i "$default_if" -o "$iface" -j ACCEPT || true
+    iptables -C FORWARD -i "$iface" -o "$default_if" -j ACCEPT 2>/dev/null \
+      || iptables -I FORWARD -i "$iface" -o "$default_if" -j ACCEPT || true
+  fi
+}
+
 apply_port_forwards() {
   local json="$1"
   local count
   count=$(echo "$json" | jq 'length')
   [ "$count" -gt 0 ] || return 0
-  local i ext ip port
+  local i ext ip port proto
   for i in $(seq 0 $((count - 1))); do
     ext=$(echo "$json" | jq -r ".[$i].external_port")
     ip=$(echo "$json" | jq -r ".[$i].internal_ip")
     port=$(echo "$json" | jq -r ".[$i].internal_port")
     [ -n "$ext" ] && [ -n "$ip" ] && [ -n "$port" ] || continue
-    if ! iptables -t nat -C PREROUTING -p tcp --dport "$ext" -j DNAT --to-destination "${ip}:${port}" 2>/dev/null; then
-      iptables -t nat -A PREROUTING -p tcp --dport "$ext" -j DNAT --to-destination "${ip}:${port}" || true
-    fi
+    # Narnia forwards both TCP and UDP for each port.
+    for proto in tcp udp; do
+      if ! iptables -t nat -C PREROUTING -p "$proto" --dport "$ext" -j DNAT --to-destination "${ip}:${port}" 2>/dev/null; then
+        iptables -t nat -A PREROUTING -p "$proto" --dport "$ext" -j DNAT --to-destination "${ip}:${port}" || true
+      fi
+    done
   done
 }
 
@@ -306,10 +360,14 @@ stop_tunnel_container() {
   docker rm -f "$name" >/dev/null 2>&1 || true
 }
 
-# One host = one TAP name. Kill sibling HPX tunnel containers that would steal INTERFACE.
+# One host = one ICMP tunnel. Kill sibling HPX + legacy Narnia containers.
 stop_conflicting_tunnels() {
   local keep="${1:-}" iface="${2:-}"
   local id name env_iface
+  if docker inspect narnia_tunnel >/dev/null 2>&1; then
+    warn "removing legacy Narnia container narnia_tunnel (ICMP conflict)"
+    docker rm -f narnia_tunnel >/dev/null 2>&1 || true
+  fi
   for id in $(docker ps -aq --filter name='hpx_tunnel' 2>/dev/null); do
     name=$(docker inspect -f '{{.Name}}' "$id" 2>/dev/null | sed 's#^/##')
     [ -n "$name" ] || continue
@@ -371,22 +429,28 @@ No Docker account or docker push is required."
 
 start_tunnel_from_config() {
   local cfg="$1"
-  local image container iface password keepalive remote_ip mtu dscp local_ip port_forwards
+  local image container iface password keepalive remote_ip mtu dscp local_ip port_forwards role server_listen bw op_mode
 
-  image=$(echo "$cfg" | jq -r '.docker_image')
+  image=$(echo "$cfg" | jq -r '.docker_image // empty')
   container=$(echo "$cfg" | jq -r '.container_name')
-  iface=$(echo "$cfg" | jq -r '.interface')
+  iface=$(echo "$cfg" | jq -r '.interface // "hpx0"')
   password=$(echo "$cfg" | jq -r '.password')
-  keepalive=$(echo "$cfg" | jq -r '.keepalive')
+  keepalive=$(echo "$cfg" | jq -r '.keepalive // 20')
   remote_ip=$(echo "$cfg" | jq -r '.remote_ip // empty')
   mtu=$(echo "$cfg" | jq -r '.mtu // empty')
   dscp=$(echo "$cfg" | jq -r '.dscp_mark // empty')
   local_ip=$(echo "$cfg" | jq -r '.local_ip')
   port_forwards=$(echo "$cfg" | jq -c '.port_forwards // []')
+  role=$(echo "$cfg" | jq -r '.role // "iran"')
+  server_listen=$(echo "$cfg" | jq -r '.server_listen // "0.0.0.0"')
+  bw=$(echo "$cfg" | jq -r '.bandwidth_limit // empty')
+  op_mode=$(echo "$cfg" | jq -r '.operating_mode // empty')
 
-  [ -n "$remote_ip" ] || die "remote_ip missing"
   [ -n "$password" ] || die "password missing"
-  [ -n "$image" ] && [ "$image" != "null" ] || die "docker_image missing"
+  if [ "$role" = "iran" ]; then
+    [ -n "$remote_ip" ] || die "remote_ip missing"
+  fi
+  [ -n "$image" ] && [ "$image" != "null" ] || image="$DEFAULT_IMAGE"
 
   image="$(pull_image "$image")"
   [ -n "$image" ] || die "resolved docker image is empty"
@@ -394,15 +458,23 @@ start_tunnel_from_config() {
   image="$(echo "$image" | tr -d '\r\n' | awk '{print $1}')"
   docker image inspect "$image" >/dev/null 2>&1 || die "image not available locally: ${image}"
 
+  fix_hostname_resolution
   stop_tunnel_container "$container"
   stop_conflicting_tunnels "$container" "$iface"
   sysctl -w net.ipv4.icmp_echo_ignore_all=1 >/dev/null 2>&1 || true
 
-  local env_args=(-e "INTERFACE=${iface}" -e "PASSWORD=${password}" -e "KEEPALIVE=${keepalive}" -e "REMOTE_IP=${remote_ip}")
+  local env_args=(-e "INTERFACE=${iface}" -e "PASSWORD=${password}" -e "KEEPALIVE=${keepalive}")
+  if [ "$role" = "foreign" ]; then
+    env_args+=(-e "SERVER=${server_listen:-0.0.0.0}")
+    [ -n "$op_mode" ] && [ "$op_mode" != "null" ] && env_args+=(-e "OPERATING_MODE=${op_mode}")
+    [ -n "$bw" ] && [ "$bw" != "null" ] && env_args+=(-e "BANDWIDTH_LIMIT=${bw}")
+  else
+    env_args+=(-e "REMOTE_IP=${remote_ip}")
+    [ -n "$dscp" ] && [ "$dscp" != "null" ] && env_args+=(-e "DSCP_MARK=${dscp}")
+  fi
   [ -n "$mtu" ] && [ "$mtu" != "null" ] && env_args+=(-e "MTU=${mtu}")
-  [ -n "$dscp" ] && [ "$dscp" != "null" ] && env_args+=(-e "DSCP_MARK=${dscp}")
 
-  log "starting container ${container} (${image})"
+  log "starting container ${container} (${image}) role=${role}"
   docker run -d \
     --cap-add=NET_ADMIN \
     --device /dev/net/tun:/dev/net/tun \
@@ -412,9 +484,17 @@ start_tunnel_from_config() {
     "${env_args[@]}" \
     "$image" >/dev/null
 
-  sleep 2
-  assign_interface_ip "$iface" "$local_ip" "$mtu"
-  apply_port_forwards "$port_forwards"
+  # Narnia.sh waits 3s before assigning IP / bringing iface up.
+  sleep 3
+  apply_tunnel_firewall "$role" "$iface"
+  if [[ ! "${op_mode}" =~ ^ip: ]]; then
+    assign_interface_ip "$iface" "$local_ip" "$mtu"
+  else
+    ip link set "$iface" up 2>/dev/null || true
+  fi
+  if [ "$role" = "iran" ]; then
+    apply_port_forwards "$port_forwards"
+  fi
 
   if ! docker inspect -f '{{.State.Running}}' "$container" 2>/dev/null | grep -qi true; then
     docker logs --tail 30 "$container" || true
@@ -560,7 +640,7 @@ wizard_manual() {
   password=$(ask_secret "Shared tunnel password (same as FOREIGN side)")
   iface=$(ask_val "Tunnel interface name" "hpx0")
   local_ip=$(ask_val "Local tunnel IP on this Iran server" "10.200.200.2")
-  keepalive=$(ask_val "Keepalive seconds" "30")
+  keepalive=$(ask_val "Keepalive seconds" "20")
   mtu=$(ask_val "MTU" "1000")
   image=$(ask_val "Docker image" "$DEFAULT_IMAGE")
   container=$(ask_val "Container name" "hpx_tunnel_iran")
@@ -596,6 +676,7 @@ wizard_manual() {
     --argjson mtu "$mtu" \
     --arg local_ip "$local_ip" \
     '{
+      role:"iran",
       docker_image:$image,
       container_name:$container,
       interface:$iface,
@@ -611,6 +692,7 @@ wizard_manual() {
   install_self
   mkdir -p "$ETC_DIR"
   cat >"$MANUAL_ENV" <<EOF
+ROLE=iran
 REMOTE_IP=${remote_ip}
 PASSWORD=${password}
 INTERFACE=${iface}
@@ -626,11 +708,172 @@ EOF
   install_systemd
 
   echo
-  echo -e "${c_bld}${c_grn}Manual tunnel is up.${c_off}"
+  echo -e "${c_bld}${c_grn}Manual IRAN tunnel is up.${c_off}"
   echo "  remote : ${remote_ip}"
   echo "  later  : sudo hpx-tunnel-agent"
   echo
   _read -r -p "Press Enter to continue..." _
+}
+
+# FOREIGN server on Node VPS — same steps as official Narnia.sh start_logic.
+wizard_foreign() {
+  need_root
+  ensure_deps
+  banner
+  echo -e "  ${c_bld}FOREIGN tunnel (Node / abroad VPS)${c_off}"
+  echo -e "  ${c_dim}Listens for IRAN agent. Stop native narnia_tunnel if it is still running.${c_off}"
+  echo
+
+  local password iface local_ip keepalive mtu image container server_listen
+  password=$(ask_secret "Shared tunnel password (same as IRAN side)")
+  iface=$(ask_val "Tunnel interface name" "hpx0")
+  local_ip=$(ask_val "Local tunnel IP on this FOREIGN server" "10.200.200.1")
+  server_listen=$(ask_val "Listen address" "0.0.0.0")
+  keepalive=$(ask_val "Keepalive seconds" "20")
+  mtu=$(ask_val "MTU" "1000")
+  image=$(ask_val "Docker image" "$DEFAULT_IMAGE")
+  container=$(ask_val "Container name" "hpx_tunnel_foreign")
+
+  echo
+  hr
+  echo -e "  ${c_bld}Summary${c_off}"
+  echo "  role      : FOREIGN (SERVER=${server_listen})"
+  echo "  interface : ${iface}"
+  echo "  local IP  : ${local_ip}"
+  echo "  image     : ${image}"
+  hr
+  if ! ask_yn "Start FOREIGN tunnel?" "y"; then
+    die "cancelled"
+  fi
+
+  MODE="manual"
+  PANEL_URL=""
+  AGENT_KEY=""
+  TUNNEL_ID=""
+  CONFIG_HASH=""
+  CONTAINER_NAME="$container"
+  INTERFACE="$iface"
+
+  local cfg
+  cfg=$(jq -nc \
+    --arg image "$image" \
+    --arg container "$container" \
+    --arg iface "$iface" \
+    --arg password "$password" \
+    --argjson keepalive "$keepalive" \
+    --argjson mtu "$mtu" \
+    --arg local_ip "$local_ip" \
+    --arg listen "$server_listen" \
+    '{
+      role:"foreign",
+      docker_image:$image,
+      container_name:$container,
+      interface:$iface,
+      password:$password,
+      keepalive:$keepalive,
+      mtu:$mtu,
+      local_ip:$local_ip,
+      server_listen:$listen,
+      port_forwards:[],
+      config_hash:"manual-foreign"
+    }')
+
+  install_self
+  mkdir -p "$ETC_DIR"
+  cat >"$MANUAL_ENV" <<EOF
+ROLE=foreign
+SERVER_LISTEN=${server_listen}
+PASSWORD=${password}
+INTERFACE=${iface}
+LOCAL_IP=${local_ip}
+KEEPALIVE=${keepalive}
+MTU=${mtu}
+DOCKER_IMAGE=${image}
+CONTAINER_NAME=${container}
+EOF
+  chmod 600 "$MANUAL_ENV"
+
+  start_tunnel_from_config "$cfg"
+  install_systemd
+
+  echo
+  echo -e "${c_bld}${c_grn}FOREIGN tunnel is up.${c_off}"
+  echo "  local  : ${local_ip}  iface=${iface}"
+  echo "  IRAN remote_ip must be THIS server's public IP"
+  echo "  later  : sudo hpx-tunnel-agent"
+  echo
+  _read -r -p "Press Enter to continue..." _
+}
+
+cmd_foreign() {
+  need_root
+  ensure_deps
+  local password="" iface="hpx0" local_ip="10.200.200.1" keepalive="20" mtu="1000" listen="0.0.0.0" container="hpx_tunnel_foreign"
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --password) password="${2:-}"; shift 2 ;;
+      --password=*) password="${1#*=}"; shift ;;
+      --interface) iface="${2:-}"; shift 2 ;;
+      --interface=*) iface="${1#*=}"; shift ;;
+      --local-ip) local_ip="${2:-}"; shift 2 ;;
+      --local-ip=*) local_ip="${1#*=}"; shift ;;
+      --keepalive) keepalive="${2:-}"; shift 2 ;;
+      --keepalive=*) keepalive="${1#*=}"; shift ;;
+      --mtu) mtu="${2:-}"; shift 2 ;;
+      --mtu=*) mtu="${1#*=}"; shift ;;
+      --listen) listen="${2:-}"; shift 2 ;;
+      --listen=*) listen="${1#*=}"; shift ;;
+      --container) container="${2:-}"; shift 2 ;;
+      --container=*) container="${1#*=}"; shift ;;
+      -*) die "unknown flag: $1" ;;
+      *) die "unexpected arg: $1" ;;
+    esac
+  done
+  [ -n "$password" ] || die "foreign requires --password"
+
+  MODE="manual"
+  PANEL_URL=""
+  AGENT_KEY=""
+  local cfg
+  cfg=$(jq -nc \
+    --arg image "$DEFAULT_IMAGE" \
+    --arg container "$container" \
+    --arg iface "$iface" \
+    --arg password "$password" \
+    --argjson keepalive "$keepalive" \
+    --argjson mtu "$mtu" \
+    --arg local_ip "$local_ip" \
+    --arg listen "$listen" \
+    '{
+      role:"foreign",
+      docker_image:$image,
+      container_name:$container,
+      interface:$iface,
+      password:$password,
+      keepalive:$keepalive,
+      mtu:$mtu,
+      local_ip:$local_ip,
+      server_listen:$listen,
+      port_forwards:[],
+      config_hash:"manual-foreign"
+    }')
+  install_self
+  mkdir -p "$ETC_DIR"
+  cat >"$MANUAL_ENV" <<EOF
+ROLE=foreign
+SERVER_LISTEN=${listen}
+PASSWORD=${password}
+INTERFACE=${iface}
+LOCAL_IP=${local_ip}
+KEEPALIVE=${keepalive}
+MTU=${mtu}
+DOCKER_IMAGE=${DEFAULT_IMAGE}
+CONTAINER_NAME=${container}
+EOF
+  chmod 600 "$MANUAL_ENV"
+  start_tunnel_from_config "$cfg"
+  install_systemd
+  log "FOREIGN up — ${local_ip} on ${iface}"
 }
 
 cmd_sync() {
@@ -650,10 +893,12 @@ cmd_sync() {
         --arg iface "${INTERFACE}" \
         --arg password "${PASSWORD}" \
         --argjson keepalive "${KEEPALIVE}" \
-        --arg remote_ip "${REMOTE_IP}" \
+        --arg remote_ip "${REMOTE_IP:-}" \
         --argjson mtu "${MTU}" \
         --arg local_ip "${LOCAL_IP}" \
-        '{docker_image:$image,container_name:$container,interface:$iface,password:$password,keepalive:$keepalive,remote_ip:$remote_ip,mtu:$mtu,local_ip:$local_ip,port_forwards:[],config_hash:"manual"}')
+        --arg role "${ROLE:-iran}" \
+        --arg listen "${SERVER_LISTEN:-0.0.0.0}" \
+        '{role:$role,docker_image:$image,container_name:$container,interface:$iface,password:$password,keepalive:$keepalive,remote_ip:$remote_ip,mtu:$mtu,local_ip:$local_ip,server_listen:$listen,port_forwards:[],config_hash:"manual"}')
       start_tunnel_from_config "$cfg"
     fi
     return 0
@@ -689,9 +934,10 @@ cmd_sync() {
       start_tunnel_from_config "$cfg"
       peer="$(peer_tunnel_ip "$local_ip")"
       loss_info="$(measure_peer_ping "$peer")"
-      ack_command "smart_fix" "running" "doctor: sysctl+conflict+restart peer=${peer} ping=${loss_info}"
+      ack_command "smart_fix" "running" "doctor: narnia-parity restart peer=${peer} ping=${loss_info}"
       heartbeat "running" "doctor smart_fix ok" >/dev/null || true
     else
+      apply_tunnel_firewall "iran" "$iface"
       peer="$(peer_tunnel_ip "${LOCAL_IP:-$local_ip}")"
       loss_info="$(measure_peer_ping "$peer")"
       local running="false" icmp_ignore
@@ -770,10 +1016,12 @@ cmd_restart() {
       --arg iface "${INTERFACE}" \
       --arg password "${PASSWORD}" \
       --argjson keepalive "${KEEPALIVE}" \
-      --arg remote_ip "${REMOTE_IP}" \
+      --arg remote_ip "${REMOTE_IP:-}" \
       --argjson mtu "${MTU}" \
       --arg local_ip "${LOCAL_IP}" \
-      '{docker_image:$image,container_name:$container,interface:$iface,password:$password,keepalive:$keepalive,remote_ip:$remote_ip,mtu:$mtu,local_ip:$local_ip,port_forwards:[],config_hash:"manual"}')
+      --arg role "${ROLE:-iran}" \
+      --arg listen "${SERVER_LISTEN:-0.0.0.0}" \
+      '{role:$role,docker_image:$image,container_name:$container,interface:$iface,password:$password,keepalive:$keepalive,remote_ip:$remote_ip,mtu:$mtu,local_ip:$local_ip,server_listen:$listen,port_forwards:[],config_hash:"manual"}')
     start_tunnel_from_config "$cfg"
   else
     local cfg
@@ -804,23 +1052,25 @@ interactive_menu() {
   need_root
   while true; do
     banner
-    echo -e "  ${c_bld}1)${c_off} Connect with panel join token"
-    echo -e "  ${c_bld}2)${c_off} Manual setup (ask IP / password)"
-    echo -e "  ${c_bld}3)${c_off} Status"
-    echo -e "  ${c_bld}4)${c_off} Logs"
-    echo -e "  ${c_bld}5)${c_off} Restart tunnel"
-    echo -e "  ${c_bld}6)${c_off} Uninstall"
+    echo -e "  ${c_bld}1)${c_off} Connect with panel join token ${c_dim}(IRAN)${c_off}"
+    echo -e "  ${c_bld}2)${c_off} Manual IRAN setup (ask IP / password)"
+    echo -e "  ${c_bld}3)${c_off} FOREIGN setup on this Node VPS ${c_dim}(Narnia parity)${c_off}"
+    echo -e "  ${c_bld}4)${c_off} Status"
+    echo -e "  ${c_bld}5)${c_off} Logs"
+    echo -e "  ${c_bld}6)${c_off} Restart tunnel"
+    echo -e "  ${c_bld}7)${c_off} Uninstall"
     echo -e "  ${c_bld}0)${c_off} Exit"
     echo
     local choice
-    _read -r -p "$(echo -e "${c_bld}Select${c_off} [0-6]: ")" choice
+    _read -r -p "$(echo -e "${c_bld}Select${c_off} [0-7]: ")" choice
     case "${choice:-}" in
       1) wizard_join_panel ;;
       2) wizard_manual ;;
-      3) cmd_status ;;
-      4) cmd_logs ;;
-      5) cmd_restart; _read -r -p "Press Enter..." _ ;;
-      6)
+      3) wizard_foreign ;;
+      4) cmd_status ;;
+      5) cmd_logs ;;
+      6) cmd_restart; _read -r -p "Press Enter..." _ ;;
+      7)
         if ask_yn "Really uninstall agent and stop tunnel?" "n"; then
           cmd_uninstall
           exit 0
@@ -834,7 +1084,7 @@ interactive_menu() {
 
 usage() {
   cat <<EOF
-HPX ICMP Tunnel Agent (Iran)
+HPX ICMP Tunnel Agent (IRAN + FOREIGN)
 
 Interactive menu (default):
   curl -fsSL https://raw.githubusercontent.com/pooyahpx/HPXPANEL/main/scripts/hpx-tunnel-agent.sh | sudo bash
@@ -842,8 +1092,12 @@ Interactive menu (default):
 
 Commands:
   menu                         Interactive installer / management
-  join [TOKEN] [--panel-url]   Non-interactive panel join (optional flags)
+  join [TOKEN] [--panel-url]   Non-interactive panel join (IRAN)
+  foreign --password SECRET    Start FOREIGN on this Node (Narnia parity)
   sync | status | logs | restart | uninstall
+
+FOREIGN one-liner (Node VPS):
+  curl -fsSL .../hpx-tunnel-agent.sh | sudo bash -s -- foreign --password 'YOUR_PASSWORD'
 
 EOF
 }
@@ -899,6 +1153,7 @@ main() {
   case "$cmd" in
     menu|install) interactive_menu ;;
     join) cmd_join "$@" ;;
+    foreign) cmd_foreign "$@" ;;
     sync) cmd_sync "$@" ;;
     status) cmd_status "$@" ;;
     logs) cmd_logs "$@" ;;

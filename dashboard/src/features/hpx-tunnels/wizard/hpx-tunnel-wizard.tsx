@@ -15,7 +15,7 @@ import {
   getHpxPanelPublicIp,
   type HpxPreflightResponse,
 } from '@/service/api/hpx-tunnels'
-import { Check, Server, Shield, Sparkles } from 'lucide-react'
+import { Check, Copy, Server, Shield, Sparkles } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
@@ -134,7 +134,7 @@ export default function HpxTunnelWizard({ open, onOpenChange, onSuccess }: HpxTu
         interface: 'hpx0',
         local_ip: '10.200.200.1',
         mtu: 1000,
-        keepalive: 30,
+        keepalive: 20,
         start_after_create: true,
       })
       if (result.tunnel.status === 'error') {
@@ -165,7 +165,7 @@ export default function HpxTunnelWizard({ open, onOpenChange, onSuccess }: HpxTu
         interface: 'hpx0',
         local_ip: '10.200.200.2',
         mtu: 1000,
-        keepalive: 30,
+        keepalive: 20,
         start_after_create: false,
       })
       if (result.join_token && result.join_command) {
@@ -265,25 +265,45 @@ export default function HpxTunnelWizard({ open, onOpenChange, onSuccess }: HpxTu
                     <FormField
                       control={foreignForm.control}
                       name="password"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{t('password', { defaultValue: 'Shared password' })}</FormLabel>
-                          <div className="flex gap-2">
-                            <FormControl>
-                              <PasswordInput {...field} dir="ltr" className="font-mono" />
-                            </FormControl>
-                            <Button type="button" variant="outline" size="icon" onClick={() => field.onChange(generatePassword())}>
-                              <Sparkles className="size-4" />
-                            </Button>
-                          </div>
-                          <p className="text-muted-foreground text-xs">
-                            {t('hpxTunnel.wizard.nodeForeignCmd', {
-                              defaultValue: 'On the Node VPS run FOREIGN Docker with this password (listen 0.0.0.0, local 10.200.200.1).',
-                            })}
-                          </p>
-                          <FormMessage />
-                        </FormItem>
-                      )}
+                      render={({ field }) => {
+                        const foreignCmd = `curl -fsSL https://raw.githubusercontent.com/pooyahpx/HPXPANEL/main/scripts/hpx-tunnel-agent.sh | sudo bash -s -- foreign --password '${field.value || 'YOUR_PASSWORD'}'`
+                        return (
+                          <FormItem>
+                            <FormLabel>{t('password', { defaultValue: 'Shared password' })}</FormLabel>
+                            <div className="flex gap-2">
+                              <FormControl>
+                                <PasswordInput {...field} dir="ltr" className="font-mono" />
+                              </FormControl>
+                              <Button type="button" variant="outline" size="icon" onClick={() => field.onChange(generatePassword())}>
+                                <Sparkles className="size-4" />
+                              </Button>
+                            </div>
+                            <p className="text-muted-foreground text-xs">
+                              {t('hpxTunnel.wizard.nodeForeignCmd', {
+                                defaultValue:
+                                  'On the Node VPS run this exact command (stops legacy narnia_tunnel, sets sysctl, MASQUERADE, IP 10.200.200.1). Same password must be used on IRAN.',
+                              })}
+                            </p>
+                            <div className="bg-muted/50 relative mt-2 rounded-md border p-3 font-mono text-xs break-all" dir="ltr">
+                              {foreignCmd}
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                size="sm"
+                                className="mt-2"
+                                onClick={async () => {
+                                  await navigator.clipboard.writeText(foreignCmd)
+                                  toast.success(t('copied', { defaultValue: 'Copied' }))
+                                }}
+                              >
+                                <Copy className="size-3.5" />
+                                {t('hpxTunnel.wizard.copyForeignCmd', { defaultValue: 'Copy FOREIGN command' })}
+                              </Button>
+                            </div>
+                            <FormMessage />
+                          </FormItem>
+                        )
+                      }}
                     />
                   </Form>
                   <div className="flex justify-end gap-2">
@@ -463,7 +483,8 @@ export default function HpxTunnelWizard({ open, onOpenChange, onSuccess }: HpxTu
                   <li>
                     {foreignHost === 'node'
                       ? t('hpxTunnel.wizard.checklistNodeForeign', {
-                          defaultValue: 'FOREIGN Docker must run on the Node VPS (same password, 10.200.200.1).',
+                          defaultValue:
+                            'Run the copied FOREIGN command on the Node VPS first (menu option 3 / foreign --password). Then IRAN agent.',
                         })
                       : t('hpxTunnel.wizard.checklistForeign', { defaultValue: 'FOREIGN is running on this panel server.' })}
                   </li>

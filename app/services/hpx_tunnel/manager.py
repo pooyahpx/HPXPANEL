@@ -152,8 +152,20 @@ async def stop_container(container_name: str) -> tuple[bool, str | None]:
     return True, None
 
 
+async def stop_legacy_narnia_containers() -> None:
+    """Native Narnia installer uses a fixed name; two ICMP daemons on one host fight."""
+    for name in ("narnia_tunnel",):
+        inspect = await run_command("docker", "inspect", "-f", "{{.Id}}", name, timeout=5)
+        if inspect.returncode != 0:
+            continue
+        logger.warning("Removing legacy Narnia container %s (conflicts with HPX ICMP)", name)
+        await run_command("docker", "rm", "-f", name, timeout=30)
+
+
 async def stop_containers_using_interface(interface: str, keep_name: str | None = None) -> None:
-    """Remove other hpx_tunnel_* containers that claim the same TAP INTERFACE."""
+    """Remove other tunnel containers that claim the same TAP INTERFACE (or legacy Narnia)."""
+    await stop_legacy_narnia_containers()
+
     listed = await run_command("docker", "ps", "-aq", "--filter", "name=hpx_tunnel", timeout=15)
     if listed.returncode != 0 or not listed.stdout.strip():
         return
@@ -269,6 +281,51 @@ async def _assign_interface_ip(
 
 async def _enable_ip_forward() -> None:
     await run_command("sysctl", "-w", "net.ipv4.ip_forward=1", timeout=5)
+
+
+async def _default_route_iface() -> str | None:
+    result = await run_command("ip", "-4", "route", "show", "default", timeout=5)
+    if result.returncode != 0:
+        return None
+    match = re.search(r"\bdev\s+(\S+)", result.stdout or "")
+    return match.group(1) if match else None
+
+
+async def _iptables_ensure(table: str | None, *rule: str, insert: bool = False) -> None:
+    """Idempotent iptables rule — mirrors Narnia.sh apply_firewall (-C then -A/-I)."""
+    check_cmd = ["iptables"]
+    if table:
+        check_cmd.extend(["-t", table])
+    check_cmd.append("-C")
+    check_cmd.extend(rule)
+    check = await run_command(*check_cmd, timeout=5)
+    if check.returncode == 0:
+        return
+    add_cmd = ["iptables"]
+    if table:
+        add_cmd.extend(["-t", table])
+    add_cmd.append("-I" if insert else "-A")
+    add_cmd.extend(rule)
+    await run_command(*add_cmd, timeout=5)
+
+
+async def apply_tunnel_firewall(tunnel: HpxTunnel) -> None:
+    """
+    Narnia parity: MASQUERADE on WAN + (IRAN) tunnel iface, and bidirectional FORWARD.
+
+    Without this, peer ping over 10.200.200.x may work while forwarded user traffic fails —
+    and on some hosts even tunnel traffic is flaky without FORWARD ACCEPT.
+    """
+    await _enable_ip_forward()
+    default_if = await _default_route_iface()
+    if default_if:
+        await _iptables_ensure("nat", "POSTROUTING", "-o", default_if, "-j", "MASQUERADE")
+
+    if tunnel.role == HpxTunnelRole.iran and default_if:
+        iface = tunnel.interface
+        await _iptables_ensure("nat", "POSTROUTING", "-o", iface, "-j", "MASQUERADE")
+        await _iptables_ensure(None, "FORWARD", "-i", default_if, "-o", iface, "-j", "ACCEPT", insert=True)
+        await _iptables_ensure(None, "FORWARD", "-i", iface, "-o", default_if, "-j", "ACCEPT", insert=True)
 
 
 async def apply_icmp_kernel_hardening() -> tuple[bool, str | None]:
@@ -419,8 +476,9 @@ async def start_tunnel(tunnel: HpxTunnel, password: str) -> tuple[bool, str | No
     if result.returncode != 0:
         return False, result.stderr or result.stdout or "docker run failed"
 
-    await asyncio.sleep(2)
-    await _enable_ip_forward()
+    # Narnia.sh waits 3s for TAP to appear before ip addr / link up.
+    await asyncio.sleep(3)
+    await apply_tunnel_firewall(tunnel)
     assign_err = await _assign_interface_ip(tunnel.interface, tunnel.local_ip, tunnel.operating_mode, tunnel.mtu)
     if assign_err:
         logs = await run_command("docker", "logs", "--tail", "30", container_name, timeout=10)
@@ -447,38 +505,19 @@ async def apply_port_forwards(tunnel: HpxTunnel) -> None:
         internal_port = rule.get("internal_port")
         if not external_port or not internal_ip or not internal_port:
             continue
-        check = await run_command(
-            "iptables",
-            "-t",
-            "nat",
-            "-C",
-            "PREROUTING",
-            "-p",
-            "tcp",
-            "--dport",
-            str(external_port),
-            "-j",
-            "DNAT",
-            "--to-destination",
-            f"{internal_ip}:{internal_port}",
-            timeout=5,
-        )
-        if check.returncode != 0:
-            await run_command(
-                "iptables",
-                "-t",
+        dest = f"{internal_ip}:{internal_port}"
+        for proto in ("tcp", "udp"):
+            await _iptables_ensure(
                 "nat",
-                "-A",
                 "PREROUTING",
                 "-p",
-                "tcp",
+                proto,
                 "--dport",
                 str(external_port),
                 "-j",
                 "DNAT",
                 "--to-destination",
-                f"{internal_ip}:{internal_port}",
-                timeout=5,
+                dest,
             )
 
 

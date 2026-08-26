@@ -211,8 +211,8 @@ EOF
 Description=HPX ICMP Tunnel Agent sync timer
 
 [Timer]
-OnBootSec=30s
-OnUnitActiveSec=30s
+OnBootSec=10s
+OnUnitActiveSec=15s
 AccuracySec=5s
 Unit=${SERVICE_NAME}.service
 

@@ -47,30 +47,33 @@ def upgrade() -> None:
     elif dialect in {"mysql", "mariadb"}:
         op.execute(_mysql_status_enum(_STATUS_VALUES))
 
-    op.add_column("hpx_tunnels", sa.Column("join_token_hash", sa.String(length=128), nullable=True))
-    op.add_column("hpx_tunnels", sa.Column("join_token_expires_at", sa.DateTime(timezone=True), nullable=True))
-    op.add_column("hpx_tunnels", sa.Column("agent_key_hash", sa.String(length=128), nullable=True))
-    op.add_column("hpx_tunnels", sa.Column("agent_claimed_at", sa.DateTime(timezone=True), nullable=True))
-    op.add_column("hpx_tunnels", sa.Column("agent_last_seen", sa.DateTime(timezone=True), nullable=True))
-    op.add_column("hpx_tunnels", sa.Column("agent_host", sa.String(length=255), nullable=True))
-    op.add_column("hpx_tunnels", sa.Column("agent_command", sa.String(length=16), nullable=True))
-    op.create_unique_constraint("uq_hpx_tunnels_join_token_hash", "hpx_tunnels", ["join_token_hash"])
-    op.create_unique_constraint("uq_hpx_tunnels_agent_key_hash", "hpx_tunnels", ["agent_key_hash"])
+    # SQLite cannot ALTER constraints in-place — use batch mode for all dialects.
+    with op.batch_alter_table("hpx_tunnels", schema=None) as batch_op:
+        batch_op.add_column(sa.Column("join_token_hash", sa.String(length=128), nullable=True))
+        batch_op.add_column(sa.Column("join_token_expires_at", sa.DateTime(timezone=True), nullable=True))
+        batch_op.add_column(sa.Column("agent_key_hash", sa.String(length=128), nullable=True))
+        batch_op.add_column(sa.Column("agent_claimed_at", sa.DateTime(timezone=True), nullable=True))
+        batch_op.add_column(sa.Column("agent_last_seen", sa.DateTime(timezone=True), nullable=True))
+        batch_op.add_column(sa.Column("agent_host", sa.String(length=255), nullable=True))
+        batch_op.add_column(sa.Column("agent_command", sa.String(length=16), nullable=True))
+        batch_op.create_unique_constraint("uq_hpx_tunnels_join_token_hash", ["join_token_hash"])
+        batch_op.create_unique_constraint("uq_hpx_tunnels_agent_key_hash", ["agent_key_hash"])
 
 
 def downgrade() -> None:
     bind = op.get_bind()
     dialect = bind.dialect.name
 
-    op.drop_constraint("uq_hpx_tunnels_agent_key_hash", "hpx_tunnels", type_="unique")
-    op.drop_constraint("uq_hpx_tunnels_join_token_hash", "hpx_tunnels", type_="unique")
-    op.drop_column("hpx_tunnels", "agent_command")
-    op.drop_column("hpx_tunnels", "agent_host")
-    op.drop_column("hpx_tunnels", "agent_last_seen")
-    op.drop_column("hpx_tunnels", "agent_claimed_at")
-    op.drop_column("hpx_tunnels", "agent_key_hash")
-    op.drop_column("hpx_tunnels", "join_token_expires_at")
-    op.drop_column("hpx_tunnels", "join_token_hash")
+    with op.batch_alter_table("hpx_tunnels", schema=None) as batch_op:
+        batch_op.drop_constraint("uq_hpx_tunnels_agent_key_hash", type_="unique")
+        batch_op.drop_constraint("uq_hpx_tunnels_join_token_hash", type_="unique")
+        batch_op.drop_column("agent_command")
+        batch_op.drop_column("agent_host")
+        batch_op.drop_column("agent_last_seen")
+        batch_op.drop_column("agent_claimed_at")
+        batch_op.drop_column("agent_key_hash")
+        batch_op.drop_column("join_token_expires_at")
+        batch_op.drop_column("join_token_hash")
 
     op.execute("UPDATE hpx_tunnels SET status = 'stopped' WHERE status = 'pending_claim'")
 

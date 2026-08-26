@@ -81,6 +81,8 @@ def _heal_allowed(tunnel: HpxTunnel, action: HealAction) -> tuple[bool, str | No
 def diagnose_tunnel(tunnel: HpxTunnel, runtime, logs: str = "") -> list[HealIssue]:
     issues: list[HealIssue] = []
     logs_lower = (logs or tunnel.message or "").lower()
+    agent = is_agent_managed(tunnel)
+    loss_100 = tunnel.packet_loss_pct is not None and tunnel.packet_loss_pct >= 100
 
     if tunnel.status == HpxTunnelStatus.starting and tunnel.last_status_change:
         age = (dt.now(UTC) - tunnel.last_status_change).total_seconds()
@@ -93,7 +95,7 @@ def diagnose_tunnel(tunnel: HpxTunnel, runtime, logs: str = "") -> list[HealIssu
                 )
             )
 
-    if tunnel.role == HpxTunnelRole.foreign and not is_agent_managed(tunnel):
+    if tunnel.role == HpxTunnelRole.foreign and not agent:
         if not runtime.container_running:
             issues.append(
                 HealIssue(
@@ -120,14 +122,23 @@ def diagnose_tunnel(tunnel: HpxTunnel, runtime, logs: str = "") -> list[HealIssu
             )
         )
 
-    if _KEEPALIVE_RE.search(logs_lower) or (tunnel.packet_loss_pct is not None and tunnel.packet_loss_pct >= 100):
-        issues.append(
-            HealIssue(
-                "keepalive_loss",
-                "Keepalive timeout or 100% packet loss on tunnel peer",
-                HealAction.bump_keepalive_restart,
+    if _KEEPALIVE_RE.search(logs_lower) or loss_100:
+        if agent:
+            issues.append(
+                HealIssue(
+                    "keepalive_loss",
+                    "Keepalive timeout or 100% packet loss — restart Iran agent tunnel",
+                    HealAction.agent_restart,
+                )
             )
-        )
+        elif tunnel.role == HpxTunnelRole.foreign:
+            issues.append(
+                HealIssue(
+                    "keepalive_loss",
+                    "Keepalive timeout or 100% packet loss on tunnel peer",
+                    HealAction.bump_keepalive_restart,
+                )
+            )
 
     if _RTNETLINK_RE.search(logs_lower):
         issues.append(
@@ -138,7 +149,7 @@ def diagnose_tunnel(tunnel: HpxTunnel, runtime, logs: str = "") -> list[HealIssu
             )
         )
 
-    if tunnel.role == HpxTunnelRole.iran and is_agent_managed(tunnel):
+    if tunnel.role == HpxTunnelRole.iran and agent:
         if tunnel.agent_last_seen:
             stale = (dt.now(UTC) - tunnel.agent_last_seen).total_seconds()
             if stale > AGENT_STALE_SECONDS:
@@ -166,8 +177,8 @@ def diagnose_tunnel(tunnel: HpxTunnel, runtime, logs: str = "") -> list[HealIssu
                 )
             )
 
-    # Heuristic: duplicate kernel ICMP replies break keepalive
-    if tunnel.packet_loss_pct is not None and tunnel.packet_loss_pct >= 100 and "icmp_echo_ignore" not in logs_lower:
+    # Kernel ICMP replies break keepalive — prep only; restart still required.
+    if loss_100 and "icmp_echo_ignore" not in logs_lower:
         issues.append(
             HealIssue(
                 "icmp_kernel_reply",
@@ -215,6 +226,10 @@ async def apply_heal_action(
         HealAction.bump_keepalive_restart,
         HealAction.unstuck_starting,
     }:
+        if is_agent_managed(tunnel):
+            tunnel.agent_command = "restart"
+            tunnel.message = "Auto-heal: restart requested for Iran agent"
+            return True, "queued agent restart"
         if not password:
             return False, "password required for restart"
         if action == HealAction.bump_keepalive_restart and (tunnel.keepalive or 0) < MIN_KEEPALIVE:
@@ -265,9 +280,18 @@ async def evaluate_and_repair(
     if not issues:
         return result
 
-    priority = [
-        HealAction.stop_conflicts,
-        HealAction.sysctl_icmp_ignore,
+    if auto and not tunnel.auto_heal_enabled:
+        result.skipped_reason = "auto-heal disabled"
+        return result
+
+    # Gate once on cooldown/limit before doing any work.
+    ok, reason = _heal_allowed(tunnel, HealAction.restart_foreign)
+    if not ok and auto:
+        result.skipped_reason = reason
+        return result
+
+    prep_priority = [HealAction.stop_conflicts, HealAction.sysctl_icmp_ignore]
+    primary_priority = [
         HealAction.unstuck_starting,
         HealAction.reassign_iface,
         HealAction.bump_keepalive_restart,
@@ -276,24 +300,39 @@ async def evaluate_and_repair(
         HealAction.agent_start,
     ]
 
-    for heal_action in priority:
+    for heal_action in prep_priority:
         matching = [i for i in issues if i.suggested_action == heal_action]
         if not matching:
             continue
-        if auto and not tunnel.auto_heal_enabled:
-            result.skipped_reason = "auto-heal disabled"
-            break
-        ok, msg = await apply_heal_action(tunnel, heal_action, password=password, force=not auto)
+        ok, msg = await apply_heal_action(tunnel, heal_action, password=password, force=True)
         if ok:
             result.actions_taken.append(msg)
-            result.repaired = True
-            tunnel.last_heal_at = dt.now(UTC)
-            tunnel.last_heal_action = msg
-            tunnel.heal_count_window = (tunnel.heal_count_window or 0) + 1
-            logger.info("Healed tunnel %s: %s", tunnel.name, msg)
+
+    primary_done = False
+    for heal_action in primary_priority:
+        matching = [i for i in issues if i.suggested_action == heal_action]
+        if not matching:
+            continue
+        ok, msg = await apply_heal_action(tunnel, heal_action, password=password, force=True)
+        if ok:
+            result.actions_taken.append(msg)
+            primary_done = True
             break
-        if not auto:
-            result.skipped_reason = msg
+        result.skipped_reason = msg
+
+    # If only prep was needed (e.g. conflicts) and no primary issue, count prep as repair.
+    if result.actions_taken and (primary_done or not any(i.suggested_action in primary_priority for i in issues)):
+        result.repaired = True
+        tunnel.last_heal_at = dt.now(UTC)
+        tunnel.last_heal_action = " → ".join(result.actions_taken)
+        tunnel.heal_count_window = (tunnel.heal_count_window or 0) + 1
+        logger.info("Healed tunnel %s: %s", tunnel.name, tunnel.last_heal_action)
+    elif result.actions_taken and not primary_done:
+        # Prep ran (sysctl) but primary failed — still record prep; don't claim full repair.
+        result.skipped_reason = result.skipped_reason or "prep applied but primary repair failed"
+        tunnel.last_heal_action = " → ".join(result.actions_taken)
+    elif not result.actions_taken and not result.skipped_reason:
+        result.skipped_reason = "no applicable repair action"
 
     return result
 

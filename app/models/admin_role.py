@@ -78,6 +78,10 @@ class HpxTunnelsPermissions(CRUDPermissions):
     logs: RoleActionValue | None = None
 
 
+class HpxPulsePermissions(CRUDPermissions):
+    pass
+
+
 class APIKeysPermissions(CRUDPermissions):
     create: bool | None = None
 
@@ -142,6 +146,7 @@ class RolePermissions(BaseModel):
     admins: AdminsPermissions | None = None
     nodes: NodesPermissions | None = None
     hpx_tunnels: HpxTunnelsPermissions | None = None
+    hpx_pulse: HpxPulsePermissions | None = None
     groups: CRUDPermissions | None = None
     hosts: HostsPermissions | None = None
     templates: CRUDPermissions | None = None

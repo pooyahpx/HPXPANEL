@@ -2150,6 +2150,36 @@
     "repairSkipped": "تعمیر ممکن نشد",
     "mtuHint": "برای ICMP مقدار 1000 توصیه می‌شود."
   },
+  "hpxPulse": {
+    "title": "HPX Pulse",
+    "description": "مشاور هوشمند BackPack Direct — انتخاب پروفایل stealth/speed، نصب agent ایران و خارج، چک‌لیست Reality.",
+    "add": "Pulse جدید",
+    "create": "ساخت Pulse",
+    "advise": "دریافت پیشنهاد",
+    "profiles": "پروفایل‌های پیشنهادی",
+    "goal": "هدف",
+    "iranIp": "IP عمومی ایران",
+    "abroadIp": "IP عمومی خارج",
+    "domain": "دامنه روی ایران",
+    "summary": "{{total}} تونل Pulse",
+    "empty": "هنوز تونل Pulse ندارید. با ویزارد مشاور یکی بسازید.",
+    "installCommands": "دستور نصب",
+    "regenerate": "توکن‌ها",
+    "wizard": {
+      "title": "مشاور HPX Pulse",
+      "description": "مشخصات سرور را وارد کنید، پروفایل BackPack Direct با دلیل ببینید، سپس agent ایران و خارج را deploy کنید."
+    },
+    "status": {
+      "pending_claim": "منتظر agent",
+      "running": "در حال اجرا",
+      "stopped": "متوقف",
+      "starting": "در حال استارت",
+      "stopping": "در حال توقف",
+      "error": "خطا",
+      "unhealthy": "ناسالم",
+      "partial": "ناقص"
+    }
+  },
   "success": "موفق",
   "error": "خطا",
   "tutorial": "مشاهده آموزش",

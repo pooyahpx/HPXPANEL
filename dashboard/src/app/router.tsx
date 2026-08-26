@@ -29,6 +29,7 @@ const NodesPage = lazyWithChunkRecovery(() => import('../pages/_dashboard.nodes.
 const NodeLogs = lazyWithChunkRecovery(() => import('../pages/_dashboard.nodes.logs'))
 const NodeWireGuard = lazyWithChunkRecovery(() => import('../pages/_dashboard.nodes.wireguard'))
 const HpxTunnelPage = lazyWithChunkRecovery(() => import('../pages/_dashboard.hpx-tunnel'))
+const HpxPulsePage = lazyWithChunkRecovery(() => import('../pages/_dashboard.hpx-pulse'))
 const Settings = lazyWithChunkRecovery(() => import('../pages/_dashboard.settings'))
 const CleanupSettings = lazyWithChunkRecovery(() => import('../pages/_dashboard.settings.cleanup'))
 const GeneralSettings = lazyWithChunkRecovery(() => import('../pages/_dashboard.settings.general'))
@@ -116,6 +117,14 @@ export const router = createHashRouter([
         element: (
           <Suspense fallback={<LoadingSpinner />}>
             <HpxTunnelPage />
+          </Suspense>
+        ),
+      },
+      {
+        path: '/hpx-pulse',
+        element: (
+          <Suspense fallback={<LoadingSpinner />}>
+            <HpxPulsePage />
           </Suspense>
         ),
       },

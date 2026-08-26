@@ -258,6 +258,36 @@
     "repairSkipped": "Could not repair",
     "mtuHint": "Use 1000 for ICMP tunnels (recommended)."
   },
+  "hpxPulse": {
+    "title": "HPX Pulse",
+    "description": "Smart BackPack Direct advisor — pick stealth/speed profiles, deploy Iran + abroad agents, Reality front checklist.",
+    "add": "New Pulse",
+    "create": "Create Pulse",
+    "advise": "Get recommendation",
+    "profiles": "Recommended profiles",
+    "goal": "Goal",
+    "iranIp": "Iran public IP",
+    "abroadIp": "Abroad public IP",
+    "domain": "Domain on Iran",
+    "summary": "{{total}} pulse tunnel(s)",
+    "empty": "No Pulse tunnels yet. Create one with the advisor wizard.",
+    "installCommands": "Install commands",
+    "regenerate": "Tokens",
+    "wizard": {
+      "title": "HPX Pulse Advisor",
+      "description": "Enter host facts, get ranked BackPack Direct profiles with reasons, then deploy Iran and abroad agents."
+    },
+    "status": {
+      "pending_claim": "Waiting for agents",
+      "running": "Running",
+      "stopped": "Stopped",
+      "starting": "Starting",
+      "stopping": "Stopping",
+      "error": "Error",
+      "unhealthy": "Unhealthy",
+      "partial": "Partial"
+    }
+  },
   "groups": "Groups",
   "documentation": "Documentation",
   "discussionGroup": "Discussion Group",

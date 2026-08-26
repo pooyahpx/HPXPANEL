@@ -52,6 +52,7 @@ import {
   UserPlus,
   UsersIcon,
   Webhook,
+  Zap,
 } from 'lucide-react'
 import * as React from 'react'
 import { useCallback, useEffect, useRef } from 'react'
@@ -72,6 +73,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const canReadTemplates = canReadResourcePage(admin, 'templates')
   const canReadClientTemplates = canReadResourcePage(admin, 'client_templates')
   const canReadHpxTunnels = canReadResourcePage(admin, 'hpx_tunnels')
+  const canReadHpxPulse = canReadResourcePage(admin, 'hpx_pulse')
   const canReadNodeLogs = hasPermission(admin, 'nodes', 'logs')
   const canBulkCreateFromTemplate = hasPermission(admin, 'users', 'create') && canReadTemplates
   const canBulkUpdateUsers = hasScopeAll(admin, 'users', 'update')
@@ -227,6 +229,15 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               title: 'hpxTunnel.title',
               url: '/hpx-tunnel',
               icon: Radar,
+            },
+          ]
+        : []),
+      ...(canReadHpxPulse
+        ? [
+            {
+              title: 'hpxPulse.title',
+              url: '/hpx-pulse',
+              icon: Zap,
             },
           ]
         : []),

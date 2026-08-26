@@ -1114,6 +1114,64 @@ class HpxTunnel(Base, CreatedAtUTCMixin):
     heal_count_window: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
 
 
+class HpxPulseStatus(str, Enum):
+    pending_claim = "pending_claim"
+    running = "running"
+    stopped = "stopped"
+    starting = "starting"
+    stopping = "stopping"
+    error = "error"
+    unhealthy = "unhealthy"
+    partial = "partial"
+
+
+class HpxPulse(Base, CreatedAtUTCMixin):
+    __tablename__ = "hpx_pulses"
+
+    name: Mapped[str] = mapped_column(String(40), unique=True)
+    status: Mapped[HpxPulseStatus] = mapped_column(
+        SQLEnum(HpxPulseStatus),
+        default=HpxPulseStatus.pending_claim,
+        server_default=HpxPulseStatus.pending_claim.name,
+    )
+    enabled: Mapped[bool] = mapped_column(server_default="1", default=True)
+    engine: Mapped[str] = mapped_column(String(16), default="backpack", server_default="backpack")
+    profile_id: Mapped[str] = mapped_column(String(64), default="pulse-stealth-balance")
+    goal: Mapped[str] = mapped_column(String(16), default="balanced", server_default="balanced")
+    tunnel_mode: Mapped[str] = mapped_column(String(32), default="direct_l3", server_default="direct_l3")
+    carrier: Mapped[str | None] = mapped_column(String(16), default="pck")
+    preset: Mapped[str] = mapped_column(String(16), default="balance", server_default="balance")
+    token_encrypted: Mapped[str] = mapped_column(String(512), nullable=False)
+    iran_public_ip: Mapped[str] = mapped_column(String(45), nullable=False)
+    abroad_public_ip: Mapped[str] = mapped_column(String(45), nullable=False)
+    control_port: Mapped[int] = mapped_column(Integer, default=9067, server_default="9067")
+    local_ip_iran: Mapped[str] = mapped_column(String(45), default="10.10.0.1/30", server_default="10.10.0.1/30")
+    local_ip_abroad: Mapped[str] = mapped_column(String(45), default="10.10.0.2/30", server_default="10.10.0.2/30")
+    port_forwards: Mapped[list[str] | None] = mapped_column(PostgresJSONB, default_factory=list)
+    domain: Mapped[str | None] = mapped_column(String(255), default=None)
+    sni_hint: Mapped[str | None] = mapped_column(String(255), default=None)
+    advice_json: Mapped[dict | None] = mapped_column(PostgresJSONB, default=None)
+    note: Mapped[str | None] = mapped_column(String(512), default=None)
+    iran_join_token_hash: Mapped[str | None] = mapped_column(String(128), unique=True, default=None)
+    iran_join_token_expires_at: Mapped[dt | None] = mapped_column(DateTime(timezone=True), default=None)
+    abroad_join_token_hash: Mapped[str | None] = mapped_column(String(128), unique=True, default=None)
+    abroad_join_token_expires_at: Mapped[dt | None] = mapped_column(DateTime(timezone=True), default=None)
+    iran_agent_key_hash: Mapped[str | None] = mapped_column(String(128), unique=True, default=None)
+    abroad_agent_key_hash: Mapped[str | None] = mapped_column(String(128), unique=True, default=None)
+    iran_agent_claimed_at: Mapped[dt | None] = mapped_column(DateTime(timezone=True), default=None)
+    abroad_agent_claimed_at: Mapped[dt | None] = mapped_column(DateTime(timezone=True), default=None)
+    iran_agent_last_seen: Mapped[dt | None] = mapped_column(DateTime(timezone=True), default=None)
+    abroad_agent_last_seen: Mapped[dt | None] = mapped_column(DateTime(timezone=True), default=None)
+    iran_agent_host: Mapped[str | None] = mapped_column(String(255), default=None)
+    abroad_agent_host: Mapped[str | None] = mapped_column(String(255), default=None)
+    iran_agent_command: Mapped[str | None] = mapped_column(String(16), default=None)
+    abroad_agent_command: Mapped[str | None] = mapped_column(String(16), default=None)
+    latency_ms: Mapped[float | None] = mapped_column(Float, default=None)
+    packet_loss_pct: Mapped[float | None] = mapped_column(Float, default=None)
+    message: Mapped[str | None] = mapped_column(String(1024), default=None)
+    last_status_change: Mapped[dt | None] = mapped_column(DateTime(timezone=True), default=None)
+
+
 class TelegramSubDelivery(Base):
     __tablename__ = "telegram_sub_deliveries"
 

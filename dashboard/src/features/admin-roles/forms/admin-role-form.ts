@@ -96,6 +96,15 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     ],
   },
   {
+    labelKey: 'hpxPulse.title',
+    actions: [
+      { resource: 'hpx_pulse', action: 'read' },
+      { resource: 'hpx_pulse', action: 'create' },
+      { resource: 'hpx_pulse', action: 'update' },
+      { resource: 'hpx_pulse', action: 'delete' },
+    ],
+  },
+  {
     labelKey: 'coreHosts',
     actions: [
       { resource: 'cores', action: 'read' },

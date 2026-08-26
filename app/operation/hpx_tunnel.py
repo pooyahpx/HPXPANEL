@@ -72,9 +72,10 @@ def _mint_token(prefix: str = "hpx") -> str:
 
 def _build_join_command(panel_url: str | None, token: str) -> str:
     base = (panel_url or "https://YOUR_PANEL_HOST").rstrip("/")
-    return (
-        f'curl -fsSL {AGENT_SCRIPT_URL} | sudo bash -s -- join {token} --panel-url {base}'
-    )
+    # Interactive installer asks for panel URL + token (and can confirm remote IP).
+    # Token is shown separately in the UI for paste — keep the one-liner simple.
+    _ = (base, token)
+    return f"curl -fsSL {AGENT_SCRIPT_URL} | sudo bash"
 
 
 def _config_payload(db_tunnel: HpxTunnel, password: str) -> dict:

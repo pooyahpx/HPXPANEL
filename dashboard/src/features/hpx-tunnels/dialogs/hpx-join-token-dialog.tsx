@@ -48,7 +48,7 @@ export default function HpxJoinTokenDialog({ open, onOpenChange, payload }: HpxJ
           </DialogTitle>
           <DialogDescription>
             {t('hpxTunnel.agent.joinDescription', {
-              defaultValue: 'Run this one-liner on the Iran server. Settings are applied automatically — no need to configure them again in the panel.',
+              defaultValue: 'On the Iran server run the installer (it asks questions). Paste the secret token when prompted — or use Manual setup and enter the FOREIGN IP yourself.',
             })}
           </DialogDescription>
         </DialogHeader>

@@ -203,18 +203,18 @@
     },
     "agent": {
       "joinTitle": "Iran agent join token",
-      "joinDescription": "Run this one-liner on the Iran server. Settings apply automatically — no need to reconfigure in the panel.",
+      "joinDescription": "On the Iran server run the installer (interactive menu). Paste this secret token when asked — or choose Manual setup and enter the FOREIGN IP yourself.",
       "secretToken": "Secret token",
-      "oneLiner": "Iran server command",
-      "copyCommand": "Copy command",
+      "oneLiner": "Iran server installer",
+      "copyCommand": "Copy installer command",
       "expiresAt": "Expires: {{when}}",
-      "shownOnce": "Token is shown once. If lost, regenerate it from the tunnel card.",
+      "shownOnce": "Token is shown once. On Iran, the script asks for Panel URL and this token (or Manual IP setup).",
       "regenerateToken": "Join token",
       "waitingClaim": "Waiting for Iran agent…",
-      "waitingClaimHint": "Copy the join token and run it on the Iran VPS. The panel does not run Docker for IRAN tunnels.",
+      "waitingClaimHint": "Run the interactive installer on the Iran VPS and paste the join token when asked.",
       "claimed": "Agent claimed",
       "lastSeen": "Agent last seen: {{when}}",
-      "joinHint": "After create, a join token is shown for the Iran server agent."
+      "joinHint": "After create, a join token is shown. On Iran the installer asks questions (URL, token, or manual IP)."
     }
   },
   "groups": "Groups",

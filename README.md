@@ -77,11 +77,15 @@ Most ICMP tunnel tools are CLI-only, single-instance, zero observability.
 3. On the Iran VPS (Docker only — no HPXPANEL UI):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/pooyahpx/HPXPANEL/main/scripts/hpx-tunnel-agent.sh \
-  | sudo bash -s -- join <TOKEN> --panel-url https://YOUR_PANEL
+curl -fsSL https://raw.githubusercontent.com/pooyahpx/HPXPANEL/main/scripts/hpx-tunnel-agent.sh | sudo bash
 ```
 
-The agent claims the token, pulls full config, starts `hpx-icmp`, and syncs every ~30s. **FOREIGN** tunnels still run via Docker on the panel host.
+The installer opens an interactive menu:
+1. **Connect with panel join token** — asks Panel URL + token, shows config, can confirm/change remote IP
+2. **Manual setup** — asks FOREIGN IP, password, interface, local IP, …
+
+Then it starts `hpx-icmp` and (in panel mode) syncs every ~30s. **FOREIGN** tunnels still run via Docker on the panel host.
+
 
 
 ---

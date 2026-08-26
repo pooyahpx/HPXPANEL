@@ -77,11 +77,15 @@
 3. روی VPS ایران (فقط Docker — بدون UI پنل):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/pooyahpx/HPXPANEL/main/scripts/hpx-tunnel-agent.sh \
-  | sudo bash -s -- join <TOKEN> --panel-url https://YOUR_PANEL
+curl -fsSL https://raw.githubusercontent.com/pooyahpx/HPXPANEL/main/scripts/hpx-tunnel-agent.sh | sudo bash
 ```
 
-Agent توکن را claim می‌کند، کل تنظیمات را می‌گیرد، `hpx-icmp` را استارت می‌زند و هر ~۳۰ثانیه sync می‌کند. تونل‌های **FOREIGN** همچنان با Docker روی هاست پنل اجرا می‌شوند.
+نصب‌کننده منوی تعاملی باز می‌کند:
+1. **وصل با join token پنل** — آدرس پنل + توکن را می‌پرسد، کانفیگ را نشان می‌دهد، IP ریموت را می‌توانی تأیید/عوض کنی
+2. **ستاپ دستی** — IP سرور خارج، رمز، اینترفیس، IP محلی و … را می‌پرسد
+
+بعد `hpx-icmp` را استارت می‌زند و (در حالت پنل) هر ~۳۰ثانیه sync می‌کند. تونل‌های **FOREIGN** همچنان با Docker روی هاست پنل اجرا می‌شوند.
+
 
 
 ---

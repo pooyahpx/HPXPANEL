@@ -6,8 +6,8 @@ from app.db.crud.hpx_tunnel import get_hpx_tunnel_by_id, is_agent_managed, list_
 from app.db.models import HpxTunnelRole, HpxTunnelStatus
 from app.operation import OperatorType
 from app.operation.hpx_tunnel import HpxTunnelOperation
-from app.services.hpx_tunnel.manager import health_ping_target, ping_host, start_tunnel, stop_container
 from app.services.hpx_tunnel.healer import evaluate_and_repair
+from app.services.hpx_tunnel.manager import health_ping_target, ping_host, start_tunnel, stop_container
 from app.utils.logger import get_logger
 
 logger = get_logger("hpx-tunnel-checker")
@@ -107,9 +107,8 @@ async def hpx_tunnel_checker_job():
                     if db_tunnel.role == HpxTunnelRole.foreign and not is_agent_managed(db_tunnel):
                         password = await hpx_tunnel_operator._decrypt_password(db, db_tunnel)
                     heal = await evaluate_and_repair(db_tunnel, password=password, auto=True)
-                    if heal.repaired:
-                        if db_tunnel.role == HpxTunnelRole.foreign and not is_agent_managed(db_tunnel):
-                            db_tunnel = await hpx_tunnel_operator._refresh_runtime(db, db_tunnel)
+                    if heal.repaired and db_tunnel.role == HpxTunnelRole.foreign and not is_agent_managed(db_tunnel):
+                        db_tunnel = await hpx_tunnel_operator._refresh_runtime(db, db_tunnel)
 
             await db.commit()
     except Exception:

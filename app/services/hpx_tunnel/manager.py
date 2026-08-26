@@ -91,6 +91,7 @@ async def docker_unavailable_reason() -> str:
         ).strip()
     return "Docker is not available on this host"
 
+
 async def pull_image(image: str) -> tuple[bool, str | None]:
     result = await run_command("docker", "pull", image, timeout=300)
     if result.returncode != 0:
@@ -123,11 +124,7 @@ async def ensure_tunnel_image(wanted: str | None = None) -> tuple[str, str | Non
     logger.info("Pulling HPX tunnel runtime from upstream…")
     ok, err = await pull_image(UPSTREAM_IMAGE)
     if not ok:
-        return target, (
-            err
-            or "failed to download tunnel runtime image. "
-            "Check Docker Hub access on this server."
-        )
+        return target, (err or "failed to download tunnel runtime image. Check Docker Hub access on this server.")
 
     await run_command("docker", "tag", UPSTREAM_IMAGE, target, timeout=30)
     return target, None
@@ -270,7 +267,6 @@ async def _assign_interface_ip(
     return None
 
 
-
 async def _enable_ip_forward() -> None:
     await run_command("sysctl", "-w", "net.ipv4.ip_forward=1", timeout=5)
 
@@ -351,7 +347,9 @@ async def resolve_panel_public_ip(panel_url: str | None = None) -> tuple[str | N
                     ipaddress.ip_address(resolved)
                     if not ipaddress.ip_address(resolved).is_private:
                         return resolved, "panel_url_dns"
-                except (OSError, ValueError):
+                except OSError:
+                    pass
+                except ValueError:
                     pass
 
     for svc in ("https://api.ipify.org", "https://ifconfig.me/ip"):
@@ -423,13 +421,9 @@ async def start_tunnel(tunnel: HpxTunnel, password: str) -> tuple[bool, str | No
 
     await asyncio.sleep(2)
     await _enable_ip_forward()
-    assign_err = await _assign_interface_ip(
-        tunnel.interface, tunnel.local_ip, tunnel.operating_mode, tunnel.mtu
-    )
+    assign_err = await _assign_interface_ip(tunnel.interface, tunnel.local_ip, tunnel.operating_mode, tunnel.mtu)
     if assign_err:
-        logs = await run_command(
-            "docker", "logs", "--tail", "30", container_name, timeout=10
-        )
+        logs = await run_command("docker", "logs", "--tail", "30", container_name, timeout=10)
         detail = logs.stderr or logs.stdout or ""
         return False, f"{assign_err}. {detail}".strip()
     await _host_ip("neigh", "flush", "dev", tunnel.interface, timeout=10)
@@ -531,6 +525,7 @@ def health_ping_target(tunnel: HpxTunnel) -> str | None:
         # IRAN local_ip lives on the Iran side — reachable from FOREIGN over the tunnel.
         return (tunnel.local_ip or "").split("/", 1)[0].strip() or None
     return peer_tunnel_ip(tunnel.local_ip)
+
 
 async def get_interface_ip(interface: str) -> str | None:
     result = await run_command("ip", "-4", "-o", "addr", "show", "dev", interface, timeout=5)

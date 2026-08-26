@@ -1,8 +1,7 @@
 from datetime import datetime as dt
-from enum import Enum
 from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.db.models import HpxTunnelRole, HpxTunnelStatus
 

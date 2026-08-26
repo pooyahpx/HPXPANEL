@@ -23,7 +23,10 @@ from app.db.models import HpxTunnel, HpxTunnelRole, HpxTunnelStatus
 from app.models.admin import AdminDetails
 from app.models.hpx_tunnel import (
     BulkHpxTunnelSelection,
+    HpxHealIssueResponse,
+    HpxPanelPublicIpResponse,
     HpxPortForward,
+    HpxPreflightResponse,
     HpxTunnelActionResponse,
     HpxTunnelAgentAckRequest,
     HpxTunnelAgentBootstrap,
@@ -31,20 +34,18 @@ from app.models.hpx_tunnel import (
     HpxTunnelAgentConfigResponse,
     HpxTunnelAgentHeartbeatRequest,
     HpxTunnelCreate,
+    HpxTunnelDiagnoseResponse,
     HpxTunnelJoinTokenResponse,
+    HpxTunnelRepairResponse,
     HpxTunnelResponse,
     HpxTunnelsQuery,
     HpxTunnelsResponse,
     HpxTunnelStatsResponse,
     HpxTunnelUpdate,
-    HpxHealIssueResponse,
-    HpxTunnelDiagnoseResponse,
-    HpxTunnelRepairResponse,
-    HpxPreflightResponse,
-    HpxPanelPublicIpResponse,
     RemoveHpxTunnelsResponse,
 )
 from app.operation import BaseOperation
+from app.services.hpx_tunnel.healer import diagnose_tunnel as diagnose_tunnel_issues, evaluate_and_repair
 from app.services.hpx_tunnel.manager import (
     DEFAULT_IMAGE,
     derive_status,
@@ -58,7 +59,6 @@ from app.services.hpx_tunnel.manager import (
     start_tunnel,
     stop_container,
 )
-from app.services.hpx_tunnel.healer import diagnose_tunnel as diagnose_tunnel_issues, evaluate_and_repair
 from app.utils.crypto import decrypt_secret, encrypt_secret, hash_api_key
 from app.utils.helpers import resolve_panel_base_url
 from app.utils.logger import get_logger
@@ -173,9 +173,7 @@ class HpxTunnelOperation(BaseOperation):
         command = _build_join_command(panel_url, token)
         return token, command, expires_at
 
-    def _agent_config_response(
-        self, db_tunnel: HpxTunnel, password: str
-    ) -> HpxTunnelAgentConfigResponse:
+    def _agent_config_response(self, db_tunnel: HpxTunnel, password: str) -> HpxTunnelAgentConfigResponse:
         payload = _config_payload(db_tunnel, password)
         return HpxTunnelAgentConfigResponse(
             tunnel_id=db_tunnel.id,
@@ -322,9 +320,7 @@ class HpxTunnelOperation(BaseOperation):
             await self.raise_error(message="Join tokens are only for IRAN tunnels", code=422)
 
         resolved_panel = await self._panel_url(panel_url)
-        token, command, expires_at = await self._issue_join_token(
-            db, db_tunnel, panel_url=resolved_panel
-        )
+        token, command, expires_at = await self._issue_join_token(db, db_tunnel, panel_url=resolved_panel)
         await db.commit()
         return HpxTunnelJoinTokenResponse(
             tunnel_id=db_tunnel.id,
@@ -598,9 +594,7 @@ class HpxTunnelOperation(BaseOperation):
             )
         return await get_container_logs(db_tunnel.container_name)
 
-    async def claim_agent(
-        self, db: AsyncSession, *, model: HpxTunnelAgentClaimRequest
-    ) -> HpxTunnelAgentBootstrap:
+    async def claim_agent(self, db: AsyncSession, *, model: HpxTunnelAgentClaimRequest) -> HpxTunnelAgentBootstrap:
         token_hash = hash_api_key(model.join_token)
         db_tunnel = await get_hpx_tunnel_by_join_token_hash(db, token_hash)
         if db_tunnel is None:
@@ -733,9 +727,7 @@ class HpxTunnelOperation(BaseOperation):
             last_heal_action=db_tunnel.last_heal_action,
         )
 
-    async def repair_tunnel(
-        self, db: AsyncSession, *, admin: AdminDetails, tunnel_id: int
-    ) -> HpxTunnelRepairResponse:
+    async def repair_tunnel(self, db: AsyncSession, *, admin: AdminDetails, tunnel_id: int) -> HpxTunnelRepairResponse:
         db_tunnel = await get_hpx_tunnel_by_id(db, tunnel_id)
         if db_tunnel is None:
             await self.raise_error(message="Tunnel not found", code=404)

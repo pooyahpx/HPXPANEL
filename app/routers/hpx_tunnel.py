@@ -5,6 +5,8 @@ from app.db import AsyncSession, get_db
 from app.models.admin import AdminDetails
 from app.models.hpx_tunnel import (
     BulkHpxTunnelSelection,
+    HpxPanelPublicIpResponse,
+    HpxPreflightResponse,
     HpxTunnelActionResponse,
     HpxTunnelAgentAckRequest,
     HpxTunnelAgentBootstrap,
@@ -12,17 +14,15 @@ from app.models.hpx_tunnel import (
     HpxTunnelAgentConfigResponse,
     HpxTunnelAgentHeartbeatRequest,
     HpxTunnelCreate,
+    HpxTunnelDiagnoseResponse,
     HpxTunnelJoinTokenResponse,
+    HpxTunnelRepairResponse,
     HpxTunnelResponse,
     HpxTunnelsQuery,
     HpxTunnelsResponse,
     HpxTunnelStatsResponse,
     HpxTunnelUpdate,
     RemoveHpxTunnelsResponse,
-    HpxTunnelDiagnoseResponse,
-    HpxTunnelRepairResponse,
-    HpxPreflightResponse,
-    HpxPanelPublicIpResponse,
 )
 from app.operation import OperatorType
 from app.operation.hpx_tunnel import HpxTunnelOperation
@@ -56,9 +56,7 @@ async def create_hpx_tunnel(
     db: AsyncSession = Depends(get_db),
     admin: AdminDetails = Depends(require_permission("hpx_tunnels", "create")),
 ):
-    return await hpx_tunnel_operator.create_tunnel(
-        db, admin=admin, model=model, panel_url=_request_base_url(request)
-    )
+    return await hpx_tunnel_operator.create_tunnel(db, admin=admin, model=model, panel_url=_request_base_url(request))
 
 
 @router.get("s", response_model=HpxTunnelsResponse)
@@ -97,9 +95,7 @@ async def hpx_tunnel_panel_public_ip(
     db: AsyncSession = Depends(get_db),
     admin: AdminDetails = Depends(require_permission("hpx_tunnels", "read")),
 ):
-    return await hpx_tunnel_operator.get_panel_public_ip(
-        db, admin=admin, panel_url=_request_base_url(request)
-    )
+    return await hpx_tunnel_operator.get_panel_public_ip(db, admin=admin, panel_url=_request_base_url(request))
 
 
 @router.post(

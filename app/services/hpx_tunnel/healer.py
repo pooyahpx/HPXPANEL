@@ -7,8 +7,8 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime as dt, timedelta as td
 from enum import Enum
 
-from app.db.models import HpxTunnel, HpxTunnelRole, HpxTunnelStatus
 from app.db.crud.hpx_tunnel import is_agent_managed
+from app.db.models import HpxTunnel, HpxTunnelRole, HpxTunnelStatus
 from app.services.hpx_tunnel.manager import (
     _assign_interface_ip,
     apply_icmp_kernel_hardening,
@@ -55,9 +55,9 @@ class HealResult:
     skipped_reason: str | None = None
 
 
-_KEEPALIVE_RE = re.compile(r"Keepalive timeout", re.I)
-_BUSY_RE = re.compile(r"device or resource busy", re.I)
-_RTNETLINK_RE = re.compile(r"Operation not permitted", re.I)
+_KEEPALIVE_RE = re.compile(r"Keepalive timeout", re.IGNORECASE)
+_BUSY_RE = re.compile(r"device or resource busy", re.IGNORECASE)
+_RTNETLINK_RE = re.compile(r"Operation not permitted", re.IGNORECASE)
 
 
 def _reset_heal_window_if_stale(tunnel: HpxTunnel) -> None:
@@ -120,9 +120,7 @@ def diagnose_tunnel(tunnel: HpxTunnel, runtime, logs: str = "") -> list[HealIssu
             )
         )
 
-    if _KEEPALIVE_RE.search(logs_lower) or (
-        tunnel.packet_loss_pct is not None and tunnel.packet_loss_pct >= 100
-    ):
+    if _KEEPALIVE_RE.search(logs_lower) or (tunnel.packet_loss_pct is not None and tunnel.packet_loss_pct >= 100):
         issues.append(
             HealIssue(
                 "keepalive_loss",
@@ -169,15 +167,14 @@ def diagnose_tunnel(tunnel: HpxTunnel, runtime, logs: str = "") -> list[HealIssu
             )
 
     # Heuristic: duplicate kernel ICMP replies break keepalive
-    if tunnel.packet_loss_pct is not None and tunnel.packet_loss_pct >= 100:
-        if "icmp_echo_ignore" not in logs_lower:
-            issues.append(
-                HealIssue(
-                    "icmp_kernel_reply",
-                    "Kernel may be replying to ICMP alongside tunnel (set icmp_echo_ignore_all)",
-                    HealAction.sysctl_icmp_ignore,
-                )
+    if tunnel.packet_loss_pct is not None and tunnel.packet_loss_pct >= 100 and "icmp_echo_ignore" not in logs_lower:
+        issues.append(
+            HealIssue(
+                "icmp_kernel_reply",
+                "Kernel may be replying to ICMP alongside tunnel (set icmp_echo_ignore_all)",
+                HealAction.sysctl_icmp_ignore,
             )
+        )
 
     return issues
 
@@ -198,9 +195,7 @@ async def apply_heal_action(
         return False, "no action"
 
     if action == HealAction.stop_conflicts:
-        await stop_containers_using_interface(
-            tunnel.interface, keep_name=tunnel.container_name or None
-        )
+        await stop_containers_using_interface(tunnel.interface, keep_name=tunnel.container_name or None)
         return True, "removed conflicting tunnel containers"
 
     if action == HealAction.sysctl_icmp_ignore:
@@ -209,9 +204,7 @@ async def apply_heal_action(
 
     if action == HealAction.reassign_iface:
         await apply_icmp_kernel_hardening()
-        err = await _assign_interface_ip(
-            tunnel.interface, tunnel.local_ip, tunnel.operating_mode, tunnel.mtu
-        )
+        err = await _assign_interface_ip(tunnel.interface, tunnel.local_ip, tunnel.operating_mode, tunnel.mtu)
         if err:
             return False, err
         await _host_neigh_flush(tunnel.interface)
@@ -227,9 +220,7 @@ async def apply_heal_action(
         if action == HealAction.bump_keepalive_restart and (tunnel.keepalive or 0) < MIN_KEEPALIVE:
             tunnel.keepalive = MIN_KEEPALIVE
         await apply_icmp_kernel_hardening()
-        await stop_containers_using_interface(
-            tunnel.interface, keep_name=tunnel.container_name or None
-        )
+        await stop_containers_using_interface(tunnel.interface, keep_name=tunnel.container_name or None)
         ok, err = await start_tunnel(tunnel, password)
         if not ok:
             return False, err or "restart failed"
@@ -292,9 +283,7 @@ async def evaluate_and_repair(
         if auto and not tunnel.auto_heal_enabled:
             result.skipped_reason = "auto-heal disabled"
             break
-        ok, msg = await apply_heal_action(
-            tunnel, heal_action, password=password, force=not auto
-        )
+        ok, msg = await apply_heal_action(tunnel, heal_action, password=password, force=not auto)
         if ok:
             result.actions_taken.append(msg)
             result.repaired = True

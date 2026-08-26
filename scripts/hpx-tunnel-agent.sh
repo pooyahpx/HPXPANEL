@@ -24,8 +24,9 @@ BIN_LINK="${BIN_LINK:-/usr/local/bin/hpx-tunnel-agent}"
 SERVICE_NAME="${SERVICE_NAME:-hpx-tunnel-agent}"
 TIMER_NAME="${TIMER_NAME:-hpx-tunnel-agent.timer}"
 SCRIPT_SRC="${BASH_SOURCE[0]:-$0}"
-DEFAULT_IMAGE="${DEFAULT_IMAGE:-ghcr.io/pooyahpx/hpx-icmp:0.0.3}"
+DEFAULT_IMAGE="${DEFAULT_IMAGE:-stormotron/narnia:0.0.3}"
 FALLBACK_IMAGE="${FALLBACK_IMAGE:-stormotron/narnia:0.0.3}"
+BRANDED_IMAGE="${BRANDED_IMAGE:-ghcr.io/pooyahpx/hpx-icmp:0.0.3}"
 
 if [ -t 1 ]; then
   c_grn='\033[0;32m'; c_yel='\033[0;33m'; c_red='\033[0;31m'
@@ -33,12 +34,13 @@ if [ -t 1 ]; then
 else
   c_grn=''; c_yel=''; c_red=''; c_cyn=''; c_mag=''; c_bld=''; c_dim=''; c_off=''
 fi
-log()  { echo -e "${c_grn}[+]${c_off} $*"; }
-warn() { echo -e "${c_yel}[!]${c_off} $*"; }
+# Logs must go to stderr — stdout is captured by $(pull_image ...)
+log()  { echo -e "${c_grn}[+]${c_off} $*" >&2; }
+warn() { echo -e "${c_yel}[!]${c_off} $*" >&2; }
 err()  { echo -e "${c_red}[x]${c_off} $*" >&2; }
 die()  { err "$*"; exit 1; }
 has()  { command -v "$1" >/dev/null 2>&1; }
-hr()   { echo -e "${c_cyn}------------------------------------------------------------${c_off}"; }
+hr()   { echo -e "${c_cyn}------------------------------------------------------------${c_off}" >&2; }
 
 _read() {
   if [ -e /dev/tty ]; then
@@ -258,18 +260,48 @@ stop_tunnel_container() {
 }
 
 pull_image() {
-  local image="$1"
-  log "pulling ${image}"
-  if ! docker pull "$image" >/dev/null; then
-    if [ "$image" != "$FALLBACK_IMAGE" ]; then
-      warn "pull failed — trying fallback ${FALLBACK_IMAGE}"
-      docker pull "$FALLBACK_IMAGE" >/dev/null || die "docker pull failed"
-      echo "$FALLBACK_IMAGE"
-      return
+  local wanted="$1"
+  local candidate
+
+  # Prefer an image that already exists locally (e.g. after manual tag).
+  for candidate in "$wanted" "$BRANDED_IMAGE" "$FALLBACK_IMAGE" "$DEFAULT_IMAGE"; do
+    [ -n "$candidate" ] || continue
+    if docker image inspect "$candidate" >/dev/null 2>&1; then
+      log "using local image ${candidate}"
+      # Keep panel-requested name available for next runs when possible.
+      if [ "$candidate" != "$wanted" ]; then
+        docker tag "$candidate" "$wanted" 2>/dev/null || true
+      fi
+      echo "$wanted"
+      return 0
     fi
-    die "docker pull failed"
-  fi
-  echo "$image"
+  done
+
+  for candidate in "$wanted" "$FALLBACK_IMAGE" "$DEFAULT_IMAGE"; do
+    [ -n "$candidate" ] || continue
+    log "pulling ${candidate}"
+    if docker pull "$candidate" >/dev/null 2>&1; then
+      if [ "$candidate" != "$wanted" ]; then
+        docker tag "$candidate" "$wanted" 2>/dev/null || true
+        log "tagged ${candidate} -> ${wanted}"
+      fi
+      echo "$wanted"
+      return 0
+    fi
+    warn "pull denied/failed: ${candidate}"
+  done
+
+  die "Cannot download tunnel image (registry denied from this server).
+
+Run these on Iran, then get a NEW join token from the panel:
+
+  docker pull ${FALLBACK_IMAGE}
+  docker tag ${FALLBACK_IMAGE} ${wanted}
+  docker tag ${FALLBACK_IMAGE} ${BRANDED_IMAGE}
+
+Or in panel → edit IRAN tunnel → set Docker image to:
+  ${FALLBACK_IMAGE}
+"
 }
 
 start_tunnel_from_config() {
@@ -289,15 +321,21 @@ start_tunnel_from_config() {
 
   [ -n "$remote_ip" ] || die "remote_ip missing"
   [ -n "$password" ] || die "password missing"
+  [ -n "$image" ] && [ "$image" != "null" ] || die "docker_image missing"
 
   image="$(pull_image "$image")"
+  [ -n "$image" ] || die "resolved docker image is empty"
+  # Guard against polluted image names (spaces/newlines)
+  image="$(echo "$image" | tr -d '\r\n' | awk '{print $1}')"
+  docker image inspect "$image" >/dev/null 2>&1 || die "image not available locally: ${image}"
+
   stop_tunnel_container "$container"
 
   local env_args=(-e "INTERFACE=${iface}" -e "PASSWORD=${password}" -e "KEEPALIVE=${keepalive}" -e "REMOTE_IP=${remote_ip}")
   [ -n "$mtu" ] && [ "$mtu" != "null" ] && env_args+=(-e "MTU=${mtu}")
   [ -n "$dscp" ] && [ "$dscp" != "null" ] && env_args+=(-e "DSCP_MARK=${dscp}")
 
-  log "starting container ${container}"
+  log "starting container ${container} (${image})"
   docker run -d \
     --cap-add=NET_ADMIN \
     --device /dev/net/tun:/dev/net/tun \

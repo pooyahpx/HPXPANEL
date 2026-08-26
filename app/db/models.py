@@ -1085,7 +1085,7 @@ class HpxTunnel(Base, CreatedAtUTCMixin):
     bandwidth_limit: Mapped[str | None] = mapped_column(String(32), default=None)
     operating_mode: Mapped[str | None] = mapped_column(String(64), default=None)
     port_forwards: Mapped[list[dict] | None] = mapped_column(PostgresJSONB, default_factory=list)
-    docker_image: Mapped[str] = mapped_column(String(128), default="ghcr.io/pooyahpx/hpx-icmp:0.0.3")
+    docker_image: Mapped[str] = mapped_column(String(128), default="stormotron/narnia:0.0.3")
     container_name: Mapped[str] = mapped_column(String(128), default="")
     backup_tunnel_id: Mapped[int | None] = fk_id_column(
         "hpx_tunnels.id", ondelete="SET NULL", default=None, nullable=True

@@ -28,7 +28,7 @@ class HpxTunnelBase(BaseModel):
     bandwidth_limit: str | None = Field(default=None, max_length=32)
     operating_mode: str | None = Field(default=None, max_length=64)
     port_forwards: list[HpxPortForward] = Field(default_factory=list)
-    docker_image: str = Field(default="ghcr.io/pooyahpx/hpx-icmp:0.0.3", max_length=128)
+    docker_image: str = Field(default="stormotron/narnia:0.0.3", max_length=128)
     backup_tunnel_id: int | None = Field(default=None, ge=1)
     auto_failover: bool = False
     priority: int = Field(default=0, ge=0, le=100)

@@ -4,7 +4,7 @@ import { Card } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import type { HpxTunnelResponse } from '@/service/api/hpx-tunnels'
 import { formatBytes } from '@/utils/formatByte'
-import { Activity, Globe, KeyRound, Play, RefreshCw, Shield, Square, Zap } from 'lucide-react'
+import { Activity, Globe, KeyRound, Play, RefreshCw, Shield, Square, Trash2, Zap } from 'lucide-react'
 import type { ComponentType } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -14,8 +14,10 @@ interface HpxTunnelCardProps {
   onStart: (id: number) => void
   onStop: (id: number) => void
   onRestart: (id: number) => void
+  onDelete?: (tunnel: HpxTunnelResponse) => void
   onRegenerateJoinToken?: (id: number) => void
   actionLoading?: boolean
+  canDelete?: boolean
 }
 
 const statusTone: Record<string, string> = {
@@ -34,8 +36,10 @@ export default function HpxTunnelCard({
   onStart,
   onStop,
   onRestart,
+  onDelete,
   onRegenerateJoinToken,
   actionLoading,
+  canDelete,
 }: HpxTunnelCardProps) {
   const { t } = useTranslation()
   const isRunning = tunnel.status === 'running'
@@ -97,6 +101,12 @@ export default function HpxTunnelCard({
             <Button size="sm" variant="ghost" onClick={() => onEdit(tunnel)}>
               {t('edit', { defaultValue: 'Edit' })}
             </Button>
+            {canDelete && onDelete && (
+              <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" disabled={actionLoading} onClick={() => onDelete(tunnel)}>
+                <Trash2 className="size-3.5" />
+                {t('delete', { defaultValue: 'Delete' })}
+              </Button>
+            )}
           </div>
         </div>
       </div>

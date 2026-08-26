@@ -1,13 +1,25 @@
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useAdmin } from '@/hooks/use-admin'
+import useDirDetection from '@/hooks/use-dir-detection'
 import HpxTunnelCard from '@/features/hpx-tunnels/components/hpx-tunnel-card'
 import HpxJoinTokenDialog, { type JoinTokenPayload } from '@/features/hpx-tunnels/dialogs/hpx-join-token-dialog'
 import HpxTunnelModal from '@/features/hpx-tunnels/dialogs/hpx-tunnel-modal'
 import { hpxTunnelFormDefaultValues } from '@/features/hpx-tunnels/forms/hpx-tunnel-form'
 import {
   type HpxTunnelResponse,
+  useDeleteHpxTunnel,
   useGetHpxTunnels,
   useRegenerateHpxTunnelJoinToken,
   useRestartHpxTunnel,
@@ -26,18 +38,22 @@ import { hpxTunnelFormFromResponse, hpxTunnelFormSchema, type HpxTunnelFormValue
 
 export default function HpxTunnelsList() {
   const { t } = useTranslation()
+  const dir = useDirDetection()
   const { admin } = useAdmin()
   const canCreate = hasPermission(admin, 'hpx_tunnels', 'create')
   const canStart = hasPermission(admin, 'hpx_tunnels', 'start')
+  const canDelete = hasPermission(admin, 'hpx_tunnels', 'delete')
   const { data, isLoading, isFetching, refetch } = useGetHpxTunnels({ limit: 100, offset: 0 }, { refetchInterval: 15000 })
   const startMutation = useStartHpxTunnel()
   const stopMutation = useStopHpxTunnel()
   const restartMutation = useRestartHpxTunnel()
+  const deleteMutation = useDeleteHpxTunnel()
   const joinTokenMutation = useRegenerateHpxTunnelJoinToken()
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingTunnel, setEditingTunnel] = useState<HpxTunnelResponse | null>(null)
   const [joinPayload, setJoinPayload] = useState<JoinTokenPayload | null>(null)
   const [joinOpen, setJoinOpen] = useState(false)
+  const [tunnelToDelete, setTunnelToDelete] = useState<HpxTunnelResponse | null>(null)
 
   const form = useForm<HpxTunnelFormValues>({
     resolver: zodResolver(hpxTunnelFormSchema),
@@ -63,7 +79,8 @@ export default function HpxTunnelsList() {
     }
   }, [data?.tunnels])
 
-  const actionLoading = startMutation.isPending || stopMutation.isPending || restartMutation.isPending || joinTokenMutation.isPending
+  const actionLoading =
+    startMutation.isPending || stopMutation.isPending || restartMutation.isPending || joinTokenMutation.isPending || deleteMutation.isPending
 
   const runAction = async (label: string, fn: () => Promise<{ message?: string | null }>) => {
     try {
@@ -72,6 +89,23 @@ export default function HpxTunnelsList() {
       await refetch()
     } catch (error: any) {
       toast.error(label, { description: error?.data?.detail || error?.message })
+    }
+  }
+
+  const confirmDelete = async () => {
+    const target = tunnelToDelete
+    if (!target) return
+    try {
+      await deleteMutation.mutateAsync(target.id)
+      toast.success(t('hpxTunnel.deleteSuccess', { defaultValue: 'Tunnel deleted' }), {
+        description: target.name,
+      })
+      setTunnelToDelete(null)
+      await refetch()
+    } catch (error: any) {
+      toast.error(t('hpxTunnel.delete', { defaultValue: 'Delete tunnel' }), {
+        description: error?.data?.detail || error?.message,
+      })
     }
   }
 
@@ -160,6 +194,7 @@ export default function HpxTunnelsList() {
               key={tunnel.id}
               tunnel={tunnel}
               actionLoading={actionLoading || !canStart}
+              canDelete={canDelete}
               onEdit={item => {
                 setEditingTunnel(item)
                 form.reset(hpxTunnelFormFromResponse(item))
@@ -168,6 +203,7 @@ export default function HpxTunnelsList() {
               onStart={id => runAction(t('hpxTunnel.start', { defaultValue: 'Start' }), () => startMutation.mutateAsync(id))}
               onStop={id => runAction(t('hpxTunnel.stop', { defaultValue: 'Stop' }), () => stopMutation.mutateAsync(id))}
               onRestart={id => runAction(t('hpxTunnel.restart', { defaultValue: 'Restart' }), () => restartMutation.mutateAsync(id))}
+              onDelete={setTunnelToDelete}
               onRegenerateJoinToken={regenerateJoinToken}
             />
           ))}
@@ -176,6 +212,26 @@ export default function HpxTunnelsList() {
 
       <HpxTunnelModal open={dialogOpen} onOpenChange={setDialogOpen} form={form} editingTunnel={editingTunnel} onSuccess={() => refetch()} />
       <HpxJoinTokenDialog open={joinOpen} onOpenChange={setJoinOpen} payload={joinPayload} />
+
+      <AlertDialog open={!!tunnelToDelete} onOpenChange={open => !open && setTunnelToDelete(null)}>
+        <AlertDialogContent dir={dir}>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('hpxTunnel.deleteTitle', { defaultValue: 'Delete tunnel?' })}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('hpxTunnel.deletePrompt', {
+                name: tunnelToDelete?.name ?? '',
+                defaultValue: 'This will remove "{{name}}" from the panel and stop its Docker container on this host (FOREIGN). Iran agent containers must be stopped on the Iran server separately.',
+              })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteMutation.isPending}>{t('cancel', { defaultValue: 'Cancel' })}</AlertDialogCancel>
+            <AlertDialogAction variant="destructive" disabled={deleteMutation.isPending} onClick={confirmDelete}>
+              {t('delete', { defaultValue: 'Delete' })}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

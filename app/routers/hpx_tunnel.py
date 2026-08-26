@@ -18,6 +18,7 @@ from app.models.hpx_tunnel import (
     HpxTunnelJoinTokenResponse,
     HpxTunnelRepairResponse,
     HpxTunnelResponse,
+    HpxTunnelSmartFixResponse,
     HpxTunnelsQuery,
     HpxTunnelsResponse,
     HpxTunnelStatsResponse,
@@ -241,10 +242,35 @@ async def diagnose_hpx_tunnel(
 @router.post("/{tunnel_id}/repair", response_model=HpxTunnelRepairResponse, responses={404: responses._404})
 async def repair_hpx_tunnel(
     tunnel_id: int,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     admin: AdminDetails = Depends(require_permission("hpx_tunnels", "start")),
 ):
-    return await hpx_tunnel_operator.repair_tunnel(db, admin=admin, tunnel_id=tunnel_id)
+    # Repair now runs the multi-step doctor (topology + nodes + FOREIGN + Iran agent).
+    smart = await hpx_tunnel_operator.smart_fix_tunnel(
+        db, admin=admin, tunnel_id=tunnel_id, panel_url=_request_base_url(request)
+    )
+    from app.models.hpx_tunnel import HpxHealIssueResponse
+
+    return HpxTunnelRepairResponse(
+        tunnel=smart.tunnel,
+        repaired=smart.fixed,
+        actions_taken=smart.actions,
+        issues=[HpxHealIssueResponse(code="finding", message=f, suggested_action="smart_fix") for f in smart.findings],
+        message=smart.summary,
+    )
+
+
+@router.post("/{tunnel_id}/smart-fix", response_model=HpxTunnelSmartFixResponse, responses={404: responses._404})
+async def smart_fix_hpx_tunnel(
+    tunnel_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    admin: AdminDetails = Depends(require_permission("hpx_tunnels", "start")),
+):
+    return await hpx_tunnel_operator.smart_fix_tunnel(
+        db, admin=admin, tunnel_id=tunnel_id, panel_url=_request_base_url(request)
+    )
 
 
 @router.get("/{tunnel_id}/logs", response_class=PlainTextResponse, responses={404: responses._404})

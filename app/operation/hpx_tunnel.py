@@ -23,6 +23,7 @@ from app.db.models import HpxTunnel, HpxTunnelRole, HpxTunnelStatus
 from app.models.admin import AdminDetails
 from app.models.hpx_tunnel import (
     BulkHpxTunnelSelection,
+    HpxDoctorStepResponse,
     HpxHealIssueResponse,
     HpxPanelPublicIpResponse,
     HpxPortForward,
@@ -38,6 +39,7 @@ from app.models.hpx_tunnel import (
     HpxTunnelJoinTokenResponse,
     HpxTunnelRepairResponse,
     HpxTunnelResponse,
+    HpxTunnelSmartFixResponse,
     HpxTunnelsQuery,
     HpxTunnelsResponse,
     HpxTunnelStatsResponse,
@@ -45,7 +47,8 @@ from app.models.hpx_tunnel import (
     RemoveHpxTunnelsResponse,
 )
 from app.operation import BaseOperation
-from app.services.hpx_tunnel.healer import diagnose_tunnel as diagnose_tunnel_issues, evaluate_and_repair
+from app.services.hpx_tunnel.doctor import run_smart_fix
+from app.services.hpx_tunnel.healer import diagnose_tunnel as diagnose_tunnel_issues
 from app.services.hpx_tunnel.manager import (
     DEFAULT_IMAGE,
     derive_status,
@@ -728,6 +731,26 @@ class HpxTunnelOperation(BaseOperation):
         )
 
     async def repair_tunnel(self, db: AsyncSession, *, admin: AdminDetails, tunnel_id: int) -> HpxTunnelRepairResponse:
+        smart = await self.smart_fix_tunnel(db, admin=admin, tunnel_id=tunnel_id, panel_url=None)
+        return HpxTunnelRepairResponse(
+            tunnel=smart.tunnel,
+            repaired=smart.fixed,
+            actions_taken=smart.actions,
+            issues=[
+                HpxHealIssueResponse(code="finding", message=f, suggested_action="smart_fix") for f in smart.findings
+            ],
+            message=smart.summary,
+        )
+
+    async def smart_fix_tunnel(
+        self,
+        db: AsyncSession,
+        *,
+        admin: AdminDetails,
+        tunnel_id: int,
+        panel_url: str | None = None,
+    ) -> HpxTunnelSmartFixResponse:
+        _ = admin
         db_tunnel = await get_hpx_tunnel_by_id(db, tunnel_id)
         if db_tunnel is None:
             await self.raise_error(message="Tunnel not found", code=404)
@@ -736,22 +759,25 @@ class HpxTunnelOperation(BaseOperation):
         if db_tunnel.role == HpxTunnelRole.foreign and not is_agent_managed(db_tunnel):
             password = await self._decrypt_password(db, db_tunnel)
 
-        result = await evaluate_and_repair(db_tunnel, password=password, auto=False)
-        if result.repaired:
+        report = await run_smart_fix(
+            db,
+            db_tunnel,
+            password=password,
+            panel_url=panel_url or await self._panel_url(None),
+            decrypt_password=self._decrypt_password,
+        )
+        db_tunnel = await get_hpx_tunnel_by_id(db, tunnel_id)
+        if db_tunnel and db_tunnel.role == HpxTunnelRole.foreign and not is_agent_managed(db_tunnel):
             db_tunnel = await self._refresh_runtime(db, db_tunnel)
         await db.commit()
+        db_tunnel = await get_hpx_tunnel_by_id(db, tunnel_id)
 
-        return HpxTunnelRepairResponse(
+        return HpxTunnelSmartFixResponse(
             tunnel=_to_response(db_tunnel),
-            repaired=result.repaired,
-            actions_taken=result.actions_taken,
-            issues=[
-                HpxHealIssueResponse(
-                    code=i.code,
-                    message=i.message,
-                    suggested_action=i.suggested_action.value,
-                )
-                for i in result.issues
-            ],
-            message=result.actions_taken[-1] if result.actions_taken else result.skipped_reason,
+            fixed=report.fixed,
+            summary=report.summary,
+            steps=[HpxDoctorStepResponse(title=s.title, detail=s.detail, ok=s.ok) for s in report.steps],
+            findings=report.findings,
+            actions=report.actions,
+            related_nodes=report.related_nodes,
         )

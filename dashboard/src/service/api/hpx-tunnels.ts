@@ -136,6 +136,22 @@ export interface HpxTunnelRepairResponse {
   message?: string | null
 }
 
+export interface HpxDoctorStep {
+  title: string
+  detail: string
+  ok: boolean
+}
+
+export interface HpxTunnelSmartFixResponse {
+  tunnel: HpxTunnelResponse
+  fixed: boolean
+  summary: string
+  steps: HpxDoctorStep[]
+  findings: string[]
+  actions: string[]
+  related_nodes: Array<Record<string, unknown>>
+}
+
 export interface HpxPreflightResponse {
   linux: boolean
   docker: boolean
@@ -186,6 +202,9 @@ export const diagnoseHpxTunnel = (id: number) =>
 
 export const repairHpxTunnel = (id: number) =>
   fetcher<HpxTunnelRepairResponse>(`${BASE}/${id}/repair`, { method: 'POST' })
+
+export const smartFixHpxTunnel = (id: number) =>
+  fetcher<HpxTunnelSmartFixResponse>(`${BASE}/${id}/smart-fix`, { method: 'POST' })
 
 export const getHpxTunnelPreflight = () => fetcher<HpxPreflightResponse>(`${BASE}/preflight`)
 
@@ -287,6 +306,14 @@ export function useRepairHpxTunnel() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: repairHpxTunnel,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['hpx-tunnels'] }),
+  })
+}
+
+export function useSmartFixHpxTunnel() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: smartFixHpxTunnel,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['hpx-tunnels'] }),
   })
 }

@@ -209,7 +209,7 @@ class HpxTunnelAgentHeartbeatRequest(BaseModel):
 
 
 class HpxTunnelAgentAckRequest(BaseModel):
-    command: str = Field(min_length=1, max_length=16)
+    command: str = Field(min_length=1, max_length=32)
     status: HpxTunnelStatus | None = None
     message: str | None = Field(default=None, max_length=1024)
 
@@ -234,6 +234,22 @@ class HpxTunnelRepairResponse(BaseModel):
     actions_taken: list[str]
     issues: list[HpxHealIssueResponse]
     message: str | None = None
+
+
+class HpxDoctorStepResponse(BaseModel):
+    title: str
+    detail: str
+    ok: bool = True
+
+
+class HpxTunnelSmartFixResponse(BaseModel):
+    tunnel: HpxTunnelResponse
+    fixed: bool
+    summary: str
+    steps: list[HpxDoctorStepResponse]
+    findings: list[str]
+    actions: list[str]
+    related_nodes: list[dict] = Field(default_factory=list)
 
 
 class HpxPreflightResponse(BaseModel):

@@ -27,6 +27,7 @@ import {
   useStartHpxTunnel,
   useStopHpxTunnel,
   useRepairHpxTunnel,
+  useSmartFixHpxTunnel,
   getHpxTunnelLogs,
 } from '@/service/api/hpx-tunnels'
 import { hasPermission } from '@/utils/rbac'
@@ -53,6 +54,7 @@ export default function HpxTunnelsList() {
   const deleteMutation = useDeleteHpxTunnel()
   const joinTokenMutation = useRegenerateHpxTunnelJoinToken()
   const repairMutation = useRepairHpxTunnel()
+  const smartFixMutation = useSmartFixHpxTunnel()
   const [logsOpen, setLogsOpen] = useState(false)
   const [logsTunnel, setLogsTunnel] = useState<HpxTunnelResponse | null>(null)
   const [logsText, setLogsText] = useState('')
@@ -88,7 +90,13 @@ export default function HpxTunnelsList() {
   }, [data?.tunnels])
 
   const actionLoading =
-    startMutation.isPending || stopMutation.isPending || restartMutation.isPending || joinTokenMutation.isPending || deleteMutation.isPending || repairMutation.isPending
+    startMutation.isPending ||
+    stopMutation.isPending ||
+    restartMutation.isPending ||
+    joinTokenMutation.isPending ||
+    deleteMutation.isPending ||
+    repairMutation.isPending ||
+    smartFixMutation.isPending
 
   const runAction = async (label: string, fn: () => Promise<{ message?: string | null }>) => {
     try {
@@ -136,16 +144,17 @@ export default function HpxTunnelsList() {
 
   const diagnoseRepair = async (id: number) => {
     try {
-      const result = await repairMutation.mutateAsync(id)
-      if (result.repaired) {
-        toast.success(t('hpxTunnel.repairSuccess', { defaultValue: 'Repair applied' }), {
-          description: result.message || result.actions_taken.join(', '),
+      const result = await smartFixMutation.mutateAsync(id)
+      const steps = result.steps?.map(s => `${s.ok ? '✓' : '✗'} ${s.title}: ${s.detail}`).join('\n')
+      if (result.fixed) {
+        toast.success(t('hpxTunnel.smartFixSuccess', { defaultValue: 'Smart fix applied' }), {
+          description: result.summary || steps,
+          duration: 12000,
         })
-      } else if (result.issues.length === 0) {
-        toast.info(t('hpxTunnel.diagnoseOk', { defaultValue: 'No issues detected' }))
       } else {
-        toast.warning(t('hpxTunnel.repairSkipped', { defaultValue: 'Could not repair' }), {
-          description: result.message || result.issues.map(i => i.message).join('; '),
+        toast.warning(t('hpxTunnel.smartFixPartial', { defaultValue: 'Smart fix needs attention' }), {
+          description: [result.summary, ...(result.findings || [])].filter(Boolean).join('\n'),
+          duration: 12000,
         })
       }
       await refetch()

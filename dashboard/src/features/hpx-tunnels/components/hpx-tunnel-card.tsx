@@ -93,7 +93,7 @@ export default function HpxTunnelCard({
             {onDiagnoseRepair && (
               <Button size="sm" variant="secondary" disabled={actionLoading} onClick={() => onDiagnoseRepair(tunnel.id)}>
                 <Stethoscope className="size-3.5" />
-                {t('hpxTunnel.diagnoseRepair', { defaultValue: 'Diagnose & Repair' })}
+                {t('hpxTunnel.diagnoseRepair', { defaultValue: 'Smart Fix' })}
               </Button>
             )}
             {isForeignPanel && onViewLogs && (

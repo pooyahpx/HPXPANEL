@@ -675,6 +675,38 @@ cmd_sync() {
     return 0
   fi
 
+  # Panel doctor: full remote heal on Iran host (allowlisted steps only).
+  if [ "$command" = "smart_fix" ] || [ "$command" = "diagnose" ]; then
+    local container iface remote_ip local_ip peer loss_info
+    container=$(echo "$cfg" | jq -r '.container_name')
+    iface=$(echo "$cfg" | jq -r '.interface')
+    remote_ip=$(echo "$cfg" | jq -r '.remote_ip // empty')
+    local_ip=$(echo "$cfg" | jq -r '.local_ip // empty')
+    sysctl -w net.ipv4.icmp_echo_ignore_all=1 >/dev/null 2>&1 || true
+    sysctl -w net.ipv4.ip_forward=1 >/dev/null 2>&1 || true
+    stop_conflicting_tunnels "$container" "$iface"
+    if [ "$command" = "smart_fix" ]; then
+      start_tunnel_from_config "$cfg"
+      peer="$(peer_tunnel_ip "$local_ip")"
+      loss_info="$(measure_peer_ping "$peer")"
+      ack_command "smart_fix" "running" "doctor: sysctl+conflict+restart peer=${peer} ping=${loss_info}"
+      heartbeat "running" "doctor smart_fix ok" >/dev/null || true
+    else
+      peer="$(peer_tunnel_ip "${LOCAL_IP:-$local_ip}")"
+      loss_info="$(measure_peer_ping "$peer")"
+      local running="false" icmp_ignore
+      icmp_ignore="$(sysctl -n net.ipv4.icmp_echo_ignore_all 2>/dev/null || echo '?')"
+      if [ -n "${CONTAINER_NAME:-$container}" ] && docker inspect -f '{{.State.Running}}' "${CONTAINER_NAME:-$container}" 2>/dev/null | grep -qi true; then
+        running="true"
+      fi
+      ack_command "diagnose" "running" "doctor diagnose: running=${running} icmp_ignore=${icmp_ignore} remote=${remote_ip} peer=${peer} ping=${loss_info}"
+      heartbeat "running" >/dev/null || true
+    fi
+    CONFIG_HASH="$hash"
+    write_env
+    return 0
+  fi
+
   local need_restart=0
   if [ "$hash" != "${CONFIG_HASH:-}" ]; then need_restart=1; fi
   if [ "$command" = "start" ] || [ "$command" = "restart" ]; then need_restart=1; fi

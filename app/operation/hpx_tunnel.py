@@ -207,19 +207,13 @@ class HpxTunnelOperation(BaseOperation):
         ping: bool = True,
     ) -> HpxTunnel:
         if is_agent_managed(db_tunnel) or db_tunnel.status == HpxTunnelStatus.pending_claim:
-            target = health_ping_target(db_tunnel)
-            if ping and target:
-                latency_ms, packet_loss_pct = await ping_host(target)
-                return await update_hpx_tunnel(
-                    db,
-                    db_tunnel,
-                    {
-                        "latency_ms": latency_ms,
-                        "packet_loss_pct": packet_loss_pct,
-                        "last_health_check": dt.now(UTC),
-                    },
-                )
-            return db_tunnel
+            # Iran agent owns latency/loss via heartbeat — panel must NOT ping 10.200.200.x
+            # (that address only exists on the Iran/Node hosts, so panel always sees 100% loss).
+            return await update_hpx_tunnel(
+                db,
+                db_tunnel,
+                {"last_health_check": dt.now(UTC)},
+            )
 
         runtime = await inspect_runtime(db_tunnel)
         latency_ms = db_tunnel.latency_ms

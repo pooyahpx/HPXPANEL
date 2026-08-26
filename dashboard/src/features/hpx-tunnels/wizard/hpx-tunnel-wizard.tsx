@@ -8,19 +8,21 @@ import useDirDetection from '@/hooks/use-dir-detection'
 import useDynamicErrorHandler from '@/hooks/use-dynamic-errors'
 import HpxJoinTokenDialog, { type JoinTokenPayload } from '@/features/hpx-tunnels/dialogs/hpx-join-token-dialog'
 import { cn } from '@/lib/utils'
+import { getNodes, type NodeResponse } from '@/service/api'
 import {
   createHpxTunnel,
   getHpxTunnelPreflight,
   getHpxPanelPublicIp,
   type HpxPreflightResponse,
 } from '@/service/api/hpx-tunnels'
-import { Check, RefreshCw, Server, Shield, Sparkles } from 'lucide-react'
+import { Check, Server, Shield, Sparkles } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 interface HpxTunnelWizardProps {
   open: boolean
@@ -54,6 +56,8 @@ export default function HpxTunnelWizard({ open, onOpenChange, onSuccess }: HpxTu
   const [busy, setBusy] = useState(false)
   const [preflight, setPreflight] = useState<HpxPreflightResponse | null>(null)
   const [panelIp, setPanelIp] = useState<string | null>(null)
+  const [nodes, setNodes] = useState<NodeResponse[]>([])
+  const [foreignHost, setForeignHost] = useState<'panel' | 'node'>('node')
   const [sharedPassword, setSharedPassword] = useState('')
   const [foreignTunnelId, setForeignTunnelId] = useState<number | null>(null)
   const [joinPayload, setJoinPayload] = useState<JoinTokenPayload | null>(null)
@@ -73,13 +77,13 @@ export default function HpxTunnelWizard({ open, onOpenChange, onSuccess }: HpxTu
     () => [
       {
         id: 0,
-        label: t('hpxTunnel.wizard.foreignStep', { defaultValue: 'FOREIGN (this server)' }),
-        hint: t('hpxTunnel.wizard.foreignHint', { defaultValue: 'Panel host · ICMP listen' }),
+        label: t('hpxTunnel.wizard.foreignStep', { defaultValue: 'FOREIGN host' }),
+        hint: t('hpxTunnel.wizard.foreignHint', { defaultValue: 'Panel or Node VPS' }),
       },
       {
         id: 1,
         label: t('hpxTunnel.wizard.iranStep', { defaultValue: 'IRAN (VPS agent)' }),
-        hint: t('hpxTunnel.wizard.iranHint', { defaultValue: 'Join token · remote IP' }),
+        hint: t('hpxTunnel.wizard.iranHint', { defaultValue: 'Join token · Node IP' }),
       },
       {
         id: 2,
@@ -94,18 +98,24 @@ export default function HpxTunnelWizard({ open, onOpenChange, onSuccess }: HpxTu
     if (!open) return
     setStep(0)
     setForeignTunnelId(null)
+    setForeignHost('node')
     const pwd = generatePassword()
     setSharedPassword(pwd)
     foreignForm.reset({ name: 'hpx_foreign', password: pwd })
     iranForm.reset({ name: 'hpx_iran', remote_ip: '' })
     ;(async () => {
       try {
-        const [pf, ipRes] = await Promise.all([getHpxTunnelPreflight(), getHpxPanelPublicIp()])
+        const [pf, ipRes, nodesRes] = await Promise.all([
+          getHpxTunnelPreflight(),
+          getHpxPanelPublicIp(),
+          getNodes({ limit: 200 }),
+        ])
         setPreflight(pf)
-        if (ipRes.ip) {
-          setPanelIp(ipRes.ip)
-          iranForm.setValue('remote_ip', ipRes.ip)
-        }
+        if (ipRes.ip) setPanelIp(ipRes.ip)
+        const list = nodesRes?.nodes ?? []
+        setNodes(list)
+        const preferred = list.find(n => n.status === 'connected') || list[0]
+        if (preferred?.address) iranForm.setValue('remote_ip', preferred.address)
       } catch {
         setPreflight(null)
       }
@@ -218,76 +228,132 @@ export default function HpxTunnelWizard({ open, onOpenChange, onSuccess }: HpxTu
             <div className="space-y-4">
               <div className="rounded-lg border border-blue-500/30 bg-blue-500/5 px-4 py-3 text-sm">
                 <p className="font-medium text-blue-700 dark:text-blue-300">
-                  {t('hpxTunnel.wizard.foreignBanner', {
-                    defaultValue: 'FOREIGN runs on this panel server — ICMP only, no open port required.',
+                  {t('hpxTunnel.wizard.foreignWhere', {
+                    defaultValue: 'Where does FOREIGN run? Usually on a Node VPS — not the panel.',
                   })}
                 </p>
-                {preflight && (
-                  <p className="text-muted-foreground mt-1 text-xs">
-                    {preflight.ready
-                      ? t('hpxTunnel.wizard.preflightOk', { defaultValue: 'Docker + docker.sock + NET_ADMIN ready.' })
-                      : preflight.message || t('hpxTunnel.wizard.preflightBad', { defaultValue: 'Host preflight failed — check compose mounts.' })}
-                  </p>
-                )}
               </div>
 
-              <Form {...foreignForm}>
-                <form onSubmit={foreignForm.handleSubmit(createForeign)} className="space-y-4">
-                  <FormField
-                    control={foreignForm.control}
-                    name="name"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{t('name', { defaultValue: 'Name' })}</FormLabel>
-                        <FormControl>
-                          <Input {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={foreignForm.control}
-                    name="password"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{t('password', { defaultValue: 'Password' })}</FormLabel>
-                        <div className="flex gap-2">
-                          <FormControl>
-                            <PasswordInput {...field} dir="ltr" className="font-mono" />
-                          </FormControl>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="icon"
-                            onClick={() => field.onChange(generatePassword())}
-                            title={t('hpxTunnel.wizard.generatePassword', { defaultValue: 'Generate' })}
-                          >
-                            <Sparkles className="size-4" />
-                          </Button>
-                        </div>
-                        <p className="text-muted-foreground text-xs">
-                          {t('hpxTunnel.wizard.sharedPassword', { defaultValue: 'Same password will be used for IRAN in step 2.' })}
-                        </p>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <div className="text-muted-foreground grid gap-1 rounded-md border bg-muted/30 p-3 text-xs font-mono">
-                    <div>Listen: 0.0.0.0 · MTU: 1000 · Keepalive: 30s</div>
-                    <div>Local IP: 10.200.200.1 · Interface: hpx0</div>
-                  </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <Button
+                  type="button"
+                  variant={foreignHost === 'node' ? 'default' : 'outline'}
+                  className="h-auto flex-col items-start gap-1 py-3"
+                  onClick={() => setForeignHost('node')}
+                >
+                  <span className="font-semibold">{t('hpxTunnel.wizard.onNode', { defaultValue: 'On a Node / external VPS' })}</span>
+                  <span className="text-xs font-normal opacity-80">
+                    {t('hpxTunnel.wizard.onNodeHint', { defaultValue: 'Recommended — pick Node IP for IRAN remote' })}
+                  </span>
+                </Button>
+                <Button
+                  type="button"
+                  variant={foreignHost === 'panel' ? 'default' : 'outline'}
+                  className="h-auto flex-col items-start gap-1 py-3"
+                  onClick={() => setForeignHost('panel')}
+                >
+                  <span className="font-semibold">{t('hpxTunnel.wizard.onPanel', { defaultValue: 'On this panel server' })}</span>
+                  <span className="text-xs font-normal opacity-80">
+                    {t('hpxTunnel.wizard.onPanelHint', { defaultValue: 'Starts Docker FOREIGN here' })}
+                  </span>
+                </Button>
+              </div>
+
+              {foreignHost === 'node' ? (
+                <div className="space-y-4">
+                  <Form {...foreignForm}>
+                    <FormField
+                      control={foreignForm.control}
+                      name="password"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{t('password', { defaultValue: 'Shared password' })}</FormLabel>
+                          <div className="flex gap-2">
+                            <FormControl>
+                              <PasswordInput {...field} dir="ltr" className="font-mono" />
+                            </FormControl>
+                            <Button type="button" variant="outline" size="icon" onClick={() => field.onChange(generatePassword())}>
+                              <Sparkles className="size-4" />
+                            </Button>
+                          </div>
+                          <p className="text-muted-foreground text-xs">
+                            {t('hpxTunnel.wizard.nodeForeignCmd', {
+                              defaultValue: 'On the Node VPS run FOREIGN Docker with this password (listen 0.0.0.0, local 10.200.200.1).',
+                            })}
+                          </p>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </Form>
                   <div className="flex justify-end gap-2">
                     <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                       {t('cancel', { defaultValue: 'Cancel' })}
                     </Button>
-                    <LoaderButton type="submit" loading={busy}>
-                      <Server className="size-4" />
-                      {t('hpxTunnel.wizard.startForeign', { defaultValue: 'Start FOREIGN' })}
-                    </LoaderButton>
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        setSharedPassword(foreignForm.getValues('password'))
+                        setStep(1)
+                      }}
+                    >
+                      {t('hpxTunnel.wizard.nextIran', { defaultValue: 'Next: IRAN' })}
+                    </Button>
                   </div>
-                </form>
-              </Form>
+                </div>
+              ) : (
+                <Form {...foreignForm}>
+                  <form onSubmit={foreignForm.handleSubmit(createForeign)} className="space-y-4">
+                    {preflight && (
+                      <p className="text-muted-foreground text-xs">
+                        {preflight.ready
+                          ? t('hpxTunnel.wizard.preflightOk', { defaultValue: 'Docker + docker.sock + NET_ADMIN ready.' })
+                          : preflight.message || t('hpxTunnel.wizard.preflightBad', { defaultValue: 'Host preflight failed.' })}
+                      </p>
+                    )}
+                    <FormField
+                      control={foreignForm.control}
+                      name="name"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{t('name', { defaultValue: 'Name' })}</FormLabel>
+                          <FormControl>
+                            <Input {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={foreignForm.control}
+                      name="password"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{t('password', { defaultValue: 'Password' })}</FormLabel>
+                          <div className="flex gap-2">
+                            <FormControl>
+                              <PasswordInput {...field} dir="ltr" className="font-mono" />
+                            </FormControl>
+                            <Button type="button" variant="outline" size="icon" onClick={() => field.onChange(generatePassword())}>
+                              <Sparkles className="size-4" />
+                            </Button>
+                          </div>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <div className="flex justify-end gap-2">
+                      <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                        {t('cancel', { defaultValue: 'Cancel' })}
+                      </Button>
+                      <LoaderButton type="submit" loading={busy}>
+                        <Server className="size-4" />
+                        {t('hpxTunnel.wizard.startForeign', { defaultValue: 'Start FOREIGN on panel' })}
+                      </LoaderButton>
+                    </div>
+                  </form>
+                </Form>
+              )}
             </div>
           )}
 
@@ -295,7 +361,8 @@ export default function HpxTunnelWizard({ open, onOpenChange, onSuccess }: HpxTu
             <div className="space-y-4">
               <div className="rounded-lg border border-violet-500/30 bg-violet-500/5 px-4 py-3 text-sm">
                 {t('hpxTunnel.wizard.iranBanner', {
-                  defaultValue: 'IRAN uses the agent on your VPS. Remote IP = public IP of this panel server (FOREIGN). No port — only ICMP between the two IPs.',
+                  defaultValue:
+                    'IRAN Remote IP = public IP of the host running FOREIGN (usually a Node). Do not use panel IP unless FOREIGN runs on the panel.',
                 })}
               </div>
 
@@ -314,6 +381,30 @@ export default function HpxTunnelWizard({ open, onOpenChange, onSuccess }: HpxTu
                       </FormItem>
                     )}
                   />
+                  {nodes.length > 0 && (
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">
+                        {t('hpxTunnel.wizard.pickNode', { defaultValue: 'Pick Node (FOREIGN host)' })}
+                      </label>
+                      <Select
+                        onValueChange={value => {
+                          const node = nodes.find(n => String(n.id) === value)
+                          if (node?.address) iranForm.setValue('remote_ip', node.address)
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder={t('hpxTunnel.wizard.pickNodePlaceholder', { defaultValue: 'Select a node…' })} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {nodes.map(node => (
+                            <SelectItem key={node.id} value={String(node.id)}>
+                              {node.name} — {node.address} ({node.status})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                   <FormField
                     control={iranForm.control}
                     name="remote_ip"
@@ -324,30 +415,23 @@ export default function HpxTunnelWizard({ open, onOpenChange, onSuccess }: HpxTu
                           <FormControl>
                             <Input {...field} dir="ltr" className="font-mono" />
                           </FormControl>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="icon"
-                            onClick={async () => {
-                              try {
-                                const res = await getHpxPanelPublicIp()
-                                if (res.ip) {
-                                  field.onChange(res.ip)
-                                  setPanelIp(res.ip)
-                                }
-                              } catch {
-                                /* ignore */
-                              }
-                            }}
-                          >
-                            <RefreshCw className="size-4" />
-                          </Button>
+                          {panelIp && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => field.onChange(panelIp)}
+                              title={t('hpxTunnel.wizard.usePanelIp', { defaultValue: 'Use panel IP' })}
+                            >
+                              Panel
+                            </Button>
+                          )}
                         </div>
-                        {panelIp && (
-                          <p className="text-muted-foreground text-xs">
-                            {t('hpxTunnel.wizard.panelIpHint', { defaultValue: 'Suggested panel public IP: {{ip}}', ip: panelIp })}
-                          </p>
-                        )}
+                        <p className="text-muted-foreground text-xs">
+                          {t('hpxTunnel.wizard.remoteIpHint', {
+                            defaultValue: 'Must match the VPS where FOREIGN Docker listens (Node IP preferred).',
+                          })}
+                        </p>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -376,7 +460,13 @@ export default function HpxTunnelWizard({ open, onOpenChange, onSuccess }: HpxTu
                   {t('hpxTunnel.wizard.doneTitle', { defaultValue: 'Tunnels configured' })}
                 </p>
                 <ul className="text-muted-foreground mt-2 list-inside list-disc space-y-1 text-xs">
-                  <li>{t('hpxTunnel.wizard.checklistForeign', { defaultValue: 'FOREIGN is running on this panel server.' })}</li>
+                  <li>
+                    {foreignHost === 'node'
+                      ? t('hpxTunnel.wizard.checklistNodeForeign', {
+                          defaultValue: 'FOREIGN Docker must run on the Node VPS (same password, 10.200.200.1).',
+                        })
+                      : t('hpxTunnel.wizard.checklistForeign', { defaultValue: 'FOREIGN is running on this panel server.' })}
+                  </li>
                   <li>{t('hpxTunnel.wizard.checklistAgent', { defaultValue: 'Run the Iran agent installer once — paste the join token when asked.' })}</li>
                   <li>{t('hpxTunnel.wizard.checklistPing', { defaultValue: 'Ping 10.200.200.x between ends after agent connects.' })}</li>
                 </ul>

@@ -89,14 +89,16 @@ async def hpx_tunnel_checker_job():
                     if not is_agent_managed(db_tunnel):
                         await _attempt_failover(db, db_tunnel)
 
-                target = health_ping_target(db_tunnel)
-                if target:
-                    latency, loss = await ping_host(target)
-                    await update_hpx_tunnel(
-                        db,
-                        db_tunnel,
-                        {"latency_ms": latency, "packet_loss_pct": loss, "last_health_check": dt.now(UTC)},
-                    )
+                # Agent-managed IRAN: metrics come from heartbeat only.
+                if not is_agent_managed(db_tunnel):
+                    target = health_ping_target(db_tunnel)
+                    if target:
+                        latency, loss = await ping_host(target)
+                        await update_hpx_tunnel(
+                            db,
+                            db_tunnel,
+                            {"latency_ms": latency, "packet_loss_pct": loss, "last_health_check": dt.now(UTC)},
+                        )
 
                 if db_tunnel.auto_heal_enabled and db_tunnel.status not in {
                     HpxTunnelStatus.stopped,

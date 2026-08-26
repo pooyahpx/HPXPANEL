@@ -32,6 +32,9 @@ _OLD_STATUS_VALUES = (
     "unhealthy",
 )
 
+_old_status = sa.Enum(*_OLD_STATUS_VALUES, name="hpxtunnelstatus")
+_new_status = sa.Enum(*_STATUS_VALUES, name="hpxtunnelstatus")
+
 
 def _mysql_status_enum(values: tuple[str, ...]) -> str:
     members = ", ".join(f"'{value}'" for value in values)
@@ -46,6 +49,16 @@ def upgrade() -> None:
         op.execute("ALTER TYPE hpxtunnelstatus ADD VALUE IF NOT EXISTS 'pending_claim'")
     elif dialect in {"mysql", "mariadb"}:
         op.execute(_mysql_status_enum(_STATUS_VALUES))
+    elif dialect == "sqlite":
+        # SQLite stores Enum as VARCHAR(len(longest)); pending_claim widens it.
+        with op.batch_alter_table("hpx_tunnels", schema=None) as batch_op:
+            batch_op.alter_column(
+                "status",
+                existing_type=_old_status,
+                type_=_new_status,
+                existing_nullable=False,
+                existing_server_default="stopped",
+            )
 
     # SQLite cannot ALTER constraints in-place — use batch mode for all dialects.
     with op.batch_alter_table("hpx_tunnels", schema=None) as batch_op:
@@ -92,3 +105,12 @@ def downgrade() -> None:
         op.execute("DROP TYPE hpxtunnelstatus_old")
     elif dialect in {"mysql", "mariadb"}:
         op.execute(_mysql_status_enum(_OLD_STATUS_VALUES))
+    elif dialect == "sqlite":
+        with op.batch_alter_table("hpx_tunnels", schema=None) as batch_op:
+            batch_op.alter_column(
+                "status",
+                existing_type=_new_status,
+                type_=_old_status,
+                existing_nullable=False,
+                existing_server_default="stopped",
+            )

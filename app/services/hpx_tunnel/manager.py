@@ -10,7 +10,7 @@ from app.utils.logger import get_logger
 
 logger = get_logger("hpx-tunnel-manager")
 
-DEFAULT_IMAGE = "stormotron/narnia:0.0.3"
+DEFAULT_IMAGE = "pooyahpx/hpx-icmp:0.0.3"
 _CONTAINER_PREFIX = "hpx_tunnel_"
 
 

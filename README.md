@@ -66,7 +66,7 @@ Most ICMP tunnel tools are CLI-only, single-instance, zero observability.
 | **Port forwarding** | IRAN-side DNAT rules from the dashboard |
 | **Encrypted secrets** | Tunnel password stored encrypted — not plaintext in DB |
 | **RBAC** | Granular `hpx_tunnels` permissions per admin role |
-| **Branded core** | `ghcr.io/pooyahpx/hpx-icmp` · interface `hpx0` · container `hpx_tunnel_*` |
+| **Branded core** | `pooyahpx/hpx-icmp` · interface `hpx0` · container `hpx_tunnel_*` |
 
 **Route:** `HPX ICMP` (sidebar) · **API:** `/api/hpx_tunnel`
 

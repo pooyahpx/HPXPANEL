@@ -24,9 +24,11 @@ BIN_LINK="${BIN_LINK:-/usr/local/bin/hpx-tunnel-agent}"
 SERVICE_NAME="${SERVICE_NAME:-hpx-tunnel-agent}"
 TIMER_NAME="${TIMER_NAME:-hpx-tunnel-agent.timer}"
 SCRIPT_SRC="${BASH_SOURCE[0]:-$0}"
-DEFAULT_IMAGE="${DEFAULT_IMAGE:-stormotron/narnia:0.0.3}"
-FALLBACK_IMAGE="${FALLBACK_IMAGE:-stormotron/narnia:0.0.3}"
-BRANDED_IMAGE="${BRANDED_IMAGE:-ghcr.io/pooyahpx/hpx-icmp:0.0.3}"
+DEFAULT_IMAGE="${DEFAULT_IMAGE:-pooyahpx/hpx-icmp:0.0.3}"
+FALLBACK_IMAGE="${FALLBACK_IMAGE:-pooyahpx/hpx-icmp:0.0.3}"
+# Silent upstream source only if branded image is missing (never shown as default).
+UPSTREAM_IMAGE="${UPSTREAM_IMAGE:-stormotron/narnia:0.0.3}"
+BRANDED_IMAGE="${BRANDED_IMAGE:-pooyahpx/hpx-icmp:0.0.3}"
 
 if [ -t 1 ]; then
   c_grn='\033[0;32m'; c_yel='\033[0;33m'; c_red='\033[0;31m'
@@ -264,26 +266,30 @@ pull_image() {
   local candidate
 
   # Prefer an image that already exists locally (e.g. after manual tag).
-  for candidate in "$wanted" "$BRANDED_IMAGE" "$FALLBACK_IMAGE" "$DEFAULT_IMAGE"; do
+  for candidate in "$wanted" "$BRANDED_IMAGE" "$FALLBACK_IMAGE" "$DEFAULT_IMAGE" "$UPSTREAM_IMAGE"; do
     [ -n "$candidate" ] || continue
     if docker image inspect "$candidate" >/dev/null 2>&1; then
       log "using local image ${candidate}"
-      # Keep panel-requested name available for next runs when possible.
+      # Always expose as HPX-branded name when possible.
       if [ "$candidate" != "$wanted" ]; then
         docker tag "$candidate" "$wanted" 2>/dev/null || true
+      fi
+      if [ "$wanted" != "$BRANDED_IMAGE" ]; then
+        docker tag "$wanted" "$BRANDED_IMAGE" 2>/dev/null || true
       fi
       echo "$wanted"
       return 0
     fi
   done
 
-  for candidate in "$wanted" "$FALLBACK_IMAGE" "$DEFAULT_IMAGE"; do
+  for candidate in "$wanted" "$BRANDED_IMAGE" "$FALLBACK_IMAGE" "$DEFAULT_IMAGE" "$UPSTREAM_IMAGE"; do
     [ -n "$candidate" ] || continue
     log "pulling ${candidate}"
     if docker pull "$candidate" >/dev/null 2>&1; then
+      docker tag "$candidate" "$wanted" 2>/dev/null || true
+      docker tag "$candidate" "$BRANDED_IMAGE" 2>/dev/null || true
       if [ "$candidate" != "$wanted" ]; then
-        docker tag "$candidate" "$wanted" 2>/dev/null || true
-        log "tagged ${candidate} -> ${wanted}"
+        log "tagged as ${wanted}"
       fi
       echo "$wanted"
       return 0
@@ -291,16 +297,22 @@ pull_image() {
     warn "pull denied/failed: ${candidate}"
   done
 
-  die "Cannot download tunnel image (registry denied from this server).
+  die "Cannot download HPX tunnel image.
 
-Run these on Iran, then get a NEW join token from the panel:
+On a server that CAN pull Docker Hub, build/publish the branded image once:
 
-  docker pull ${FALLBACK_IMAGE}
-  docker tag ${FALLBACK_IMAGE} ${wanted}
-  docker tag ${FALLBACK_IMAGE} ${BRANDED_IMAGE}
+  docker pull ${UPSTREAM_IMAGE}
+  docker tag ${UPSTREAM_IMAGE} ${BRANDED_IMAGE}
+  docker push ${BRANDED_IMAGE}
 
-Or in panel → edit IRAN tunnel → set Docker image to:
-  ${FALLBACK_IMAGE}
+Or on this Iran server (one-time):
+
+  docker pull ${UPSTREAM_IMAGE}
+  docker tag ${UPSTREAM_IMAGE} ${BRANDED_IMAGE}
+  docker tag ${UPSTREAM_IMAGE} ${wanted}
+
+Then set panel Docker image to: ${BRANDED_IMAGE}
+and join again with a NEW token.
 "
 }
 

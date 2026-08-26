@@ -66,7 +66,7 @@
 | **Port forwarding** | قوانین DNAT سمت IRAN از داشبورد |
 | **رمز امن** | password تونل رمزنگاری‌شده در DB |
 | **RBAC** | دسترسی `hpx_tunnels` برای هر نقش ادمین |
-| **برند HPX** | `ghcr.io/pooyahpx/hpx-icmp` · اینترفیس `hpx0` |
+| **برند HPX** | `pooyahpx/hpx-icmp` · اینترفیس `hpx0` |
 
 **مسیر:** `HPX ICMP` (سایدبار) · **API:** `/api/hpx_tunnel`
 

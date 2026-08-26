@@ -135,7 +135,7 @@ export default function HpxPulseWizard({ open, onOpenChange, onCreated }: Props)
           <DialogTitle>{t('hpxPulse.wizard.title', { defaultValue: 'HPX Pulse Advisor' })}</DialogTitle>
           <DialogDescription>
             {t('hpxPulse.wizard.description', {
-              defaultValue: 'Smart profile picker for BackPack Direct + Reality front on Iran.',
+              defaultValue: 'Smart profile picker for HPX Direct + Reality front on Iran.',
             })}
           </DialogDescription>
         </DialogHeader>
@@ -227,7 +227,7 @@ export default function HpxPulseWizard({ open, onOpenChange, onCreated }: Props)
               </div>
               <p className="text-muted-foreground text-xs">
                 {t('hpxPulse.portForwardsHint', {
-                  defaultValue: 'BackPack syntax on Iran: 443, 443=8443, or 443=10.0.0.5:8443. Empty internal IP uses tunnel peer.',
+                  defaultValue: 'HPX Direct on Iran: 443, 443=8443, or 443=10.0.0.5:8443. Empty internal IP uses tunnel peer.',
                 })}
               </p>
               {form.watch('port_forwards').map((_, index) => (

@@ -16,6 +16,13 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
+function statusVariant(status: string): 'default' | 'secondary' | 'destructive' | 'outline' {
+  if (status === 'running') return 'default'
+  if (status === 'partial' || status === 'starting' || status === 'pending_claim') return 'secondary'
+  if (status === 'error' || status === 'unhealthy') return 'destructive'
+  return 'outline'
+}
+
 function PulseCard({
   pulse,
   onDelete,
@@ -36,10 +43,12 @@ function PulseCard({
           <div className="flex items-center gap-2">
             <Zap className="text-primary size-4" />
             <span className="font-semibold">{pulse.name}</span>
-            <Badge variant="outline">{pulse.status}</Badge>
+            <Badge variant={statusVariant(pulse.status)}>
+              {t(`hpxPulse.status.${pulse.status}`, { defaultValue: pulse.status })}
+            </Badge>
           </div>
           <p className="text-muted-foreground mt-1 text-xs">
-            {pulse.profile_id} · {pulse.carrier || '—'} · {pulse.preset}
+            HPX Direct · {pulse.profile_id} · {pulse.carrier || '—'} · {pulse.preset}
           </p>
         </div>
         <div className="flex gap-1">
@@ -52,8 +61,20 @@ function PulseCard({
         </div>
       </div>
       <div className="text-muted-foreground grid gap-1 text-xs sm:grid-cols-2">
-        <span>IR {pulse.iran_public_ip} {pulse.iran_claimed ? '✓' : '…'}</span>
-        <span>KH {pulse.abroad_public_ip} {pulse.abroad_claimed ? '✓' : '…'}</span>
+        <span>
+          {t('hpxPulse.iranAgent', { defaultValue: 'Iran agent' })}:{' '}
+          {pulse.iran_claimed
+            ? t('hpxPulse.agentConnected', { defaultValue: 'connected' })
+            : t('hpxPulse.agentWaiting', { defaultValue: 'waiting' })}
+          {pulse.iran_agent_host ? ` (${pulse.iran_agent_host})` : ''}
+        </span>
+        <span>
+          {t('hpxPulse.abroadAgent', { defaultValue: 'Abroad agent' })}:{' '}
+          {pulse.abroad_claimed
+            ? t('hpxPulse.agentConnected', { defaultValue: 'connected' })
+            : t('hpxPulse.agentWaiting', { defaultValue: 'waiting' })}
+          {pulse.abroad_agent_host ? ` (${pulse.abroad_agent_host})` : ''}
+        </span>
         <span>{t('hpxPulse.tunnelPort', { defaultValue: 'Tunnel port' })}: {pulse.control_port}</span>
         {pulse.port_forwards?.length ? (
           <span>{t('hpxPulse.portForwards', { defaultValue: 'Port forwards' })}: {pulse.port_forwards.join(', ')}</span>

@@ -2152,7 +2152,7 @@
   },
   "hpxPulse": {
     "title": "HPX Pulse",
-    "description": "مشاور هوشمند BackPack Direct — انتخاب پروفایل stealth/speed، نصب agent ایران و خارج، چک‌لیست Reality.",
+    "description": "مشاور هوشمند HPX Direct — انتخاب پروفایل stealth/speed، نصب agent ایران و خارج، چک‌لیست Reality.",
     "add": "Pulse جدید",
     "create": "ساخت Pulse",
     "advise": "دریافت پیشنهاد",
@@ -2167,14 +2167,18 @@
     "externalPort": "خارجی",
     "internalIp": "IP داخلی (اختیاری)",
     "internalPort": "پورت داخلی",
-    "portForwardsHint": "BackPack روی ایران: 443، 443=8443 یا 443=10.0.0.5:8443. IP خالی = peer تونل (خارج).",
+    "portForwardsHint": "HPX Direct روی ایران: 443، 443=8443 یا 443=10.0.0.5:8443. IP خالی = peer تونل (خارج).",
+    "iranAgent": "Agent ایران",
+    "abroadAgent": "Agent خارج",
+    "agentConnected": "متصل",
+    "agentWaiting": "منتظر",
     "summary": "{{total}} تونل Pulse",
     "empty": "هنوز تونل Pulse ندارید. با ویزارد مشاور یکی بسازید.",
     "installCommands": "دستور نصب",
     "regenerate": "توکن‌ها",
     "wizard": {
       "title": "مشاور HPX Pulse",
-      "description": "مشخصات سرور را وارد کنید، پروفایل BackPack Direct با دلیل ببینید، سپس agent ایران و خارج را deploy کنید."
+      "description": "مشخصات سرور را وارد کنید، پروفایل HPX Direct با دلیل ببینید، سپس agent ایران و خارج را deploy کنید."
     },
     "status": {
       "pending_claim": "منتظر agent",

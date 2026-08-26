@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# HPX Pulse Agent — installs BackPack L3 config from panel advisor
+# HPX Pulse Agent — deploys HPX Direct (L3) tunnel config from panel advisor
 #
 # Iran:
 #   curl -fsSL .../hpx-pulse-agent.sh | sudo bash -s -- join TOKEN --panel-url URL --side iran
@@ -17,11 +17,12 @@ ENV_FILE="$ETC_DIR/agent.env"
 BIN_LINK="${BIN_LINK:-/usr/local/bin/hpx-pulse-agent}"
 SERVICE_NAME="${SERVICE_NAME:-hpx-pulse-agent}"
 TIMER_NAME="${TIMER_NAME:-hpx-pulse-agent.timer}"
-BACKPACK_INSTALL="bash <(curl -fsSL https://raw.githubusercontent.com/AminMGMT/BackPack/main/install.sh)"
+TUNNEL_SERVICE="${TUNNEL_SERVICE:-hpx-pulse-tunnel}"
+ENGINE_INSTALL="bash <(curl -fsSL https://raw.githubusercontent.com/AminMGMT/BackPack/main/install.sh)"
 
-log()  { echo "[+] $*" >&2; }
-warn() { echo "[!] $*" >&2; }
-die()  { echo "[x] $*" >&2; exit 1; }
+log()  { echo "[HPX Pulse] $*" >&2; }
+warn() { echo "[HPX Pulse !] $*" >&2; }
+die()  { echo "[HPX Pulse x] $*" >&2; exit 1; }
 has()  { command -v "$1" >/dev/null 2>&1; }
 
 need_root() { [ "$(id -u)" -eq 0 ] || die "run as root (sudo)"; }
@@ -73,12 +74,13 @@ AGENT_KEY=${AGENT_KEY:-}
 PULSE_SIDE=${PULSE_SIDE:-}
 PULSE_ID=${PULSE_ID:-}
 CONFIG_HASH=${CONFIG_HASH:-}
+TUNNEL_CFG=${TUNNEL_CFG:-}
 EOF
   chmod 600 "$ENV_FILE"
 }
 
 load_env() {
-  [ -f "$ENV_FILE" ] || die "agent not configured"
+  [ -f "$ENV_FILE" ] || die "agent not configured — run join first"
   # shellcheck disable=SC1090
   set -a; source "$ENV_FILE"; set +a
 }
@@ -91,36 +93,76 @@ api() {
   curl "${args[@]}" "$url"
 }
 
-ensure_backpack() {
+ensure_engine() {
   if has backpack; then
     return 0
   fi
-  log "Installing BackPack (one-time)..."
-  eval "$BACKPACK_INSTALL" </dev/null || die "BackPack install failed"
-  has backpack || die "backpack binary not found after install"
+  log "Installing HPX tunnel engine (one-time dependency)..."
+  # BackPack binary powers HPX Direct L3 under the hood; user-facing name is HPX Pulse.
+  eval "$ENGINE_INSTALL" </dev/null || die "HPX tunnel engine install failed"
+  has backpack || die "tunnel engine binary missing after install"
 }
 
-apply_backpack_toml() {
+tunnel_cfg_path() {
+  echo "${ETC_DIR}/l3-pulse-${PULSE_ID:-0}.toml"
+}
+
+tunnel_iface_up() {
+  ip link show bp0 2>/dev/null | grep -qE 'state (UP|UNKNOWN)' || return 1
+}
+
+tunnel_service_active() {
+  systemctl is-active --quiet "${TUNNEL_SERVICE}.service" 2>/dev/null
+}
+
+install_tunnel_systemd() {
+  local cfg="$1"
+  local engine_bin
+  engine_bin="$(command -v backpack)"
+  cat >"/etc/systemd/system/${TUNNEL_SERVICE}.service" <<EOF
+[Unit]
+Description=HPX Pulse Direct tunnel
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=${engine_bin} -c ${cfg}
+Restart=always
+RestartSec=5
+Nice=-5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  systemctl daemon-reload
+  systemctl enable "${TUNNEL_SERVICE}.service" >/dev/null
+  systemctl restart "${TUNNEL_SERVICE}.service"
+}
+
+apply_tunnel_config() {
   local toml="$1"
-  local cfg="/etc/backpack/l3-pulse-${PULSE_ID:-0}.toml"
-  mkdir -p /etc/backpack
+  local cfg
+  cfg="$(tunnel_cfg_path)"
+  mkdir -p "$ETC_DIR"
   printf '%s\n' "$toml" >"$cfg"
   chmod 600 "$cfg"
-  log "wrote BackPack config $cfg"
-  # BackPack reads per-tunnel service; operator starts via backpack CLI
-  if backpack --help 2>&1 | grep -qi l3; then
-    :
+  TUNNEL_CFG="$cfg"
+  log "wrote HPX tunnel config $cfg"
+  install_tunnel_systemd "$cfg"
+  sleep 2
+  if tunnel_service_active; then
+    log "HPX tunnel service started"
+  else
+    warn "HPX tunnel service not active yet — check: systemctl status ${TUNNEL_SERVICE}"
   fi
-  systemctl restart "backpack-l3-pulse-${PULSE_ID:-0}" 2>/dev/null || \
-    systemctl restart backpack 2>/dev/null || \
-    warn "start BackPack manually: sudo backpack (Manage → start tunnel)"
 }
 
-install_systemd() {
+install_agent_systemd() {
   cat >"/etc/systemd/system/${SERVICE_NAME}.service" <<EOF
 [Unit]
 Description=HPX Pulse Agent sync
-After=network-online.target docker.service
+After=network-online.target docker.service ${TUNNEL_SERVICE}.service
 Wants=network-online.target
 
 [Service]
@@ -147,6 +189,21 @@ EOF
   systemctl enable --now "$TIMER_NAME" >/dev/null
 }
 
+send_heartbeat() {
+  local running="false"
+  local iface="false"
+  tunnel_service_active && running="true"
+  tunnel_iface_up && iface="true"
+  api POST "/api/hpx_pulse/agent/heartbeat" \
+    "$(jq -nc \
+      --arg s "running" \
+      --arg h "$(hostname -f 2>/dev/null || hostname)" \
+      --argjson tr "$running" \
+      --argjson iu "$iface" \
+      '{status:$s, host:$h, backpack_running:$tr, iface_up:$iu, message:"HPX Pulse sync"}')" \
+    >/dev/null || warn "heartbeat to panel failed — check PANEL_URL and firewall"
+}
+
 cmd_join() {
   need_root
   ensure_deps
@@ -170,61 +227,66 @@ cmd_join() {
   host="$(hostname -f 2>/dev/null || hostname)"
   body=$(jq -nc --arg t "$token" --arg h "$host" --arg s "$side" '{join_token:$t, host:$h, side:$s}')
 
-  log "claiming pulse token (${side})..."
+  log "claiming join token (${side})..."
   claim=$(curl -fsSL -X POST -H "Content-Type: application/json" -d "$body" \
-    "${PANEL_URL}/api/hpx_pulse/agent/claim") || die "claim failed"
+    "${PANEL_URL}/api/hpx_pulse/agent/claim") || die "claim failed — check panel URL and token"
 
   AGENT_KEY=$(echo "$claim" | jq -r '.agent_key')
   PULSE_ID=$(echo "$claim" | jq -r '.pulse_id')
   CONFIG_HASH=$(echo "$claim" | jq -r '.config_hash')
-  [ -n "$AGENT_KEY" ] && [ "$AGENT_KEY" != "null" ] || die "missing agent_key"
+  [ -n "$AGENT_KEY" ] && [ "$AGENT_KEY" != "null" ] || die "missing agent_key from panel"
 
   install_self
   write_env
-  ensure_backpack
-  apply_backpack_toml "$(echo "$claim" | jq -r '.backpack_toml')"
-  install_systemd
+  ensure_engine
+  apply_tunnel_config "$(echo "$claim" | jq -r '.backpack_toml')"
+  write_env
+  install_agent_systemd
 
   api POST "/api/hpx_pulse/agent/ack" \
-    "$(jq -nc '{command:"start", status:"running", message:"pulse joined"}')" >/dev/null || true
-  log "Pulse agent ready (${side}) pulse_id=${PULSE_ID}"
+    "$(jq -nc '{command:"start", status:"running", message:"HPX Pulse joined"}')" >/dev/null || true
+  send_heartbeat
+  log "ready on ${side} — pulse_id=${PULSE_ID} (panel should show agent connected)"
 }
 
 cmd_sync() {
   need_root
   load_env
-  ensure_backpack
+  ensure_engine
   local cfg hash toml command
   cfg=$(api GET "/api/hpx_pulse/agent/config")
   hash=$(echo "$cfg" | jq -r '.config_hash')
   command=$(echo "$cfg" | jq -r '.agent_command // empty')
   toml=$(echo "$cfg" | jq -r '.backpack_toml')
 
-  if [ "$hash" != "${CONFIG_HASH:-}" ]; then
-    apply_backpack_toml "$toml"
+  if [ "$hash" != "${CONFIG_HASH:-}" ] || [ "$command" = "start" ] || [ "$command" = "restart" ]; then
+    apply_tunnel_config "$toml"
     CONFIG_HASH="$hash"
     write_env
-  fi
-
-  if [ "$command" = "start" ] || [ "$command" = "restart" ]; then
-    apply_backpack_toml "$toml"
     api POST "/api/hpx_pulse/agent/ack" \
-      "$(jq -nc --arg c "$command" '{command:$c, status:"running", message:"sync applied"}')" >/dev/null || true
+      "$(jq -nc --arg c "${command:-start}" '{command:$c, status:"running", message:"HPX config applied"}')" >/dev/null || true
   fi
 
-  local running="false"
-  has backpack && running="true"
-  api POST "/api/hpx_pulse/agent/heartbeat" \
-    "$(jq -nc --arg s "running" --arg h "$(hostname -f 2>/dev/null || hostname)" \
-      --argjson br "$running" '{status:$s, host:$h, backpack_running:$br}')" >/dev/null || true
+  send_heartbeat
 }
 
 cmd_status() {
   load_env 2>/dev/null || true
-  echo "panel : ${PANEL_URL:-not set}"
-  echo "side  : ${PULSE_SIDE:-?}"
-  echo "pulse : ${PULSE_ID:-?}"
-  has backpack && backpack --version 2>/dev/null || echo "backpack: not installed"
+  echo "HPX Pulse Agent"
+  echo "  panel : ${PANEL_URL:-not set}"
+  echo "  side  : ${PULSE_SIDE:-?}"
+  echo "  pulse : ${PULSE_ID:-?}"
+  echo "  config: ${TUNNEL_CFG:-$(tunnel_cfg_path 2>/dev/null || echo '?')}"
+  if tunnel_service_active; then
+    echo "  tunnel: running (${TUNNEL_SERVICE})"
+  else
+    echo "  tunnel: stopped"
+  fi
+  if tunnel_iface_up; then
+    echo "  iface : bp0 up"
+  else
+    echo "  iface : bp0 down"
+  fi
 }
 
 usage() {

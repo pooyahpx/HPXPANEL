@@ -315,13 +315,13 @@ class HpxPulseOperation(BaseOperation):
             db_pulse = await update_hpx_pulse(
                 db,
                 db_pulse,
-                {"status": HpxPulseStatus.starting, "message": "Both agents claimed — starting tunnel"},
+                {"status": HpxPulseStatus.starting, "message": "Both HPX agents connected — starting tunnel"},
             )
         else:
             db_pulse = await update_hpx_pulse(
                 db,
                 db_pulse,
-                {"status": HpxPulseStatus.partial, "message": f"{side} claimed — waiting for other side"},
+                {"status": HpxPulseStatus.partial, "message": f"{side} HPX agent connected — waiting for other side"},
             )
         await db.commit()
 
@@ -378,7 +378,12 @@ class HpxPulseOperation(BaseOperation):
             "message": model.message,
         }
         if model.status in {HpxPulseStatus.running.value, "running"} and db_pulse.iran_agent_key_hash and db_pulse.abroad_agent_key_hash:
-            update_data["status"] = HpxPulseStatus.running
+            if model.backpack_running or model.iface_up:
+                update_data["status"] = HpxPulseStatus.running
+                update_data["message"] = "HPX tunnel active"
+            elif db_pulse.status in {HpxPulseStatus.starting, HpxPulseStatus.partial}:
+                update_data["status"] = HpxPulseStatus.starting
+                update_data["message"] = f"{side} agent online — waiting for tunnel link"
         db_pulse = await update_hpx_pulse(db, db_pulse, update_data)
         await db.commit()
         return self._agent_config(db_pulse, side, token)

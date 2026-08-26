@@ -54,6 +54,10 @@ function PulseCard({
       <div className="text-muted-foreground grid gap-1 text-xs sm:grid-cols-2">
         <span>IR {pulse.iran_public_ip} {pulse.iran_claimed ? '✓' : '…'}</span>
         <span>KH {pulse.abroad_public_ip} {pulse.abroad_claimed ? '✓' : '…'}</span>
+        <span>{t('hpxPulse.tunnelPort', { defaultValue: 'Tunnel port' })}: {pulse.control_port}</span>
+        {pulse.port_forwards?.length ? (
+          <span>{t('hpxPulse.portForwards', { defaultValue: 'Port forwards' })}: {pulse.port_forwards.join(', ')}</span>
+        ) : null}
       </div>
       {top && (
         <p className="text-xs">{fa ? top.title_fa : top.title}</p>

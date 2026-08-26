@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import useDirDetection from '@/hooks/use-dir-detection'
 import useDynamicErrorHandler from '@/hooks/use-dynamic-errors'
 import { cn } from '@/lib/utils'
+import { toBackpackPortString } from '@/features/hpx-pulse/utils/port-forwards'
 import {
   useAdvisePulse,
   useCreateHpxPulse,
@@ -15,11 +16,17 @@ import {
   type PulseAdviseResponse,
 } from '@/service/api/hpx-pulse'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Sparkles } from 'lucide-react'
+import { Sparkles, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { z } from 'zod'
+
+const portForwardSchema = z.object({
+  external_port: z.coerce.number().int().min(1).max(65535),
+  internal_ip: z.string().max(45).optional().default(''),
+  internal_port: z.coerce.number().int().min(1).max(65535),
+})
 
 const schema = z.object({
   name: z.string().min(1).max(40),
@@ -30,6 +37,8 @@ const schema = z.object({
   ram_mb: z.coerce.number().int().min(256),
   udp_reachable: z.enum(['unknown', 'yes', 'no']),
   packet_loss_pct: z.coerce.number().min(0).max(100).optional(),
+  control_port: z.coerce.number().int().min(1024).max(65535),
+  port_forwards: z.array(portForwardSchema).default([]),
   domain: z.string().optional(),
   sni_hint: z.string().optional(),
 })
@@ -64,6 +73,8 @@ export default function HpxPulseWizard({ open, onOpenChange, onCreated }: Props)
       ram_mb: 1024,
       udp_reachable: 'unknown',
       packet_loss_pct: 0,
+      control_port: 9067,
+      port_forwards: [],
       domain: '',
       sni_hint: 'play.google.com',
     },
@@ -105,6 +116,8 @@ export default function HpxPulseWizard({ open, onOpenChange, onCreated }: Props)
         udp_reachable: values.udp_reachable === 'unknown' ? null : values.udp_reachable === 'yes',
         packet_loss_pct: values.packet_loss_pct,
         profile_id: selectedProfile ?? advice?.recommended_profile_id,
+        control_port: values.control_port,
+        port_forwards: values.port_forwards.map(toBackpackPortString),
         domain: values.domain || null,
         sni_hint: values.sni_hint || null,
       })
@@ -186,6 +199,71 @@ export default function HpxPulseWizard({ open, onOpenChange, onCreated }: Props)
                   <FormControl><Input {...field} dir="ltr" /></FormControl>
                 </FormItem>
               )} />
+              <FormField control={form.control} name="control_port" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('hpxPulse.tunnelPort', { defaultValue: 'Tunnel port' })}</FormLabel>
+                  <FormControl><Input type="number" {...field} dir="ltr" /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+            </div>
+
+            <div className="space-y-2 rounded-lg border p-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-medium">{t('hpxPulse.portForwards', { defaultValue: 'Port forwards' })}</p>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    form.setValue('port_forwards', [
+                      ...form.getValues('port_forwards'),
+                      { external_port: 443, internal_ip: '', internal_port: 443 },
+                    ])
+                  }
+                >
+                  {t('hpxPulse.addPortForward', { defaultValue: 'Add rule' })}
+                </Button>
+              </div>
+              <p className="text-muted-foreground text-xs">
+                {t('hpxPulse.portForwardsHint', {
+                  defaultValue: 'BackPack syntax on Iran: 443, 443=8443, or 443=10.0.0.5:8443. Empty internal IP uses tunnel peer.',
+                })}
+              </p>
+              {form.watch('port_forwards').map((_, index) => (
+                <div key={index} className="grid gap-2 sm:grid-cols-[1fr_1.2fr_1fr_auto]">
+                  <FormField control={form.control} name={`port_forwards.${index}.external_port`} render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs">{t('hpxPulse.externalPort', { defaultValue: 'External' })}</FormLabel>
+                      <FormControl><Input type="number" {...field} dir="ltr" /></FormControl>
+                    </FormItem>
+                  )} />
+                  <FormField control={form.control} name={`port_forwards.${index}.internal_ip`} render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs">{t('hpxPulse.internalIp', { defaultValue: 'Internal IP (optional)' })}</FormLabel>
+                      <FormControl><Input {...field} dir="ltr" placeholder="10.10.0.2" /></FormControl>
+                    </FormItem>
+                  )} />
+                  <FormField control={form.control} name={`port_forwards.${index}.internal_port`} render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs">{t('hpxPulse.internalPort', { defaultValue: 'Internal port' })}</FormLabel>
+                      <FormControl><Input type="number" {...field} dir="ltr" /></FormControl>
+                    </FormItem>
+                  )} />
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    className="mt-6"
+                    onClick={() => {
+                      const current = form.getValues('port_forwards')
+                      form.setValue('port_forwards', current.filter((_, i) => i !== index))
+                    }}
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
+                </div>
+              ))}
             </div>
 
             <Button type="button" variant="secondary" onClick={runAdvise} disabled={adviseMutation.isPending}>

@@ -160,6 +160,7 @@ AGENT_KEY=${AGENT_KEY:-}
 TUNNEL_ID=${TUNNEL_ID:-}
 CONTAINER_NAME=${CONTAINER_NAME:-}
 INTERFACE=${INTERFACE:-hpx0}
+LOCAL_IP=${LOCAL_IP:-10.200.200.2}
 CONFIG_HASH=${CONFIG_HASH:-}
 EOF
   chmod 600 "$ENV_FILE"
@@ -246,12 +247,56 @@ apply_port_forwards() {
 }
 
 assign_interface_ip() {
-  local iface="$1" local_ip="$2"
-  local cidr="$local_ip"
+  local iface="$1" local_ip="$2" mtu="${3:-}"
+  local cidr="$local_ip" i
   [[ "$cidr" == */* ]] || cidr="${local_ip}/24"
   sysctl -w net.ipv4.ip_forward=1 >/dev/null 2>&1 || true
-  ip addr add "$cidr" dev "$iface" 2>/dev/null || true
+
+  for i in $(seq 1 40); do
+    if ip link show dev "$iface" >/dev/null 2>&1; then
+      break
+    fi
+    sleep 0.5
+  done
+  if ! ip link show dev "$iface" >/dev/null 2>&1; then
+    die "tunnel interface ${iface} did not appear — check docker logs"
+  fi
+
+  ip addr flush dev "$iface" 2>/dev/null || true
+  ip addr add "$cidr" dev "$iface" 2>/dev/null || ip addr add "$cidr" dev "$iface" || true
+  if [ -n "$mtu" ] && [ "$mtu" != "null" ]; then
+    ip link set dev "$iface" mtu "$mtu" 2>/dev/null || true
+  fi
   ip link set "$iface" up 2>/dev/null || true
+
+  if ! ip -4 -o addr show dev "$iface" 2>/dev/null | grep -q 'inet '; then
+    die "failed to assign ${cidr} on ${iface}"
+  fi
+  log "interface ${iface} ready (${cidr})"
+}
+
+peer_tunnel_ip() {
+  local ip="$1"
+  ip="${ip%%/*}"
+  case "$ip" in
+    *.1) echo "${ip%.1}.2" ;;
+    *.2) echo "${ip%.2}.1" ;;
+    *) echo "" ;;
+  esac
+}
+
+measure_peer_ping() {
+  local peer="$1"
+  [ -n "$peer" ] || { echo "null null"; return 0; }
+  local out avg loss
+  out=$(ping -c 3 -W 2 "$peer" 2>/dev/null || true)
+  loss=$(echo "$out" | sed -n 's/.* \([0-9.]\+\)% packet loss.*/\1/p' | head -1)
+  avg=$(echo "$out" | sed -n 's/.*= [0-9.]\+\/\([0-9.]\+\)\/.*/\1/p' | head -1)
+  if [ -z "$avg" ]; then
+    echo "null ${loss:-100}"
+  else
+    echo "${avg} ${loss:-0}"
+  fi
 }
 
 stop_tunnel_container() {
@@ -259,6 +304,30 @@ stop_tunnel_container() {
   [ -n "$name" ] || return 0
   docker rm -f "$name" >/dev/null 2>&1 || true
 }
+
+# One host = one TAP name. Kill sibling HPX tunnel containers that would steal INTERFACE.
+stop_conflicting_tunnels() {
+  local keep="${1:-}" iface="${2:-}"
+  local id name env_iface
+  for id in $(docker ps -aq --filter name='hpx_tunnel' 2>/dev/null); do
+    name=$(docker inspect -f '{{.Name}}' "$id" 2>/dev/null | sed 's#^/##')
+    [ -n "$name" ] || continue
+    [ "$name" = "$keep" ] && continue
+    if [ -n "$iface" ]; then
+      env_iface=$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$id" 2>/dev/null | sed -n 's/^INTERFACE=//p' | head -1)
+      [ -n "$env_iface" ] && [ "$env_iface" != "$iface" ] && continue
+    fi
+    warn "removing conflicting tunnel container: ${name}"
+    docker rm -f "$id" >/dev/null 2>&1 || true
+  done
+  if [ -n "$iface" ] && ip link show dev "$iface" >/dev/null 2>&1; then
+    # Stale TAP left behind after a crashed container.
+    if ! docker ps -q --filter name='hpx_tunnel' | grep -q .; then
+      ip link delete "$iface" 2>/dev/null || true
+    fi
+  fi
+}
+
 
 pull_image() {
   local wanted="${1:-$DEFAULT_IMAGE}"
@@ -325,6 +394,7 @@ start_tunnel_from_config() {
   docker image inspect "$image" >/dev/null 2>&1 || die "image not available locally: ${image}"
 
   stop_tunnel_container "$container"
+  stop_conflicting_tunnels "$container" "$iface"
 
   local env_args=(-e "INTERFACE=${iface}" -e "PASSWORD=${password}" -e "KEEPALIVE=${keepalive}" -e "REMOTE_IP=${remote_ip}")
   [ -n "$mtu" ] && [ "$mtu" != "null" ] && env_args+=(-e "MTU=${mtu}")
@@ -341,7 +411,7 @@ start_tunnel_from_config() {
     "$image" >/dev/null
 
   sleep 2
-  assign_interface_ip "$iface" "$local_ip"
+  assign_interface_ip "$iface" "$local_ip" "$mtu"
   apply_port_forwards "$port_forwards"
 
   if ! docker inspect -f '{{.State.Running}}' "$container" 2>/dev/null | grep -qi true; then
@@ -351,6 +421,7 @@ start_tunnel_from_config() {
 
   CONTAINER_NAME="$container"
   INTERFACE="$iface"
+  LOCAL_IP="$local_ip"
   CONFIG_HASH=$(echo "$cfg" | jq -r '.config_hash // empty')
   TUNNEL_ID=$(echo "$cfg" | jq -r '.tunnel_id // empty')
   write_env
@@ -380,8 +451,10 @@ heartbeat() {
     bytes_up=$(cat "/sys/class/net/${INTERFACE}/statistics/tx_bytes" 2>/dev/null || echo 0)
     bytes_down=$(cat "/sys/class/net/${INTERFACE}/statistics/rx_bytes" 2>/dev/null || echo 0)
   fi
-  local host
+  local host latency_ms packet_loss_pct peer
   host="$(hostname -f 2>/dev/null || hostname)"
+  peer="$(peer_tunnel_ip "${LOCAL_IP:-}")"
+  read -r latency_ms packet_loss_pct <<<"$(measure_peer_ping "$peer")"
   local body
   body=$(jq -nc \
     --arg s "$status" \
@@ -391,7 +464,19 @@ heartbeat() {
     --argjson down "$bytes_down" \
     --argjson cr "$running" \
     --argjson iu "$iface_up" \
-    '{status:$s, host:$h, message:(if $m=="" then null else $m end), bytes_up:$up, bytes_down:$down, container_running:$cr, interface_up:$iu}')
+    --arg lat "$latency_ms" \
+    --arg loss "$packet_loss_pct" \
+    '{
+      status:$s,
+      host:$h,
+      message:(if $m=="" then null else $m end),
+      bytes_up:$up,
+      bytes_down:$down,
+      container_running:$cr,
+      interface_up:$iu,
+      latency_ms:(if $lat=="null" or $lat=="" then null else ($lat|tonumber) end),
+      packet_loss_pct:(if $loss=="null" or $loss=="" then null else ($loss|tonumber) end)
+    }')
   api POST "/api/hpx_tunnel/agent/heartbeat" "$body"
 }
 
@@ -474,7 +559,7 @@ wizard_manual() {
   iface=$(ask_val "Tunnel interface name" "hpx0")
   local_ip=$(ask_val "Local tunnel IP on this Iran server" "10.200.200.2")
   keepalive=$(ask_val "Keepalive seconds" "5")
-  mtu=$(ask_val "MTU" "1500")
+  mtu=$(ask_val "MTU" "1200")
   image=$(ask_val "Docker image" "$DEFAULT_IMAGE")
   container=$(ask_val "Container name" "hpx_tunnel_iran")
 

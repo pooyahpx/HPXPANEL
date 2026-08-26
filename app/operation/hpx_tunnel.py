@@ -44,6 +44,7 @@ from app.services.hpx_tunnel.manager import (
     DEFAULT_IMAGE,
     derive_status,
     get_container_logs,
+    health_ping_target,
     inspect_runtime,
     is_linux_host,
     ping_host,
@@ -195,8 +196,9 @@ class HpxTunnelOperation(BaseOperation):
         ping: bool = True,
     ) -> HpxTunnel:
         if is_agent_managed(db_tunnel) or db_tunnel.status == HpxTunnelStatus.pending_claim:
-            if ping and db_tunnel.role == HpxTunnelRole.iran and db_tunnel.remote_ip:
-                latency_ms, packet_loss_pct = await ping_host(db_tunnel.remote_ip)
+            target = health_ping_target(db_tunnel)
+            if ping and target:
+                latency_ms, packet_loss_pct = await ping_host(target)
                 return await update_hpx_tunnel(
                     db,
                     db_tunnel,
@@ -212,8 +214,9 @@ class HpxTunnelOperation(BaseOperation):
         latency_ms = db_tunnel.latency_ms
         packet_loss_pct = db_tunnel.packet_loss_pct
 
-        if ping and db_tunnel.role == HpxTunnelRole.iran and db_tunnel.remote_ip:
-            latency_ms, packet_loss_pct = await ping_host(db_tunnel.remote_ip)
+        target = health_ping_target(db_tunnel)
+        if ping and target:
+            latency_ms, packet_loss_pct = await ping_host(target)
 
         new_status = derive_status(db_tunnel, runtime, latency_ms, packet_loss_pct)
         previous_status = db_tunnel.status

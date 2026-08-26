@@ -6,7 +6,7 @@ from app.db.crud.hpx_tunnel import get_hpx_tunnel_by_id, is_agent_managed, list_
 from app.db.models import HpxTunnelRole, HpxTunnelStatus
 from app.operation import OperatorType
 from app.operation.hpx_tunnel import HpxTunnelOperation
-from app.services.hpx_tunnel.manager import ping_host, start_tunnel, stop_container
+from app.services.hpx_tunnel.manager import health_ping_target, ping_host, start_tunnel, stop_container
 from app.utils.logger import get_logger
 
 logger = get_logger("hpx-tunnel-checker")
@@ -88,8 +88,9 @@ async def hpx_tunnel_checker_job():
                     if not is_agent_managed(db_tunnel):
                         await _attempt_failover(db, db_tunnel)
 
-                if db_tunnel.role == HpxTunnelRole.iran and db_tunnel.remote_ip:
-                    latency, loss = await ping_host(db_tunnel.remote_ip)
+                target = health_ping_target(db_tunnel)
+                if target:
+                    latency, loss = await ping_host(target)
                     await update_hpx_tunnel(
                         db,
                         db_tunnel,

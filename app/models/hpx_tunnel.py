@@ -22,7 +22,7 @@ class HpxTunnelBase(BaseModel):
     interface: str = Field(default="hpx0", max_length=32)
     local_ip: str = Field(default="10.200.200.2", max_length=45)
     subnet: str = Field(default="10.200.200.0/24", max_length=64)
-    mtu: int | None = Field(default=1500, ge=576, le=9000)
+    mtu: int | None = Field(default=1200, ge=576, le=9000)
     keepalive: int = Field(default=5, ge=1, le=300)
     dscp_mark: int | None = Field(default=None, ge=0, le=63)
     bandwidth_limit: str | None = Field(default=None, max_length=32)

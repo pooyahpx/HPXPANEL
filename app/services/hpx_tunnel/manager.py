@@ -70,6 +70,20 @@ async def docker_available() -> bool:
     return result.returncode == 0
 
 
+async def docker_unavailable_reason() -> str:
+    if not shutil.which("docker"):
+        return (
+            "Docker CLI is missing inside the panel container. "
+            "Update HPXPANEL and ensure /var/run/docker.sock is mounted."
+        )
+    result = await run_command("docker", "info", "--format", "{{.ServerVersion}}", timeout=10)
+    if result.returncode != 0:
+        return (
+            "Cannot reach Docker daemon (is /var/run/docker.sock mounted into the panel?). "
+            f"{(result.stderr or result.stdout or '').strip()}"
+        ).strip()
+    return "Docker is not available on this host"
+
 async def pull_image(image: str) -> tuple[bool, str | None]:
     result = await run_command("docker", "pull", image, timeout=300)
     if result.returncode != 0:
@@ -134,12 +148,85 @@ async def stop_container(container_name: str) -> tuple[bool, str | None]:
     return True, None
 
 
-async def _assign_interface_ip(interface: str, local_ip: str, operating_mode: str | None) -> None:
-    if operating_mode and operating_mode.startswith("ip:"):
+async def stop_containers_using_interface(interface: str, keep_name: str | None = None) -> None:
+    """Remove other hpx_tunnel_* containers that claim the same TAP INTERFACE."""
+    listed = await run_command("docker", "ps", "-aq", "--filter", "name=hpx_tunnel", timeout=15)
+    if listed.returncode != 0 or not listed.stdout.strip():
         return
+    for cid in listed.stdout.split():
+        inspect = await run_command(
+            "docker",
+            "inspect",
+            "-f",
+            "{{.Name}}\n{{range .Config.Env}}{{println .}}{{end}}",
+            cid,
+            timeout=10,
+        )
+        if inspect.returncode != 0:
+            continue
+        lines = [line for line in inspect.stdout.splitlines() if line.strip()]
+        if not lines:
+            continue
+        name = lines[0].lstrip("/")
+        if keep_name and name == keep_name:
+            continue
+        iface = None
+        for line in lines[1:]:
+            if line.startswith("INTERFACE="):
+                iface = line.split("=", 1)[1].strip()
+                break
+        if iface and iface != interface:
+            continue
+        logger.warning("Removing conflicting tunnel container %s (interface %s)", name, interface)
+        await run_command("docker", "rm", "-f", cid, timeout=30)
+
+    still = await run_command("docker", "ps", "-q", "--filter", "name=hpx_tunnel", timeout=10)
+    if not (still.stdout or "").strip():
+        await run_command("ip", "link", "delete", interface, timeout=10)
+
+
+async def wait_for_interface(interface: str, timeout: float = 20.0) -> bool:
+    import time
+
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        link = await run_command("ip", "link", "show", "dev", interface, timeout=5)
+        if link.returncode == 0:
+            return True
+        await asyncio.sleep(0.5)
+    return False
+
+
+async def _assign_interface_ip(
+    interface: str,
+    local_ip: str,
+    operating_mode: str | None,
+    mtu: int | None = None,
+) -> str | None:
+    if operating_mode and operating_mode.startswith("ip:"):
+        return None
+    if not await wait_for_interface(interface, timeout=20.0):
+        return f"tunnel interface {interface} did not appear — check docker logs"
+
     cidr = local_ip if "/" in local_ip else f"{local_ip}/24"
-    await run_command("ip", "addr", "add", cidr, "dev", interface, timeout=10)
+    # Replace any previous address on this TAP, then add ours.
+    await run_command("ip", "addr", "flush", "dev", interface, timeout=10)
+    add = await run_command("ip", "addr", "add", cidr, "dev", interface, timeout=10)
+    if add.returncode != 0 and "File exists" not in (add.stderr or ""):
+        # Retry once without flush failure noise.
+        add = await run_command("ip", "addr", "add", cidr, "dev", interface, timeout=10)
+        if add.returncode != 0 and "File exists" not in (add.stderr or ""):
+            return add.stderr or add.stdout or f"failed to assign {cidr} on {interface}"
+
+    if mtu:
+        await run_command("ip", "link", "set", "dev", interface, "mtu", str(mtu), timeout=10)
     await run_command("ip", "link", "set", interface, "up", timeout=10)
+
+    assigned = await get_interface_ip(interface)
+    if not assigned:
+        return f"interface {interface} is up but has no IPv4 address"
+    return None
+
 
 
 async def _enable_ip_forward() -> None:
@@ -150,10 +237,11 @@ async def start_tunnel(tunnel: HpxTunnel, password: str) -> tuple[bool, str | No
     if not is_linux_host():
         return False, "HPX tunnel control requires a Linux host with Docker"
     if not await docker_available():
-        return False, "Docker is not available on this host"
+        return False, await docker_unavailable_reason()
 
     container_name = tunnel.container_name or container_name_for_tunnel(tunnel.id)
     await stop_container(container_name)
+    await stop_containers_using_interface(tunnel.interface, keep_name=container_name)
 
     image, err = await ensure_tunnel_image(tunnel.docker_image or DEFAULT_IMAGE)
     if err:
@@ -202,7 +290,15 @@ async def start_tunnel(tunnel: HpxTunnel, password: str) -> tuple[bool, str | No
 
     await asyncio.sleep(2)
     await _enable_ip_forward()
-    await _assign_interface_ip(tunnel.interface, tunnel.local_ip, tunnel.operating_mode)
+    assign_err = await _assign_interface_ip(
+        tunnel.interface, tunnel.local_ip, tunnel.operating_mode, tunnel.mtu
+    )
+    if assign_err:
+        logs = await run_command(
+            "docker", "logs", "--tail", "30", container_name, timeout=10
+        )
+        detail = logs.stderr or logs.stdout or ""
+        return False, f"{assign_err}. {detail}".strip()
     if tunnel.role == HpxTunnelRole.iran and tunnel.port_forwards:
         await apply_port_forwards(tunnel)
 
@@ -271,6 +367,36 @@ async def ping_host(host: str, count: int = 3) -> tuple[float | None, float | No
     loss = float(loss_match.group(1)) if loss_match else None
     return latency, loss
 
+
+def peer_tunnel_ip(local_ip: str | None) -> str | None:
+    """Opposite end of the usual /24 tunnel pair (.1 ↔ .2)."""
+    if not local_ip:
+        return None
+    host = local_ip.split("/", 1)[0].strip()
+    parts = host.split(".")
+    if len(parts) != 4 or not all(p.isdigit() for p in parts):
+        return None
+    last = int(parts[3])
+    if last == 1:
+        parts[3] = "2"
+    elif last == 2:
+        parts[3] = "1"
+    else:
+        return None
+    return ".".join(parts)
+
+
+def health_ping_target(tunnel: HpxTunnel) -> str | None:
+    """
+    ICMP tunnel health must ping the *tunnel* address, not the public remote IP.
+
+    Public ICMP is owned by the tunnel daemon; panel host (FOREIGN) should ping
+    the Iran tunnel IP (typically 10.200.200.2).
+    """
+    if tunnel.role == HpxTunnelRole.iran:
+        # IRAN local_ip lives on the Iran side — reachable from FOREIGN over the tunnel.
+        return (tunnel.local_ip or "").split("/", 1)[0].strip() or None
+    return peer_tunnel_ip(tunnel.local_ip)
 
 async def get_interface_ip(interface: str) -> str | None:
     result = await run_command("ip", "-4", "-o", "addr", "show", "dev", interface, timeout=5)

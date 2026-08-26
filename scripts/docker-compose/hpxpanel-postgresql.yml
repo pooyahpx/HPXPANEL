@@ -6,6 +6,7 @@ services:
     network_mode: host
     volumes:
       - /var/lib/hpxpanel:/var/lib/hpxpanel
+      - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
       pgbouncer:
         condition: service_healthy

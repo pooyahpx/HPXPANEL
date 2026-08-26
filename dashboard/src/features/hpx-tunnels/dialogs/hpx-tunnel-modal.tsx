@@ -189,7 +189,14 @@ export default function HpxTunnelModal({ open, onOpenChange, form, editingTunnel
                     <FormItem><FormLabel>{t('hpxTunnel.subnet', { defaultValue: 'Subnet' })}</FormLabel><FormControl><Input {...field} dir="ltr" className="font-mono" /></FormControl><FormMessage /></FormItem>
                   )} />
                   <FormField control={form.control} name="mtu" render={({ field }) => (
-                    <FormItem><FormLabel>MTU</FormLabel><FormControl><Input {...field} value={field.value ?? ''} type="number" /></FormControl><FormMessage /></FormItem>
+                    <FormItem>
+                      <FormLabel>MTU</FormLabel>
+                      <FormControl><Input {...field} value={field.value ?? ''} type="number" /></FormControl>
+                      <p className="text-muted-foreground text-[11px]">
+                        {t('hpxTunnel.mtuHint', { defaultValue: 'Use 1200 for ICMP tunnels (1500 usually breaks ping/traffic).' })}
+                      </p>
+                      <FormMessage />
+                    </FormItem>
                   )} />
                   <FormField control={form.control} name="keepalive" render={({ field }) => (
                     <FormItem><FormLabel>{t('hpxTunnel.keepalive', { defaultValue: 'Keepalive (s)' })}</FormLabel><FormControl><Input {...field} type="number" /></FormControl><FormMessage /></FormItem>

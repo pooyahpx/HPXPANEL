@@ -1079,7 +1079,7 @@ class HpxTunnel(Base, CreatedAtUTCMixin):
     interface: Mapped[str] = mapped_column(String(32), default="hpx0", server_default="hpx0")
     local_ip: Mapped[str] = mapped_column(String(45), default="10.200.200.2", server_default="10.200.200.2")
     subnet: Mapped[str] = mapped_column(String(64), default="10.200.200.0/24", server_default="10.200.200.0/24")
-    mtu: Mapped[int | None] = mapped_column(Integer, default=1500)
+    mtu: Mapped[int | None] = mapped_column(Integer, default=1200)
     keepalive: Mapped[int] = mapped_column(Integer, default=5, server_default="5")
     dscp_mark: Mapped[int | None] = mapped_column(Integer, default=None)
     bandwidth_limit: Mapped[str | None] = mapped_column(String(32), default=None)

@@ -30,9 +30,22 @@ WORKDIR /code
 
 ENV PATH="/code/.venv/bin:$PATH"
 
-# Install curl for health checks
+# curl: healthchecks · docker CLI: spawn FOREIGN tunnel containers via host socket
+# iproute2/iptables/ping: manage TAP iface + health when network_mode=host
+ARG TARGETARCH
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
     curl \
+    iproute2 \
+    iptables \
+    iputils-ping \
+    && DOCKER_ARCH="$TARGETARCH" \
+    && if [ "$DOCKER_ARCH" = "amd64" ] || [ -z "$DOCKER_ARCH" ]; then DOCKER_ARCH=x86_64; fi \
+    && if [ "$DOCKER_ARCH" = "arm64" ]; then DOCKER_ARCH=aarch64; fi \
+    && curl -fsSL "https://download.docker.com/linux/static/stable/${DOCKER_ARCH}/docker-27.5.1.tgz" \
+      | tar -xz -C /tmp \
+    && mv /tmp/docker/docker /usr/local/bin/docker \
+    && rm -rf /tmp/docker \
     && rm -rf /var/lib/apt/lists/*
 
 COPY cli_wrapper.sh /usr/bin/hpxpanel-cli

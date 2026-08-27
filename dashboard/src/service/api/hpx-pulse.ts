@@ -125,7 +125,7 @@ export function useGetHpxPulses(params?: { offset?: number; limit?: number; name
   const qs = q.toString()
   return useQuery({
     queryKey: ['hpx-pulses', params],
-    queryFn: () => fetcher<HpxPulsesResponse>(`/api/hpx_pulse/s${qs ? `?${qs}` : ''}`),
+    queryFn: () => fetcher<HpxPulsesResponse>(`/api/hpx_pulses${qs ? `?${qs}` : ''}`),
     refetchInterval: 15000,
   })
 }

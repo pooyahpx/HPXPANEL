@@ -16,7 +16,7 @@ import {
   type PulseAdviseResponse,
 } from '@/service/api/hpx-pulse'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Sparkles, Trash2 } from 'lucide-react'
+import { Dices, Sparkles, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
@@ -34,13 +34,8 @@ const schema = z.object({
   iran_public_ip: z.string().min(7, 'Iran IP required'),
   abroad_public_ip: z.string().min(7, 'Abroad IP required'),
   goal: z.enum(['stealth', 'balanced', 'speed']),
-  cpu_cores: z.coerce.number().int().min(1).max(128),
-  ram_mb: z.coerce.number().int().min(256),
-  packet_loss_pct: z.coerce.number().min(0).max(100).optional(),
   control_port: z.coerce.number().int().min(1024).max(65535),
   port_forwards: z.array(portForwardSchema).default([]),
-  domain: z.string().optional(),
-  sni_hint: z.string().optional(),
 })
 
 type FormValues = z.infer<typeof schema>
@@ -48,6 +43,10 @@ type FormValues = z.infer<typeof schema>
 function defaultPulseName() {
   const n = new Date()
   return `pulse_${n.getFullYear()}${String(n.getMonth() + 1).padStart(2, '0')}${String(n.getDate()).padStart(2, '0')}_${String(n.getHours()).padStart(2, '0')}${String(n.getMinutes()).padStart(2, '0')}`
+}
+
+function randomTunnelPort() {
+  return Math.floor(Math.random() * (65500 - 10000 + 1)) + 10000
 }
 
 interface Props {
@@ -74,13 +73,8 @@ export default function HpxPulseWizard({ open, onOpenChange, onCreated }: Props)
       iran_public_ip: '',
       abroad_public_ip: '',
       goal: 'balanced',
-      cpu_cores: 1,
-      ram_mb: 1024,
-      packet_loss_pct: 0,
-      control_port: 9067,
-      port_forwards: [],
-      domain: '',
-      sni_hint: 'play.google.com',
+      control_port: randomTunnelPort(),
+      port_forwards: [{ external_port: 443, internal_ip: '', internal_port: 443 }],
     },
   })
 
@@ -91,13 +85,8 @@ export default function HpxPulseWizard({ open, onOpenChange, onCreated }: Props)
         iran_public_ip: '',
         abroad_public_ip: '',
         goal: 'balanced',
-        cpu_cores: 1,
-        ram_mb: 1024,
-        packet_loss_pct: 0,
-        control_port: 9067,
-        port_forwards: [],
-        domain: '',
-        sni_hint: 'play.google.com',
+        control_port: randomTunnelPort(),
+        port_forwards: [{ external_port: 443, internal_ip: '', internal_port: 443 }],
       })
       setAdvice(null)
       setSelectedProfile(null)
@@ -107,10 +96,10 @@ export default function HpxPulseWizard({ open, onOpenChange, onCreated }: Props)
   const runAdvise = async (values?: FormValues) => {
     const v = values ?? form.getValues()
     const res = await adviseMutation.mutateAsync({
-      cpu_cores: v.cpu_cores,
-      ram_mb: v.ram_mb,
+      cpu_cores: 1,
+      ram_mb: 1024,
       goal: v.goal,
-      packet_loss_pct: v.packet_loss_pct,
+      packet_loss_pct: 0,
       udp_reachable: null,
     })
     setAdvice(res)
@@ -131,15 +120,13 @@ export default function HpxPulseWizard({ open, onOpenChange, onCreated }: Props)
         iran_public_ip: values.iran_public_ip.trim(),
         abroad_public_ip: values.abroad_public_ip.trim(),
         goal: values.goal,
-        cpu_cores: values.cpu_cores,
-        ram_mb: values.ram_mb,
+        cpu_cores: 1,
+        ram_mb: 1024,
         udp_reachable: null,
-        packet_loss_pct: values.packet_loss_pct,
+        packet_loss_pct: 0,
         profile_id: profileId,
         control_port: values.control_port,
         port_forwards: (values.port_forwards ?? []).map(toTunnelPortString),
-        domain: values.domain?.trim() || null,
-        sni_hint: values.sni_hint?.trim() || null,
       })
       toast.success(t('hpxPulse.createSuccess', { defaultValue: 'Pulse created — copy install commands below' }))
       onCreated?.(res)
@@ -150,7 +137,7 @@ export default function HpxPulseWizard({ open, onOpenChange, onCreated }: Props)
   }
 
   const previewAdvise = async () => {
-    const valid = await form.trigger(['cpu_cores', 'ram_mb', 'goal'])
+    const valid = await form.trigger(['goal'])
     if (!valid) return
     try {
       await runAdvise()
@@ -208,34 +195,23 @@ export default function HpxPulseWizard({ open, onOpenChange, onCreated }: Props)
                   <FormMessage />
                 </FormItem>
               )} />
-              <FormField control={form.control} name="cpu_cores" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>CPU cores</FormLabel>
-                  <FormControl><Input type="number" {...field} /></FormControl>
-                </FormItem>
-              )} />
-              <FormField control={form.control} name="ram_mb" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>RAM (MB)</FormLabel>
-                  <FormControl><Input type="number" {...field} /></FormControl>
-                </FormItem>
-              )} />
-              <FormField control={form.control} name="domain" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t('hpxPulse.domain', { defaultValue: 'Domain on Iran (optional)' })}</FormLabel>
-                  <FormControl><Input {...field} dir="ltr" placeholder="vpn.example.com" /></FormControl>
-                </FormItem>
-              )} />
-              <FormField control={form.control} name="sni_hint" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Reality SNI</FormLabel>
-                  <FormControl><Input {...field} dir="ltr" /></FormControl>
-                </FormItem>
-              )} />
               <FormField control={form.control} name="control_port" render={({ field }) => (
                 <FormItem>
                   <FormLabel>{t('hpxPulse.tunnelPort', { defaultValue: 'Tunnel port' })}</FormLabel>
-                  <FormControl><Input type="number" {...field} dir="ltr" /></FormControl>
+                  <div className="flex gap-2">
+                    <FormControl>
+                      <Input type="number" {...field} dir="ltr" />
+                    </FormControl>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      title={t('hpxPulse.randomPort', { defaultValue: 'Random port' })}
+                      onClick={() => form.setValue('control_port', randomTunnelPort())}
+                    >
+                      <Dices className="size-4" />
+                    </Button>
+                  </div>
                   <FormMessage />
                 </FormItem>
               )} />
@@ -255,39 +231,32 @@ export default function HpxPulseWizard({ open, onOpenChange, onCreated }: Props)
                     ])
                   }
                 >
-                  {t('hpxPulse.addPortForward', { defaultValue: 'Add rule' })}
+                  {t('hpxPulse.addPortForward', { defaultValue: 'Add' })}
                 </Button>
               </div>
               <p className="text-muted-foreground text-xs">
-                {t('hpxPulse.portForwardsHint', {
-                  defaultValue: 'Reverse on Iran: 443 or 443=127.0.0.1:8443 to abroad service. Direct L3: empty internal IP uses tunnel peer.',
-                })}
+                {t('hpxPulse.portForwardsHint', { defaultValue: 'Iran port → abroad port  (example: 443 → 443)' })}
               </p>
               {form.watch('port_forwards').map((_, index) => (
-                <div key={index} className="grid gap-2 sm:grid-cols-[1fr_1.2fr_1fr_auto]">
+                <div key={index} className="flex items-end gap-2">
                   <FormField control={form.control} name={`port_forwards.${index}.external_port`} render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-xs">{t('hpxPulse.externalPort', { defaultValue: 'External' })}</FormLabel>
-                      <FormControl><Input type="number" {...field} dir="ltr" /></FormControl>
+                    <FormItem className="flex-1">
+                      <FormLabel className="text-xs">{t('hpxPulse.iranPort', { defaultValue: 'Iran' })}</FormLabel>
+                      <FormControl><Input type="number" {...field} dir="ltr" placeholder="443" /></FormControl>
                     </FormItem>
                   )} />
-                  <FormField control={form.control} name={`port_forwards.${index}.internal_ip`} render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-xs">{t('hpxPulse.internalIp', { defaultValue: 'Internal IP (optional)' })}</FormLabel>
-                      <FormControl><Input {...field} dir="ltr" placeholder="10.10.0.2" /></FormControl>
-                    </FormItem>
-                  )} />
+                  <span className="text-muted-foreground mb-2 text-sm">→</span>
                   <FormField control={form.control} name={`port_forwards.${index}.internal_port`} render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-xs">{t('hpxPulse.internalPort', { defaultValue: 'Internal port' })}</FormLabel>
-                      <FormControl><Input type="number" {...field} dir="ltr" /></FormControl>
+                    <FormItem className="flex-1">
+                      <FormLabel className="text-xs">{t('hpxPulse.abroadPort', { defaultValue: 'Abroad' })}</FormLabel>
+                      <FormControl><Input type="number" {...field} dir="ltr" placeholder="443" /></FormControl>
                     </FormItem>
                   )} />
                   <Button
                     type="button"
                     size="icon"
                     variant="ghost"
-                    className="mt-6"
+                    className="mb-0.5"
                     onClick={() => {
                       const current = form.getValues('port_forwards')
                       form.setValue('port_forwards', current.filter((_, i) => i !== index))

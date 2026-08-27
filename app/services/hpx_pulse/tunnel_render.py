@@ -32,11 +32,36 @@ def _ports_block(port_forwards: list[str]) -> str:
     return f"\nports = [{quoted}]\n"
 
 
+def _normalize_reverse_ports(port_forwards: list[str]) -> list[str]:
+    """Map Iran listen → abroad localhost target.
+
+    '443'         → '443=127.0.0.1:443'
+    '443=8443'    → '443=127.0.0.1:8443'
+    '443=10.0.0.5:8443' kept as-is
+    """
+    out: list[str] = []
+    for raw in port_forwards:
+        p = (raw or "").strip()
+        if not p:
+            continue
+        if "=" not in p:
+            out.append(f"{p}=127.0.0.1:{p}")
+            continue
+        left, right = p.split("=", 1)
+        left, right = left.strip(), right.strip()
+        if ":" not in right:
+            out.append(f"{left}=127.0.0.1:{right}")
+        else:
+            out.append(f"{left}={right}")
+    return out
+
+
 def _reverse_ports_block(port_forwards: list[str]) -> str:
-    if not port_forwards:
+    ports = _normalize_reverse_ports(port_forwards)
+    if not ports:
         return "ports = []\n"
     lines = ["ports = ["]
-    for port in port_forwards:
+    for port in ports:
         lines.append(f'  "{port}",')
     lines.append("]")
     return "\n".join(lines) + "\n"

@@ -141,6 +141,7 @@ class HpxPulseAgentBootstrap(BaseModel):
     abroad_public_ip: str
     iran_public_ip: str
     tunnel_mode: str = "direct_l3"
+    port_forwards: list[str] = Field(default_factory=list)
 
 
 class HpxPulseAgentConfigResponse(BaseModel):
@@ -156,6 +157,7 @@ class HpxPulseAgentConfigResponse(BaseModel):
     control_port: int = 9067
     iran_public_ip: str | None = None
     abroad_public_ip: str | None = None
+    port_forwards: list[str] = Field(default_factory=list)
 
 
 class HpxPulseAgentHeartbeatRequest(BaseModel):

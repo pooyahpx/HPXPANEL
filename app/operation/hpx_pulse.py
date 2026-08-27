@@ -339,6 +339,7 @@ class HpxPulseOperation(BaseOperation):
             abroad_public_ip=db_pulse.abroad_public_ip,
             iran_public_ip=db_pulse.iran_public_ip,
             tunnel_mode=db_pulse.tunnel_mode,
+            port_forwards=db_pulse.port_forwards or [],
         )
 
     async def _pulse_from_agent_key(self, db: AsyncSession, agent_key: str, side: str) -> HpxPulse:
@@ -362,6 +363,7 @@ class HpxPulseOperation(BaseOperation):
             control_port=db_pulse.control_port,
             iran_public_ip=db_pulse.iran_public_ip,
             abroad_public_ip=db_pulse.abroad_public_ip,
+            port_forwards=db_pulse.port_forwards or [],
         )
 
     async def get_agent_config(self, db: AsyncSession, *, agent_key: str, side: str) -> HpxPulseAgentConfigResponse:

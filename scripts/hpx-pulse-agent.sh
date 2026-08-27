@@ -80,6 +80,7 @@ TUNNEL_MODE=${TUNNEL_MODE:-direct_l3}
 CONTROL_PORT=${CONTROL_PORT:-}
 IRAN_PUBLIC_IP=${IRAN_PUBLIC_IP:-}
 ABROAD_PUBLIC_IP=${ABROAD_PUBLIC_IP:-}
+PORT_FORWARDS=${PORT_FORWARDS:-}
 EOF
   chmod 600 "$ENV_FILE"
 }
@@ -202,6 +203,7 @@ apply_tunnel_config() {
   chmod 600 "$cfg"
   TUNNEL_CFG="$cfg"
   log "wrote HPX tunnel config $cfg"
+  open_iran_firewall
   install_tunnel_systemd "$cfg"
   sleep 2
   if tunnel_service_active; then
@@ -209,6 +211,76 @@ apply_tunnel_config() {
   else
     warn "HPX tunnel service not active yet — check: systemctl status ${TUNNEL_SERVICE}"
   fi
+  check_abroad_backends
+}
+
+# Open tunnel + forwarded ports on Iran (required for Reverse).
+open_iran_firewall() {
+  [ "${PULSE_SIDE:-}" = "iran" ] || return 0
+  case "${TUNNEL_MODE:-}" in reverse_*) ;; *) return 0 ;; esac
+
+  local ports=()
+  [ -n "${CONTROL_PORT:-}" ] && ports+=("$CONTROL_PORT")
+  local raw pf left
+  raw="${PORT_FORWARDS:-}"
+  raw="${raw//[\[\]\"]/}"
+  IFS=',' read -ra pf <<< "$raw"
+  for left in "${pf[@]}"; do
+    left="${left%%=*}"
+    left="${left// /}"
+    [[ "$left" =~ ^[0-9]+$ ]] && ports+=("$left")
+  done
+
+  local p
+  for p in "${ports[@]}"; do
+    if has ufw && ufw status 2>/dev/null | grep -qi "Status: active"; then
+      ufw allow "${p}/tcp" >/dev/null 2>&1 || true
+      log "ufw allow ${p}/tcp"
+    elif has firewall-cmd; then
+      firewall-cmd --permanent --add-port="${p}/tcp" >/dev/null 2>&1 || true
+      firewall-cmd --reload >/dev/null 2>&1 || true
+      log "firewalld allow ${p}/tcp"
+    elif has iptables; then
+      iptables -C INPUT -p tcp --dport "$p" -j ACCEPT 2>/dev/null \
+        || iptables -I INPUT -p tcp --dport "$p" -j ACCEPT
+      log "iptables allow ${p}/tcp"
+    else
+      warn "open firewall manually: allow TCP ${p}"
+    fi
+  done
+}
+
+# Abroad must have the target service listening (e.g. Xray on 127.0.0.1:443).
+check_abroad_backends() {
+  [ "${PULSE_SIDE:-}" = "abroad" ] || return 0
+  case "${TUNNEL_MODE:-}" in reverse_*) ;; *) return 0 ;; esac
+
+  local raw pf entry target host port
+  raw="${PORT_FORWARDS:-}"
+  raw="${raw//[\[\]\"]/}"
+  [ -n "$raw" ] || return 0
+  IFS=',' read -ra pf <<< "$raw"
+  for entry in "${pf[@]}"; do
+    entry="${entry// /}"
+    [ -n "$entry" ] || continue
+    if [[ "$entry" == *"="* ]]; then
+      target="${entry#*=}"
+    else
+      target="127.0.0.1:${entry}"
+    fi
+    if [[ "$target" != *:* ]]; then
+      target="127.0.0.1:${target}"
+    fi
+    host="${target%:*}"
+    port="${target##*:}"
+    if has ss; then
+      if ! ss -tlnH "sport = :${port}" 2>/dev/null | grep -q .; then
+        warn "nothing listening on ${host}:${port} — start Xray/panel inbound there or host ping will be -1"
+      else
+        log "backend OK: ${host}:${port} listening"
+      fi
+    fi
+  done
 }
 
 install_agent_systemd() {
@@ -246,8 +318,9 @@ EOF
 measure_tcp_ms() {
   local host="$1" port="$2"
   [ -n "$host" ] && [ -n "$port" ] || return 1
+  local out=""
   if has python3; then
-    python3 -c "
+    out=$(python3 -c "
 import socket, time
 s = socket.socket(); s.settimeout(3.0)
 t = time.time()
@@ -258,11 +331,9 @@ except Exception:
     pass
 finally:
     s.close()
-" 2>/dev/null
-    return 0
-  fi
-  if has python; then
-    python -c "
+" 2>/dev/null || true)
+  elif has python; then
+    out=$(python -c "
 import socket, time
 s = socket.socket(); s.settimeout(3.0)
 t = time.time()
@@ -273,10 +344,19 @@ except Exception:
     pass
 finally:
     s.close()
-" 2>/dev/null
-    return 0
+" 2>/dev/null || true)
+  elif has bash; then
+    local start end ms
+    start=$(date +%s%N 2>/dev/null || echo 0)
+    if timeout 3 bash -c "echo >/dev/tcp/${host}/${port}" 2>/dev/null; then
+      end=$(date +%s%N 2>/dev/null || echo 0)
+      if [ "$start" != 0 ] && [ "$end" != 0 ]; then
+        ms=$(( (end - start) / 1000000 ))
+        out="$ms"
+      fi
+    fi
   fi
-  return 1
+  [ -n "$out" ] && echo "$out"
 }
 
 measure_icmp_ms() {
@@ -301,11 +381,22 @@ send_heartbeat() {
       fi
       ;;
     reverse_*)
-      # Abroad dials Iran tunnel port — TCP RTT is the real reverse latency.
-      # Iran does not measure (avoids null overwriting abroad's value).
+      # Prefer abroad → Iran tunnel port. Also try first forwarded port (user path).
       if [ "${PULSE_SIDE:-}" = "abroad" ] && [ "$running" = "true" ] \
-        && [ -n "${IRAN_PUBLIC_IP:-}" ] && [ -n "${CONTROL_PORT:-}" ]; then
-        lat="$(measure_tcp_ms "$IRAN_PUBLIC_IP" "$CONTROL_PORT" || true)"
+        && [ -n "${IRAN_PUBLIC_IP:-}" ]; then
+        if [ -n "${CONTROL_PORT:-}" ]; then
+          lat="$(measure_tcp_ms "$IRAN_PUBLIC_IP" "$CONTROL_PORT" || true)"
+        fi
+        if [ -z "$lat" ]; then
+          local first_pf
+          first_pf=$(echo "${PORT_FORWARDS:-}" | tr -d '[]"' | cut -d',' -f1 | cut -d'=' -f1 | tr -d ' ')
+          [ -n "$first_pf" ] && lat="$(measure_tcp_ms "$IRAN_PUBLIC_IP" "$first_pf" || true)"
+        fi
+      fi
+      # Iran side: if abroad already failed, report local listen readiness via 0 ms sentinel? skip.
+      if [ -z "$lat" ] && [ "${PULSE_SIDE:-}" = "iran" ] && tunnel_port_listening; then
+        # Local bind OK — do not invent latency; leave null unless abroad reports.
+        :
       fi
       ;;
   esac
@@ -356,6 +447,7 @@ cmd_join() {
   CONTROL_PORT=$(echo "$claim" | jq -r '.control_port // empty')
   IRAN_PUBLIC_IP=$(echo "$claim" | jq -r '.iran_public_ip // empty')
   ABROAD_PUBLIC_IP=$(echo "$claim" | jq -r '.abroad_public_ip // empty')
+  PORT_FORWARDS=$(echo "$claim" | jq -c '.port_forwards // []')
   [ -n "$AGENT_KEY" ] && [ "$AGENT_KEY" != "null" ] || die "missing agent_key from panel"
 
   install_self
@@ -374,6 +466,19 @@ cmd_join() {
 cmd_sync() {
   need_root
   load_env
+  # Pull latest agent script once so firewall/ping fixes apply without re-join.
+  if curl -fsSL "https://raw.githubusercontent.com/pooyahpx/HPXPANEL/main/scripts/hpx-pulse-agent.sh" \
+      -o "$INSTALL_DIR/hpx-pulse-agent.sh.new" 2>/dev/null; then
+    if [ -s "$INSTALL_DIR/hpx-pulse-agent.sh.new" ] \
+      && ! cmp -s "$INSTALL_DIR/hpx-pulse-agent.sh.new" "$INSTALL_DIR/hpx-pulse-agent.sh" 2>/dev/null; then
+      mv "$INSTALL_DIR/hpx-pulse-agent.sh.new" "$INSTALL_DIR/hpx-pulse-agent.sh"
+      chmod 755 "$INSTALL_DIR/hpx-pulse-agent.sh"
+      ln -sfn "$INSTALL_DIR/hpx-pulse-agent.sh" "$BIN_LINK"
+      log "agent updated from GitHub — re-exec sync"
+      exec "$BIN_LINK" sync
+    fi
+    rm -f "$INSTALL_DIR/hpx-pulse-agent.sh.new"
+  fi
   ensure_engine
   local cfg hash toml command
   cfg=$(api GET "/api/hpx_pulse/agent/config")
@@ -384,12 +489,17 @@ cmd_sync() {
   CONTROL_PORT=$(echo "$cfg" | jq -r '.control_port // empty')
   IRAN_PUBLIC_IP=$(echo "$cfg" | jq -r '.iran_public_ip // empty')
   ABROAD_PUBLIC_IP=$(echo "$cfg" | jq -r '.abroad_public_ip // empty')
+  PORT_FORWARDS=$(echo "$cfg" | jq -c '.port_forwards // []')
 
   if [ "$hash" != "${CONFIG_HASH:-}" ] || [ "$command" = "start" ] || [ "$command" = "restart" ]; then
     apply_tunnel_config "$toml"
     CONFIG_HASH="$hash"
     api POST "/api/hpx_pulse/agent/ack" \
       "$(jq -nc --arg c "${command:-start}" '{command:$c, status:"running", message:"HPX config applied"}')" >/dev/null || true
+  else
+    # Still refresh firewall + backend checks even when config unchanged.
+    open_iran_firewall
+    check_abroad_backends
   fi
 
   write_env

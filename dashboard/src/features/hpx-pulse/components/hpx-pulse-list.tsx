@@ -93,7 +93,7 @@ export default function HpxPulseList() {
   const { admin } = useAdmin()
   const canCreate = hasPermission(admin, 'hpx_pulse', 'create')
   const canDelete = hasPermission(admin, 'hpx_pulse', 'delete')
-  const { data, isLoading, refetch, isFetching } = useGetHpxPulses({ limit: 50, offset: 0 })
+  const { data, isLoading, isError, error, refetch, isFetching } = useGetHpxPulses({ limit: 50, offset: 0 })
   const deleteMutation = useDeleteHpxPulse()
   const regenMutation = useRegeneratePulseTokens()
   const [wizardOpen, setWizardOpen] = useState(false)
@@ -132,9 +132,30 @@ export default function HpxPulseList() {
         </div>
       </div>
 
+      {isError && (
+        <Card className="border-destructive/50 bg-destructive/5 space-y-1 p-4 text-sm">
+          <p className="font-medium text-destructive">
+            {t('hpxPulse.loadError', { defaultValue: 'Could not load Pulse tunnels from panel API' })}
+          </p>
+          <p className="text-muted-foreground text-xs">
+            {t('hpxPulse.loadErrorHint', {
+              defaultValue: 'Update panel to v3.7.2+, run DB migration (alembic upgrade head), and check hpx_pulse permissions.',
+            })}
+          </p>
+          {(error as Error)?.message && (
+            <p className="text-muted-foreground font-mono text-[11px]">{(error as Error).message}</p>
+          )}
+        </Card>
+      )}
+
       {joinCommands && (
         <Card className="space-y-2 p-4 text-xs">
           <p className="font-medium">{t('hpxPulse.installCommands', { defaultValue: 'Install commands' })}</p>
+          <p className="text-muted-foreground text-[11px]">
+            {t('hpxPulse.panelUrlWarning', {
+              defaultValue: 'Use the exact panel URL below on both servers — a typo (e.g. duolingoo vs duolingo) means agents join a different panel than this UI.',
+            })}
+          </p>
           {joinCommands.iran && (
             <div className="space-y-1">
               <span className="text-muted-foreground">Iran</span>
@@ -158,7 +179,7 @@ export default function HpxPulseList() {
 
       {isLoading ? (
         <Skeleton className="h-32 w-full" />
-      ) : (data?.pulses?.length ?? 0) === 0 ? (
+      ) : isError ? null : (data?.pulses?.length ?? 0) === 0 ? (
         <Card className="text-muted-foreground p-8 text-center text-sm">
           {t('hpxPulse.empty', { defaultValue: 'No Pulse tunnels yet. Create one with the advisor wizard.' })}
         </Card>

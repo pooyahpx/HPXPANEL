@@ -71,7 +71,10 @@ def _pulse_status(db_pulse: HpxPulse) -> str:
 def _to_response(db_pulse: HpxPulse) -> HpxPulseResponse:
     advice = None
     if db_pulse.advice_json:
-        advice = PulseAdviseResponse.model_validate(db_pulse.advice_json)
+        try:
+            advice = PulseAdviseResponse.model_validate(db_pulse.advice_json)
+        except Exception:
+            advice = None
     data = {
         "id": db_pulse.id,
         "name": db_pulse.name,

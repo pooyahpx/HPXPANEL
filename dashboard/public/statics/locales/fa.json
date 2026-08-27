@@ -2155,12 +2155,16 @@
     "description": "مشاور هوشمند HPX Direct — انتخاب پروفایل stealth/speed، نصب agent ایران و خارج، چک‌لیست Reality.",
     "add": "Pulse جدید",
     "create": "ساخت Pulse",
-    "advise": "دریافت پیشنهاد",
+    "createSuccess": "Pulse ساخته شد — دستور نصب را از پایین کپی کنید",
+    "loadError": "بارگذاری تونل‌های Pulse ناموفق بود",
+    "loadErrorHint": "پنل را آپدیت کنید، migration را اجرا کنید، و دسترسی hpx_pulse را بررسی کنید.",
+    "panelUrlWarning": "دستور را دقیق کپی کنید — URL پنل باید با آدرسی که در مرورگر باز است یکی باشد.",
+    "advise": "پیش‌نمایش پیشنهاد (اختیاری)",
     "profiles": "پروفایل‌های پیشنهادی",
     "goal": "هدف",
     "iranIp": "IP عمومی ایران",
     "abroadIp": "IP عمومی خارج",
-    "domain": "دامنه روی ایران",
+    "domain": "دامنه روی ایران (اختیاری)",
     "tunnelPort": "پورت تونل",
     "portForwards": "پورت فوروارد",
     "addPortForward": "افزودن قانون",
@@ -2178,7 +2182,7 @@
     "regenerate": "توکن‌ها",
     "wizard": {
       "title": "مشاور HPX Pulse",
-      "description": "مشخصات سرور را وارد کنید، پروفایل HPX Direct با دلیل ببینید، سپس agent ایران و خارج را deploy کنید."
+      "description": "IPها را بزنید و Create بزنید — پیشنهاد خودکار گرفته می‌شود."
     },
     "status": {
       "pending_claim": "منتظر agent",

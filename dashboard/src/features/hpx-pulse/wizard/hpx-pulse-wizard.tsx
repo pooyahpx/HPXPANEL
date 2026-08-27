@@ -20,6 +20,7 @@ import { Sparkles, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 import { z } from 'zod'
 
 const portForwardSchema = z.object({
@@ -29,13 +30,12 @@ const portForwardSchema = z.object({
 })
 
 const schema = z.object({
-  name: z.string().min(1).max(40),
-  iran_public_ip: z.string().min(7),
-  abroad_public_ip: z.string().min(7),
+  name: z.string().min(1, 'Name required').max(40),
+  iran_public_ip: z.string().min(7, 'Iran IP required'),
+  abroad_public_ip: z.string().min(7, 'Abroad IP required'),
   goal: z.enum(['stealth', 'balanced', 'speed']),
   cpu_cores: z.coerce.number().int().min(1).max(128),
   ram_mb: z.coerce.number().int().min(256),
-  udp_reachable: z.enum(['unknown', 'yes', 'no']),
   packet_loss_pct: z.coerce.number().min(0).max(100).optional(),
   control_port: z.coerce.number().int().min(1024).max(65535),
   port_forwards: z.array(portForwardSchema).default([]),
@@ -44,6 +44,11 @@ const schema = z.object({
 })
 
 type FormValues = z.infer<typeof schema>
+
+function defaultPulseName() {
+  const n = new Date()
+  return `pulse_${n.getFullYear()}${String(n.getMonth() + 1).padStart(2, '0')}${String(n.getDate()).padStart(2, '0')}_${String(n.getHours()).padStart(2, '0')}${String(n.getMinutes()).padStart(2, '0')}`
+}
 
 interface Props {
   open: boolean
@@ -65,13 +70,12 @@ export default function HpxPulseWizard({ open, onOpenChange, onCreated }: Props)
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
-      name: 'pulse_main',
+      name: defaultPulseName(),
       iran_public_ip: '',
       abroad_public_ip: '',
       goal: 'balanced',
       cpu_cores: 1,
       ram_mb: 1024,
-      udp_reachable: 'unknown',
       packet_loss_pct: 0,
       control_port: 9067,
       port_forwards: [],
@@ -81,48 +85,75 @@ export default function HpxPulseWizard({ open, onOpenChange, onCreated }: Props)
   })
 
   useEffect(() => {
-    if (!open) {
+    if (open) {
+      form.reset({
+        name: defaultPulseName(),
+        iran_public_ip: '',
+        abroad_public_ip: '',
+        goal: 'balanced',
+        cpu_cores: 1,
+        ram_mb: 1024,
+        packet_loss_pct: 0,
+        control_port: 9067,
+        port_forwards: [],
+        domain: '',
+        sni_hint: 'play.google.com',
+      })
       setAdvice(null)
       setSelectedProfile(null)
     }
-  }, [open])
+  }, [open, form])
 
-  const runAdvise = async () => {
-    const v = form.getValues()
+  const runAdvise = async (values?: FormValues) => {
+    const v = values ?? form.getValues()
+    const res = await adviseMutation.mutateAsync({
+      cpu_cores: v.cpu_cores,
+      ram_mb: v.ram_mb,
+      goal: v.goal,
+      packet_loss_pct: v.packet_loss_pct,
+      udp_reachable: null,
+    })
+    setAdvice(res)
+    setSelectedProfile(res.recommended_profile_id)
+    return res
+  }
+
+  const create = async (values: FormValues) => {
     try {
-      const res = await adviseMutation.mutateAsync({
-        cpu_cores: v.cpu_cores,
-        ram_mb: v.ram_mb,
-        goal: v.goal,
-        packet_loss_pct: v.packet_loss_pct,
-        udp_reachable: v.udp_reachable === 'unknown' ? null : v.udp_reachable === 'yes',
+      let profileId = selectedProfile ?? advice?.recommended_profile_id
+      if (!profileId) {
+        const res = await runAdvise(values)
+        profileId = res.recommended_profile_id
+      }
+
+      const res = await createMutation.mutateAsync({
+        name: values.name.trim(),
+        iran_public_ip: values.iran_public_ip.trim(),
+        abroad_public_ip: values.abroad_public_ip.trim(),
+        goal: values.goal,
+        cpu_cores: values.cpu_cores,
+        ram_mb: values.ram_mb,
+        udp_reachable: null,
+        packet_loss_pct: values.packet_loss_pct,
+        profile_id: profileId,
+        control_port: values.control_port,
+        port_forwards: (values.port_forwards ?? []).map(toBackpackPortString),
+        domain: values.domain?.trim() || null,
+        sni_hint: values.sni_hint?.trim() || null,
       })
-      setAdvice(res)
-      setSelectedProfile(res.recommended_profile_id)
+      toast.success(t('hpxPulse.createSuccess', { defaultValue: 'Pulse created — copy install commands below' }))
+      onCreated?.(res)
+      onOpenChange(false)
     } catch (e) {
       handleError(e)
     }
   }
 
-  const create = async (values: FormValues) => {
+  const previewAdvise = async () => {
+    const valid = await form.trigger(['cpu_cores', 'ram_mb', 'goal'])
+    if (!valid) return
     try {
-      const res = await createMutation.mutateAsync({
-        name: values.name,
-        iran_public_ip: values.iran_public_ip,
-        abroad_public_ip: values.abroad_public_ip,
-        goal: values.goal,
-        cpu_cores: values.cpu_cores,
-        ram_mb: values.ram_mb,
-        udp_reachable: values.udp_reachable === 'unknown' ? null : values.udp_reachable === 'yes',
-        packet_loss_pct: values.packet_loss_pct,
-        profile_id: selectedProfile ?? advice?.recommended_profile_id,
-        control_port: values.control_port,
-        port_forwards: values.port_forwards.map(toBackpackPortString),
-        domain: values.domain || null,
-        sni_hint: values.sni_hint || null,
-      })
-      onCreated?.(res)
-      onOpenChange(false)
+      await runAdvise()
     } catch (e) {
       handleError(e)
     }
@@ -135,7 +166,7 @@ export default function HpxPulseWizard({ open, onOpenChange, onCreated }: Props)
           <DialogTitle>{t('hpxPulse.wizard.title', { defaultValue: 'HPX Pulse Advisor' })}</DialogTitle>
           <DialogDescription>
             {t('hpxPulse.wizard.description', {
-              defaultValue: 'Smart profile picker for HPX Direct + Reality front on Iran.',
+              defaultValue: 'Fill IPs and click Create — recommendation runs automatically.',
             })}
           </DialogDescription>
         </DialogHeader>
@@ -166,13 +197,15 @@ export default function HpxPulseWizard({ open, onOpenChange, onCreated }: Props)
               <FormField control={form.control} name="iran_public_ip" render={({ field }) => (
                 <FormItem>
                   <FormLabel>{t('hpxPulse.iranIp', { defaultValue: 'Iran public IP' })}</FormLabel>
-                  <FormControl><Input {...field} dir="ltr" /></FormControl>
+                  <FormControl><Input {...field} dir="ltr" placeholder="1.2.3.4" /></FormControl>
+                  <FormMessage />
                 </FormItem>
               )} />
               <FormField control={form.control} name="abroad_public_ip" render={({ field }) => (
                 <FormItem>
                   <FormLabel>{t('hpxPulse.abroadIp', { defaultValue: 'Abroad public IP' })}</FormLabel>
-                  <FormControl><Input {...field} dir="ltr" /></FormControl>
+                  <FormControl><Input {...field} dir="ltr" placeholder="5.6.7.8" /></FormControl>
+                  <FormMessage />
                 </FormItem>
               )} />
               <FormField control={form.control} name="cpu_cores" render={({ field }) => (
@@ -189,7 +222,7 @@ export default function HpxPulseWizard({ open, onOpenChange, onCreated }: Props)
               )} />
               <FormField control={form.control} name="domain" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>{t('hpxPulse.domain', { defaultValue: 'Domain on Iran' })}</FormLabel>
+                  <FormLabel>{t('hpxPulse.domain', { defaultValue: 'Domain on Iran (optional)' })}</FormLabel>
                   <FormControl><Input {...field} dir="ltr" placeholder="vpn.example.com" /></FormControl>
                 </FormItem>
               )} />
@@ -266,9 +299,9 @@ export default function HpxPulseWizard({ open, onOpenChange, onCreated }: Props)
               ))}
             </div>
 
-            <Button type="button" variant="secondary" onClick={runAdvise} disabled={adviseMutation.isPending}>
+            <Button type="button" variant="secondary" onClick={previewAdvise} disabled={adviseMutation.isPending}>
               <Sparkles className="size-4" />
-              {t('hpxPulse.advise', { defaultValue: 'Get AI recommendation' })}
+              {t('hpxPulse.advise', { defaultValue: 'Preview recommendation (optional)' })}
             </Button>
 
             {advice && (
@@ -291,11 +324,6 @@ export default function HpxPulseWizard({ open, onOpenChange, onCreated }: Props)
                     <p className="text-muted-foreground mt-1">{fa ? p.reasons_fa[0] : p.reasons[0]}</p>
                   </button>
                 ))}
-                <ul className="text-muted-foreground list-inside list-disc text-xs">
-                  {(fa ? advice.reality_front.checklist_fa : advice.reality_front.checklist).map(line => (
-                    <li key={line}>{line}</li>
-                  ))}
-                </ul>
               </div>
             )}
 
@@ -303,7 +331,7 @@ export default function HpxPulseWizard({ open, onOpenChange, onCreated }: Props)
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 {t('cancel', { defaultValue: 'Cancel' })}
               </Button>
-              <LoaderButton type="submit" loading={createMutation.isPending} disabled={!advice}>
+              <LoaderButton type="submit" loading={createMutation.isPending || adviseMutation.isPending}>
                 {t('hpxPulse.create', { defaultValue: 'Create Pulse' })}
               </LoaderButton>
             </div>

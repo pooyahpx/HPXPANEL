@@ -192,15 +192,23 @@ EOF
 send_heartbeat() {
   local running="false"
   local iface="false"
+  local peer lat lat_json="null"
   tunnel_service_active && running="true"
   tunnel_iface_up && iface="true"
+  peer="10.10.0.2"
+  [ "${PULSE_SIDE:-}" = "abroad" ] && peer="10.10.0.1"
+  if [ "$iface" = "true" ] && has ping; then
+    lat=$(ping -c 3 -W 2 "$peer" 2>/dev/null | tail -1 | sed -n 's/.*= \([0-9.]*\)\/.*/\1/p')
+    [ -n "$lat" ] && lat_json="$lat"
+  fi
   api POST "/api/hpx_pulse/agent/heartbeat" \
     "$(jq -nc \
       --arg s "running" \
       --arg h "$(hostname -f 2>/dev/null || hostname)" \
       --argjson tr "$running" \
       --argjson iu "$iface" \
-      '{status:$s, host:$h, backpack_running:$tr, iface_up:$iu, message:"HPX Pulse sync"}')" \
+      --argjson lm "$lat_json" \
+      '{status:$s, host:$h, backpack_running:$tr, iface_up:$iu, latency_ms:($lm|tonumber? // null), message:"HPX Pulse sync"}')" \
     >/dev/null || warn "heartbeat to panel failed — check PANEL_URL and firewall"
 }
 

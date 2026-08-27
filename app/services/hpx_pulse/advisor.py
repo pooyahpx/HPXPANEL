@@ -8,6 +8,14 @@ from app.models.hpx_pulse import (
 )
 
 _PROFILES: dict[str, dict] = {
+    "pulse-tcp-stealth": {
+        "title": "Direct TCP Stealth (PCK)",
+        "title_fa": "دایرکت TCP Stealth (PCK)",
+        "tunnel_mode": "direct_l3",
+        "carrier": "pck",
+        "preset": "balance",
+        "base_score": 88,
+    },
     "pulse-stealth-balance": {
         "title": "Stealth Direct (Balance)",
         "title_fa": "دایرکت Stealth (Balance)",
@@ -22,7 +30,7 @@ _PROFILES: dict[str, dict] = {
         "tunnel_mode": "direct_l3",
         "carrier": "udp",
         "preset": "balance",
-        "base_score": 70,
+        "base_score": 55,
     },
     "pulse-lossy-kcp": {
         "title": "Lossy path (Reverse KCP+FEC)",
@@ -81,22 +89,36 @@ def advise(
         preset = meta["preset"]
         tunnel_mode = meta["tunnel_mode"]
 
-        if pid == "pulse-stealth-balance":
+        if pid == "pulse-tcp-stealth":
+            reasons.append("TCP-shaped stealth carrier (PCK) — best default for filtered paths")
+            reasons_fa.append("حامل TCP Stealth (PCK) — پیش‌فرض مناسب برای مسیر فیلترشده")
+            if req.goal in {"stealth", "balanced"}:
+                score += 12
             if low_cpu:
-                score -= 25
-                carrier = "udp"
-                opt_warnings.append("1 CPU core: PCK disabled — using UDP carrier instead")
-                reasons.append("Single-core VPS: lighter UDP carrier instead of PCP")
-                reasons_fa.append("VPS تک‌هسته: حامل UDP سبک‌تر به‌جای PCK")
+                score -= 15
+                opt_warnings.append("1 CPU core: PCK is CPU-heavy — consider 2+ cores or UDP profile")
+                reasons.append("Single-core: PCK works but CPU will spike under load")
+                reasons_fa.append("تک‌هسته: PCK کار می‌کند ولی CPU زیر بار بالا می‌رود")
+            reasons.append("Direct L3 + Noise/GRE — HPX Direct tunnel")
+            reasons_fa.append("Direct L3 + Noise/GRE — تونل HPX Direct")
+
+        elif pid == "pulse-stealth-balance":
+            if low_cpu:
+                score -= 10
+                opt_warnings.append("1 CPU core: prefer pulse-tcp-stealth with Balance preset")
             else:
-                reasons.append("Filtered path: PCK carrier hides socket from firewall")
-                reasons_fa.append("مسیر فیلترشده: حامل PCK سوکت را از فایروال پنهان می‌کند")
+                reasons.append("Filtered path: PCK carrier hides socket fingerprint")
+                reasons_fa.append("مسیر فیلترشده: PCK اثر TCP بدون سوکت واقعی")
             if req.goal == "stealth":
-                score += 10
-            reasons.append("Direct L3 + Noise/GRE inside BackPack")
-            reasons_fa.append("Direct L3 با GRE+Noise داخل BackPack")
+                score += 8
+            reasons.append("Direct L3 + Noise/GRE inside HPX engine")
+            reasons_fa.append("Direct L3 با GRE+Noise")
 
         elif pid == "pulse-clean-udp":
+            if req.goal in {"stealth", "balanced"}:
+                score -= 10
+            if req.goal == "speed":
+                score += 10
             if req.udp_reachable is False:
                 score -= 40
                 opt_warnings.append("UDP path reported blocked — not recommended")
@@ -156,5 +178,5 @@ def advise(
 
 def profile_meta(profile_id: str) -> dict:
     if profile_id not in _PROFILES:
-        profile_id = "pulse-stealth-balance"
+        profile_id = "pulse-tcp-stealth"
     return {"profile_id": profile_id, **_PROFILES[profile_id]}

@@ -242,34 +242,75 @@ EOF
   systemctl enable --now "$TIMER_NAME" >/dev/null
 }
 
+# TCP connect RTT in ms (reverse tunnels — ICMP is often blocked on VPS).
+measure_tcp_ms() {
+  local host="$1" port="$2"
+  [ -n "$host" ] && [ -n "$port" ] || return 1
+  if has python3; then
+    python3 -c "
+import socket, time
+s = socket.socket(); s.settimeout(3.0)
+t = time.time()
+try:
+    s.connect(('$host', int('$port')))
+    print(f'{(time.time() - t) * 1000:.1f}')
+except Exception:
+    pass
+finally:
+    s.close()
+" 2>/dev/null
+    return 0
+  fi
+  if has python; then
+    python -c "
+import socket, time
+s = socket.socket(); s.settimeout(3.0)
+t = time.time()
+try:
+    s.connect(('$host', int('$port')))
+    print('%.1f' % ((time.time() - t) * 1000))
+except Exception:
+    pass
+finally:
+    s.close()
+" 2>/dev/null
+    return 0
+  fi
+  return 1
+}
+
+measure_icmp_ms() {
+  local peer="$1"
+  [ -n "$peer" ] && has ping || return 1
+  ping -c 3 -W 2 "$peer" 2>/dev/null | tail -1 | sed -n 's/.*= \([0-9.]*\)\/.*/\1/p'
+}
+
 send_heartbeat() {
   local running="false"
   local link="false"
-  local peer lat lat_json="null"
+  local lat="" lat_json="null"
   tunnel_service_active && running="true"
   tunnel_link_up && link="true"
+
   case "${TUNNEL_MODE:-direct_l3}" in
     direct_l3)
-      peer="10.10.0.2"
-      [ "${PULSE_SIDE:-}" = "abroad" ] && peer="10.10.0.1"
-      ;;
-    reverse_*)
-      if [ "${PULSE_SIDE:-}" = "abroad" ] && [ -n "${IRAN_PUBLIC_IP:-}" ]; then
-        peer="$IRAN_PUBLIC_IP"
-      elif [ "${PULSE_SIDE:-}" = "iran" ] && [ -n "${ABROAD_PUBLIC_IP:-}" ]; then
-        peer="$ABROAD_PUBLIC_IP"
-      else
-        peer=""
+      if [ "$link" = "true" ]; then
+        local peer="10.10.0.2"
+        [ "${PULSE_SIDE:-}" = "abroad" ] && peer="10.10.0.1"
+        lat="$(measure_icmp_ms "$peer" || true)"
       fi
       ;;
-    *)
-      peer=""
+    reverse_*)
+      # Abroad dials Iran tunnel port — TCP RTT is the real reverse latency.
+      # Iran does not measure (avoids null overwriting abroad's value).
+      if [ "${PULSE_SIDE:-}" = "abroad" ] && [ "$running" = "true" ] \
+        && [ -n "${IRAN_PUBLIC_IP:-}" ] && [ -n "${CONTROL_PORT:-}" ]; then
+        lat="$(measure_tcp_ms "$IRAN_PUBLIC_IP" "$CONTROL_PORT" || true)"
+      fi
       ;;
   esac
-  if [ "$link" = "true" ] && [ -n "$peer" ] && has ping; then
-    lat=$(ping -c 3 -W 2 "$peer" 2>/dev/null | tail -1 | sed -n 's/.*= \([0-9.]*\)\/.*/\1/p')
-    [ -n "$lat" ] && lat_json="$lat"
-  fi
+
+  [ -n "$lat" ] && lat_json="$lat"
   api POST "/api/hpx_pulse/agent/heartbeat" \
     "$(jq -nc \
       --arg s "running" \

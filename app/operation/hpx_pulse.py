@@ -381,10 +381,13 @@ class HpxPulseOperation(BaseOperation):
         update_data = {
             f"{prefix}_agent_last_seen": dt.now(UTC),
             f"{prefix}_agent_host": model.host or getattr(db_pulse, f"{prefix}_agent_host"),
-            "latency_ms": model.latency_ms,
-            "packet_loss_pct": model.packet_loss_pct,
             "message": model.message,
         }
+        # Only write latency when measured — null must not wipe a good reading from the other side.
+        if model.latency_ms is not None:
+            update_data["latency_ms"] = model.latency_ms
+        if model.packet_loss_pct is not None:
+            update_data["packet_loss_pct"] = model.packet_loss_pct
         if model.status in {HpxPulseStatus.running.value, "running"} and db_pulse.iran_agent_key_hash and db_pulse.abroad_agent_key_hash:
             if model.tunnel_running or model.iface_up:
                 update_data["status"] = HpxPulseStatus.running

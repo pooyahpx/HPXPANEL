@@ -692,7 +692,7 @@ export function ThemeProvider({
   // Enhanced setRadius function
   const setRadius = useCallback(
     (newRadius: Radius) => {
-      if (['0', '0.3rem', '0.5rem', '0.75rem'].includes(newRadius)) {
+      if (['0', '0.3rem', '0.5rem', '0.75rem', '1rem'].includes(newRadius)) {
         if (safeLocalStorage.setItem(radiusStorageKey, newRadius)) {
           setRadiusState(newRadius)
         } else {

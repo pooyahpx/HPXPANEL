@@ -1,25 +1,51 @@
 import { useTranslation } from 'react-i18next'
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
-import { Label } from '@/components/ui/label'
 import { useTheme, colorThemes, type ColorTheme, type Radius } from '@/app/providers/theme-provider'
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
-import { CheckCircle2, SunMoon, Palette, Ruler, Eye, RotateCcw, Sun, Moon, Monitor, CalendarClock, Languages, BarChart3, TrendingUp, FileJson2 } from 'lucide-react'
+import {
+  SunMoon,
+  Palette,
+  Ruler,
+  Eye,
+  RotateCcw,
+  Sun,
+  Moon,
+  Monitor,
+  CalendarClock,
+  BarChart3,
+  TrendingUp,
+  FileJson2,
+  Type,
+  Rows3,
+  Sparkles,
+  Accessibility,
+  Check,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import useDirDetection from '@/hooks/use-dir-detection'
 import { Switch } from '@/components/ui/switch'
+import useDirDetection from '@/hooks/use-dir-detection'
 import {
   getCoresListUseConfigModal,
   getDatePickerPreference,
   getChartViewTypePreference,
+  getUiDensity,
+  getFontScale,
+  getReducedMotion,
+  getMeshBackground,
   setCoresListUseConfigModal,
   setDatePickerPreference,
   setChartViewTypePreference,
+  setUiDensity,
+  setFontScale,
+  setReducedMotion,
+  setMeshBackground,
+  resetUiAppearancePrefs,
   type DatePickerPreference,
   type ChartViewType,
+  type UiDensity,
+  type FontScale,
 } from '@/utils/userPreferenceStorage'
-import { isPersianLocaleLanguage } from '@/utils/datePickerUtils'
 
 const colorThemeData = [
   { name: 'default', label: 'theme.default', dot: '#2563eb' },
@@ -33,25 +59,78 @@ const colorThemeData = [
 ] as const
 
 const radiusOptions = [
-  { value: '0', label: 'theme.radiusNone', description: '0px' },
-  { value: '0.3rem', label: 'theme.radiusSmall', description: '0.3rem' },
-  { value: '0.5rem', label: 'theme.radiusMedium', description: '0.5rem' },
-  { value: '0.75rem', label: 'theme.radiusLarge', description: '0.75rem' },
+  { value: '0', label: 'theme.radiusNone', description: '0' },
+  { value: '0.3rem', label: 'theme.radiusSmall', description: 'S' },
+  { value: '0.5rem', label: 'theme.radiusMedium', description: 'M' },
+  { value: '0.75rem', label: 'theme.radiusLarge', description: 'L' },
+  { value: '1rem', label: 'theme.radiusXl', description: 'XL' },
 ] as const
 
-const modeOptions = ['light', 'dark', 'system'] as const
+const modeOptions = [
+  { id: 'light' as const, icon: Sun },
+  { id: 'dark' as const, icon: Moon },
+  { id: 'system' as const, icon: Monitor },
+]
 
-const modeIcons: Record<(typeof modeOptions)[number], ReactNode> = {
-  light: <Sun className="text-primary h-4 w-4" />,
-  dark: <Moon className="text-primary h-4 w-4" />,
-  system: <Monitor className="text-primary h-4 w-4" />,
+const densityOptions: { id: UiDensity; labelKey: string }[] = [
+  { id: 'compact', labelKey: 'theme.densityCompact' },
+  { id: 'comfortable', labelKey: 'theme.densityComfortable' },
+  { id: 'spacious', labelKey: 'theme.densitySpacious' },
+]
+
+const fontScaleOptions: { id: FontScale; label: string }[] = [
+  { id: 'sm', label: 'S' },
+  { id: 'md', label: 'M' },
+  { id: 'lg', label: 'L' },
+]
+
+function Segmented<T extends string>({
+  value,
+  options,
+  onChange,
+  className,
+}: {
+  value: T
+  options: { id: T; label: string; icon?: React.ReactNode }[]
+  onChange: (v: T) => void
+  className?: string
+}) {
+  return (
+    <div className={cn('bg-muted/50 grid gap-1 rounded-xl border p-1', className)} style={{ gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }}>
+      {options.map(opt => (
+        <button
+          key={opt.id}
+          type="button"
+          onClick={() => onChange(opt.id)}
+          className={cn(
+            'flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-medium transition-all sm:text-sm',
+            value === opt.id ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-background/80 hover:text-foreground',
+          )}
+        >
+          {opt.icon}
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  )
 }
 
-const chartViewOptions = ['bar', 'area'] as const
-
-const chartViewIcons: Record<(typeof chartViewOptions)[number], ReactNode> = {
-  bar: <BarChart3 className="text-primary h-4 w-4" />,
-  area: <TrendingUp className="text-primary h-4 w-4" />,
+function Panel({ title, icon, description, children, action }: { title: string; icon: React.ReactNode; description?: string; children: React.ReactNode; action?: React.ReactNode }) {
+  return (
+    <section className="border-border/60 bg-card/40 space-y-3 rounded-2xl border p-4 backdrop-blur-sm sm:p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 space-y-1">
+          <div className="flex items-center gap-2">
+            <span className="text-primary">{icon}</span>
+            <h3 className="text-sm font-semibold sm:text-base">{title}</h3>
+          </div>
+          {description ? <p className="text-muted-foreground text-xs leading-relaxed">{description}</p> : null}
+        </div>
+        {action}
+      </div>
+      {children}
+    </section>
+  )
 }
 
 export default function ThemeSettings() {
@@ -62,397 +141,330 @@ export default function ThemeSettings() {
   const [datePickerPreference, setDatePickerPreferenceState] = useState<DatePickerPreference>('locale')
   const [chartViewType, setChartViewTypeState] = useState<ChartViewType>('bar')
   const [coresListUseConfigModal, setCoresListUseConfigModalState] = useState(false)
+  const [density, setDensityState] = useState<UiDensity>('comfortable')
+  const [fontScale, setFontScaleState] = useState<FontScale>('md')
+  const [reducedMotion, setReducedMotionState] = useState(false)
+  const [meshBg, setMeshBgState] = useState(true)
+
   const isDatePickerFollowingLocale = datePickerPreference === 'locale'
-  const defaultManualDatePreference: Exclude<DatePickerPreference, 'locale'> = isPersianLocaleLanguage(i18n.resolvedLanguage ?? i18n.language) ? 'persian' : 'gregorian'
-  const datePickerModeCopy: Record<DatePickerPreference, string> = {
-    locale: t('theme.datePickerModeLocale'),
-    gregorian: t('theme.datePickerModeGregorian'),
-    persian: t('theme.datePickerModePersian'),
-  }
-  const chartViewTypeCopy: Record<ChartViewType, string> = {
-    bar: t('theme.chartViewBar'),
-    area: t('theme.chartViewArea'),
-  }
+  const defaultManualDatePreference: Exclude<DatePickerPreference, 'locale'> = i18n.language?.startsWith('fa') ? 'persian' : 'gregorian'
 
   useEffect(() => {
     setDatePickerPreferenceState(getDatePickerPreference())
     setChartViewTypeState(getChartViewTypePreference())
     setCoresListUseConfigModalState(getCoresListUseConfigModal())
+    setDensityState(getUiDensity())
+    setFontScaleState(getFontScale())
+    setReducedMotionState(getReducedMotion())
+    setMeshBgState(getMeshBackground())
   }, [])
 
-  const handleThemeChange = (newTheme: 'light' | 'dark' | 'system') => {
-    setTheme(newTheme)
+  const colorLabel = useMemo(() => t(colorThemeData.find(c => c.name === colorTheme)?.label || 'theme.default'), [colorTheme, t])
 
-    // Get the appropriate icon for the toast
-    const getThemeIcon = (theme: string) => {
-      switch (theme) {
-        case 'light':
-          return '☀️'
-        case 'dark':
-          return '🌙'
-        case 'system':
-          return '💻'
-        default:
-          return '🎨'
-      }
-    }
-
-    toast.success(t('success'), {
-      description: `${getThemeIcon(newTheme)} ${t('theme.themeChanged')}`,
-      duration: 2000,
-    })
-  }
-
-  const handleColorChange = (colorName: string) => {
-    if (Object.keys(colorThemes).includes(colorName)) {
-      setColorTheme(colorName as ColorTheme)
-
-      // Get the color dot for the toast
-      const colorData = colorThemeData.find(c => c.name === colorName)
-      const colorEmoji = '🎨'
-
-      toast.success(t('success'), {
-        description: `${colorEmoji} ${t('theme.themeSaved')} - ${t(colorData?.label || '')}`,
-        duration: 2000,
-      })
-    }
-  }
-
-  const handleRadiusChange = (radiusValue: string) => {
-    if (['0', '0.3rem', '0.5rem', '0.75rem'].includes(radiusValue)) {
-      setRadius(radiusValue as Radius)
-
-      const radiusData = radiusOptions.find(r => r.value === radiusValue)
-
-      toast.success(t('success'), {
-        description: `📐 ${t('theme.radiusSaved')} - ${t(radiusData?.label || '')}`,
-        duration: 2000,
-      })
-    }
-  }
-
-  const persistDatePickerPreference = (preference: DatePickerPreference) => {
-    setDatePickerPreferenceState(preference)
-    setDatePickerPreference(preference)
-    toast.success(t('success'), {
-      description: `📅 ${t('theme.datePickerPreferenceSaved')} • ${datePickerModeCopy[preference]}`,
-      duration: 2000,
-    })
-  }
-
-  const handleDatePickerAutoToggle = (checked: boolean) => {
-    if (checked) {
-      persistDatePickerPreference('locale')
-      return
-    }
-    const nextPreference = datePickerPreference === 'locale' ? defaultManualDatePreference : datePickerPreference
-    persistDatePickerPreference(nextPreference)
-  }
-
-  const handleManualDatePreferenceChange = (preference: Exclude<DatePickerPreference, 'locale'>) => {
-    persistDatePickerPreference(preference)
-  }
-
-  const handleChartViewTypeChange = (viewType: ChartViewType) => {
-    setChartViewTypeState(viewType)
-    setChartViewTypePreference(viewType)
-    toast.success(t('success'), {
-      description: `📊 ${t('theme.chartViewSaved')} • ${chartViewTypeCopy[viewType]}`,
-      duration: 2000,
-    })
-  }
-
-  const handleCoresListUseConfigModalChange = (checked: boolean) => {
-    setCoresListUseConfigModalState(checked)
-    setCoresListUseConfigModal(checked)
-    toast.success(t('success'), {
-      description: `🧩 ${t('theme.coresListEditorSaved')} • ${checked ? t('theme.coresListEditorModal') : t('theme.coresListEditorFullPage')}`,
-      duration: 2000,
-    })
+  const notify = (description: string) => {
+    toast.success(t('success'), { description, duration: 1800 })
   }
 
   const handleResetToDefaults = async () => {
     setIsResetting(true)
     try {
       resetToDefaults()
-      setDatePickerPreferenceState('locale')
+      resetUiAppearancePrefs()
       setDatePickerPreference('locale')
-      setChartViewTypeState('bar')
       setChartViewTypePreference('bar')
-      setCoresListUseConfigModalState(false)
       setCoresListUseConfigModal(false)
-      toast.success(t('success'), {
-        description: '🔄 ' + t('theme.resetSuccess'),
-        duration: 3000,
-      })
-    } catch (error) {
-      toast.error(t('error'), {
-        description: '❌ ' + t('theme.resetFailed'),
-        duration: 3000,
-      })
+      setDatePickerPreferenceState('locale')
+      setChartViewTypeState('bar')
+      setCoresListUseConfigModalState(false)
+      setDensityState('comfortable')
+      setFontScaleState('md')
+      setReducedMotionState(false)
+      setMeshBgState(true)
+      notify(t('theme.resetSuccess'))
+    } catch {
+      toast.error(t('error'), { description: t('theme.resetFailed') })
     } finally {
       setIsResetting(false)
     }
   }
 
   return (
-    <div className="space-y-10 px-4 pt-6 pb-12 sm:pt-8">
-      <section className="space-y-3">
-        <div className="flex items-start justify-between gap-3">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <SunMoon className="text-primary h-4 w-4" />
-              <p className="text-base font-semibold sm:text-lg">{t('theme.mode')}</p>
-            </div>
-            <p className="text-muted-foreground text-xs leading-relaxed sm:text-sm">{t('theme.modeDescription')}</p>
+    <div dir={dir} className="gap-6 px-3 pt-4 pb-16 sm:px-4 sm:pt-6 lg:grid lg:grid-cols-[minmax(0,1fr)_280px] lg:items-start xl:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="space-y-4">
+        <header className="space-y-1">
+          <p className="text-muted-foreground text-[11px] font-medium tracking-[0.18em] uppercase">{t('theme.studioEyebrow', { defaultValue: 'Appearance studio' })}</p>
+          <h2 className="text-xl font-semibold tracking-tight sm:text-2xl">{t('theme.title')}</h2>
+          <p className="text-muted-foreground max-w-2xl text-sm">{t('theme.studioIntro', { defaultValue: 'Mode, color, density, motion — tuned live. Your panel, your deck.' })}</p>
+        </header>
+
+        <Panel
+          title={t('theme.mode')}
+          icon={<SunMoon className="h-4 w-4" />}
+          description={t('theme.modeDescription')}
+          action={
+            isSystemTheme ? (
+              <span className="text-muted-foreground shrink-0 text-[11px]">
+                {t('theme.system')}: {resolvedTheme === 'dark' ? t('theme.dark') : t('theme.light')}
+              </span>
+            ) : null
+          }
+        >
+          <Segmented
+            value={theme}
+            onChange={v => {
+              setTheme(v)
+              notify(t('theme.themeChanged'))
+            }}
+            options={modeOptions.map(m => ({
+              id: m.id,
+              label: t(`theme.${m.id}`),
+              icon: <m.icon className="h-3.5 w-3.5" />,
+            }))}
+          />
+        </Panel>
+
+        <Panel title={t('theme.color')} icon={<Palette className="h-4 w-4" />} description={t('theme.colorDescription')}>
+          <div className="grid grid-cols-4 gap-2 sm:grid-cols-8">
+            {colorThemeData.map(color => {
+              const active = colorTheme === color.name
+              return (
+                <button
+                  key={color.name}
+                  type="button"
+                  title={t(color.label)}
+                  onClick={() => {
+                    if (Object.keys(colorThemes).includes(color.name)) {
+                      setColorTheme(color.name as ColorTheme)
+                      notify(`${t('theme.themeSaved')} — ${t(color.label)}`)
+                    }
+                  }}
+                  className={cn(
+                    'relative flex aspect-square items-center justify-center rounded-xl border transition-all',
+                    active ? 'border-primary ring-primary/40 scale-[1.03] ring-2' : 'border-border/60 hover:border-primary/50',
+                  )}
+                  style={{ background: `linear-gradient(145deg, ${color.dot}, color-mix(in srgb, ${color.dot} 55%, black))` }}
+                  aria-label={t(color.label)}
+                >
+                  {active ? <Check className="h-4 w-4 text-white drop-shadow" /> : null}
+                </button>
+              )
+            })}
           </div>
-          {isSystemTheme && (
-            <span className="text-muted-foreground text-xs sm:text-sm rtl:text-left">
-              {t('theme.system')}: {resolvedTheme === 'dark' ? t('theme.dark') : t('theme.light')}
-            </span>
-          )}
+          <p className="text-muted-foreground text-xs">
+            {t('theme.currentTheme')}: <span className="text-foreground font-medium">{colorLabel}</span>
+          </p>
+        </Panel>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Panel title={t('theme.radius')} icon={<Ruler className="h-4 w-4" />} description={t('theme.radiusDescription')}>
+            <div className="grid grid-cols-5 gap-1.5">
+              {radiusOptions.map(option => {
+                const active = radius === option.value
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => {
+                      setRadius(option.value as Radius)
+                      notify(t('theme.radiusSaved'))
+                    }}
+                    className={cn(
+                      'flex flex-col items-center gap-1.5 rounded-xl border px-1 py-2 text-[10px] transition-colors',
+                      active ? 'border-primary bg-primary/10 text-foreground' : 'border-border/60 text-muted-foreground hover:border-primary/40',
+                    )}
+                  >
+                    <span className="bg-muted border-border flex h-8 w-8 items-center justify-center border" style={{ borderRadius: option.value }}>
+                      <span className="bg-primary/40 h-3 w-3" style={{ borderRadius: option.value }} />
+                    </span>
+                    {t(option.label)}
+                  </button>
+                )
+              })}
+            </div>
+          </Panel>
+
+          <Panel title={t('theme.density', { defaultValue: 'Density' })} icon={<Rows3 className="h-4 w-4" />} description={t('theme.densityDescription', { defaultValue: 'How tight the deck feels.' })}>
+            <Segmented
+              value={density}
+              onChange={v => {
+                setDensityState(v)
+                setUiDensity(v)
+                notify(t('theme.densitySaved', { defaultValue: 'Density updated' }))
+              }}
+              options={densityOptions.map(d => ({ id: d.id, label: t(d.labelKey, { defaultValue: d.id }) }))}
+            />
+          </Panel>
         </div>
 
-        <RadioGroup value={theme} onValueChange={handleThemeChange} className="grid gap-3 sm:grid-cols-3">
-          {modeOptions.map(option => (
-            <div dir={dir} key={option} className="relative">
-              <RadioGroupItem value={option} id={option} className="peer sr-only" />
-              <Label
-                htmlFor={option}
-                dir={dir}
-                className={cn(
-                  'border-border/70 bg-background flex cursor-pointer items-start justify-between gap-3 rounded-lg border px-3 py-3 text-xs transition-colors sm:px-4 sm:text-sm',
-                  'hover:border-primary/60 hover:bg-accent/40',
-                  'peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5',
-                )}
-              >
-                <div className="min-w-0 flex-1 space-y-1">
-                  <div className="flex items-center gap-2">
-                    {modeIcons[option]}
-                    <span className="font-medium">{t(`theme.${option}`)}</span>
-                  </div>
-                  <span className="text-muted-foreground block text-xs leading-relaxed">{t(`theme.${option}Description`)}</span>
-                </div>
-                {theme === option && <CheckCircle2 className="text-primary h-4 w-4 flex-shrink-0 ltr:ml-auto rtl:mr-auto" />}
-              </Label>
-            </div>
-          ))}
-        </RadioGroup>
-      </section>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Panel title={t('theme.fontScale', { defaultValue: 'Type scale' })} icon={<Type className="h-4 w-4" />} description={t('theme.fontScaleDescription', { defaultValue: 'Base text size for the whole panel.' })}>
+            <Segmented
+              value={fontScale}
+              onChange={v => {
+                setFontScaleState(v)
+                setFontScale(v)
+                notify(t('theme.fontScaleSaved', { defaultValue: 'Type scale updated' }))
+              }}
+              options={fontScaleOptions.map(f => ({ id: f.id, label: f.label }))}
+            />
+          </Panel>
 
-      <section className="space-y-3">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <Palette className="text-primary h-4 w-4" />
-            <p className="text-base font-semibold sm:text-lg">{t('theme.color')}</p>
-          </div>
-          <p className="text-muted-foreground text-xs leading-relaxed sm:text-sm">{t('theme.colorDescription')}</p>
+          <Panel title={t('theme.chartViewType')} icon={<BarChart3 className="h-4 w-4" />} description={t('theme.chartViewDescription')}>
+            <Segmented
+              value={chartViewType}
+              onChange={v => {
+                setChartViewTypeState(v)
+                setChartViewTypePreference(v)
+                notify(t('theme.chartViewSaved'))
+              }}
+              options={[
+                { id: 'bar' as const, label: t('theme.chartViewBar'), icon: <BarChart3 className="h-3.5 w-3.5" /> },
+                { id: 'area' as const, label: t('theme.chartViewArea'), icon: <TrendingUp className="h-3.5 w-3.5" /> },
+              ]}
+            />
+          </Panel>
         </div>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-          {colorThemeData.map(color => (
-            <button
-              key={color.name}
-              onClick={() => handleColorChange(color.name)}
-              dir={dir}
-              className={cn(
-                'group border-border/70 flex items-center gap-3 rounded-md border px-3 py-3 text-left transition-colors sm:px-4',
-                'hover:border-primary/60 hover:bg-accent/40',
-                colorTheme === color.name ? 'border-primary bg-primary/5' : 'bg-background',
-              )}
-              aria-label={color.label}
-            >
-              <span
-                className={cn('h-8 w-8 rounded-full border shadow-sm transition-transform group-hover:scale-105', colorTheme === color.name ? 'border-primary' : 'border-border')}
-                style={{ background: color.dot }}
+
+        <Panel title={t('theme.datePicker')} icon={<CalendarClock className="h-4 w-4" />} description={t('theme.datePickerDescription')}>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center justify-between gap-3 sm:justify-start">
+              <span className="text-xs font-medium">{t('theme.datePickerFollowLocale')}</span>
+              <Switch
+                checked={isDatePickerFollowingLocale}
+                onCheckedChange={checked => {
+                  const next = checked ? 'locale' : defaultManualDatePreference
+                  setDatePickerPreferenceState(next)
+                  setDatePickerPreference(next)
+                  notify(t('theme.datePickerPreferenceSaved'))
+                }}
               />
-              <span className="text-xs font-medium sm:text-sm">{t(color.label)}</span>
-              {colorTheme === color.name && <CheckCircle2 className="text-primary h-4 w-4 ltr:ml-auto rtl:mr-auto" />}
-            </button>
-          ))}
-        </div>
-      </section>
-
-      <section className="space-y-3">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <Ruler className="text-primary h-4 w-4" />
-            <p className="text-base font-semibold sm:text-lg">{t('theme.radius')}</p>
-          </div>
-          <p className="text-muted-foreground text-xs leading-relaxed sm:text-sm">{t('theme.radiusDescription')}</p>
-        </div>
-        <RadioGroup value={radius} onValueChange={handleRadiusChange} className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          {radiusOptions.map(option => (
-            <div key={option.value} className="relative">
-              <RadioGroupItem value={option.value} id={`radius-${option.value}`} className="peer sr-only" />
-              <Label
-                htmlFor={`radius-${option.value}`}
-                dir={dir}
-                className={cn(
-                  'border-border/70 bg-background flex cursor-pointer flex-wrap items-start gap-3 rounded-lg border px-3 py-3 text-xs transition-colors sm:px-4 sm:text-sm',
-                  'hover:border-primary/50 hover:bg-accent/40',
-                  'peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5',
-                  'sm:flex-nowrap sm:items-center',
-                )}
-              >
-                <div className="bg-muted flex h-10 w-10 flex-shrink-0 items-center justify-center rounded border" style={{ borderRadius: option.value }}>
-                  <div className="bg-primary/30 h-4 w-4" style={{ borderRadius: option.value }} />
-                </div>
-                <div className="min-w-0 flex-1 space-y-0.5">
-                  <span className="block font-medium">{t(option.label)}</span>
-                  <span className="text-muted-foreground block text-xs leading-relaxed break-words">{option.description}</span>
-                </div>
-                {radius === option.value && <CheckCircle2 className="text-primary h-4 w-4 flex-shrink-0 ltr:ml-auto rtl:mr-auto" />}
-              </Label>
-            </div>
-          ))}
-        </RadioGroup>
-      </section>
-
-      <section className="space-y-3">
-        <div className="border-border/70 bg-background/60 flex flex-col gap-3 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between sm:p-4">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <CalendarClock className="text-primary h-4 w-4" />
-              <p className="text-base font-semibold sm:text-lg">{t('theme.datePicker')}</p>
-            </div>
-            <p className="text-muted-foreground text-xs leading-relaxed sm:text-sm">{t('theme.datePickerDescription')}</p>
-          </div>
-          <div className="border-border/70 bg-muted/40 flex items-center justify-between gap-3 rounded-lg border px-3 py-2">
-            <div className="space-y-0.5">
-              <p className="text-foreground text-xs font-medium">{t('theme.datePickerFollowLocale')}</p>
-              <p className="text-muted-foreground text-[11px] leading-relaxed">{t('theme.datePickerManualHint')}</p>
-            </div>
-            <Switch checked={isDatePickerFollowingLocale} onCheckedChange={handleDatePickerAutoToggle} aria-label={t('theme.datePickerFollowLocale')} />
-          </div>
-        </div>
-
-        <div className="border-border/70 bg-muted/30 grid grid-cols-1 gap-2 rounded-lg border border-dashed px-3 py-2 pb-6 sm:flex sm:flex-wrap sm:items-center sm:pb-2" dir={dir}>
-          {(['gregorian', 'persian'] as const).map(option => (
-            <Button
-              key={option}
-              type="button"
-              variant={datePickerPreference === option ? 'default' : 'outline'}
-              size="sm"
-              className="flex w-full items-center justify-center gap-2 sm:w-auto sm:justify-start"
-              disabled={isDatePickerFollowingLocale}
-              onClick={() => handleManualDatePreferenceChange(option)}
-            >
-              <CalendarClock className="h-3.5 w-3.5" />
-              <span className="text-xs font-medium sm:text-sm">{datePickerModeCopy[option]}</span>
-            </Button>
-          ))}
-          <div className="text-muted-foreground mt-3 flex items-center justify-start gap-2 text-xs sm:mt-0">
-            <Languages className="text-primary h-3.5 w-3.5" />
-            <span className="text-foreground font-medium">{datePickerModeCopy[datePickerPreference]}</span>
-          </div>
-        </div>
-      </section>
-
-      <section className="space-y-3">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <BarChart3 className="text-primary h-4 w-4" />
-            <p className="text-base font-semibold sm:text-lg">{t('theme.chartViewType')}</p>
-          </div>
-          <p className="text-muted-foreground text-xs leading-relaxed sm:text-sm">{t('theme.chartViewDescription')}</p>
-        </div>
-        <RadioGroup value={chartViewType} onValueChange={value => handleChartViewTypeChange(value as ChartViewType)} className="grid gap-2 sm:grid-cols-2">
-          {chartViewOptions.map(option => (
-            <div dir={dir} key={option} className="relative">
-              <RadioGroupItem value={option} id={`chart-view-${option}`} className="peer sr-only" />
-              <Label
-                htmlFor={`chart-view-${option}`}
-                className={cn(
-                  'border-border/70 bg-background flex cursor-pointer items-start justify-between gap-3 rounded-lg border px-3 py-3 text-xs transition-colors sm:px-4 sm:text-sm',
-                  'hover:border-primary/50 hover:bg-accent/40',
-                  'peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5',
-                )}
-              >
-                <div className="min-w-0 flex-1 space-y-1">
-                  <div className="flex items-center gap-2">
-                    {chartViewIcons[option]}
-                    <span className="font-medium">{option === 'bar' ? t('theme.chartViewBar') : t('theme.chartViewArea')}</span>
-                  </div>
-                  <span className="text-muted-foreground block text-xs leading-relaxed">{option === 'bar' ? t('theme.chartViewBarDescription') : t('theme.chartViewAreaDescription')}</span>
-                </div>
-                {chartViewType === option && <CheckCircle2 className="text-primary h-4 w-4 flex-shrink-0 ltr:ml-auto rtl:mr-auto" />}
-              </Label>
-            </div>
-          ))}
-        </RadioGroup>
-      </section>
-
-      <section className="space-y-3">
-        <div className="border-border/70 bg-background/60 flex flex-col gap-3 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between sm:p-4">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <FileJson2 className="text-primary h-4 w-4" />
-              <p className="text-base font-semibold sm:text-lg">{t('theme.coresListEditor')}</p>
-            </div>
-            <p className="text-muted-foreground text-xs leading-relaxed sm:text-sm">{t('theme.coresListEditorDescription')}</p>
-          </div>
-          <div className="border-border/70 bg-muted/40 flex items-center justify-between gap-3 rounded-lg border px-3 py-2">
-            <div className="space-y-0.5">
-              <p className="text-foreground text-xs font-medium">{t('theme.coresListEditorModal')}</p>
-              <p className="text-muted-foreground text-[11px] leading-relaxed">{t('theme.coresListEditorModalHint')}</p>
-            </div>
-            <Switch checked={coresListUseConfigModal} onCheckedChange={handleCoresListUseConfigModalChange} aria-label={t('theme.coresListEditorModal')} />
-          </div>
-        </div>
-      </section>
-
-      <section className="space-y-3">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <Eye className="text-primary h-4 w-4" />
-            <p className="text-base font-semibold sm:text-lg">{t('theme.preview')}</p>
-          </div>
-          <p className="text-muted-foreground text-xs leading-relaxed sm:text-sm">{t('theme.previewDescription')}</p>
-        </div>
-        <div className="border-border/70 bg-muted/30 space-y-3 rounded-lg border p-3 sm:space-y-4 sm:p-4" style={{ borderRadius: radius }}>
-          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-xs font-medium sm:text-sm">{t('theme.dashboardPreview')}</p>
-              <p className="text-muted-foreground text-xs">
-                {t('theme.currentTheme')}: {t(colorThemeData.find(c => c.name === colorTheme)?.label || '')} • {resolvedTheme === 'dark' ? t('theme.dark') : t('theme.light')}
-              </p>
             </div>
             <div className="flex gap-2">
-              <span className="bg-primary h-2.5 w-2.5 rounded-full" />
-              <span className="bg-border h-2.5 w-2.5 rounded-full" />
-              <span className="bg-accent h-2.5 w-2.5 rounded-full" />
+              {(['gregorian', 'persian'] as const).map(option => (
+                <Button
+                  key={option}
+                  type="button"
+                  size="sm"
+                  variant={datePickerPreference === option ? 'default' : 'outline'}
+                  disabled={isDatePickerFollowingLocale}
+                  onClick={() => {
+                    setDatePickerPreferenceState(option)
+                    setDatePickerPreference(option)
+                    notify(t('theme.datePickerPreferenceSaved'))
+                  }}
+                >
+                  {option === 'gregorian' ? t('theme.datePickerModeGregorian') : t('theme.datePickerModePersian')}
+                </Button>
+              ))}
             </div>
           </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className="space-y-2">
-              <div className="bg-primary/80 h-3 rounded" style={{ borderRadius: radius }} />
-              <div className="bg-muted h-3 rounded" style={{ borderRadius: radius }} />
-              <div className="bg-accent h-3 rounded" style={{ borderRadius: radius }} />
+        </Panel>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Panel title={t('theme.atmosphere', { defaultValue: 'Atmosphere' })} icon={<Sparkles className="h-4 w-4" />} description={t('theme.atmosphereDescription', { defaultValue: 'Mesh glow behind the deck.' })}>
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-xs font-medium">{t('theme.meshBackground', { defaultValue: 'Background mesh' })}</span>
+              <Switch
+                checked={meshBg}
+                onCheckedChange={checked => {
+                  setMeshBgState(checked)
+                  setMeshBackground(checked)
+                  notify(t('theme.meshSaved', { defaultValue: 'Atmosphere updated' }))
+                }}
+              />
             </div>
-            <div className="space-y-2">
-              <div className="bg-background text-muted-foreground flex h-9 items-center rounded border px-3 text-xs" style={{ borderRadius: radius }}>
+          </Panel>
+
+          <Panel title={t('theme.accessibility', { defaultValue: 'Motion' })} icon={<Accessibility className="h-4 w-4" />} description={t('theme.reducedMotionDescription', { defaultValue: 'Cut animations for focus and comfort.' })}>
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-xs font-medium">{t('theme.reducedMotion', { defaultValue: 'Reduced motion' })}</span>
+              <Switch
+                checked={reducedMotion}
+                onCheckedChange={checked => {
+                  setReducedMotionState(checked)
+                  setReducedMotion(checked)
+                  notify(t('theme.motionSaved', { defaultValue: 'Motion preference saved' }))
+                }}
+              />
+            </div>
+          </Panel>
+        </div>
+
+        <Panel title={t('theme.coresListEditor')} icon={<FileJson2 className="h-4 w-4" />} description={t('theme.coresListEditorDescription')}>
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-xs font-medium">{t('theme.coresListEditorModal')}</p>
+              <p className="text-muted-foreground text-[11px]">{t('theme.coresListEditorModalHint')}</p>
+            </div>
+            <Switch
+              checked={coresListUseConfigModal}
+              onCheckedChange={checked => {
+                setCoresListUseConfigModalState(checked)
+                setCoresListUseConfigModal(checked)
+                notify(t('theme.coresListEditorSaved'))
+              }}
+            />
+          </div>
+        </Panel>
+
+        <section className="border-border/60 flex flex-col gap-3 rounded-2xl border border-dashed p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <RotateCcw className="text-primary h-4 w-4" />
+              <p className="text-sm font-semibold">{t('theme.resetToDefaults')}</p>
+            </div>
+            <p className="text-muted-foreground text-xs">{t('theme.resetDescription')}</p>
+          </div>
+          <Button variant="outline" onClick={handleResetToDefaults} disabled={isResetting} className="w-full sm:w-auto">
+            {isResetting ? t('theme.resetting') : t('theme.reset')}
+          </Button>
+        </section>
+      </div>
+
+      <aside className="lg:sticky lg:top-20">
+        <div className="border-border/60 from-card/80 to-muted/20 space-y-4 rounded-2xl border bg-gradient-to-b p-4 shadow-sm backdrop-blur-md">
+          <div className="flex items-center gap-2">
+            <Eye className="text-primary h-4 w-4" />
+            <p className="text-sm font-semibold">{t('theme.preview')}</p>
+          </div>
+          <p className="text-muted-foreground text-xs">{t('theme.previewDescription')}</p>
+
+          <div className="border-border/70 bg-background space-y-3 border p-3" style={{ borderRadius: radius }}>
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <p className="text-xs font-semibold">{t('theme.dashboardPreview')}</p>
+                <p className="text-muted-foreground text-[10px]">
+                  {colorLabel} · {resolvedTheme === 'dark' ? t('theme.dark') : t('theme.light')} · {density}
+                </p>
+              </div>
+              <div className="flex gap-1">
+                <span className="bg-primary h-2 w-2 rounded-full" />
+                <span className="bg-chart-2 h-2 w-2 rounded-full" />
+                <span className="bg-chart-3 h-2 w-2 rounded-full" />
+              </div>
+            </div>
+            <div className="bg-primary/15 h-16 w-full overflow-hidden border" style={{ borderRadius: radius }}>
+              <div className="bg-primary/40 h-full w-2/3" style={{ borderRadius: radius }} />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="bg-muted text-muted-foreground flex h-8 items-center rounded border px-2 text-[10px]" style={{ borderRadius: radius }}>
                 {t('theme.sampleInput')}
               </div>
-              <div className="bg-primary text-primary-foreground flex h-9 items-center justify-center rounded text-xs font-medium" style={{ borderRadius: radius }}>
+              <div className="bg-primary text-primary-foreground flex h-8 items-center justify-center text-[10px] font-semibold" style={{ borderRadius: radius }}>
                 {t('theme.primaryButton')}
               </div>
             </div>
+            <div className="text-muted-foreground grid grid-cols-2 gap-2 text-[10px]">
+              <div className="bg-muted/50 rounded border px-2 py-1.5" style={{ borderRadius: radius }}>
+                {t('theme.fontScale', { defaultValue: 'Type' })}: {fontScale.toUpperCase()}
+              </div>
+              <div className="bg-muted/50 rounded border px-2 py-1.5" style={{ borderRadius: radius }}>
+                {t('theme.meshBackground', { defaultValue: 'Mesh' })}: {meshBg ? 'ON' : 'OFF'}
+              </div>
+            </div>
           </div>
         </div>
-      </section>
-
-      <section className="flex flex-col gap-2 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <div className="flex items-center gap-2">
-            <RotateCcw className="text-primary h-4 w-4" />
-            <p className="text-base font-semibold sm:text-lg">{t('theme.resetToDefaults')}</p>
-          </div>
-          <p className="text-muted-foreground text-xs leading-relaxed sm:text-sm">{t('theme.resetDescription')}</p>
-        </div>
-        <Button variant="outline" onClick={handleResetToDefaults} disabled={isResetting} className="w-full sm:w-auto">
-          {isResetting ? t('theme.resetting') : t('theme.reset')}
-        </Button>
-      </section>
+      </aside>
     </div>
   )
 }

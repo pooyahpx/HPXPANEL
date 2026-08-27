@@ -5,6 +5,9 @@ import { RouterProvider } from 'react-router'
 import { Toaster } from '@/components/ui/sonner'
 import '@/lib/dayjs'
 import { queryClient } from '@/utils/query-client'
+import { hydrateUiAppearancePrefs } from '@/utils/userPreferenceStorage'
+
+hydrateUiAppearancePrefs()
 
 export default function App() {
   return (

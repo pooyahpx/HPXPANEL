@@ -122,3 +122,109 @@ export const setCoresListUseConfigModal = (value: boolean) => {
   if (typeof localStorage === 'undefined') return
   localStorage.setItem(CORES_LIST_USE_CONFIG_MODAL_KEY, value ? 'true' : 'false')
 }
+
+/** UI density · font scale · motion · mesh — applied on <html> */
+export type UiDensity = 'compact' | 'comfortable' | 'spacious'
+export type FontScale = 'sm' | 'md' | 'lg'
+
+const UI_DENSITY_KEY = 'hpxpanel-ui-density'
+const FONT_SCALE_KEY = 'hpxpanel-font-scale'
+const REDUCED_MOTION_KEY = 'hpxpanel-reduced-motion'
+const MESH_BG_KEY = 'hpxpanel-mesh-bg'
+
+const DEFAULT_UI_DENSITY: UiDensity = 'comfortable'
+const DEFAULT_FONT_SCALE: FontScale = 'md'
+const DEFAULT_REDUCED_MOTION = false
+const DEFAULT_MESH_BG = true
+
+export const UI_PREFS_CHANGE_EVENT = 'hpxpanel-ui-prefs-change'
+
+function applyHtmlUiPrefs(partial?: {
+  density?: UiDensity
+  fontScale?: FontScale
+  reducedMotion?: boolean
+  meshBg?: boolean
+}) {
+  if (typeof document === 'undefined') return
+  const root = document.documentElement
+  const density = partial?.density ?? getUiDensity()
+  const fontScale = partial?.fontScale ?? getFontScale()
+  const reducedMotion = partial?.reducedMotion ?? getReducedMotion()
+  const meshBg = partial?.meshBg ?? getMeshBackground()
+  root.dataset.density = density
+  root.dataset.fontScale = fontScale
+  root.dataset.reducedMotion = reducedMotion ? 'true' : 'false'
+  root.dataset.meshBg = meshBg ? 'on' : 'off'
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(UI_PREFS_CHANGE_EVENT))
+  }
+}
+
+export const getUiDensity = (): UiDensity => {
+  if (typeof localStorage === 'undefined') return DEFAULT_UI_DENSITY
+  const v = localStorage.getItem(UI_DENSITY_KEY)
+  if (v === 'compact' || v === 'comfortable' || v === 'spacious') return v
+  return DEFAULT_UI_DENSITY
+}
+
+export const setUiDensity = (value: UiDensity) => {
+  if (typeof localStorage === 'undefined') return
+  localStorage.setItem(UI_DENSITY_KEY, value)
+  applyHtmlUiPrefs({ density: value })
+}
+
+export const getFontScale = (): FontScale => {
+  if (typeof localStorage === 'undefined') return DEFAULT_FONT_SCALE
+  const v = localStorage.getItem(FONT_SCALE_KEY)
+  if (v === 'sm' || v === 'md' || v === 'lg') return v
+  return DEFAULT_FONT_SCALE
+}
+
+export const setFontScale = (value: FontScale) => {
+  if (typeof localStorage === 'undefined') return
+  localStorage.setItem(FONT_SCALE_KEY, value)
+  applyHtmlUiPrefs({ fontScale: value })
+}
+
+export const getReducedMotion = (): boolean => {
+  if (typeof localStorage === 'undefined') return DEFAULT_REDUCED_MOTION
+  return localStorage.getItem(REDUCED_MOTION_KEY) === 'true'
+}
+
+export const setReducedMotion = (value: boolean) => {
+  if (typeof localStorage === 'undefined') return
+  localStorage.setItem(REDUCED_MOTION_KEY, value ? 'true' : 'false')
+  applyHtmlUiPrefs({ reducedMotion: value })
+}
+
+export const getMeshBackground = (): boolean => {
+  if (typeof localStorage === 'undefined') return DEFAULT_MESH_BG
+  const v = localStorage.getItem(MESH_BG_KEY)
+  if (v === null) return DEFAULT_MESH_BG
+  return v !== 'false'
+}
+
+export const setMeshBackground = (value: boolean) => {
+  if (typeof localStorage === 'undefined') return
+  localStorage.setItem(MESH_BG_KEY, value ? 'true' : 'false')
+  applyHtmlUiPrefs({ meshBg: value })
+}
+
+export const resetUiAppearancePrefs = () => {
+  if (typeof localStorage === 'undefined') return
+  localStorage.setItem(UI_DENSITY_KEY, DEFAULT_UI_DENSITY)
+  localStorage.setItem(FONT_SCALE_KEY, DEFAULT_FONT_SCALE)
+  localStorage.setItem(REDUCED_MOTION_KEY, 'false')
+  localStorage.setItem(MESH_BG_KEY, 'true')
+  applyHtmlUiPrefs({
+    density: DEFAULT_UI_DENSITY,
+    fontScale: DEFAULT_FONT_SCALE,
+    reducedMotion: false,
+    meshBg: true,
+  })
+}
+
+/** Call once on app boot */
+export const hydrateUiAppearancePrefs = () => {
+  applyHtmlUiPrefs()
+}

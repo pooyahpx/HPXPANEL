@@ -168,6 +168,42 @@
     background-attachment: fixed;
   }
 
+  html[data-mesh-bg='off'] body {
+    background-image: none;
+  }
+
+  html[data-font-scale='sm'] {
+    font-size: 14px;
+  }
+  html[data-font-scale='md'] {
+    font-size: 16px;
+  }
+  html[data-font-scale='lg'] {
+    font-size: 17.5px;
+  }
+
+  html[data-density='compact'] {
+    --ui-pad: 0.5rem;
+    --ui-gap: 0.5rem;
+  }
+  html[data-density='comfortable'] {
+    --ui-pad: 0.75rem;
+    --ui-gap: 0.75rem;
+  }
+  html[data-density='spacious'] {
+    --ui-pad: 1rem;
+    --ui-gap: 1.25rem;
+  }
+
+  html[data-reduced-motion='true'] *,
+  html[data-reduced-motion='true'] *::before,
+  html[data-reduced-motion='true'] *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
   h1,
   h2,
   h3,

@@ -1,3 +1,4 @@
+import { GradientLoader } from '@/components/ui/gradient-loader'
 import { cn } from '@/lib/utils'
 
 interface LoadingSpinnerProps {
@@ -7,15 +8,14 @@ interface LoadingSpinnerProps {
 }
 
 /**
- * Lightweight route fallback — no full-screen overlay.
- * TopLoadingBar already signals navigation progress.
+ * Route / hydrate fallback — uses the branded gradient orb (not the old bar).
+ * First dashboard mount still uses PageLoadOverlay for the full splash.
  */
-export function LoadingSpinner({ className = '' }: LoadingSpinnerProps) {
+export function LoadingSpinner({ size = 'medium', className = '' }: LoadingSpinnerProps) {
+  const orb = size === 'small' ? 48 : size === 'large' ? 96 : 72
   return (
-    <div className={cn('flex min-h-[32vh] flex-1 items-center justify-center px-4 py-10', className)} role="status" aria-busy="true">
-      <div className="border-border bg-muted relative h-1.5 w-28 overflow-hidden border">
-        <div className="bg-primary absolute inset-y-0 w-1/2 animate-[pulse_0.9s_ease-in-out_infinite]" />
-      </div>
+    <div className={cn('flex min-h-[40vh] flex-1 flex-col items-center justify-center gap-4 px-4 py-10', className)} role="status" aria-busy="true">
+      <GradientLoader size={orb} />
       <span className="sr-only">Loading</span>
     </div>
   )

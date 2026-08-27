@@ -28,10 +28,25 @@ const statusTone: Record<string, string> = {
 }
 
 function carrierLabel(carrier: string | null, t: (k: string, o?: { defaultValue: string }) => string) {
-  if (carrier === 'pck') return t('hpxPulse.carrierTcpStealth', { defaultValue: 'TCP Stealth' })
+  if (carrier === 'stealth') return t('hpxPulse.carrierStealth', { defaultValue: 'STEALTH' })
+  if (carrier === 'pck') return t('hpxPulse.carrierPck', { defaultValue: 'PCK' })
+  if (carrier === 'tcp') return t('hpxPulse.carrierTcp', { defaultValue: 'TCP' })
+  if (carrier === 'tcpmux') return t('hpxPulse.carrierTcpMux', { defaultValue: 'TCP MUX' })
   if (carrier === 'udp') return t('hpxPulse.carrierUdp', { defaultValue: 'UDP' })
+  if (carrier === 'kcp') return t('hpxPulse.carrierKcp', { defaultValue: 'KCP' })
+  if (carrier === 'quic') return t('hpxPulse.carrierQuic', { defaultValue: 'QUIC' })
+  if (carrier === 'ws') return t('hpxPulse.carrierWs', { defaultValue: 'WS' })
+  if (carrier === 'wss') return t('hpxPulse.carrierWss', { defaultValue: 'WSS' })
+  if (carrier === 'wssmux') return t('hpxPulse.carrierWssMux', { defaultValue: 'WSS MUX' })
   if (carrier === 'xdi') return t('hpxPulse.carrierIcmp', { defaultValue: 'ICMP' })
-  return carrier || '—'
+  return carrier?.toUpperCase() || '—'
+}
+
+function modeLabel(tunnelMode: string, t: (k: string, o?: { defaultValue: string }) => string) {
+  if (tunnelMode.startsWith('reverse_')) {
+    return t('hpxPulse.modeReverse', { defaultValue: 'REVERSE' })
+  }
+  return t('hpxPulse.modeDirect', { defaultValue: 'DIRECT' })
 }
 
 function PulseCard({
@@ -66,11 +81,14 @@ function PulseCard({
               {t(`hpxPulse.status.${pulse.status}`, { defaultValue: pulse.status })}
             </Badge>
             <Badge variant="secondary" className="text-xs uppercase">
+              {modeLabel(pulse.tunnel_mode, t)}
+            </Badge>
+            <Badge variant="secondary" className="text-xs uppercase">
               {carrierLabel(pulse.carrier, t)}
             </Badge>
           </div>
           <p className="text-muted-foreground mt-1 text-xs">
-            HPX Direct · {pulse.profile_id} · {pulse.preset}
+            {pulse.tunnel_mode.startsWith('reverse_') ? 'HPX Reverse' : 'HPX Direct'} · {pulse.profile_id.replace('pulse-', '')} · {pulse.preset}
           </p>
         </div>
         <div className="flex gap-1">

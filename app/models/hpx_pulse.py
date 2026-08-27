@@ -1,11 +1,11 @@
 from datetime import datetime as dt
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 PulseGoal = Literal["stealth", "balanced", "speed"]
 PulseSide = Literal["iran", "abroad"]
-PulseEngine = Literal["backpack", "native"]
+PulseEngine = Literal["hpx", "native"]
 PulseStatus = Literal[
     "pending_claim",
     "running",
@@ -135,22 +135,27 @@ class HpxPulseAgentBootstrap(BaseModel):
     name: str
     side: PulseSide
     agent_key: str
-    backpack_toml: str
+    tunnel_toml: str
     config_hash: str
     control_port: int
     abroad_public_ip: str
     iran_public_ip: str
+    tunnel_mode: str = "direct_l3"
 
 
 class HpxPulseAgentConfigResponse(BaseModel):
     pulse_id: int
     name: str
     side: PulseSide
-    backpack_toml: str
+    tunnel_toml: str
     config_hash: str
     desired_status: PulseStatus
     agent_command: str | None = None
     enabled: bool = True
+    tunnel_mode: str = "direct_l3"
+    control_port: int = 9067
+    iran_public_ip: str | None = None
+    abroad_public_ip: str | None = None
 
 
 class HpxPulseAgentHeartbeatRequest(BaseModel):
@@ -159,7 +164,7 @@ class HpxPulseAgentHeartbeatRequest(BaseModel):
     message: str | None = None
     latency_ms: float | None = None
     packet_loss_pct: float | None = None
-    backpack_running: bool = False
+    tunnel_running: bool = Field(default=False, validation_alias=AliasChoices("tunnel_running", "backpack_running"))
     iface_up: bool = False
 
 

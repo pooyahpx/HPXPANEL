@@ -23,7 +23,7 @@ async def create_hpx_pulse(
         name=model.name,
         status=HpxPulseStatus.pending_claim,
         enabled=True,
-        engine="backpack",
+        engine="hpx",
         profile_id=profile_id,
         goal=model.goal,
         tunnel_mode=tunnel_mode,

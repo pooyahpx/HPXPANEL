@@ -260,7 +260,7 @@
   },
   "hpxPulse": {
     "title": "HPX Pulse",
-    "description": "Smart HPX Direct advisor — pick stealth/speed profiles, deploy Iran + abroad agents, Reality front checklist.",
+    "description": "Smart HPX tunnel advisor — Reverse TCP Stealth (default) or Direct L3, deploy Iran + abroad agents.",
     "add": "New Pulse",
     "create": "Create Pulse",
     "createSuccess": "Pulse created — copy install commands below",
@@ -279,13 +279,23 @@
     "externalPort": "External",
     "internalIp": "Internal IP (optional)",
     "internalPort": "Internal port",
-    "portForwardsHint": "HPX Direct on Iran: 443, 443=8443, or 443=10.0.0.5:8443. Empty internal IP uses tunnel peer (abroad).",
+    "portForwardsHint": "Reverse (Iran server): 443 or 443=127.0.0.1:8443 forwards to service on abroad. Direct L3: empty internal IP uses tunnel peer.",
     "iranAgent": "Iran agent",
     "abroadAgent": "Abroad agent",
     "agentConnected": "connected",
     "agentWaiting": "waiting",
     "ping": "Ping",
-    "carrierTcpStealth": "TCP Stealth",
+    "modeReverse": "REVERSE",
+    "modeDirect": "DIRECT",
+    "carrierStealth": "STEALTH",
+    "carrierPck": "PCK",
+    "carrierTcp": "TCP",
+    "carrierTcpMux": "TCP MUX",
+    "carrierKcp": "KCP",
+    "carrierQuic": "QUIC",
+    "carrierWs": "WS",
+    "carrierWss": "WSS",
+    "carrierWssMux": "WSS MUX",
     "carrierUdp": "UDP",
     "carrierIcmp": "ICMP",
     "summary": "{{total}} pulse tunnel(s)",
@@ -294,7 +304,7 @@
     "regenerate": "Tokens",
     "wizard": {
       "title": "HPX Pulse Advisor",
-      "description": "Fill IPs and click Create — recommendation runs automatically."
+      "description": "Enter host facts, get ranked HPX Reverse/Direct profiles, then deploy Iran and abroad agents."
     },
     "status": {
       "pending_claim": "Waiting for agents",

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# HPX Pulse Agent — deploys HPX Direct (L3) tunnel config from panel advisor
+# HPX Pulse Agent — deploys HPX tunnel config from panel advisor (Direct L3 or Reverse)
 #
 # Iran:
 #   curl -fsSL .../hpx-pulse-agent.sh | sudo bash -s -- join TOKEN --panel-url URL --side iran
@@ -18,7 +18,8 @@ BIN_LINK="${BIN_LINK:-/usr/local/bin/hpx-pulse-agent}"
 SERVICE_NAME="${SERVICE_NAME:-hpx-pulse-agent}"
 TIMER_NAME="${TIMER_NAME:-hpx-pulse-agent.timer}"
 TUNNEL_SERVICE="${TUNNEL_SERVICE:-hpx-pulse-tunnel}"
-ENGINE_INSTALL="bash <(curl -fsSL https://raw.githubusercontent.com/AminMGMT/BackPack/main/install.sh)"
+ENGINE_INSTALL_URL="https://raw.githubusercontent.com/pooyahpx/HPXPANEL/main/scripts/hpx-tunnel-engine-install.sh"
+ENGINE_BIN="${ENGINE_BIN:-/usr/local/bin/hpx-tunnel-engine}"
 
 log()  { echo "[HPX Pulse] $*" >&2; }
 warn() { echo "[HPX Pulse !] $*" >&2; }
@@ -75,6 +76,10 @@ PULSE_SIDE=${PULSE_SIDE:-}
 PULSE_ID=${PULSE_ID:-}
 CONFIG_HASH=${CONFIG_HASH:-}
 TUNNEL_CFG=${TUNNEL_CFG:-}
+TUNNEL_MODE=${TUNNEL_MODE:-direct_l3}
+CONTROL_PORT=${CONTROL_PORT:-}
+IRAN_PUBLIC_IP=${IRAN_PUBLIC_IP:-}
+ABROAD_PUBLIC_IP=${ABROAD_PUBLIC_IP:-}
 EOF
   chmod 600 "$ENV_FILE"
 }
@@ -94,13 +99,29 @@ api() {
 }
 
 ensure_engine() {
-  if has backpack; then
+  if [ -x "$ENGINE_BIN" ]; then
     return 0
   fi
-  log "Installing HPX tunnel engine (one-time dependency)..."
-  # BackPack binary powers HPX Direct L3 under the hood; user-facing name is HPX Pulse.
-  eval "$ENGINE_INSTALL" </dev/null || die "HPX tunnel engine install failed"
-  has backpack || die "tunnel engine binary missing after install"
+  if [ -x /usr/local/bin/backpack ] && [ ! -x "$ENGINE_BIN" ]; then
+    ln -sf /usr/local/bin/backpack "$ENGINE_BIN"
+    return 0
+  fi
+  log "Installing HPX tunnel engine (one-time)..."
+  bash <(curl -fsSL "$ENGINE_INSTALL_URL") || die "HPX tunnel engine install failed"
+  [ -x "$ENGINE_BIN" ] || die "HPX tunnel engine binary missing after install"
+}
+
+engine_bin() {
+  if [ -x "$ENGINE_BIN" ]; then
+    echo "$ENGINE_BIN"
+    return
+  fi
+  if [ -x /usr/local/bin/backpack ]; then
+    ln -sf /usr/local/bin/backpack "$ENGINE_BIN" 2>/dev/null || true
+    echo "$ENGINE_BIN"
+    return
+  fi
+  die "HPX tunnel engine not installed"
 }
 
 tunnel_cfg_path() {
@@ -115,13 +136,45 @@ tunnel_service_active() {
   systemctl is-active --quiet "${TUNNEL_SERVICE}.service" 2>/dev/null
 }
 
+tunnel_port_listening() {
+  local port="${CONTROL_PORT:-}"
+  [ -n "$port" ] || return 1
+  if has ss; then
+    ss -tlnH "sport = :${port}" 2>/dev/null | grep -q .
+    return $?
+  fi
+  if has netstat; then
+    netstat -tln 2>/dev/null | grep -q ":${port} "
+    return $?
+  fi
+  return 1
+}
+
+tunnel_link_up() {
+  case "${TUNNEL_MODE:-direct_l3}" in
+    direct_l3)
+      tunnel_iface_up
+      ;;
+    reverse_*)
+      if [ "${PULSE_SIDE:-}" = "iran" ]; then
+        tunnel_port_listening
+      else
+        tunnel_service_active
+      fi
+      ;;
+    *)
+      tunnel_service_active
+      ;;
+  esac
+}
+
 install_tunnel_systemd() {
   local cfg="$1"
   local engine_bin
-  engine_bin="$(command -v backpack)"
+  engine_bin="$(engine_bin)"
   cat >"/etc/systemd/system/${TUNNEL_SERVICE}.service" <<EOF
 [Unit]
-Description=HPX Pulse Direct tunnel
+Description=HPX Pulse tunnel
 After=network-online.target
 Wants=network-online.target
 
@@ -191,13 +244,29 @@ EOF
 
 send_heartbeat() {
   local running="false"
-  local iface="false"
+  local link="false"
   local peer lat lat_json="null"
   tunnel_service_active && running="true"
-  tunnel_iface_up && iface="true"
-  peer="10.10.0.2"
-  [ "${PULSE_SIDE:-}" = "abroad" ] && peer="10.10.0.1"
-  if [ "$iface" = "true" ] && has ping; then
+  tunnel_link_up && link="true"
+  case "${TUNNEL_MODE:-direct_l3}" in
+    direct_l3)
+      peer="10.10.0.2"
+      [ "${PULSE_SIDE:-}" = "abroad" ] && peer="10.10.0.1"
+      ;;
+    reverse_*)
+      if [ "${PULSE_SIDE:-}" = "abroad" ] && [ -n "${IRAN_PUBLIC_IP:-}" ]; then
+        peer="$IRAN_PUBLIC_IP"
+      elif [ "${PULSE_SIDE:-}" = "iran" ] && [ -n "${ABROAD_PUBLIC_IP:-}" ]; then
+        peer="$ABROAD_PUBLIC_IP"
+      else
+        peer=""
+      fi
+      ;;
+    *)
+      peer=""
+      ;;
+  esac
+  if [ "$link" = "true" ] && [ -n "$peer" ] && has ping; then
     lat=$(ping -c 3 -W 2 "$peer" 2>/dev/null | tail -1 | sed -n 's/.*= \([0-9.]*\)\/.*/\1/p')
     [ -n "$lat" ] && lat_json="$lat"
   fi
@@ -206,9 +275,9 @@ send_heartbeat() {
       --arg s "running" \
       --arg h "$(hostname -f 2>/dev/null || hostname)" \
       --argjson tr "$running" \
-      --argjson iu "$iface" \
+      --argjson iu "$link" \
       --argjson lm "$lat_json" \
-      '{status:$s, host:$h, backpack_running:$tr, iface_up:$iu, latency_ms:($lm|tonumber? // null), message:"HPX Pulse sync"}')" \
+      '{status:$s, host:$h, tunnel_running:$tr, iface_up:$iu, latency_ms:($lm|tonumber? // null), message:"HPX Pulse sync"}')" \
     >/dev/null || warn "heartbeat to panel failed — check PANEL_URL and firewall"
 }
 
@@ -242,12 +311,16 @@ cmd_join() {
   AGENT_KEY=$(echo "$claim" | jq -r '.agent_key')
   PULSE_ID=$(echo "$claim" | jq -r '.pulse_id')
   CONFIG_HASH=$(echo "$claim" | jq -r '.config_hash')
+  TUNNEL_MODE=$(echo "$claim" | jq -r '.tunnel_mode // "direct_l3"')
+  CONTROL_PORT=$(echo "$claim" | jq -r '.control_port // empty')
+  IRAN_PUBLIC_IP=$(echo "$claim" | jq -r '.iran_public_ip // empty')
+  ABROAD_PUBLIC_IP=$(echo "$claim" | jq -r '.abroad_public_ip // empty')
   [ -n "$AGENT_KEY" ] && [ "$AGENT_KEY" != "null" ] || die "missing agent_key from panel"
 
   install_self
   write_env
   ensure_engine
-  apply_tunnel_config "$(echo "$claim" | jq -r '.backpack_toml')"
+  apply_tunnel_config "$(echo "$claim" | jq -r '.tunnel_toml // .backpack_toml // empty')"
   write_env
   install_agent_systemd
 
@@ -265,16 +338,20 @@ cmd_sync() {
   cfg=$(api GET "/api/hpx_pulse/agent/config")
   hash=$(echo "$cfg" | jq -r '.config_hash')
   command=$(echo "$cfg" | jq -r '.agent_command // empty')
-  toml=$(echo "$cfg" | jq -r '.backpack_toml')
+  toml=$(echo "$cfg" | jq -r '.tunnel_toml // .backpack_toml // empty')
+  TUNNEL_MODE=$(echo "$cfg" | jq -r '.tunnel_mode // "direct_l3"')
+  CONTROL_PORT=$(echo "$cfg" | jq -r '.control_port // empty')
+  IRAN_PUBLIC_IP=$(echo "$cfg" | jq -r '.iran_public_ip // empty')
+  ABROAD_PUBLIC_IP=$(echo "$cfg" | jq -r '.abroad_public_ip // empty')
 
   if [ "$hash" != "${CONFIG_HASH:-}" ] || [ "$command" = "start" ] || [ "$command" = "restart" ]; then
     apply_tunnel_config "$toml"
     CONFIG_HASH="$hash"
-    write_env
     api POST "/api/hpx_pulse/agent/ack" \
       "$(jq -nc --arg c "${command:-start}" '{command:$c, status:"running", message:"HPX config applied"}')" >/dev/null || true
   fi
 
+  write_env
   send_heartbeat
 }
 
@@ -283,6 +360,7 @@ cmd_status() {
   echo "HPX Pulse Agent"
   echo "  panel : ${PANEL_URL:-not set}"
   echo "  side  : ${PULSE_SIDE:-?}"
+  echo "  mode  : ${TUNNEL_MODE:-direct_l3}"
   echo "  pulse : ${PULSE_ID:-?}"
   echo "  config: ${TUNNEL_CFG:-$(tunnel_cfg_path 2>/dev/null || echo '?')}"
   if tunnel_service_active; then
@@ -290,10 +368,20 @@ cmd_status() {
   else
     echo "  tunnel: stopped"
   fi
-  if tunnel_iface_up; then
-    echo "  iface : bp0 up"
+  if [ "${TUNNEL_MODE:-direct_l3}" = "direct_l3" ]; then
+    if tunnel_iface_up; then
+      echo "  link  : bp0 up"
+    else
+      echo "  link  : bp0 down"
+    fi
+  elif [ "${PULSE_SIDE:-}" = "iran" ]; then
+    if tunnel_port_listening; then
+      echo "  link  : tunnel port ${CONTROL_PORT:-?} listening"
+    else
+      echo "  link  : tunnel port not listening"
+    fi
   else
-    echo "  iface : bp0 down"
+    echo "  link  : reverse client (check panel ping)"
   fi
 }
 

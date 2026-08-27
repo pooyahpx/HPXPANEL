@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import useDirDetection from '@/hooks/use-dir-detection'
 import useDynamicErrorHandler from '@/hooks/use-dynamic-errors'
 import { cn } from '@/lib/utils'
-import { toBackpackPortString } from '@/features/hpx-pulse/utils/port-forwards'
+import { toTunnelPortString } from '@/features/hpx-pulse/utils/port-forwards'
 import {
   useAdvisePulse,
   useCreateHpxPulse,
@@ -137,7 +137,7 @@ export default function HpxPulseWizard({ open, onOpenChange, onCreated }: Props)
         packet_loss_pct: values.packet_loss_pct,
         profile_id: profileId,
         control_port: values.control_port,
-        port_forwards: (values.port_forwards ?? []).map(toBackpackPortString),
+        port_forwards: (values.port_forwards ?? []).map(toTunnelPortString),
         domain: values.domain?.trim() || null,
         sni_hint: values.sni_hint?.trim() || null,
       })
@@ -166,7 +166,7 @@ export default function HpxPulseWizard({ open, onOpenChange, onCreated }: Props)
           <DialogTitle>{t('hpxPulse.wizard.title', { defaultValue: 'HPX Pulse Advisor' })}</DialogTitle>
           <DialogDescription>
             {t('hpxPulse.wizard.description', {
-              defaultValue: 'Fill IPs and click Create — recommendation runs automatically.',
+              defaultValue: 'Enter host facts, get ranked HPX Reverse/Direct profiles, then deploy Iran and abroad agents.',
             })}
           </DialogDescription>
         </DialogHeader>
@@ -260,7 +260,7 @@ export default function HpxPulseWizard({ open, onOpenChange, onCreated }: Props)
               </div>
               <p className="text-muted-foreground text-xs">
                 {t('hpxPulse.portForwardsHint', {
-                  defaultValue: 'HPX Direct on Iran: 443, 443=8443, or 443=10.0.0.5:8443. Empty internal IP uses tunnel peer.',
+                  defaultValue: 'Reverse on Iran: 443 or 443=127.0.0.1:8443 to abroad service. Direct L3: empty internal IP uses tunnel peer.',
                 })}
               </p>
               {form.watch('port_forwards').map((_, index) => (
@@ -317,9 +317,17 @@ export default function HpxPulseWizard({ open, onOpenChange, onCreated }: Props)
                       (selectedProfile ?? advice.recommended_profile_id) === p.profile_id && 'border-primary bg-primary/5',
                     )}
                   >
-                    <div className="flex items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
                       <span className="font-medium">{fa ? p.title_fa : p.title}</span>
-                      <Badge variant="secondary">{p.score}</Badge>
+                      <div className="flex items-center gap-1">
+                        {p.tunnel_mode.startsWith('reverse_') && (
+                          <Badge variant="outline" className="text-[10px] uppercase">Reverse</Badge>
+                        )}
+                        {p.carrier && (
+                          <Badge variant="secondary" className="text-[10px] uppercase">{p.carrier}</Badge>
+                        )}
+                        <Badge variant="secondary">{p.score}</Badge>
+                      </div>
                     </div>
                     <p className="text-muted-foreground mt-1">{fa ? p.reasons_fa[0] : p.reasons[0]}</p>
                   </button>

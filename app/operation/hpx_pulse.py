@@ -34,7 +34,7 @@ from app.models.hpx_pulse import (
 )
 from app.operation import BaseOperation
 from app.services.hpx_pulse.advisor import advise, profile_meta
-from app.services.hpx_pulse.backpack_render import mint_backpack_token, render_for_side
+from app.services.hpx_pulse.tunnel_render import mint_tunnel_token, render_for_side
 from app.utils.crypto import decrypt_secret, encrypt_secret, hash_api_key
 
 JOIN_TOKEN_TTL_HOURS = 24
@@ -186,8 +186,8 @@ class HpxPulseOperation(BaseOperation):
         meta = profile_meta(advice.recommended_profile_id)
         chosen = next((p for p in advice.profiles if p.profile_id == advice.recommended_profile_id), advice.profiles[0])
 
-        backpack_token = mint_backpack_token()
-        token_encrypted = await self._encrypt_token(db, backpack_token)
+        tunnel_token = mint_tunnel_token()
+        token_encrypted = await self._encrypt_token(db, tunnel_token)
 
         try:
             db_pulse = await create_hpx_pulse(
@@ -333,11 +333,12 @@ class HpxPulseOperation(BaseOperation):
             name=db_pulse.name,
             side=side,
             agent_key=agent_key,
-            backpack_toml=toml,
+            tunnel_toml=toml,
             config_hash=cfg_hash,
             control_port=db_pulse.control_port,
             abroad_public_ip=db_pulse.abroad_public_ip,
             iran_public_ip=db_pulse.iran_public_ip,
+            tunnel_mode=db_pulse.tunnel_mode,
         )
 
     async def _pulse_from_agent_key(self, db: AsyncSession, agent_key: str, side: str) -> HpxPulse:
@@ -352,11 +353,15 @@ class HpxPulseOperation(BaseOperation):
             pulse_id=db_pulse.id,
             name=db_pulse.name,
             side=side,
-            backpack_toml=toml,
+            tunnel_toml=toml,
             config_hash=_config_hash(toml, side, db_pulse.id),
             desired_status=_desired_status(db_pulse),
             agent_command=db_pulse.iran_agent_command if side == "iran" else db_pulse.abroad_agent_command,
             enabled=db_pulse.enabled,
+            tunnel_mode=db_pulse.tunnel_mode,
+            control_port=db_pulse.control_port,
+            iran_public_ip=db_pulse.iran_public_ip,
+            abroad_public_ip=db_pulse.abroad_public_ip,
         )
 
     async def get_agent_config(self, db: AsyncSession, *, agent_key: str, side: str) -> HpxPulseAgentConfigResponse:
@@ -381,7 +386,7 @@ class HpxPulseOperation(BaseOperation):
             "message": model.message,
         }
         if model.status in {HpxPulseStatus.running.value, "running"} and db_pulse.iran_agent_key_hash and db_pulse.abroad_agent_key_hash:
-            if model.backpack_running or model.iface_up:
+            if model.tunnel_running or model.iface_up:
                 update_data["status"] = HpxPulseStatus.running
                 update_data["message"] = "HPX tunnel active"
             elif db_pulse.status in {HpxPulseStatus.starting, HpxPulseStatus.partial}:

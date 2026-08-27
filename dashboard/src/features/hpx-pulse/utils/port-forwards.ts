@@ -4,8 +4,8 @@ export interface PulsePortForwardRow {
   internal_port: number
 }
 
-/** BackPack L3 ports syntax: "443", "443=8443", "443=10.0.0.5:8443" */
-export function toBackpackPortString(rule: PulsePortForwardRow): string {
+/** HPX tunnel ports syntax: "443", "443=8443", "443=10.0.0.5:8443" */
+export function toTunnelPortString(rule: PulsePortForwardRow): string {
   const ext = rule.external_port
   const intPort = rule.internal_port
   const ip = rule.internal_ip.trim()
@@ -14,7 +14,10 @@ export function toBackpackPortString(rule: PulsePortForwardRow): string {
   return `${ext}=${intPort}`
 }
 
-export function fromBackpackPortString(value: string): PulsePortForwardRow | null {
+/** @deprecated use toTunnelPortString */
+export const toBackpackPortString = toTunnelPortString
+
+export function fromTunnelPortString(value: string): PulsePortForwardRow | null {
   const raw = value.trim()
   if (!raw) return null
   const eq = raw.indexOf('=')
@@ -36,3 +39,6 @@ export function fromBackpackPortString(value: string): PulsePortForwardRow | nul
   if (!Number.isInteger(external) || !Number.isInteger(internal)) return null
   return { external_port: external, internal_ip: ip, internal_port: internal }
 }
+
+/** @deprecated use fromTunnelPortString */
+export const fromBackpackPortString = fromTunnelPortString

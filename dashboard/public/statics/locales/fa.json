@@ -2152,7 +2152,7 @@
   },
   "hpxPulse": {
     "title": "HPX Pulse",
-    "description": "مشاور هوشمند HPX Direct — انتخاب پروفایل stealth/speed، نصب agent ایران و خارج، چک‌لیست Reality.",
+    "description": "مشاور هوشمند HPX — Reverse TCP Stealth (پیش‌فرض) یا Direct L3، نصب agent ایران و خارج.",
     "add": "Pulse جدید",
     "create": "ساخت Pulse",
     "createSuccess": "Pulse ساخته شد — دستور نصب را از پایین کپی کنید",
@@ -2171,13 +2171,23 @@
     "externalPort": "خارجی",
     "internalIp": "IP داخلی (اختیاری)",
     "internalPort": "پورت داخلی",
-    "portForwardsHint": "HPX Direct روی ایران: 443، 443=8443 یا 443=10.0.0.5:8443. IP خالی = peer تونل (خارج).",
+    "portForwardsHint": "Reverse (سرور ایران): 443 یا 443=127.0.0.1:8443 به سرویس روی خارج. Direct L3: IP خالی = peer تونل.",
     "iranAgent": "Agent ایران",
     "abroadAgent": "Agent خارج",
     "agentConnected": "متصل",
     "agentWaiting": "منتظر",
     "ping": "پینگ",
-    "carrierTcpStealth": "TCP Stealth",
+    "modeReverse": "REVERSE",
+    "modeDirect": "DIRECT",
+    "carrierStealth": "STEALTH",
+    "carrierPck": "PCK",
+    "carrierTcp": "TCP",
+    "carrierTcpMux": "TCP MUX",
+    "carrierKcp": "KCP",
+    "carrierQuic": "QUIC",
+    "carrierWs": "WS",
+    "carrierWss": "WSS",
+    "carrierWssMux": "WSS MUX",
     "carrierUdp": "UDP",
     "carrierIcmp": "ICMP",
     "summary": "{{total}} تونل Pulse",
@@ -2186,7 +2196,7 @@
     "regenerate": "توکن‌ها",
     "wizard": {
       "title": "مشاور HPX Pulse",
-      "description": "IPها را بزنید و Create بزنید — پیشنهاد خودکار گرفته می‌شود."
+      "description": "مشخصات سرور را وارد کنید، پروفایل‌های HPX Reverse/Direct رتبه‌بندی می‌شوند، سپس agent ایران و خارج را نصب کنید."
     },
     "status": {
       "pending_claim": "منتظر agent",

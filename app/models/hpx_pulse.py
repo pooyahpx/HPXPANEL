@@ -168,6 +168,7 @@ class HpxPulseAgentHeartbeatRequest(BaseModel):
     packet_loss_pct: float | None = None
     tunnel_running: bool = Field(default=False, validation_alias=AliasChoices("tunnel_running", "backpack_running"))
     iface_up: bool = False
+    forward_ok: bool | None = None
 
 
 class HpxPulseAgentAckRequest(BaseModel):

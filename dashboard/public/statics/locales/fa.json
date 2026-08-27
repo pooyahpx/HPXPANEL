@@ -2180,6 +2180,7 @@
     "agentConnected": "متصل",
     "agentWaiting": "منتظر",
     "ping": "پینگ",
+    "live": "زنده",
     "modeReverse": "REVERSE",
     "modeDirect": "DIRECT",
     "carrierStealth": "STEALTH",

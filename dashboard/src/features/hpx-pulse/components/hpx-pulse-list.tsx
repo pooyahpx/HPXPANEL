@@ -118,12 +118,25 @@ function PulseCard({
               : t('hpxPulse.agentWaiting', { defaultValue: 'waiting' })}
           </span>
         </div>
-        <div className={cn('rounded-md border px-2 py-1.5', isRunning ? 'border-emerald-500/40 bg-emerald-500/5' : 'border-border')}>
+        <div className={cn(
+          'rounded-md border px-2 py-1.5',
+          pulse.latency_ms != null && pulse.status === 'running'
+            ? 'border-emerald-500/40 bg-emerald-500/5'
+            : pulse.status === 'unhealthy'
+              ? 'border-orange-500/40 bg-orange-500/5'
+              : 'border-border',
+        )}>
           <span className="text-muted-foreground flex items-center gap-1">
-            <Activity className="size-3" />
+            <Activity className={cn('size-3', pulse.latency_ms != null && 'animate-pulse')} />
             {t('hpxPulse.ping', { defaultValue: 'Ping' })}
+            {pulse.latency_ms != null && (
+              <span className="text-[10px] opacity-70">{t('hpxPulse.live', { defaultValue: 'live' })}</span>
+            )}
           </span>
-          <span className={isRunning && pulse.latency_ms != null ? 'font-medium text-emerald-600 dark:text-emerald-400' : ''}>
+          <span className={cn(
+            pulse.latency_ms != null && pulse.status === 'running' && 'font-medium text-emerald-600 dark:text-emerald-400',
+            pulse.status === 'unhealthy' && 'font-medium text-orange-600 dark:text-orange-400',
+          )}>
             {pulse.latency_ms != null ? `${pulse.latency_ms.toFixed(1)} ms` : '—'}
           </span>
         </div>

@@ -288,6 +288,7 @@
     "agentConnected": "connected",
     "agentWaiting": "waiting",
     "ping": "Ping",
+    "live": "live",
     "modeReverse": "REVERSE",
     "modeDirect": "DIRECT",
     "carrierStealth": "STEALTH",

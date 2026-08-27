@@ -310,8 +310,40 @@ Unit=${SERVICE_NAME}.service
 [Install]
 WantedBy=timers.target
 EOF
+
+  # Live ping every 5s (heartbeat only — no full sync).
+  cat >"/etc/systemd/system/${SERVICE_NAME}-ping.service" <<EOF
+[Unit]
+Description=HPX Pulse live ping
+After=network-online.target ${TUNNEL_SERVICE}.service
+
+[Service]
+Type=oneshot
+ExecStart=$BIN_LINK ping
+Nice=10
+EOF
+  cat >"/etc/systemd/system/${SERVICE_NAME}-ping.timer" <<EOF
+[Unit]
+Description=HPX Pulse live ping timer
+
+[Timer]
+OnBootSec=5s
+OnUnitActiveSec=5s
+AccuracySec=1s
+Unit=${SERVICE_NAME}-ping.service
+
+[Install]
+WantedBy=timers.target
+EOF
+
   systemctl daemon-reload
   systemctl enable --now "$TIMER_NAME" >/dev/null
+  systemctl enable --now "${SERVICE_NAME}-ping.timer" >/dev/null
+}
+
+cmd_ping() {
+  load_env
+  send_heartbeat
 }
 
 # TCP connect RTT in ms (reverse tunnels — ICMP is often blocked on VPS).
@@ -365,10 +397,17 @@ measure_icmp_ms() {
   ping -c 3 -W 2 "$peer" 2>/dev/null | tail -1 | sed -n 's/.*= \([0-9.]*\)\/.*/\1/p'
 }
 
+first_forward_listen_port() {
+  echo "${PORT_FORWARDS:-}" | tr -d '[]"' | cut -d',' -f1 | cut -d'=' -f1 | tr -d ' '
+}
+
 send_heartbeat() {
   local running="false"
   local link="false"
   local lat="" lat_json="null"
+  local msg="HPX Pulse sync"
+  local fwd_json="null"
+  local control_lat="" forward_lat="" fwd_port=""
   tunnel_service_active && running="true"
   tunnel_link_up && link="true"
 
@@ -381,36 +420,58 @@ send_heartbeat() {
       fi
       ;;
     reverse_*)
-      # Prefer abroad → Iran tunnel port. Also try first forwarded port (user path).
+      # Abroad measures live user-path: Iran public IP + forwarded port (e.g. 443).
+      # Control-port-only ping looked "up" while real configs still got -1.
       if [ "${PULSE_SIDE:-}" = "abroad" ] && [ "$running" = "true" ] \
         && [ -n "${IRAN_PUBLIC_IP:-}" ]; then
+        fwd_port="$(first_forward_listen_port)"
         if [ -n "${CONTROL_PORT:-}" ]; then
-          lat="$(measure_tcp_ms "$IRAN_PUBLIC_IP" "$CONTROL_PORT" || true)"
+          control_lat="$(measure_tcp_ms "$IRAN_PUBLIC_IP" "$CONTROL_PORT" || true)"
         fi
-        if [ -z "$lat" ]; then
-          local first_pf
-          first_pf=$(echo "${PORT_FORWARDS:-}" | tr -d '[]"' | cut -d',' -f1 | cut -d'=' -f1 | tr -d ' ')
-          [ -n "$first_pf" ] && lat="$(measure_tcp_ms "$IRAN_PUBLIC_IP" "$first_pf" || true)"
+        if [ -n "$fwd_port" ]; then
+          forward_lat="$(measure_tcp_ms "$IRAN_PUBLIC_IP" "$fwd_port" || true)"
         fi
-      fi
-      # Iran side: if abroad already failed, report local listen readiness via 0 ms sentinel? skip.
-      if [ -z "$lat" ] && [ "${PULSE_SIDE:-}" = "iran" ] && tunnel_port_listening; then
-        # Local bind OK — do not invent latency; leave null unless abroad reports.
-        :
+        if [ -n "$forward_lat" ]; then
+          lat="$forward_lat"
+          fwd_json="true"
+          msg="user path OK (Iran:${fwd_port})"
+        elif [ -n "$control_lat" ]; then
+          # Tunnel control works but 443 path dead — configs will show -1
+          lat="$control_lat"
+          fwd_json="false"
+          msg="control OK but Iran:${fwd_port:-443} closed — open firewall + Xray on abroad 127.0.0.1:${fwd_port:-443}"
+        else
+          fwd_json="false"
+          msg="cannot reach Iran tunnel/control — check Iran IP/firewall"
+        fi
       fi
       ;;
   esac
 
   [ -n "$lat" ] && lat_json="$lat"
-  api POST "/api/hpx_pulse/agent/heartbeat" \
-    "$(jq -nc \
-      --arg s "running" \
-      --arg h "$(hostname -f 2>/dev/null || hostname)" \
-      --argjson tr "$running" \
-      --argjson iu "$link" \
-      --argjson lm "$lat_json" \
-      '{status:$s, host:$h, tunnel_running:$tr, iface_up:$iu, latency_ms:($lm|tonumber? // null), message:"HPX Pulse sync"}')" \
-    >/dev/null || warn "heartbeat to panel failed — check PANEL_URL and firewall"
+  # Iran must not overwrite abroad's diagnostic message every 5s.
+  if [ "${PULSE_SIDE:-}" = "iran" ] && [[ "${TUNNEL_MODE:-}" == reverse_* ]]; then
+    api POST "/api/hpx_pulse/agent/heartbeat" \
+      "$(jq -nc \
+        --arg s "running" \
+        --arg h "$(hostname -f 2>/dev/null || hostname)" \
+        --argjson tr "$running" \
+        --argjson iu "$link" \
+        '{status:$s, host:$h, tunnel_running:$tr, iface_up:$iu}')" \
+      >/dev/null || warn "heartbeat to panel failed — check PANEL_URL and firewall"
+  else
+    api POST "/api/hpx_pulse/agent/heartbeat" \
+      "$(jq -nc \
+        --arg s "running" \
+        --arg h "$(hostname -f 2>/dev/null || hostname)" \
+        --arg m "$msg" \
+        --argjson tr "$running" \
+        --argjson iu "$link" \
+        --argjson lm "$lat_json" \
+        --argjson fo "$fwd_json" \
+        '{status:$s, host:$h, tunnel_running:$tr, iface_up:$iu, latency_ms:($lm|tonumber? // null), forward_ok:$fo, message:$m}')" \
+      >/dev/null || warn "heartbeat to panel failed — check PANEL_URL and firewall"
+  fi
 }
 
 cmd_join() {
@@ -540,7 +601,7 @@ usage() {
   cat <<EOF
 HPX Pulse Agent
   join TOKEN --panel-url URL --side iran|abroad
-  sync | status
+  sync | ping | status
 EOF
 }
 
@@ -550,6 +611,7 @@ main() {
   case "$cmd" in
     join) cmd_join "$@" ;;
     sync) cmd_sync ;;
+    ping) cmd_ping ;;
     status) cmd_status ;;
     -h|--help|help) usage ;;
     *) die "unknown: $cmd" ;;

@@ -116,6 +116,30 @@ if __name__ == "__main__":
             bind_args["host"] = server_settings.host
             bind_args["port"] = server_settings.port
 
+        if (
+            server_settings.http_redirect_enabled
+            and not server_settings.uds
+            and server_settings.http_redirect_port > 0
+            and server_settings.http_redirect_port != server_settings.port
+        ):
+            from app.http_redirect import start_http_redirect_server
+
+            if start_http_redirect_server(
+                server_settings.host,
+                server_settings.http_redirect_port,
+                server_settings.port,
+            ):
+                logger.info(
+                    "HTTP redirect enabled on port %s -> https://<host>:%s",
+                    server_settings.http_redirect_port,
+                    server_settings.port,
+                )
+            else:
+                logger.warning(
+                    "HTTP redirect is enabled but port %s is unavailable; use https:// explicitly.",
+                    server_settings.http_redirect_port,
+                )
+
     else:
         if server_settings.uds:
             bind_args["uds"] = server_settings.uds
@@ -143,7 +167,8 @@ Then, navigate to {click.style(f"http://{ip}:{server_settings.port}", bold=True)
 
     if runtime_settings.debug:
         bind_args["uds"] = None
-        bind_args["host"] = "0.0.0.0"
+        if server_settings.ssl_certfile and server_settings.ssl_keyfile:
+            bind_args["host"] = server_settings.host
 
     effective_log_level = logging_settings.level
     for logger_name in ("uvicorn", "uvicorn.error", "uvicorn.access"):

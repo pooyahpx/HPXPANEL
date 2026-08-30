@@ -60,6 +60,23 @@ class ServerSettings(EnvSettings):
     loop: str = Field(default="auto", validation_alias="UVICORN_LOOP")
     proxy_headers: bool = Field(default=False, validation_alias="UVICORN_PROXY_HEADERS")
     forwarded_allow_ips: str | list[str] = Field(default="127.0.0.1", validation_alias="UVICORN_FORWARDED_ALLOW_IPS")
+    http_redirect_enabled: bool = Field(default=True, validation_alias="UVICORN_HTTP_REDIRECT")
+    http_redirect_port: int = Field(default=80, validation_alias="UVICORN_HTTP_REDIRECT_PORT")
+
+    @field_validator("http_redirect_enabled", mode="before")
+    @classmethod
+    def parse_http_redirect_enabled(cls, value: Any) -> bool:
+        if isinstance(value, bool):
+            return value
+        if value is None:
+            return True
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in {"", "1", "true", "yes", "on"}:
+                return True
+            if normalized in {"0", "false", "no", "off"}:
+                return False
+        return bool(value)
 
     @field_validator("ssl_ca_type")
     @classmethod

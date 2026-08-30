@@ -745,20 +745,64 @@ configure_custom_ssl_certificate() {
     return 0
 }
 
+panel_public_base_url() {
+    local scheme="$1"
+    local host="$2"
+    local port
+    port=$(get_configured_uvicorn_port)
+
+    if [ "$scheme" = "https" ] && [ "$port" = "443" ]; then
+        printf '%s://%s' "$scheme" "$host"
+    elif [ "$scheme" = "http" ] && [ "$port" = "80" ]; then
+        printf '%s://%s' "$scheme" "$host"
+    else
+        printf '%s://%s:%s' "$scheme" "$host" "$port"
+    fi
+}
+
+get_cert_common_name() {
+    local cert_file="$1"
+    local cn=""
+
+    if [ ! -f "$cert_file" ]; then
+        return 1
+    fi
+    if command -v openssl >/dev/null 2>&1; then
+        cn=$(openssl x509 -in "$cert_file" -noout -subject 2>/dev/null \
+            | grep -oE 'CN[[:space:]]*=[[:space:]]*[^,/]+' \
+            | head -1 \
+            | sed 's/^CN[[:space:]]*=[[:space:]]*//' || true)
+    fi
+    [ -n "$cn" ] || return 1
+    printf '%s' "$cn"
+}
+
 enable_hpxpanel_ssl_env() {
     local cert_file="$1"
     local key_file="$2"
     local ca_type="${3:-public}"
+    local public_host="${4:-}"
 
     set_or_uncomment_env_var "UVICORN_SSL_CERTFILE" "$cert_file" true "$ENV_FILE"
     set_or_uncomment_env_var "UVICORN_SSL_KEYFILE" "$key_file" true "$ENV_FILE"
     set_or_uncomment_env_var "UVICORN_SSL_CA_TYPE" "$ca_type" true "$ENV_FILE"
+    set_or_uncomment_env_var "UVICORN_HTTP_REDIRECT" "true" false "$ENV_FILE"
+
+    if [ -z "$public_host" ]; then
+        public_host=$(get_cert_common_name "$cert_file" 2>/dev/null || true)
+    fi
+    if [ -n "$public_host" ]; then
+        set_or_uncomment_env_var "PANEL_PUBLIC_URL" "$(panel_public_base_url https "$public_host")" true "$ENV_FILE"
+        colorized_echo green "PANEL_PUBLIC_URL set to $(panel_public_base_url https "$public_host")"
+    fi
 }
 
 disable_hpxpanel_ssl_env() {
     comment_out_env_var "UVICORN_SSL_CERTFILE" "$ENV_FILE"
     comment_out_env_var "UVICORN_SSL_KEYFILE" "$ENV_FILE"
     comment_out_env_var "UVICORN_SSL_CA_TYPE" "$ENV_FILE"
+    comment_out_env_var "UVICORN_HTTP_REDIRECT" "$ENV_FILE"
+    comment_out_env_var "PANEL_PUBLIC_URL" "$ENV_FILE"
 }
 
 setup_hpxpanel_ssl_during_install() {
@@ -818,7 +862,7 @@ setup_hpxpanel_ssl_during_install() {
         done
 
         if setup_ssl_certificate "$ssl_domain" "$ssl_http_port"; then
-            enable_hpxpanel_ssl_env "${DATA_DIR}/certs/${ssl_domain}/fullchain.pem" "${DATA_DIR}/certs/${ssl_domain}/privkey.pem" "public"
+            enable_hpxpanel_ssl_env "${DATA_DIR}/certs/${ssl_domain}/fullchain.pem" "${DATA_DIR}/certs/${ssl_domain}/privkey.pem" "public" "$ssl_domain"
             colorized_echo green "SSL enabled for $(dashboard_access_url https "$ssl_domain")"
             # Restart panel if already running so new cert is picked up.
             if is_hpxpanel_installed && is_hpxpanel_up 2>/dev/null; then
@@ -858,7 +902,7 @@ setup_hpxpanel_ssl_during_install() {
         fi
 
         if setup_ip_ssl_certificate "$input_ipv4" "$input_ipv6" "$ssl_http_port"; then
-            enable_hpxpanel_ssl_env "${DATA_DIR}/certs/ip/fullchain.pem" "${DATA_DIR}/certs/ip/privkey.pem" "public"
+            enable_hpxpanel_ssl_env "${DATA_DIR}/certs/ip/fullchain.pem" "${DATA_DIR}/certs/ip/privkey.pem" "public" "$input_ipv4"
             colorized_echo green "SSL enabled for $(dashboard_access_url https "$input_ipv4")"
             return 0
         fi
@@ -928,7 +972,7 @@ ssl_command() {
             ;;
         --domain)
             if setup_ssl_certificate "$2" "$ssl_http_port"; then
-                enable_hpxpanel_ssl_env "${DATA_DIR}/certs/${2}/fullchain.pem" "${DATA_DIR}/certs/${2}/privkey.pem" "public"
+                enable_hpxpanel_ssl_env "${DATA_DIR}/certs/${2}/fullchain.pem" "${DATA_DIR}/certs/${2}/privkey.pem" "public" "$2"
                 if is_hpxpanel_up 2>/dev/null; then
                     $COMPOSE -f "$COMPOSE_FILE" -p "$APP_NAME" restart >/dev/null 2>&1 || true
                 fi

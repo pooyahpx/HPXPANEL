@@ -797,6 +797,20 @@ enable_hpxpanel_ssl_env() {
     fi
 }
 
+refresh_panel_public_url() {
+    local panel_url=""
+    local host=""
+
+    panel_url=$(grep -E '^[[:space:]]*PANEL_PUBLIC_URL[[:space:]]*=' "$ENV_FILE" 2>/dev/null \
+        | grep -v '^[[:space:]]*#' | head -1 | sed 's/^[^=]*=\s*//' | tr -d '[:space:]"'"'"'' || true)
+    [ -z "$panel_url" ] && return 0
+
+    host=$(printf '%s' "$panel_url" | sed -E 's#^https?://([^/:]+).*#\1#')
+    [ -z "$host" ] && return 0
+
+    set_or_uncomment_env_var "PANEL_PUBLIC_URL" "$(panel_public_base_url https "$host")" true "$ENV_FILE"
+}
+
 disable_hpxpanel_ssl_env() {
     comment_out_env_var "UVICORN_SSL_CERTFILE" "$ENV_FILE"
     comment_out_env_var "UVICORN_SSL_KEYFILE" "$ENV_FILE"
@@ -1870,6 +1884,7 @@ install_command() {
 
         set_or_uncomment_env_var "UVICORN_PORT" "$new_port" false "$ENV_FILE"
         colorized_echo green "UVICORN_PORT updated to ${new_port} in ${ENV_FILE}"
+        refresh_panel_public_url
 
         # Update ALLOWED_ORIGINS to reflect the new port
         if grep -qE '^\s*ALLOWED_ORIGINS\s*=' "$ENV_FILE"; then
@@ -1932,8 +1947,13 @@ hpxpanel_tui() {
 
 
 is_hpxpanel_up() {
+    local backend_service=""
     detect_compose
-    if [ -n "$($COMPOSE -f "$COMPOSE_FILE" -p "$APP_NAME" ps --status running -q 2>/dev/null)" ]; then
+    backend_service=$(detect_hpxpanel_backend_service 2>/dev/null || true)
+    if [ -z "$backend_service" ]; then
+        return 1
+    fi
+    if [ -n "$($COMPOSE -f "$COMPOSE_FILE" -p "$APP_NAME" ps --status running -q "$backend_service" 2>/dev/null)" ]; then
         return 0
     fi
     return 1

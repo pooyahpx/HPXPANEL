@@ -26,6 +26,11 @@ warn() { echo "[HPX Pulse !] $*" >&2; }
 die()  { echo "[HPX Pulse x] $*" >&2; exit 1; }
 has()  { command -v "$1" >/dev/null 2>&1; }
 
+# HTTP/1.1 avoids curl error 92 (PROTOCOL_ERROR) on some filtered routes (e.g. Iran).
+hp_curl() {
+  curl --http1.1 --connect-timeout 30 --max-time 120 --retry 3 --retry-delay 2 -fsSL "$@"
+}
+
 need_root() { [ "$(id -u)" -eq 0 ] || die "run as root (sudo)"; }
 
 fix_hostname_resolution() {
@@ -46,7 +51,7 @@ ensure_deps() {
   has curl || die "curl required"
   if ! has docker; then
     warn "Docker missing — installing via get.docker.com"
-    curl -fsSL https://get.docker.com | sh
+    curl --http1.1 -fsSL https://get.docker.com | sh
   fi
   docker info >/dev/null 2>&1 || die "docker daemon not running"
   if ! has jq; then
@@ -61,7 +66,7 @@ install_self() {
     cp "${BASH_SOURCE[0]}" "$INSTALL_DIR/hpx-pulse-agent.sh" 2>/dev/null || true
   fi
   if [ ! -s "$INSTALL_DIR/hpx-pulse-agent.sh" ]; then
-    curl -fsSL "https://raw.githubusercontent.com/pooyahpx/HPXPANEL/main/scripts/hpx-pulse-agent.sh" \
+    hp_curl "https://raw.githubusercontent.com/pooyahpx/HPXPANEL/main/scripts/hpx-pulse-agent.sh" \
       -o "$INSTALL_DIR/hpx-pulse-agent.sh"
   fi
   chmod 755 "$INSTALL_DIR/hpx-pulse-agent.sh"
@@ -94,7 +99,7 @@ load_env() {
 api() {
   local method="$1" path="$2" body="${3:-}"
   local url="${PANEL_URL%/}${path}"
-  local args=(-fsSL -X "$method" -H "X-HPX-Pulse-Agent-Key: ${AGENT_KEY}" -H "X-HPX-Pulse-Side: ${PULSE_SIDE}" -H "Accept: application/json")
+  local args=(--http1.1 --connect-timeout 30 --max-time 120 -fsSL -X "$method" -H "X-HPX-Pulse-Agent-Key: ${AGENT_KEY}" -H "X-HPX-Pulse-Side: ${PULSE_SIDE}" -H "Accept: application/json")
   [ -n "$body" ] && args+=(-H "Content-Type: application/json" -d "$body")
   curl "${args[@]}" "$url"
 }
@@ -108,7 +113,18 @@ ensure_engine() {
     return 0
   fi
   log "Installing HPX tunnel engine (one-time)..."
-  bash <(curl -fsSL "$ENGINE_INSTALL_URL") || die "HPX tunnel engine install failed"
+  local installer
+  installer="$(mktemp)"
+  if ! hp_curl "$ENGINE_INSTALL_URL" -o "$installer"; then
+    rm -f "$installer"
+    die "HPX tunnel engine install script download failed"
+  fi
+  chmod 755 "$installer"
+  if ! bash "$installer"; then
+    rm -f "$installer"
+    die "HPX tunnel engine install failed"
+  fi
+  rm -f "$installer"
   [ -x "$ENGINE_BIN" ] || die "HPX tunnel engine binary missing after install"
 }
 
@@ -498,7 +514,7 @@ cmd_join() {
   body=$(jq -nc --arg t "$token" --arg h "$host" --arg s "$side" '{join_token:$t, host:$h, side:$s}')
 
   log "claiming join token (${side})..."
-  claim=$(curl -fsSL -X POST -H "Content-Type: application/json" -d "$body" \
+  claim=$(hp_curl -X POST -H "Content-Type: application/json" -d "$body" \
     "${PANEL_URL}/api/hpx_pulse/agent/claim") || die "claim failed — check panel URL and token"
 
   AGENT_KEY=$(echo "$claim" | jq -r '.agent_key')
@@ -528,7 +544,7 @@ cmd_sync() {
   need_root
   load_env
   # Pull latest agent script once so firewall/ping fixes apply without re-join.
-  if curl -fsSL "https://raw.githubusercontent.com/pooyahpx/HPXPANEL/main/scripts/hpx-pulse-agent.sh" \
+  if hp_curl "https://raw.githubusercontent.com/pooyahpx/HPXPANEL/main/scripts/hpx-pulse-agent.sh" \
       -o "$INSTALL_DIR/hpx-pulse-agent.sh.new" 2>/dev/null; then
     if [ -s "$INSTALL_DIR/hpx-pulse-agent.sh.new" ] \
       && ! cmp -s "$INSTALL_DIR/hpx-pulse-agent.sh.new" "$INSTALL_DIR/hpx-pulse-agent.sh" 2>/dev/null; then

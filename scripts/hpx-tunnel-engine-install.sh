@@ -4,6 +4,9 @@ set -euo pipefail
 
 TARGET="/usr/local/bin/hpx-tunnel-engine"
 
+# HTTP/1.1 avoids curl error 92 (PROTOCOL_ERROR) on some filtered routes (e.g. Iran).
+CURL=(curl --http1.1 --connect-timeout 30 --max-time 300 --retry 3 --retry-delay 2 -fsSL)
+
 if [ -x "$TARGET" ]; then
   exit 0
 fi
@@ -18,15 +21,17 @@ esac
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 
-release_url="$(curl -fsSL https://api.github.com/repos/AminMGMT/BackPack/releases/latest \
-  | grep -o "https://[^\"]*${asset}" | head -1)"
-
-if [ -z "$release_url" ]; then
-  echo "HPX tunnel engine download failed" >&2
-  exit 1
+direct_url="https://github.com/AminMGMT/BackPack/releases/latest/download/${asset}"
+if ! "${CURL[@]}" "$direct_url" -o "$work/engine.tgz"; then
+  release_url="$("${CURL[@]}" "https://api.github.com/repos/AminMGMT/BackPack/releases/latest" \
+    | grep -o "https://[^\"]*${asset}" | head -1)" || true
+  if [ -z "$release_url" ]; then
+    echo "HPX tunnel engine download failed" >&2
+    exit 1
+  fi
+  "${CURL[@]}" "$release_url" -o "$work/engine.tgz"
 fi
 
-curl -fsSL "$release_url" -o "$work/engine.tgz"
 tar -xzf "$work/engine.tgz" -C "$work"
 
 bin="$(find "$work" -maxdepth 2 -type f -name backpack -perm -111 | head -1)"

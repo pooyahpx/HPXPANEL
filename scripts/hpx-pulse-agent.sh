@@ -113,14 +113,22 @@ ensure_engine() {
     return 0
   fi
   log "Installing HPX tunnel engine (one-time)..."
-  local installer
+  local installer panel_install_url
   installer="$(mktemp)"
-  if ! hp_curl "$ENGINE_INSTALL_URL" -o "$installer"; then
+  panel_install_url=""
+  if [ -n "${PANEL_URL:-}" ]; then
+    panel_install_url="${PANEL_URL%/}/api/hpx_pulse/agent/engine-install.sh"
+  fi
+  if [ -n "$panel_install_url" ] && hp_curl "$panel_install_url" -o "$installer"; then
+    log "Using panel-hosted engine installer"
+  elif hp_curl "$ENGINE_INSTALL_URL" -o "$installer"; then
+    log "Using GitHub-hosted engine installer"
+  else
     rm -f "$installer"
     die "HPX tunnel engine install script download failed"
   fi
   chmod 755 "$installer"
-  if ! bash "$installer"; then
+  if ! HPX_PANEL_URL="${PANEL_URL:-}" bash "$installer"; then
     rm -f "$installer"
     die "HPX tunnel engine install failed"
   fi

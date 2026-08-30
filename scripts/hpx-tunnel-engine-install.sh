@@ -32,16 +32,32 @@ esac
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 
-direct_url="https://github.com/${ENGINE_REPO}/releases/download/${release_tag}/${asset}"
-if ! "${CURL[@]}" "$direct_url" -o "$work/engine.tgz"; then
-  release_url="$("${CURL[@]}" "https://api.github.com/repos/${ENGINE_REPO}/releases/tags/${release_tag}" \
-    | grep -o "https://[^\"]*${asset}" | head -1)" || true
-  if [ -z "$release_url" ]; then
-    echo "HPX tunnel engine download failed (${ENGINE_REPO} ${release_tag})" >&2
-    echo "Publish assets with workflow: Publish HPX tunnel engine binaries" >&2
-    exit 1
+downloaded=false
+panel_url="${HPX_PANEL_URL:-}"
+if [ -n "$panel_url" ]; then
+  arch_key="amd64"
+  case "$arch" in
+    aarch64|arm64) arch_key="arm64" ;;
+  esac
+  if "${CURL[@]}" "${panel_url%/}/api/hpx_pulse/agent/engine/${arch_key}" -o "$work/engine.tgz"; then
+    downloaded=true
+  else
+    echo "HPX panel engine mirror unavailable; trying GitHub..." >&2
   fi
-  "${CURL[@]}" "$release_url" -o "$work/engine.tgz"
+fi
+
+if [ "$downloaded" = false ]; then
+  direct_url="https://github.com/${ENGINE_REPO}/releases/download/${release_tag}/${asset}"
+  if ! "${CURL[@]}" "$direct_url" -o "$work/engine.tgz"; then
+    release_url="$("${CURL[@]}" "https://api.github.com/repos/${ENGINE_REPO}/releases/tags/${release_tag}" \
+      | grep -o "https://[^\"]*${asset}" | head -1)" || true
+    if [ -z "$release_url" ]; then
+      echo "HPX tunnel engine download failed (${ENGINE_REPO} ${release_tag})" >&2
+      echo "If GitHub is blocked, set HPX_PANEL_URL to your panel base URL and retry." >&2
+      exit 1
+    fi
+    "${CURL[@]}" "$release_url" -o "$work/engine.tgz"
+  fi
 fi
 
 tar -xzf "$work/engine.tgz" -C "$work"

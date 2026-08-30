@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, Header, Request, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
+from fastapi.responses import FileResponse, PlainTextResponse
 
 from app.db import AsyncSession, get_db
 from app.models.admin import AdminDetails
@@ -17,6 +18,7 @@ from app.models.hpx_pulse import (
 )
 from app.operation import OperatorType
 from app.operation.hpx_pulse import HpxPulseOperation
+from app.services.hpx_pulse import engine_mirror
 from app.utils import responses
 
 from .authentication import require_permission
@@ -118,6 +120,31 @@ async def claim_hpx_pulse_agent(
     db: AsyncSession = Depends(get_db),
 ):
     return await pulse_operator.claim_agent(db, model=model)
+
+
+@router.get("/agent/engine-install.sh", response_class=PlainTextResponse)
+async def get_hpx_pulse_engine_install_script():
+    script = engine_mirror.install_script_path()
+    if not script.is_file():
+        raise HTTPException(status_code=404, detail="Engine install script is not bundled with this panel build")
+    return PlainTextResponse(script.read_text(encoding="utf-8"), media_type="text/x-shellscript; charset=utf-8")
+
+
+@router.get("/agent/engine/{arch}")
+async def download_hpx_pulse_engine(arch: str):
+    try:
+        normalized = engine_mirror.normalize_arch(arch)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    try:
+        path = await engine_mirror.ensure_engine_cached(normalized)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Could not fetch HPX tunnel engine: {exc}") from exc
+    return FileResponse(
+        path,
+        media_type="application/gzip",
+        filename=engine_mirror.asset_name(normalized),
+    )
 
 
 @router.get("/agent/config", response_model=HpxPulseAgentConfigResponse)

@@ -1,0 +1,80 @@
+name: Publish HPX tunnel engine binaries
+
+# Re-packages upstream BackPack into pooyahpx/HPXPANEL releases under HPX branding.
+on:
+  workflow_dispatch:
+    inputs:
+      upstream_tag:
+        description: "Upstream BackPack tag (e.g. v1.7.5)"
+        required: true
+        default: "v1.7.5"
+      engine_version:
+        description: "HPX tunnel engine version label (e.g. 1.7.5)"
+        required: true
+        default: "1.7.5"
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve versions
+        id: meta
+        run: |
+          set -eux
+          upstream="${{ github.event.inputs.upstream_tag }}"
+          engine="${{ github.event.inputs.engine_version }}"
+          if [ -z "$upstream" ]; then
+            if [ -f scripts/hpx-tunnel-engine.version ]; then
+              engine="$(tr -d '[:space:]' < scripts/hpx-tunnel-engine.version)"
+            else
+              engine="1.7.5"
+            fi
+            upstream="v${engine}"
+          fi
+          upstream="${upstream#v}"
+          engine="${engine#v}"
+          echo "upstream=v${upstream}" >> "$GITHUB_OUTPUT"
+          echo "engine=${engine}" >> "$GITHUB_OUTPUT"
+          echo "tag=hpx-tunnel-engine-v${engine}" >> "$GITHUB_OUTPUT"
+
+      - name: Build rebranded archives
+        run: |
+          set -eux
+          upstream="${{ steps.meta.outputs.upstream }}"
+          engine="${{ steps.meta.outputs.engine }}"
+          dist="dist"
+          mkdir -p "$dist"
+          for pair in amd64:backpack_linux_amd64.tar.gz arm64:backpack_linux_arm64.tar.gz; do
+            arch="${pair%%:*}"
+            upstream_asset="${pair##*:}"
+            url="https://github.com/AminMGMT/BackPack/releases/download/${upstream}/${upstream_asset}"
+            work="$(mktemp -d)"
+            curl -fsSL "$url" -o "$work/upstream.tgz"
+            tar -xzf "$work/upstream.tgz" -C "$work"
+            bin="$(find "$work" -maxdepth 2 -type f -name backpack -perm -111 | head -1)"
+            [ -n "$bin" ] || { echo "backpack binary missing in ${upstream_asset}" >&2; exit 1; }
+            pkg="$(mktemp -d)"
+            install -m 755 "$bin" "$pkg/hpx-tunnel-engine"
+            tar -czf "$dist/hpx-tunnel-engine_linux_${arch}.tar.gz" -C "$pkg" hpx-tunnel-engine
+            rm -rf "$work" "$pkg"
+          done
+          sha256sum "$dist"/*.tar.gz | tee "$dist/SHA256SUMS"
+          echo "${engine}" > scripts/hpx-tunnel-engine.version
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eux
+          tag="${{ steps.meta.outputs.tag }}"
+          engine="${{ steps.meta.outputs.engine }}"
+          upstream="${{ steps.meta.outputs.upstream }}"
+          gh release view "$tag" >/dev/null 2>&1 && gh release delete "$tag" -y --cleanup-tag || true
+          gh release create "$tag" dist/* \
+            --title "HPX Tunnel Engine v${engine}" \
+            --notes "Rebranded HPX tunnel engine (upstream BackPack ${upstream}). Assets: hpx-tunnel-engine_linux_amd64.tar.gz, hpx-tunnel-engine_linux_arm64.tar.gz"

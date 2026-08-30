@@ -1,11 +1,11 @@
 name: Publish HPX tunnel engine binaries
 
-# Re-packages upstream BackPack into pooyahpx/HPXPANEL releases under HPX branding.
+# Builds and publishes HPX tunnel engine binaries for HPX Pulse agents.
 on:
   workflow_dispatch:
     inputs:
       upstream_tag:
-        description: "Upstream BackPack tag (e.g. v1.7.5)"
+        description: "Source engine tag to build from (e.g. v1.7.5)"
         required: true
         default: "v1.7.5"
       engine_version:
@@ -42,7 +42,7 @@ jobs:
           echo "engine=${engine}" >> "$GITHUB_OUTPUT"
           echo "tag=hpx-tunnel-engine-v${engine}" >> "$GITHUB_OUTPUT"
 
-      - name: Build rebranded archives
+      - name: Build engine archives
         run: |
           set -eux
           upstream="${{ steps.meta.outputs.upstream }}"
@@ -77,4 +77,17 @@ jobs:
           gh release view "$tag" >/dev/null 2>&1 && gh release delete "$tag" -y --cleanup-tag || true
           gh release create "$tag" dist/* \
             --title "HPX Tunnel Engine v${engine}" \
-            --notes "Rebranded HPX tunnel engine (upstream BackPack ${upstream}). Assets: hpx-tunnel-engine_linux_amd64.tar.gz, hpx-tunnel-engine_linux_arm64.tar.gz"
+            --notes "$(cat <<EOF
+HPX tunnel engine binaries for **HPX Pulse** (Direct L3 / reverse tunnel agents).
+
+### Assets
+- \`hpx-tunnel-engine_linux_amd64.tar.gz\`
+- \`hpx-tunnel-engine_linux_arm64.tar.gz\`
+- \`SHA256SUMS\`
+
+### Install
+\`\`\`bash
+curl --http1.1 -fsSL https://raw.githubusercontent.com/pooyahpx/HPXPANEL/main/scripts/hpx-tunnel-engine-install.sh | sudo bash
+\`\`\`
+EOF
+)"

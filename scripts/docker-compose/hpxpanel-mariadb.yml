@@ -1,5 +1,5 @@
 services:
-    hpxpanel:
+  hpxpanel:
     image: ghcr.io/pooyahpx/hpxpanel:latest
     restart: always
     env_file: .env
@@ -8,8 +8,14 @@ services:
       - NET_ADMIN
       - NET_RAW
     volumes:
-      - /var/lib/hpxpanel:/var/lib/hpxpanel
+      - ${HPX_DATA_DIR:-/var/lib/hpxpanel}:/var/lib/hpxpanel
       - /var/run/docker.sock:/var/run/docker.sock
+    healthcheck:
+      test: ["CMD", "/code/healthcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
     depends_on:
       mariadb:
         condition: service_healthy
@@ -39,17 +45,16 @@ services:
       - --long_query_time=2 # Defines slow query threshold as 2 seconds
       - --innodb_snapshot_isolation=0   # Disables snapshot isolation for better performance
     volumes:
-      - /var/lib/mysql/hpxpanel:/var/lib/mysql
+      - ${HPX_MYSQL_DATA_DIR:-/var/lib/mysql/hpxpanel}:/var/lib/mysql
     healthcheck:
       test: [ "CMD", "healthcheck.sh", "--connect", "--innodb_initialized" ]
-      start_period: 10s
+      start_period: 5s
       start_interval: 3s
-      interval: 10s
+      interval: 5s
       timeout: 5s
-      retries: 3
+      retries: 55
 
   phpmyadmin:
-    container_name: phpmyadmin
     image: phpmyadmin:latest
     restart: always
     env_file: .env

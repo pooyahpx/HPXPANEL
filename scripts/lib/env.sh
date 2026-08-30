@@ -6,20 +6,38 @@ replace_or_append_env_var() {
     local quote_value="${3:-false}"
     local target_file="${4:-$ENV_FILE}"
     local formatted_value="$value"
-    local escaped_value=""
+    local tmp_file=""
+    local target_dir=""
 
     if [ "$quote_value" = "true" ]; then
         local sanitized_value="${value//\"/\\\"}"
         formatted_value="\"$sanitized_value\""
     fi
 
-    escaped_value=$(printf '%s' "$formatted_value" | sed -e 's/[&|\\]/\\&/g')
+    [ -f "$target_file" ] || touch "$target_file"
+    target_dir=$(dirname "$target_file")
+    tmp_file=$(create_temp_file_in_dir "$target_dir" "env-edit" ".tmp")
 
-    if grep -q "^$key=" "$target_file"; then
-        sed -i "s|^$key=.*|$key=$escaped_value|" "$target_file"
-    else
-        printf '%s=%s\n' "$key" "$formatted_value" >>"$target_file"
-    fi
+    env_key="$key" env_line="${key} = ${formatted_value}" awk '
+        BEGIN { ekey = ENVIRON["env_key"]; eline = ENVIRON["env_line"]; replaced = 0 }
+        {
+            if ($0 ~ "^[[:space:]]*#?[[:space:]]*" ekey "[[:space:]]*=") {
+                if (replaced == 0) {
+                    print eline
+                    replaced = 1
+                }
+                next
+            }
+            print
+        }
+        END {
+            if (replaced == 0) {
+                print eline
+            }
+        }
+    ' "$target_file" >"$tmp_file"
+
+    mv "$tmp_file" "$target_file"
 }
 
 set_or_uncomment_env_var() {

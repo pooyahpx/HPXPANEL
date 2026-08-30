@@ -16,7 +16,7 @@
 </p>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/release-v3.8.5-8b5cf6?style=for-the-badge">
+  <img alt="version" src="https://img.shields.io/badge/release-v3.8.6-8b5cf6?style=for-the-badge">
   <img alt="build" src="https://img.shields.io/github/actions/workflow/status/pooyahpx/HPXPANEL/build.yml?style=for-the-badge&label=CI">
   <img alt="license" src="https://img.shields.io/github/license/pooyahpx/HPXPANEL?style=for-the-badge">
 </p>

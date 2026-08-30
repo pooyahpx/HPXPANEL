@@ -40,6 +40,44 @@ def cmd_generate_temp_key():
     forge_owner_seal()
 
 
+@app.command("core-update")
+def cmd_core_update(
+    core_version: str = typer.Option(
+        "latest",
+        "--version",
+        "-v",
+        help="Core version tag (latest or vX.Y.Z).",
+    ),
+):
+    """Update proxy core on all registered nodes."""
+    import asyncio
+
+    from app.db import GetDB
+    from app.db.crud.node import get_nodes
+    from app.models.node import NodeCoreUpdate, NodeListQuery
+    from app.operation import OperatorType
+    from app.operation.node import NodeOperation
+
+    async def run() -> None:
+        async with GetDB() as db:
+            nodes, total = await get_nodes(db, NodeListQuery())
+            if total == 0:
+                console.print("[yellow]No nodes registered.[/yellow]")
+                return
+
+            op = NodeOperation(OperatorType.CLI)
+            update = NodeCoreUpdate(core_version=core_version)
+            for node in nodes:
+                console.print(f"Updating node [cyan]{node.id}[/cyan] ({node.name})...")
+                try:
+                    result = await op.update_core(db, node.id, update)
+                    console.print(f"  [green]OK[/green]: {result}")
+                except Exception as exc:
+                    console.print(f"  [red]Failed[/red]: {exc}")
+
+    asyncio.run(run())
+
+
 @app.command()
 def version():
     """Show HPXPANEL version."""

@@ -1,5 +1,5 @@
 services:
-    hpxpanel:
+  hpxpanel:
     image: ghcr.io/pooyahpx/hpxpanel:latest
     restart: always
     env_file: .env
@@ -8,8 +8,14 @@ services:
       - NET_ADMIN
       - NET_RAW
     volumes:
-      - /var/lib/hpxpanel:/var/lib/hpxpanel
+      - ${HPX_DATA_DIR:-/var/lib/hpxpanel}:/var/lib/hpxpanel
       - /var/run/docker.sock:/var/run/docker.sock
+    healthcheck:
+      test: ["CMD", "/code/healthcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -28,7 +34,7 @@ services:
     ports:
       - "127.0.0.1:5432:5432"
     volumes:
-      - /var/lib/postgresql/hpxpanel:/var/lib/postgresql
+      - ${HPX_PG_DATA_DIR:-/var/lib/postgresql/hpxpanel}:/var/lib/postgresql/data
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -q -d ${DB_NAME} -U ${DB_USER}" ]
       interval: 10s
@@ -72,7 +78,6 @@ services:
 
   pgadmin:
     image: dpage/pgadmin4:latest
-    container_name: pgadmin
     restart: unless-stopped
     network_mode: host
     environment:

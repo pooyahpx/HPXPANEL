@@ -167,6 +167,97 @@ get_public_ipv4() {
     return 1
 }
 
+url_encode_component() {
+    local value="$1"
+    if command -v python3 >/dev/null 2>&1; then
+        python3 -c "import urllib.parse, sys; print(urllib.parse.quote(sys.argv[1], safe=''))" "$value"
+        return 0
+    fi
+    # Fallback: encode the most common URL-breaking characters.
+    local encoded="${value//%/%25}"
+    encoded="${encoded//@/%40}"
+    encoded="${encoded//:/%3A}"
+    encoded="${encoded//\//%2F}"
+    encoded="${encoded//#/%23}"
+    encoded="${encoded//?/%3F}"
+    encoded="${encoded//&/%26}"
+    encoded="${encoded//=/%3D}"
+    printf '%s' "$encoded"
+}
+
+resolve_github_ref() {
+    local panel_version="$1"
+    case "$panel_version" in
+    latest | dev | pre-release) printf '%s' "main" ;;
+    v*) printf '%s' "$panel_version" ;;
+    *) printf 'v%s' "$panel_version" ;;
+    esac
+}
+
+fetch_install_asset() {
+    local primary_url="$1"
+    local dest="$2"
+    local fallback_url="${3:-}"
+
+    if curl -fsL "$primary_url" -o "$dest"; then
+        return 0
+    fi
+    if [ -n "$fallback_url" ] && [ "$primary_url" != "$fallback_url" ]; then
+        colorized_echo yellow "Asset not found at ${primary_url}; falling back to main."
+        curl -fsL "$fallback_url" -o "$dest"
+        return $?
+    fi
+    return 1
+}
+
+write_compose_path_env_vars() {
+    local pg_data_dir="/var/lib/postgresql/${APP_NAME}"
+    local mysql_data_dir="/var/lib/mysql/${APP_NAME}"
+
+    # Legacy PostgreSQL compose mounted the parent dir; PGDATA lived in ./data on the host.
+    if [ -d "${pg_data_dir}/data" ] && [ ! -f "${pg_data_dir}/PG_VERSION" ]; then
+        pg_data_dir="${pg_data_dir}/data"
+    fi
+
+    delete_env_var "HPX_DATA_DIR" "$ENV_FILE"
+    delete_env_var "HPX_PG_DATA_DIR" "$ENV_FILE"
+    delete_env_var "HPX_MYSQL_DATA_DIR" "$ENV_FILE"
+
+    echo "" >>"$ENV_FILE"
+    echo "# Host paths used by docker-compose volume mounts" >>"$ENV_FILE"
+    echo "HPX_DATA_DIR=\"${DATA_DIR}\"" >>"$ENV_FILE"
+    echo "HPX_PG_DATA_DIR=\"${pg_data_dir}\"" >>"$ENV_FILE"
+    echo "HPX_MYSQL_DATA_DIR=\"${mysql_data_dir}\"" >>"$ENV_FILE"
+}
+
+validate_compose_file() {
+    detect_compose
+    if ! $COMPOSE -f "$COMPOSE_FILE" config >/dev/null 2>&1; then
+        colorized_echo red "Invalid docker-compose.yml generated at ${COMPOSE_FILE}"
+        colorized_echo yellow "Run: docker compose -f ${COMPOSE_FILE} config"
+        return 1
+    fi
+    return 0
+}
+
+get_configured_uvicorn_port() {
+    local env_file="${1:-$ENV_FILE}"
+    local configured_port=""
+
+    configured_port=$(grep -E '^[[:space:]]*UVICORN_PORT[[:space:]]*=' "$env_file" 2>/dev/null \
+        | head -1 | sed 's/^[^=]*=\s*//' | tr -d '[:space:]"'"'"'' || true)
+    configured_port="${configured_port:-8000}"
+    printf '%s' "$configured_port"
+}
+
+dashboard_access_url() {
+    local scheme="$1"
+    local host="$2"
+    local port
+    port=$(get_configured_uvicorn_port)
+    printf '%s://%s:%s/dashboard/' "$scheme" "$host" "$port"
+}
+
 is_port_in_use() {
     local port="$1"
 
@@ -176,7 +267,7 @@ is_port_in_use() {
     fi
 
     if command -v netstat >/dev/null 2>&1; then
-        netstat -lnt 2>/dev/null | awk -v p=":${port} " '$4 ~ p {found=1; exit} END {exit found ? 0 : 1}'
+        netstat -lnt 2>/dev/null | awk -v p=":${port}$" '$4 ~ p {found=1; exit} END {exit found ? 0 : 1}'
         return
     fi
 
@@ -685,7 +776,8 @@ setup_hpxpanel_ssl_during_install() {
 
     if [ "$ssl_mode" = "disabled" ]; then
         disable_hpxpanel_ssl_env
-        colorized_echo yellow "Skipping SSL (--no-ssl). Dashboard binds to localhost only."
+        colorized_echo yellow "Skipping SSL (--no-ssl). Dashboard listens on 127.0.0.1 only — not reachable from the public IP."
+        colorized_echo yellow "Use SSH tunnel, or run: hpxpanel ssl"
         return 0
     fi
 
@@ -727,7 +819,7 @@ setup_hpxpanel_ssl_during_install() {
 
         if setup_ssl_certificate "$ssl_domain" "$ssl_http_port"; then
             enable_hpxpanel_ssl_env "${DATA_DIR}/certs/${ssl_domain}/fullchain.pem" "${DATA_DIR}/certs/${ssl_domain}/privkey.pem" "public"
-            colorized_echo green "SSL enabled for https://${ssl_domain}:8000/dashboard/"
+            colorized_echo green "SSL enabled for $(dashboard_access_url https "$ssl_domain")"
             # Restart panel if already running so new cert is picked up.
             if is_hpxpanel_installed && is_hpxpanel_up 2>/dev/null; then
                 detect_compose
@@ -767,7 +859,7 @@ setup_hpxpanel_ssl_during_install() {
 
         if setup_ip_ssl_certificate "$input_ipv4" "$input_ipv6" "$ssl_http_port"; then
             enable_hpxpanel_ssl_env "${DATA_DIR}/certs/ip/fullchain.pem" "${DATA_DIR}/certs/ip/privkey.pem" "public"
-            colorized_echo green "SSL enabled for https://${input_ipv4}:8000/dashboard/"
+            colorized_echo green "SSL enabled for $(dashboard_access_url https "$input_ipv4")"
             return 0
         fi
         ;;
@@ -803,6 +895,7 @@ setup_hpxpanel_ssl_during_install() {
     4)
         disable_hpxpanel_ssl_env
         colorized_echo yellow "Continuing without SSL."
+        colorized_echo yellow "Dashboard listens on 127.0.0.1 only — open $(dashboard_access_url http 127.0.0.1) on the server, or run: hpxpanel ssl"
         return 0
         ;;
     *)
@@ -839,7 +932,7 @@ ssl_command() {
                 if is_hpxpanel_up 2>/dev/null; then
                     $COMPOSE -f "$COMPOSE_FILE" -p "$APP_NAME" restart >/dev/null 2>&1 || true
                 fi
-                colorized_echo green "SSL enabled for https://${2}:8000/dashboard/"
+                colorized_echo green "SSL enabled for $(dashboard_access_url https "$2")"
                 return 0
             fi
             exit 1
@@ -1028,10 +1121,16 @@ find_container() {
         [ -z "$container_name" ] && container_name=$(docker ps --filter "name=${APP_NAME}" --filter "name=mariadb" --format '{{.ID}}' 2>/dev/null | head -n 1 || true)
         [ -z "$container_name" ] && container_name="mysql"
         ;;
-    postgresql|timescaledb)
+    postgresql)
+        container_name=$($COMPOSE -f "$COMPOSE_FILE" -p "$APP_NAME" ps -q postgresql 2>/dev/null || true)
+        [ -z "$container_name" ] && container_name=$($COMPOSE -f "$COMPOSE_FILE" -p "$APP_NAME" ps --format json postgresql 2>/dev/null | jq -r 'if type == "array" then .[] else . end | .Name' 2>/dev/null | head -n 1 || true)
+        [ -z "$container_name" ] && container_name=$(docker ps --filter "name=${APP_NAME}" --filter "name=postgresql" --format '{{.ID}}' 2>/dev/null | head -n 1 || true)
+        [ -z "$container_name" ] && container_name="${APP_NAME}-postgresql-1"
+        ;;
+    timescaledb)
         container_name=$($COMPOSE -f "$COMPOSE_FILE" -p "$APP_NAME" ps -q timescaledb 2>/dev/null || true)
-        [ -z "$container_name" ] && container_name=$($COMPOSE -f "$COMPOSE_FILE" -p "$APP_NAME" ps -q postgresql 2>/dev/null || true)
-        [ -z "$container_name" ] && container_name=$($COMPOSE -f "$COMPOSE_FILE" -p "$APP_NAME" ps --format json timescaledb postgresql 2>/dev/null | jq -r 'if type == "array" then .[] else . end | .Name' 2>/dev/null | head -n 1 || true)
+        [ -z "$container_name" ] && container_name=$($COMPOSE -f "$COMPOSE_FILE" -p "$APP_NAME" ps --format json timescaledb 2>/dev/null | jq -r 'if type == "array" then .[] else . end | .Name' 2>/dev/null | head -n 1 || true)
+        [ -z "$container_name" ] && container_name=$(docker ps --filter "name=${APP_NAME}" --filter "name=timescaledb" --format '{{.ID}}' 2>/dev/null | head -n 1 || true)
         [ -z "$container_name" ] && container_name="${APP_NAME}-timescaledb-1"
         ;;
     esac
@@ -1056,10 +1155,13 @@ check_container() {
             [ -z "$actual_container" ] && actual_container=$($COMPOSE -f "$COMPOSE_FILE" -p "$APP_NAME" ps -q mariadb 2>/dev/null || true)
             [ -z "$actual_container" ] && [ -f "$COMPOSE_FILE" ] && actual_container="${APP_NAME}-mysql-1"
             ;;
-        postgresql|timescaledb)
+        postgresql)
             actual_container=$($COMPOSE -f "$COMPOSE_FILE" -p "$APP_NAME" ps -q postgresql 2>/dev/null || true)
-            [ -z "$actual_container" ] && actual_container=$($COMPOSE -f "$COMPOSE_FILE" -p "$APP_NAME" ps -q timescaledb 2>/dev/null || true)
             [ -z "$actual_container" ] && [ -f "$COMPOSE_FILE" ] && actual_container="${APP_NAME}-postgresql-1"
+            ;;
+        timescaledb)
+            actual_container=$($COMPOSE -f "$COMPOSE_FILE" -p "$APP_NAME" ps -q timescaledb 2>/dev/null || true)
+            [ -z "$actual_container" ] && [ -f "$COMPOSE_FILE" ] && actual_container="${APP_NAME}-timescaledb-1"
             ;;
         esac
     fi
@@ -1092,10 +1194,13 @@ verify_and_start_container() {
             [ -z "$actual_container" ] && actual_container=$($COMPOSE -f "$COMPOSE_FILE" -p "$APP_NAME" ps -q mariadb 2>/dev/null || true)
             [ -z "$actual_container" ] && [ -f "$COMPOSE_FILE" ] && actual_container="${APP_NAME}-mysql-1"
             ;;
-        postgresql|timescaledb)
+        postgresql)
             actual_container=$($COMPOSE -f "$COMPOSE_FILE" -p "$APP_NAME" ps -q postgresql 2>/dev/null || true)
-            [ -z "$actual_container" ] && actual_container=$($COMPOSE -f "$COMPOSE_FILE" -p "$APP_NAME" ps -q timescaledb 2>/dev/null || true)
             [ -z "$actual_container" ] && [ -f "$COMPOSE_FILE" ] && actual_container="${APP_NAME}-postgresql-1"
+            ;;
+        timescaledb)
+            actual_container=$($COMPOSE -f "$COMPOSE_FILE" -p "$APP_NAME" ps -q timescaledb 2>/dev/null || true)
+            [ -z "$actual_container" ] && [ -f "$COMPOSE_FILE" ] && actual_container="${APP_NAME}-timescaledb-1"
             ;;
         esac
     fi
@@ -1129,7 +1234,7 @@ install_hpxpanel_script() {
 }
 
 is_hpxpanel_installed() {
-    if [ -d $APP_DIR ]; then
+    if [ -d "$APP_DIR" ]; then
         return 0
     else
         return 1
@@ -1190,9 +1295,18 @@ install_hpxpanel() {
     local existing_db_password=""
     local existing_db_user=""
     local existing_db_name=""
+    local github_ref=""
+    local env_example_url=""
+    local env_example_fallback=""
+    local compose_url=""
+    local compose_fallback=""
 
-    FILES_URL_PREFIX="https://raw.githubusercontent.com/pooyahpx/HPXPANEL"
-    COMPOSE_FILES_URL_PREFIX="https://raw.githubusercontent.com/pooyahpx/HPXPANEL/main/scripts/docker-compose"
+    github_ref=$(resolve_github_ref "$panel_version")
+    FILES_URL_PREFIX="https://raw.githubusercontent.com/pooyahpx/HPXPANEL/${github_ref}"
+    COMPOSE_FILES_URL_PREFIX="${FILES_URL_PREFIX}/scripts/docker-compose"
+    env_example_url="${FILES_URL_PREFIX}/.env.example"
+    env_example_fallback="https://raw.githubusercontent.com/pooyahpx/HPXPANEL/main/.env.example"
+    compose_fallback="https://raw.githubusercontent.com/pooyahpx/HPXPANEL/main/scripts/docker-compose"
 
     mkdir -p "$DATA_DIR"
     mkdir -p "$APP_DIR"
@@ -1211,7 +1325,11 @@ install_hpxpanel() {
     # Pre-create .env as 0600 (and tighten any pre-existing copy) so the DB,
     # pgAdmin and MySQL-root secrets written below are never world-readable.
     harden_secret_file "$APP_DIR/.env"
-    curl -fsL "$FILES_URL_PREFIX/main/.env.example" -o "$APP_DIR/.env"
+    if ! fetch_install_asset "$env_example_url" "$APP_DIR/.env" "$env_example_fallback"; then
+        colorized_echo red "Failed to download .env.example"
+        exit 1
+    fi
+    write_compose_path_env_vars
 
     colorized_echo green "File saved in $APP_DIR/.env"
 
@@ -1228,7 +1346,11 @@ install_hpxpanel() {
         colorized_echo red "Database engine: $db_name"
         echo "----------------------------"
         colorized_echo blue "Fetching HPXPANEL stack compose · $db_name"
-        curl -fsL "$COMPOSE_FILES_URL_PREFIX/hpxpanel-$database_type.yml" -o "$COMPOSE_FILE"
+        compose_url="${COMPOSE_FILES_URL_PREFIX}/hpxpanel-${database_type}.yml"
+        if ! fetch_install_asset "$compose_url" "$COMPOSE_FILE" "${compose_fallback}/hpxpanel-${database_type}.yml"; then
+            colorized_echo red "Failed to download docker-compose template for ${database_type}"
+            exit 1
+        fi
 
         # Comment out the SQLite line
         sed -i 's~^SQLALCHEMY_DATABASE_URL = "sqlite~#&~' "$APP_DIR/.env"
@@ -1283,7 +1405,7 @@ install_hpxpanel() {
             db_driver_scheme="mysql+asyncmy"
         fi
 
-        SQLALCHEMY_DATABASE_URL="${db_driver_scheme}://${DB_USER}:${DB_PASSWORD}@127.0.0.1:${DB_PORT}/${DB_NAME}"
+        SQLALCHEMY_DATABASE_URL="${db_driver_scheme}://${DB_USER}:$(url_encode_component "$DB_PASSWORD")@127.0.0.1:${DB_PORT}/${DB_NAME}"
 
         echo "" >>"$ENV_FILE"
         echo "# SQLAlchemy Database URL" >>"$ENV_FILE"
@@ -1294,7 +1416,11 @@ install_hpxpanel() {
         colorized_echo red "Database engine: SQLite"
         echo "----------------------------"
         colorized_echo blue "Fetching HPXPANEL stack compose · SQLite"
-        curl -fsL "$COMPOSE_FILES_URL_PREFIX/hpxpanel-sqlite.yml" -o "$COMPOSE_FILE"
+        compose_url="${COMPOSE_FILES_URL_PREFIX}/hpxpanel-sqlite.yml"
+        if ! fetch_install_asset "$compose_url" "$COMPOSE_FILE" "${compose_fallback}/hpxpanel-sqlite.yml"; then
+            colorized_echo red "Failed to download docker-compose template for sqlite"
+            exit 1
+        fi
 
         sed -i 's/^# \(SQLALCHEMY_DATABASE_URL = .*\)$/\1/' "$APP_DIR/.env"
 
@@ -1317,10 +1443,15 @@ install_hpxpanel() {
         target_image="ghcr.io/pooyahpx/hpxpanel:latest"
     fi
     case "$panel_version" in
-    latest|dev|pre-release) ensure_hpx_engine_image latest || exit 1 ;;
+    latest) ensure_hpx_engine_image latest || exit 1 ;;
+    dev) ensure_hpx_engine_image dev || ensure_hpx_engine_image latest || exit 1 ;;
+    pre-release) ensure_hpx_engine_image pre-release || ensure_hpx_engine_image latest || exit 1 ;;
     *) ensure_hpx_engine_image "${panel_version#v}" || ensure_hpx_engine_image latest || exit 1 ;;
     esac
     set_hpxpanel_image "$target_image"
+    if ! validate_compose_file; then
+        exit 1
+    fi
     colorized_echo green "File saved in $APP_DIR/docker-compose.yml"
 
     colorized_echo green "HPXPANEL installed successfully"
@@ -1350,18 +1481,14 @@ status_command() {
     echo -n "Status: "
     colorized_echo green "Up"
 
-    json=$($COMPOSE -f $COMPOSE_FILE ps -a --format=json)
-    services=$(echo "$json" | jq -r 'if type == "array" then .[] else . end | .Service')
-    states=$(echo "$json" | jq -r 'if type == "array" then .[] else . end | .State')
-    # Print out the service names and statuses
-    for i in $(seq 0 $(expr $(echo $services | wc -w) - 1)); do
-        service=$(echo $services | cut -d' ' -f $(expr $i + 1))
-        state=$(echo $states | cut -d' ' -f $(expr $i + 1))
+    json=$($COMPOSE -f "$COMPOSE_FILE" -p "$APP_NAME" ps -a --format=json 2>/dev/null || echo "[]")
+    echo "$json" | jq -r 'if type == "array" then .[] else . end | "\(.Service)\t\(.State)"' 2>/dev/null | while IFS=$'\t' read -r service state; do
+        [ -z "$service" ] && continue
         echo -n "- $service: "
-        if [ "$state" == "running" ]; then
-            colorized_echo green $state
+        if [ "$state" = "running" ]; then
+            colorized_echo green "$state"
         else
-            colorized_echo red $state
+            colorized_echo red "$state"
         fi
     done
 }
@@ -1639,7 +1766,7 @@ install_command() {
 
         local http_code
         http_code=$(curl -s -o /dev/null --max-time 5 -w "%{http_code}" "${repo_url}/tags/${version}" 2>/dev/null || echo "000")
-        if [[ "$http_code" == "200" || "$http_code" == "000" ]]; then
+        if [[ "$http_code" == "200" ]]; then
             major_version=$(echo "$version" | sed 's/^v//' | sed 's/[^0-9]*\([0-9]*\)\..*/\1/')
             [ -z "$major_version" ] && major_version=1
             return 0
@@ -1673,9 +1800,7 @@ install_command() {
     # --- Port conflict detection ---
     # Read the configured UVICORN_PORT from .env (default: 8000)
     local configured_port
-    configured_port=$(grep -E '^\s*UVICORN_PORT\s*=' "$ENV_FILE" 2>/dev/null \
-        | head -1 | sed 's/^[^=]*=\s*//' | tr -d '[:space:]"' || true)
-    configured_port="${configured_port:-8000}"
+    configured_port=$(get_configured_uvicorn_port)
 
     if is_port_in_use "$configured_port"; then
         colorized_echo yellow "Port ${configured_port} is already in use by another service."
@@ -1763,11 +1888,11 @@ hpxpanel_tui() {
 
 
 is_hpxpanel_up() {
-    if [ -z "$($COMPOSE -f $COMPOSE_FILE ps -q -a)" ]; then
-        return 1
-    else
+    detect_compose
+    if [ -n "$($COMPOSE -f "$COMPOSE_FILE" -p "$APP_NAME" ps --status running -q 2>/dev/null)" ]; then
         return 0
     fi
+    return 1
 }
 
 uninstall_command() {
@@ -1978,10 +2103,10 @@ restart_command() {
 
     down_hpxpanel
     up_hpxpanel
+    colorized_echo green "HPXPANEL successfully restarted!"
     if [ "$no_logs" = false ]; then
         follow_hpxpanel_logs
     fi
-    colorized_echo green "HPXPANEL successfully restarted!"
 }
 logs_command() {
     help() {
@@ -2083,6 +2208,22 @@ tui_command() {
     hpxpanel_tui "$@"
 }
 
+core_update_command() {
+    if ! is_hpxpanel_installed; then
+        colorized_echo red "HPXPANEL is not installed!"
+        exit 1
+    fi
+
+    detect_compose
+
+    if ! is_hpxpanel_up; then
+        colorized_echo red "HPXPANEL is not up."
+        exit 1
+    fi
+
+    hpxpanel_cli core-update "$@"
+}
+
 up_command() {
     help() {
         colorized_echo red "Usage: hpxpanel up [options]"
@@ -2125,6 +2266,7 @@ up_command() {
     fi
 
     up_hpxpanel
+    colorized_echo green "HPXPANEL is up."
     if [ "$no_logs" = false ]; then
         follow_hpxpanel_logs
     fi
@@ -2287,6 +2429,7 @@ usage() {
     colorized_echo yellow "  backup          $(tput sgr0)– Manual backup launch"
     colorized_echo yellow "  backup-service  $(tput sgr0)– hpxpanel Backup service to backup to TG, and a new job in crontab"
     colorized_echo yellow "  restore         $(tput sgr0)– Restore database from backup file"
+    colorized_echo yellow "  core-update     $(tput sgr0)– Update proxy core on all nodes"
     colorized_echo yellow "  edit            $(tput sgr0)– Edit docker-compose.yml (via nano or vi editor)"
     colorized_echo yellow "  edit-env        $(tput sgr0)– Edit environment file (via nano or vi editor)"
     colorized_echo yellow "  help            $(tput sgr0)– Show this help message"
@@ -2340,6 +2483,10 @@ hpxpanel_main() {
     restore)
         shift
         restore_command "$@"
+        ;;
+    core-update)
+        shift
+        core_update_command "$@"
         ;;
     install)
         shift

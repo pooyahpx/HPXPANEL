@@ -2,7 +2,6 @@ import { Footer } from '@/components/layout/footer'
 import { AppSidebar } from '@/components/layout/sidebar'
 import { PageLoadOverlay } from '@/components/layout/page-load-overlay'
 import PageTransition from '@/components/layout/page-transition'
-import { PixelCursor } from '@/components/layout/pixel-cursor'
 import { QuestSearch } from '@/components/layout/quest-search'
 import RouteGuard from '@/components/layout/route-guard'
 import { TopLoadingBar } from '@/components/layout/top-loading-bar'
@@ -27,7 +26,6 @@ export default function DashboardLayout() {
   return (
     <SidebarProvider defaultOpen={false} className="">
       <RouteGuard>
-        <PixelCursor />
         <PageLoadOverlay />
         <TopLoadingBar />
         <DonationPopup />

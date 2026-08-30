@@ -240,22 +240,6 @@
     cursor: pointer;
   }
 
-  /* Custom pixel cursor — hide native pointer inside panel */
-  html.pixel-cursor-on,
-  html.pixel-cursor-on * {
-    cursor: none !important;
-  }
-
-  @keyframes pixel-cursor-pulse {
-    0%,
-    100% {
-      filter: drop-shadow(0 0 0 hsl(var(--primary) / 0));
-    }
-    50% {
-      filter: drop-shadow(0 0 4px hsl(var(--primary) / 0.85));
-    }
-  }
-
   ::-webkit-scrollbar {
     @apply h-1.5 w-1.5;
   }

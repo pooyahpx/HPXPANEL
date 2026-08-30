@@ -86,6 +86,7 @@ CONTROL_PORT=${CONTROL_PORT:-}
 IRAN_PUBLIC_IP=${IRAN_PUBLIC_IP:-}
 ABROAD_PUBLIC_IP=${ABROAD_PUBLIC_IP:-}
 PORT_FORWARDS=${PORT_FORWARDS:-}
+HPX_AGENT_ASSETS_BASE=${HPX_AGENT_ASSETS_BASE:-}
 EOF
   chmod 600 "$ENV_FILE"
 }
@@ -116,7 +117,9 @@ ensure_engine() {
   local installer panel_install_url
   installer="$(mktemp)"
   panel_install_url=""
-  if [ -n "${PANEL_URL:-}" ]; then
+  if [ -n "${HPX_AGENT_ASSETS_BASE:-}" ]; then
+    panel_install_url="${HPX_AGENT_ASSETS_BASE%/}/engine-install.sh"
+  elif [ -n "${PANEL_URL:-}" ]; then
     panel_install_url="${PANEL_URL%/}/api/hpx_pulse/agent/engine-install.sh"
   fi
   if [ -n "$panel_install_url" ] && hp_curl "$panel_install_url" -o "$installer"; then
@@ -128,7 +131,7 @@ ensure_engine() {
     die "HPX tunnel engine install script download failed"
   fi
   chmod 755 "$installer"
-  if ! HPX_PANEL_URL="${PANEL_URL:-}" bash "$installer"; then
+  if ! HPX_PANEL_URL="${PANEL_URL:-}" HPX_AGENT_ASSETS_BASE="${HPX_AGENT_ASSETS_BASE:-}" bash "$installer"; then
     rm -f "$installer"
     die "HPX tunnel engine install failed"
   fi
@@ -533,6 +536,7 @@ cmd_join() {
   IRAN_PUBLIC_IP=$(echo "$claim" | jq -r '.iran_public_ip // empty')
   ABROAD_PUBLIC_IP=$(echo "$claim" | jq -r '.abroad_public_ip // empty')
   PORT_FORWARDS=$(echo "$claim" | jq -c '.port_forwards // []')
+  HPX_AGENT_ASSETS_BASE=$(echo "$claim" | jq -r '.agent_assets_base // empty')
   [ -n "$AGENT_KEY" ] && [ "$AGENT_KEY" != "null" ] || die "missing agent_key from panel"
 
   install_self

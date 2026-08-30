@@ -34,6 +34,7 @@ from app.models.hpx_pulse import (
 )
 from app.operation import BaseOperation
 from app.services.hpx_pulse.advisor import advise, profile_meta
+from app.services.hpx_pulse.engine_mirror import agent_assets_base
 from app.services.hpx_pulse.tunnel_render import mint_tunnel_token, render_for_side
 from app.utils.crypto import decrypt_secret, encrypt_secret, hash_api_key
 
@@ -267,7 +268,9 @@ class HpxPulseOperation(BaseOperation):
             message="Join tokens regenerated",
         )
 
-    async def claim_agent(self, db: AsyncSession, *, model: HpxPulseAgentClaimRequest) -> HpxPulseAgentBootstrap:
+    async def claim_agent(
+        self, db: AsyncSession, *, model: HpxPulseAgentClaimRequest, panel_url: str | None = None
+    ) -> HpxPulseAgentBootstrap:
         side = model.side
         token_hash = hash_api_key(model.join_token)
         db_pulse = await get_hpx_pulse_by_join_token_hash(db, token_hash, side)
@@ -340,6 +343,7 @@ class HpxPulseOperation(BaseOperation):
             iran_public_ip=db_pulse.iran_public_ip,
             tunnel_mode=db_pulse.tunnel_mode,
             port_forwards=db_pulse.port_forwards or [],
+            agent_assets_base=agent_assets_base(panel_url),
         )
 
     async def _pulse_from_agent_key(self, db: AsyncSession, agent_key: str, side: str) -> HpxPulse:

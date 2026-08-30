@@ -60,4 +60,19 @@ RUN chmod +x /code/healthcheck.sh
 
 RUN chmod +x /code/start.sh
 
+# Bundle HPX tunnel engine for this image arch (panel serves it — agents never hit GitHub).
+RUN mkdir -p /code/bundled/tunnel-engine \
+    && ENGINE_VERSION="$(tr -d '[:space:]' < /code/scripts/hpx-tunnel-engine.version)" \
+    && ENGINE_TAG="hpx-tunnel-engine-v${ENGINE_VERSION}" \
+    && case "${TARGETARCH}" in \
+         amd64) ENGINE_ARCH=amd64 ;; \
+         arm64) ENGINE_ARCH=arm64 ;; \
+         *) ENGINE_ARCH=amd64 ;; \
+       esac \
+    && ENGINE_ASSET="hpx-tunnel-engine_linux_${ENGINE_ARCH}.tar.gz" \
+    && curl -fsSL "https://github.com/pooyahpx/HPXPANEL/releases/download/${ENGINE_TAG}/${ENGINE_ASSET}" \
+         -o "/code/bundled/tunnel-engine/${ENGINE_ASSET}" \
+    && curl -fsSL "https://github.com/pooyahpx/HPXPANEL/releases/download/${ENGINE_TAG}/SHA256SUMS" \
+         -o "/code/bundled/tunnel-engine/SHA256SUMS" || true
+
 ENTRYPOINT ["/code/start.sh"]

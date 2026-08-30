@@ -117,9 +117,10 @@ async def regenerate_hpx_pulse_tokens(
 @router.post("/agent/claim", response_model=HpxPulseAgentBootstrap)
 async def claim_hpx_pulse_agent(
     model: HpxPulseAgentClaimRequest,
+    request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    return await pulse_operator.claim_agent(db, model=model)
+    return await pulse_operator.claim_agent(db, model=model, panel_url=_request_base_url(request))
 
 
 @router.get("/agent/engine-install.sh", response_class=PlainTextResponse)
@@ -128,6 +129,15 @@ async def get_hpx_pulse_engine_install_script():
     if not script.is_file():
         raise HTTPException(status_code=404, detail="Engine install script is not bundled with this panel build")
     return PlainTextResponse(script.read_text(encoding="utf-8"), media_type="text/x-shellscript; charset=utf-8")
+
+
+@router.get("/agent/engine/SHA256SUMS", response_class=PlainTextResponse)
+async def download_hpx_pulse_engine_checksums():
+    try:
+        path = await engine_mirror.ensure_checksums_cached()
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Could not fetch HPX tunnel engine checksums: {exc}") from exc
+    return PlainTextResponse(path.read_text(encoding="utf-8"), media_type="text/plain; charset=utf-8")
 
 
 @router.get("/agent/engine/{arch}")

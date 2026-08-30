@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import socket
 import threading
-from typing import Any
 
 from app.utils.logger import get_logger
 
@@ -31,7 +30,7 @@ def build_https_location(host_header: str | None, path: str, https_port: int) ->
         return f"https://{host_name}:{https_port}{path}"
 
     if ":" in host:
-        hostname, _, port_part = host.rpartition(":")
+        _, _, port_part = host.rpartition(":")
         if port_part.isdigit():
             return f"https://{host}{path}"
 

@@ -30,6 +30,28 @@
   <img alt="stars" src="https://img.shields.io/github/stars/pooyahpx/HPXPANEL?style=social">
 </p>
 
+## نصب سریع — یک دستور کافی است
+
+روی **Linux با root**. نصب‌کننده خودکار همه پیش‌نیازها را نصب می‌کند: **Docker · Compose · curl · jq · yq · openssl · socat · DNS tools · migration دیتابیس** (داخل کانتینر). نیازی به `apt install` جداگانه یا `alembic upgrade head` روی سرور نیست.
+
+**TimescaleDB (پیشنهادی)**
+```bash
+sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXPANEL/raw/main/scripts/hpxpanel.sh)" @ install --database timescaledb
+```
+
+**SQLite · MySQL · MariaDB · PostgreSQL**
+```bash
+sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXPANEL/raw/main/scripts/hpxpanel.sh)" @ install
+sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXPANEL/raw/main/scripts/hpxpanel.sh)" @ install --database mysql
+```
+
+بعد از نصب:
+```bash
+hpxpanel cli forge-seal   # ساخت اولین ادمین
+```
+
+**داشبورد:** `https://YOUR_DOMAIN:8000/dashboard/`
+
 ---
 
 ## 🔥 تنها پنلی که کل زرادخانه را یک‌جا دارد
@@ -197,21 +219,6 @@ curl -fsSL https://raw.githubusercontent.com/pooyahpx/HPXPANEL/main/scripts/hpx-
 
 **Xray:** VLESS + REALITY (با اسکنر REALITY) · VMess · Trojan · Shadowsocks  
 **WireGuard · Hysteria2** · **IKEv2/L2TP IPsec** · **IP Limiter** · **REALITY scanner**
-
----
-
-## نصب سریع
-
-```bash
-sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXPANEL/raw/main/scripts/hpxpanel.sh)" @ install --database timescaledb
-```
-
-```bash
-hpxpanel cli forge-seal
-alembic upgrade head   # شامل hpx_tunnels (v3.1.0+)
-```
-
-**داشبورد:** `https://YOUR_DOMAIN:8000/dashboard/`
 
 ---
 

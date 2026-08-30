@@ -114,6 +114,25 @@ install_package() {
     try_install_package "$1" || die "Failed to install $1 with ${PKG_MANAGER:-the package manager}. Check your package repositories and try again."
 }
 
+install_dns_utils_package() {
+    if [ -z "${OS:-}" ]; then
+        detect_os
+    fi
+
+    if [[ "$OS" == "Ubuntu"* ]] || [[ "$OS" == "Debian"* ]]; then
+        install_package dnsutils
+    elif is_redhat_family_os || [[ "$OS" == "Fedora"* ]]; then
+        install_package bind-utils
+    elif [[ "$OS" == "Arch Linux" ]] || [[ "$OS" == "Arch"* ]]; then
+        install_package bind-tools
+    elif [[ "$OS" == "openSUSE"* ]]; then
+        install_package bind-utils
+    else
+        colorized_echo yellow "Could not install DNS tools automatically on this OS."
+        return 1
+    fi
+}
+
 check_editor() {
     if [ -z "${EDITOR:-}" ]; then
         if command -v nano >/dev/null 2>&1; then

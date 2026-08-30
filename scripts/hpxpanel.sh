@@ -414,6 +414,38 @@ get_cron_package_name() {
     fi
 }
 
+ensure_install_prerequisites() {
+    colorized_echo blue "Checking and installing prerequisites (Docker, CLI tools, SSL deps)..."
+
+    detect_os
+    detect_and_update_package_manager
+
+    try_install_package ca-certificates || true
+
+    for cmd_pkg in curl:curl jq:jq openssl:openssl socat:socat; do
+        local cmd="${cmd_pkg%%:*}"
+        local pkg="${cmd_pkg##*:}"
+        command -v "$cmd" >/dev/null 2>&1 || install_package "$pkg"
+    done
+
+    if ! command -v dig >/dev/null 2>&1; then
+        install_dns_utils_package || true
+    fi
+
+    ensure_acme_dependencies
+
+    if ! command -v docker >/dev/null 2>&1; then
+        install_docker
+    fi
+    ensure_docker_compose
+
+    if ! command -v yq >/dev/null 2>&1; then
+        install_yq
+    fi
+
+    colorized_echo green "Prerequisites ready. Continuing installation..."
+}
+
 ensure_acme_dependencies() {
     command -v socat >/dev/null 2>&1 || install_package socat
     command -v openssl >/dev/null 2>&1 || install_package openssl
@@ -1373,9 +1405,12 @@ install_hpxpanel() {
     # already-initialized Postgres/MySQL data directory (POSTGRES_PASSWORD is
     # only applied on first boot).
     if [ -f "$APP_DIR/.env" ]; then
-        existing_db_password=$(grep -E '^DB_PASSWORD=' "$APP_DIR/.env" 2>/dev/null | head -1 | cut -d= -f2- | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//" || true)
-        existing_db_user=$(grep -E '^DB_USER=' "$APP_DIR/.env" 2>/dev/null | head -1 | cut -d= -f2- | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//" || true)
-        existing_db_name=$(grep -E '^DB_NAME=' "$APP_DIR/.env" 2>/dev/null | head -1 | cut -d= -f2- | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//" || true)
+        existing_db_password=$(grep -E '^[[:space:]]*DB_PASSWORD[[:space:]]*=' "$APP_DIR/.env" 2>/dev/null \
+            | grep -v '^[[:space:]]*#' | head -1 | sed 's/^[^=]*=\s*//' | tr -d '[:space:]"'"'"'' || true)
+        existing_db_user=$(grep -E '^[[:space:]]*DB_USER[[:space:]]*=' "$APP_DIR/.env" 2>/dev/null \
+            | grep -v '^[[:space:]]*#' | head -1 | sed 's/^[^=]*=\s*//' | tr -d '[:space:]"'"'"'' || true)
+        existing_db_name=$(grep -E '^[[:space:]]*DB_NAME[[:space:]]*=' "$APP_DIR/.env" 2>/dev/null \
+            | grep -v '^[[:space:]]*#' | head -1 | sed 's/^[^=]*=\s*//' | tr -d '[:space:]"'"'"'' || true)
         cp -a "$APP_DIR/.env" "$APP_DIR/.env.bak.$(date +%s)" 2>/dev/null || true
     fi
 
@@ -1788,20 +1823,7 @@ install_command() {
             exit 1
         fi
     fi
-    detect_os
-    if ! command -v jq >/dev/null 2>&1; then
-        install_package jq
-    fi
-    if ! command -v curl >/dev/null 2>&1; then
-        install_package curl
-    fi
-    if ! command -v docker >/dev/null 2>&1; then
-        install_docker
-    fi
-    ensure_docker_compose
-    if ! command -v yq >/dev/null 2>&1; then
-        install_yq
-    fi
+    ensure_install_prerequisites
     detect_compose
     install_hpxpanel_script
     # Function to check if a version exists in the GitHub releases
@@ -1842,9 +1864,9 @@ install_command() {
                 exit 1
             fi
             check_existing_database_volumes "$database_type"
+            echo "Installing $panel_version version"
             install_hpxpanel "$panel_version" "$major_version" "$database_type"
             setup_hpxpanel_ssl_during_install "$ssl_mode" "$ssl_domain" "$ssl_http_port"
-            echo "Installing $panel_version version"
         else
             echo "Version $panel_version does not exist. Please enter a valid version (e.g. v0.5.2)"
             exit 1
@@ -2483,7 +2505,10 @@ usage() {
     colorized_echo yellow "  logs            $(tput sgr0)– Show logs"
     colorized_echo yellow "  cli             $(tput sgr0)– HPXPANEL CLI"
     colorized_echo yellow "  tui             $(tput sgr0)– HPXPANEL TUI"
-    colorized_echo yellow "  install         $(tput sgr0)– Install HPXPANEL"
+    colorized_echo yellow "  install         $(tput sgr0)– Install HPXPANEL (auto-installs Docker + all deps)"
+    colorized_echo cyan "  One-liner:"
+    echo "    sudo bash -c \"\$(curl -fsSL https://github.com/pooyahpx/HPXPANEL/raw/main/scripts/hpxpanel.sh)\" @ install --database timescaledb"
+    echo
     colorized_echo yellow "  update          $(tput sgr0)– Update to latest version"
     colorized_echo yellow "  uninstall       $(tput sgr0)– Uninstall HPXPANEL"
     colorized_echo yellow "  purge           $(tput sgr0)– Full wipe (app+data+DB) for clean reinstall"

@@ -30,6 +30,28 @@
   <img alt="stars" src="https://img.shields.io/github/stars/pooyahpx/HPXPANEL?style=social">
 </p>
 
+## Quick install — one command does everything
+
+On **Linux as root**. The installer auto-installs **Docker · Compose · curl · jq · yq · openssl · socat · DNS tools · DB migrations** (inside the container). No separate `apt install` or manual `alembic upgrade head` on the host.
+
+**TimescaleDB (recommended)**
+```bash
+sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXPANEL/raw/main/scripts/hpxpanel.sh)" @ install --database timescaledb
+```
+
+**SQLite · MySQL · MariaDB · PostgreSQL**
+```bash
+sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXPANEL/raw/main/scripts/hpxpanel.sh)" @ install
+sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXPANEL/raw/main/scripts/hpxpanel.sh)" @ install --database mysql
+```
+
+After install:
+```bash
+hpxpanel cli forge-seal   # create first admin
+```
+
+**Dashboard:** `https://YOUR_DOMAIN:8000/dashboard/`
+
 ---
 
 ## 🔥 The only panel that puts the entire arsenal in one place
@@ -254,26 +276,7 @@ One shared IPsec identity workflow. Core editors for crypto, PSK, and network.
 
 ---
 
-## Install on Linux
-
-### One-liner
-
-**TimescaleDB (recommended)**
-```bash
-sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXPANEL/raw/main/scripts/hpxpanel.sh)" @ install --database timescaledb
-```
-
-**SQLite**
-```bash
-sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXPANEL/raw/main/scripts/hpxpanel.sh)" @ install
-```
-
-**MySQL · MariaDB · PostgreSQL**
-```bash
-sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXPANEL/raw/main/scripts/hpxpanel.sh)" @ install --database mysql
-```
-
-### After install
+## Post-install & HPX Node
 
 | | |
 | --- | --- |
@@ -281,11 +284,6 @@ sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXPANEL/raw/main/scripts
 | Config | `/opt/hpxpanel/.env` |
 | Data | `/var/lib/hpxpanel` |
 | Dashboard | `https://YOUR_DOMAIN:8000/dashboard/` |
-
-```bash
-hpxpanel cli forge-seal   # create first admin
-alembic upgrade head      # includes hpx_tunnels (v3.1.0+)
-```
 
 ### HPX Node (edge servers)
 

@@ -21,6 +21,28 @@
   <img alt="dev" src="https://img.shields.io/badge/dev-hpx-0ea5e9?style=flat-square&logo=github">
 </p>
 
+## Быстрая установка — одной командой
+
+На **Linux от root**. Установщик сам ставит **Docker · Compose · curl · jq · yq · openssl · socat · DNS tools · миграции БД** (внутри контейнера). Отдельный `apt install` или `alembic upgrade head` на хосте не нужен.
+
+**TimescaleDB (рекомендуется)**
+```bash
+sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXPANEL/raw/main/scripts/hpxpanel.sh)" @ install --database timescaledb
+```
+
+**SQLite · MySQL · MariaDB · PostgreSQL**
+```bash
+sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXPANEL/raw/main/scripts/hpxpanel.sh)" @ install
+sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXPANEL/raw/main/scripts/hpxpanel.sh)" @ install --database mysql
+```
+
+После установки:
+```bash
+hpxpanel cli forge-seal
+```
+
+**Панель:** `https://YOUR_DOMAIN:8000/dashboard/`
+
 ---
 
 ## Зачем это нужно
@@ -74,27 +96,7 @@
 
 ---
 
-## Установка на Linux
-
-### Одной командой (выберите БД)
-
-**TimescaleDB (рекомендуется)**
-```bash
-sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXPANEL/raw/main/scripts/hpxpanel.sh)" @ install --database timescaledb
-```
-
-**SQLite**
-```bash
-sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXPANEL/raw/main/scripts/hpxpanel.sh)" @ install
-```
-
-**MySQL / MariaDB / PostgreSQL**
-```bash
-sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXPANEL/raw/main/scripts/hpxpanel.sh)" @ install --database mysql
-# --database mariadb | postgresql
-```
-
-### После установки
+## После установки
 
 | | |
 | --- | --- |

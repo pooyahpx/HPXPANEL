@@ -49,11 +49,6 @@ fix_hostname_resolution() {
 ensure_deps() {
   fix_hostname_resolution
   has curl || die "curl required"
-  if ! has docker; then
-    warn "Docker missing — installing via get.docker.com"
-    curl --http1.1 -fsSL https://get.docker.com | sh
-  fi
-  docker info >/dev/null 2>&1 || die "docker daemon not running"
   if ! has jq; then
     apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq jq >/dev/null 2>&1 || \
       dnf install -y -q jq >/dev/null 2>&1 || die "install jq"
@@ -325,7 +320,7 @@ install_agent_systemd() {
   cat >"/etc/systemd/system/${SERVICE_NAME}.service" <<EOF
 [Unit]
 Description=HPX Pulse Agent sync
-After=network-online.target docker.service ${TUNNEL_SERVICE}.service
+After=network-online.target ${TUNNEL_SERVICE}.service
 Wants=network-online.target
 
 [Service]

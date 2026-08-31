@@ -124,6 +124,64 @@ hpxpanel cli forge-seal   # ساخت اولین ادمین
 
 **مسیر UI:** `HPX Pulse` · **API:** `/api/hpx_pulse` · **Agent:** `scripts/hpx-pulse-agent.sh`
 
+### نصب Agent (ایران + خارج)
+
+1. در پنل: **HPX Pulse** → ساخت تونل → **Tokens** → دستور هر طرف را کپی کنید.
+2. روی **سرور ایران** (توکن `hpxpi_…`):
+
+```bash
+curl --http1.1 --connect-timeout 20 --max-time 300 -fsSL \
+  https://raw.githubusercontent.com/pooyahpx/HPXPANEL/main/scripts/hpx-pulse-agent.sh | \
+  sudo bash -s -- join hpxpi_توکن_واقعی \
+  --panel-url https://آدرس_پنل:8000 --side iran
+```
+
+3. روی **سرور خارج** (توکن `hpxpa_…`) — همان دستور با `--side abroad`.
+
+> حتماً توکن واقعی از پنل باشد (`hpxpi_` / `hpxpa_`). کلمه `TOKEN` خطای 422 می‌دهد.
+
+### نصب Engine تونل — خودکار + دستی
+
+در `join`، agent یک‌بار **`hpx-tunnel-engine`** را در `/usr/local/bin/hpx-tunnel-engine` نصب می‌کند.
+
+| منبع | کی |
+| --- | --- |
+| **GitHub** (پیش‌فرض ایران) | سرور ایران — mirror پنل روی پورت `:8000` اغلب از داخل ایران باز نیست |
+| **Mirror پنل** | سرور خارج، یا وقتی GitHub فیلتر است |
+| **فایل محلی** | آفلاین: `hpx-tunnel-engine_linux_amd64.tar.gz` + `SHA256SUMS` در `/opt/hpx-pulse/engine/` |
+
+**اگر join گیر کرد** روی `Downloading HPX tunnel engine from panel mirror…`:
+
+```bash
+# ۱) نصب engine از GitHub (پیشنهادی برای ایران)
+curl --http1.1 --connect-timeout 20 --max-time 300 -fsSL \
+  https://raw.githubusercontent.com/pooyahpx/HPXPANEL/main/scripts/hpx-tunnel-engine-install.sh | \
+  sudo env HPX_PREFER_GITHUB=1 bash
+
+# ۲) ادامه setup (اگر join قبلاً claim شده)
+sudo hpx-pulse-agent sync
+```
+
+یا بعد از نصب agent:
+
+```bash
+sudo hpx-pulse-agent install-engine
+sudo hpx-pulse-agent sync
+```
+
+**بررسی:**
+
+```bash
+ls -la /usr/local/bin/hpx-tunnel-engine
+sudo hpx-pulse-agent status
+```
+
+| متغیر محیطی | اثر |
+| --- | --- |
+| `HPX_PREFER_GITHUB=1` | دانلود engine از GitHub اول (ایران) |
+| `HPX_NO_GITHUB_FALLBACK=1` | فقط mirror پنل / فایل محلی |
+| `HPX_ENGINE_LOCAL_DIR=/path` | استفاده از `.tar.gz` آفلاین |
+
 ---
 
 ## خلاصه — چرا اپراتورها می‌آیند اینجا

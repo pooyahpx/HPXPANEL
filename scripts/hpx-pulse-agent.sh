@@ -151,15 +151,22 @@ ensure_engine() {
     die "HPX tunnel engine install script download failed"
   fi
   chmod 755 "$installer"
-  # Panel mirror first; GitHub fallback when mirror is unreachable (common on some Iran routes).
-  # Set HPX_NO_GITHUB_FALLBACK=1 to force panel/local only.
-  if ! HPX_PANEL_URL="${PANEL_URL:-}" HPX_AGENT_ASSETS_BASE="${HPX_AGENT_ASSETS_BASE:-}" \
-      HPX_PREFER_GITHUB="${prefer_github:-0}" \
-      HPX_NO_GITHUB_FALLBACK="${HPX_NO_GITHUB_FALLBACK:-0}" bash "$installer"; then
-    rm -f "$installer"
-    die "HPX tunnel engine install failed"
+  local install_ok=0
+  run_engine_install() {
+    HPX_PANEL_URL="${PANEL_URL:-}" HPX_AGENT_ASSETS_BASE="${HPX_AGENT_ASSETS_BASE:-}" \
+      HPX_PREFER_GITHUB="${1:-0}" \
+      HPX_NO_GITHUB_FALLBACK="${HPX_NO_GITHUB_FALLBACK:-0}" bash "$installer"
+  }
+  if run_engine_install "${prefer_github:-0}"; then
+    install_ok=1
+  elif [ "${prefer_github:-0}" != "1" ]; then
+    log "panel engine mirror failed — retrying from GitHub..."
+    if run_engine_install 1; then
+      install_ok=1
+    fi
   fi
   rm -f "$installer"
+  [ "$install_ok" = 1 ] || die "HPX tunnel engine install failed — see README: HPX Pulse engine manual install"
   [ -x "$ENGINE_BIN" ] || die "HPX tunnel engine binary missing after install"
 }
 
@@ -646,6 +653,17 @@ cmd_sync() {
   send_heartbeat
 }
 
+cmd_install_engine() {
+  need_root
+  load_env 2>/dev/null || true
+  if [ -z "${HPX_PREFER_GITHUB:-}" ] && { [ "${PULSE_SIDE:-}" = "iran" ] || [ -z "${PULSE_SIDE:-}" ]; }; then
+    HPX_PREFER_GITHUB=1
+  fi
+  export HPX_PREFER_GITHUB
+  ensure_engine
+  log "HPX tunnel engine ready: $(engine_bin)"
+}
+
 cmd_status() {
   load_env 2>/dev/null || true
   echo "HPX Pulse Agent"
@@ -680,7 +698,12 @@ usage() {
   cat <<EOF
 HPX Pulse Agent
   join TOKEN --panel-url URL --side iran|abroad
+  install-engine          install hpx-tunnel-engine binary (GitHub-first on Iran)
   sync | ping | status
+
+Engine manual install (if join hangs on panel mirror):
+  curl --http1.1 -fsSL .../hpx-tunnel-engine-install.sh | sudo env HPX_PREFER_GITHUB=1 bash
+  sudo hpx-pulse-agent sync
 EOF
 }
 
@@ -689,6 +712,7 @@ main() {
   shift || true
   case "$cmd" in
     join) cmd_join "$@" ;;
+    install-engine) cmd_install_engine ;;
     sync) cmd_sync ;;
     ping) cmd_ping ;;
     status) cmd_status ;;

@@ -124,6 +124,64 @@ Everything else? A pile of scripts, a second dashboard, a Telegram bot that bare
 
 **Route:** `HPX Pulse` · **API:** `/api/hpx_pulse` · **Agents:** `scripts/hpx-pulse-agent.sh`
 
+### Deploy agents (Iran + Abroad)
+
+1. In the panel: **HPX Pulse** → create tunnel → **Tokens** → copy the one-liner for each side.
+2. Run on **Iran VPS** (`hpxpi_…` token):
+
+```bash
+curl --http1.1 --connect-timeout 20 --max-time 300 -fsSL \
+  https://raw.githubusercontent.com/pooyahpx/HPXPANEL/main/scripts/hpx-pulse-agent.sh | \
+  sudo bash -s -- join hpxpi_YOUR_TOKEN \
+  --panel-url https://YOUR_PANEL:8000 --side iran
+```
+
+3. Run on **Abroad VPS** (`hpxpa_…` token) — same command with `--side abroad`.
+
+> Use the **real** token from the panel (`hpxpi_` / `hpxpa_`). Placeholders like `TOKEN` return HTTP 422.
+
+### HPX tunnel engine — auto install + manual fallback
+
+During `join`, the agent installs **`hpx-tunnel-engine`** once to `/usr/local/bin/hpx-tunnel-engine`.
+
+| Source | When |
+| --- | --- |
+| **GitHub** (default on Iran) | Iran VPS — panel mirror on `:8000` is often unreachable from inside Iran |
+| **Panel mirror** | Abroad, or when GitHub is blocked |
+| **Local files** | Offline: put `hpx-tunnel-engine_linux_amd64.tar.gz` + `SHA256SUMS` in `/opt/hpx-pulse/engine/` |
+
+**If join hangs** on `Downloading HPX tunnel engine from panel mirror…` (common on some Iran routes):
+
+```bash
+# 1) Install engine from GitHub (recommended for Iran)
+curl --http1.1 --connect-timeout 20 --max-time 300 -fsSL \
+  https://raw.githubusercontent.com/pooyahpx/HPXPANEL/main/scripts/hpx-tunnel-engine-install.sh | \
+  sudo env HPX_PREFER_GITHUB=1 bash
+
+# 2) Finish setup (if join already claimed the token)
+sudo hpx-pulse-agent sync
+```
+
+Or after the agent script is on the server:
+
+```bash
+sudo hpx-pulse-agent install-engine
+sudo hpx-pulse-agent sync
+```
+
+**Verify:**
+
+```bash
+ls -la /usr/local/bin/hpx-tunnel-engine
+sudo hpx-pulse-agent status
+```
+
+| Env var | Effect |
+| --- | --- |
+| `HPX_PREFER_GITHUB=1` | Download engine from GitHub first (use on Iran) |
+| `HPX_NO_GITHUB_FALLBACK=1` | Panel/local only — when GitHub is blocked |
+| `HPX_ENGINE_LOCAL_DIR=/path` | Use offline `.tar.gz` in that directory |
+
 ---
 
 ## TL;DR — why operators switch

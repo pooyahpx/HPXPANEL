@@ -25,6 +25,7 @@ hpxpanel.code-workspace
 scripts
 
 # Dev tooling / CI (not used at runtime)
+# Pulse agent scripts are copied explicitly in Dockerfile (see COPY scripts/...).
 Makefile
 .github
 .pre-commit-config.yaml

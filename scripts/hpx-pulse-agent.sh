@@ -534,6 +534,18 @@ cmd_join() {
   done
   [ -n "$token" ] && [ -n "$panel_url" ] && [ -n "$side" ] || die "usage: join TOKEN --panel-url URL --side iran|abroad"
   [ "$side" = "iran" ] || [ "$side" = "abroad" ] || die "side must be iran or abroad"
+  if [ "${#token}" -lt 8 ]; then
+    die "join token too short (${#token} chars) — copy the real hpxpi_/hpxpa_ token from panel (Tokens button), not the word TOKEN"
+  fi
+  case "$token" in
+    TOKEN|TOKEN_IRAN|TOKEN_ABROAD)
+      die "replace TOKEN with the real hpxpi_/hpxpa_ value from panel (Tokens button)"
+      ;;
+    hpxpi_*|hpxpa_*) ;;
+    *)
+      warn "token should start with hpxpi_ (iran) or hpxpa_ (abroad) — double-check you copied from panel"
+      ;;
+  esac
 
   PANEL_URL="${panel_url%/}"
   PULSE_SIDE="$side"
@@ -545,8 +557,18 @@ cmd_join() {
   body=$(jq -nc --arg t "$token" --arg h "$host" --arg s "$side" '{join_token:$t, host:$h, side:$s}')
 
   log "claiming join token (${side})..."
-  claim=$(hp_curl -X POST -H "Content-Type: application/json" -d "$body" \
-    "${PANEL_URL}/api/hpx_pulse/agent/claim") || die "claim failed — check panel URL and token"
+  local claim_tmp http_code
+  claim_tmp="$(mktemp)"
+  http_code=$(curl --http1.1 --connect-timeout 30 --max-time 120 -sS -w "%{http_code}" -o "$claim_tmp" \
+    -X POST -H "Content-Type: application/json" -d "$body" \
+    "${PANEL_URL}/api/hpx_pulse/agent/claim") || http_code="000"
+  if [ "$http_code" != "200" ]; then
+    [ -s "$claim_tmp" ] && cat "$claim_tmp" >&2
+    rm -f "$claim_tmp"
+    die "claim failed (HTTP ${http_code}) — use real token from panel Tokens button; regenerate if expired"
+  fi
+  claim="$(cat "$claim_tmp")"
+  rm -f "$claim_tmp"
 
   AGENT_KEY=$(echo "$claim" | jq -r '.agent_key')
   PULSE_ID=$(echo "$claim" | jq -r '.pulse_id')

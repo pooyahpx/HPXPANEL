@@ -73,21 +73,21 @@ jobs:
           set -eux
           tag="${{ steps.meta.outputs.tag }}"
           engine="${{ steps.meta.outputs.engine }}"
-          upstream="${{ steps.meta.outputs.upstream }}"
+          notes_file="$(mktemp)"
+          printf '%s\n' \
+            'HPX tunnel engine binaries for **HPX Pulse** (Direct L3 / reverse tunnel agents).' \
+            '' \
+            '### Assets' \
+            '- `hpx-tunnel-engine_linux_amd64.tar.gz`' \
+            '- `hpx-tunnel-engine_linux_arm64.tar.gz`' \
+            '- `SHA256SUMS`' \
+            '' \
+            '### Install' \
+            '```bash' \
+            'curl --http1.1 -fsSL https://raw.githubusercontent.com/pooyahpx/HPXPANEL/main/scripts/hpx-tunnel-engine-install.sh | sudo bash' \
+            '```' \
+            > "$notes_file"
           gh release view "$tag" >/dev/null 2>&1 && gh release delete "$tag" -y --cleanup-tag || true
           gh release create "$tag" dist/* \
             --title "HPX Tunnel Engine v${engine}" \
-            --notes "$(cat <<EOF
-HPX tunnel engine binaries for **HPX Pulse** (Direct L3 / reverse tunnel agents).
-
-### Assets
-- \`hpx-tunnel-engine_linux_amd64.tar.gz\`
-- \`hpx-tunnel-engine_linux_arm64.tar.gz\`
-- \`SHA256SUMS\`
-
-### Install
-\`\`\`bash
-curl --http1.1 -fsSL https://raw.githubusercontent.com/pooyahpx/HPXPANEL/main/scripts/hpx-tunnel-engine-install.sh | sudo bash
-\`\`\`
-EOF
-)"
+            --notes-file "$notes_file"

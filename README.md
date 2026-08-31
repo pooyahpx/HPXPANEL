@@ -52,6 +52,15 @@ hpxpanel cli forge-seal   # create first admin
 
 **Dashboard:** `https://YOUR_DOMAIN:8000/dashboard/`
 
+**HPX Pulse — manual tunnel engine** (Iran VPS, if `join` hangs on panel mirror download):
+```bash
+curl --http1.1 --connect-timeout 20 --max-time 300 -fsSL \
+  https://raw.githubusercontent.com/pooyahpx/HPXPANEL/main/scripts/hpx-tunnel-engine-install.sh | \
+  sudo env HPX_PREFER_GITHUB=1 bash
+
+sudo hpx-pulse-agent sync
+```
+
 ---
 
 ## 🔥 The only panel that puts the entire arsenal in one place

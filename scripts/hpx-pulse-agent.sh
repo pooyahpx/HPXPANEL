@@ -112,12 +112,45 @@ load_env() {
   set -a; source "$ENV_FILE"; set +a
 }
 
+panel_api_bases() {
+  local u="${PANEL_URL%/}" seen="|"
+  _emit_base() {
+    local b="${1%/}"
+    [ -n "$b" ] || return 0
+    case "$seen" in *"|${b}|"*) return 0 ;; esac
+    seen="${seen}${b}|"
+    printf '%s\n' "$b"
+  }
+  _emit_base "$u"
+  [ -n "${PANEL_URL_FALLBACK:-}" ] && _emit_base "${PANEL_URL_FALLBACK}"
+  # Iran VPS often cannot reach panel :8000 — try same host on 443 (nginx → panel).
+  if [[ "$u" =~ ^(https?://[^:/]+):8000$ ]]; then
+    _emit_base "${BASH_REMATCH[1]}"
+  fi
+}
+
 api() {
   local method="$1" path="$2" body="${3:-}"
-  local url="${PANEL_URL%/}${path}"
-  local args=(--http1.1 --connect-timeout 30 --max-time 120 -fsSL -X "$method" -H "X-HPX-Pulse-Agent-Key: ${AGENT_KEY}" -H "X-HPX-Pulse-Side: ${PULSE_SIDE}" -H "Accept: application/json")
-  [ -n "$body" ] && args+=(-H "Content-Type: application/json" -d "$body")
-  curl "${args[@]}" "$url"
+  local base url attempt resp
+  while IFS= read -r base; do
+    [ -n "$base" ] || continue
+    url="${base%/}${path}"
+    for attempt in 1 2 3; do
+      local args=(--http1.1 --connect-timeout 15 --max-time 90 -fsSL -X "$method"
+        -H "X-HPX-Pulse-Agent-Key: ${AGENT_KEY}" -H "X-HPX-Pulse-Side: ${PULSE_SIDE}" -H "Accept: application/json")
+      [ -n "$body" ] && args+=(-H "Content-Type: application/json" -d "$body")
+      if resp=$(curl "${args[@]}" "$url" 2>/dev/null); then
+        if [ "$base" != "${PANEL_URL%/}" ]; then
+          log "panel API reachable at ${base} (was ${PANEL_URL}) — updating PANEL_URL"
+          PANEL_URL="$base"
+        fi
+        printf '%s' "$resp"
+        return 0
+      fi
+      [ "$attempt" -lt 3 ] && sleep 2
+    done
+  done < <(panel_api_bases)
+  return 1
 }
 
 ensure_engine() {
@@ -466,6 +499,7 @@ send_heartbeat() {
   local msg="HPX Pulse sync"
   local fwd_json="null"
   local control_lat="" forward_lat="" fwd_port=""
+  local hb_ok=0
   tunnel_service_active && running="true"
   tunnel_link_up && link="true"
 
@@ -516,7 +550,7 @@ send_heartbeat() {
         --argjson tr "$running" \
         --argjson iu "$link" \
         '{status:$s, host:$h, tunnel_running:$tr, iface_up:$iu}')" \
-      >/dev/null || warn "heartbeat to panel failed — check PANEL_URL and firewall"
+      >/dev/null && hb_ok=1
   else
     api POST "/api/hpx_pulse/agent/heartbeat" \
       "$(jq -nc \
@@ -528,8 +562,10 @@ send_heartbeat() {
         --argjson lm "$lat_json" \
         --argjson fo "$fwd_json" \
         '{status:$s, host:$h, tunnel_running:$tr, iface_up:$iu, latency_ms:($lm|tonumber? // null), forward_ok:$fo, message:$m}')" \
-      >/dev/null || warn "heartbeat to panel failed — check PANEL_URL and firewall"
+      >/dev/null && hb_ok=1
   fi
+  [ "$hb_ok" = 1 ] || warn "heartbeat to panel failed — try: hpx-pulse-agent set-panel-url https://domain (no :8000)"
+  [ "$hb_ok" = 1 ]
 }
 
 cmd_join() {
@@ -570,18 +606,24 @@ cmd_join() {
   body=$(jq -nc --arg t "$token" --arg h "$host" --arg s "$side" '{join_token:$t, host:$h, side:$s}')
 
   log "claiming join token (${side})..."
-  local claim_tmp http_code
+  local claim_tmp http_code base claim=""
   claim_tmp="$(mktemp)"
-  http_code=$(curl --http1.1 --connect-timeout 30 --max-time 120 -sS -w "%{http_code}" -o "$claim_tmp" \
-    -X POST -H "Content-Type: application/json" -d "$body" \
-    "${PANEL_URL}/api/hpx_pulse/agent/claim") || http_code="000"
-  if [ "$http_code" != "200" ]; then
-    [ -s "$claim_tmp" ] && cat "$claim_tmp" >&2
-    rm -f "$claim_tmp"
-    die "claim failed (HTTP ${http_code}) — use real token from panel Tokens button; regenerate if expired"
-  fi
-  claim="$(cat "$claim_tmp")"
+  while IFS= read -r base; do
+    [ -n "$base" ] || continue
+    http_code=$(curl --http1.1 --connect-timeout 15 --max-time 90 -sS -w "%{http_code}" -o "$claim_tmp" \
+      -X POST -H "Content-Type: application/json" -d "$body" \
+      "${base}/api/hpx_pulse/agent/claim" 2>/dev/null) || http_code="000"
+    if [ "$http_code" = "200" ]; then
+      claim="$(cat "$claim_tmp")"
+      [ "$base" != "${PANEL_URL%/}" ] && log "panel claim OK at ${base} (using this for agent)"
+      PANEL_URL="$base"
+      break
+    fi
+  done < <(panel_api_bases)
   rm -f "$claim_tmp"
+  if [ -z "$claim" ]; then
+    die "claim failed — use real token from panel Tokens button; if Iran cannot reach :8000 use --panel-url https://domain (443)"
+  fi
 
   AGENT_KEY=$(echo "$claim" | jq -r '.agent_key')
   PULSE_ID=$(echo "$claim" | jq -r '.pulse_id')
@@ -603,8 +645,17 @@ cmd_join() {
 
   api POST "/api/hpx_pulse/agent/ack" \
     "$(jq -nc '{command:"start", status:"running", message:"HPX Pulse joined"}')" >/dev/null || true
-  send_heartbeat
-  log "ready on ${side} — pulse_id=${PULSE_ID} (panel should show agent connected)"
+  if send_heartbeat; then
+    write_env
+    log "ready on ${side} — pulse_id=${PULSE_ID} (panel shows agent connected)"
+  else
+    write_env
+    warn "tunnel is running locally but panel heartbeat failed at ${PANEL_URL}"
+    warn "from Iran, port :8000 is often blocked — try:"
+    warn "  sudo hpx-pulse-agent set-panel-url https://YOUR_DOMAIN"
+    warn "  (no :8000 if nginx serves panel on 443) then: sudo hpx-pulse-agent sync"
+    log "ready on ${side} — pulse_id=${PULSE_ID} (fix PANEL_URL so panel shows connected)"
+  fi
 }
 
 cmd_sync() {
@@ -653,6 +704,19 @@ cmd_sync() {
   send_heartbeat
 }
 
+cmd_set_panel_url() {
+  need_root
+  local url="${1:-}"
+  [ -n "$url" ] || die "usage: set-panel-url https://your-panel-domain"
+  url="${url%/}"
+  load_env 2>/dev/null || true
+  PANEL_URL="$url"
+  write_env
+  log "PANEL_URL set to ${PANEL_URL}"
+  send_heartbeat && log "heartbeat OK — panel should show connected" \
+    || warn "still cannot reach panel — open port 443 from Iran or set PANEL_URL_FALLBACK"
+}
+
 cmd_install_engine() {
   need_root
   load_env 2>/dev/null || true
@@ -698,6 +762,7 @@ usage() {
   cat <<EOF
 HPX Pulse Agent
   join TOKEN --panel-url URL --side iran|abroad
+  set-panel-url URL       when :8000 is blocked from Iran, use https://domain (443)
   install-engine          install hpx-tunnel-engine binary (GitHub-first on Iran)
   sync | ping | status
 
@@ -712,6 +777,7 @@ main() {
   shift || true
   case "$cmd" in
     join) cmd_join "$@" ;;
+    set-panel-url) cmd_set_panel_url "$@" ;;
     install-engine) cmd_install_engine ;;
     sync) cmd_sync ;;
     ping) cmd_ping ;;

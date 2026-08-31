@@ -182,6 +182,21 @@ sudo hpx-pulse-agent status
 | `HPX_NO_GITHUB_FALLBACK=1` | فقط mirror پنل / فایل محلی |
 | `HPX_ENGINE_LOCAL_DIR=/path` | استفاده از `.tar.gz` آفلاین |
 
+**پنل باید از ایران برای heartbeat/sync در دسترس باشد** (نه فقط موقع join). پورت `:8000` اغلب فیلتر است — پنل را روی **443** (nginx → panel) بگذارید و در `.env` پنل:
+
+```bash
+PANEL_PUBLIC_URL=https://ss.hiby.online
+```
+
+دوباره **Tokens** بگیرید. روی سرور ایران اگر قبلاً join شده:
+
+```bash
+sudo hpx-pulse-agent set-panel-url https://ss.hiby.online
+sudo hpx-pulse-agent sync
+```
+
+تست از ایران: `curl -I --connect-timeout 10 https://ss.hiby.online/api/hpx_pulse/agent/hpx-pulse-agent.sh`
+
 ---
 
 ## خلاصه — چرا اپراتورها می‌آیند اینجا

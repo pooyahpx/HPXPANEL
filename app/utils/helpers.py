@@ -218,10 +218,10 @@ async def resolve_panel_base_url() -> str | None:
 
     settings = await telegram_settings()
     for candidate in (
+        telegram_env_settings.panel_public_url,
         settings.panel_url,
         settings.mini_app_web_url,
         settings.webhook_url,
-        telegram_env_settings.panel_public_url,
     ):
         origin = url_origin(candidate)
         if origin:

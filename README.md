@@ -182,6 +182,21 @@ sudo hpx-pulse-agent status
 | `HPX_NO_GITHUB_FALLBACK=1` | Panel/local only — when GitHub is blocked |
 | `HPX_ENGINE_LOCAL_DIR=/path` | Use offline `.tar.gz` in that directory |
 
+**Panel must be reachable from Iran for heartbeat/sync** (not just during join). Port `:8000` is often filtered — expose the panel on **443** (nginx → panel) and set in panel `.env`:
+
+```bash
+PANEL_PUBLIC_URL=https://ss.hiby.online
+```
+
+Regenerate **Tokens** so join commands use the public URL. On the Iran VPS, if already joined:
+
+```bash
+sudo hpx-pulse-agent set-panel-url https://ss.hiby.online
+sudo hpx-pulse-agent sync
+```
+
+Test from Iran: `curl -I --connect-timeout 10 https://ss.hiby.online/api/hpx_pulse/agent/hpx-pulse-agent.sh`
+
 ---
 
 ## TL;DR — why operators switch

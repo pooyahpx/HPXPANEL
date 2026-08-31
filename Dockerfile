@@ -60,11 +60,6 @@ RUN chmod +x /code/healthcheck.sh
 
 RUN chmod +x /code/start.sh
 
-# Pulse agent scripts are excluded from the build context via .dockerignore — copy explicitly.
-RUN mkdir -p /code/scripts
-COPY scripts/hpx-pulse-agent.sh scripts/hpx-tunnel-engine-install.sh scripts/hpx-tunnel-engine.version /code/scripts/
-RUN chmod +x /code/scripts/hpx-pulse-agent.sh /code/scripts/hpx-tunnel-engine-install.sh
-
 # Bundle HPX tunnel engine for this image arch (panel serves it — agents never hit GitHub).
 RUN mkdir -p /code/bundled/tunnel-engine \
     && ENGINE_VERSION="$(tr -d '[:space:]' < /code/scripts/hpx-tunnel-engine.version)" \
@@ -79,5 +74,7 @@ RUN mkdir -p /code/bundled/tunnel-engine \
          -o "/code/bundled/tunnel-engine/${ENGINE_ASSET}" \
     && curl -fsSL "https://github.com/pooyahpx/HPXPANEL/releases/download/${ENGINE_TAG}/SHA256SUMS" \
          -o "/code/bundled/tunnel-engine/SHA256SUMS" || true
+
+RUN chmod +x /code/scripts/hpx-pulse-agent.sh /code/scripts/hpx-tunnel-engine-install.sh 2>/dev/null || true
 
 ENTRYPOINT ["/code/start.sh"]

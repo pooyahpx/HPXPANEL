@@ -22,10 +22,12 @@ venv*
 LICENSE
 install_service.sh
 hpxpanel.code-workspace
-scripts
+scripts/*
+!scripts/hpx-pulse-agent.sh
+!scripts/hpx-tunnel-engine-install.sh
+!scripts/hpx-tunnel-engine.version
 
 # Dev tooling / CI (not used at runtime)
-# Pulse agent scripts are copied explicitly in Dockerfile (see COPY scripts/...).
 Makefile
 .github
 .pre-commit-config.yaml

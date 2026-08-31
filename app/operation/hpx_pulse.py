@@ -56,10 +56,11 @@ def _config_hash(toml: str, side: str, pulse_id: int) -> str:
 
 def _build_join_command_github(panel_url: str | None, token: str, side: str) -> str:
     base = (panel_url or "https://YOUR_PANEL_HOST").rstrip("/")
+    env = "HPX_PREFER_GITHUB=1 " if side == "iran" else ""
     return (
         f"curl {_JOIN_CURL} \\\n"
         f"  {GITHUB_AGENT_SCRIPT} | \\\n"
-        f"  sudo bash -s -- join {token} \\\n"
+        f"  sudo env {env}bash -s -- join {token} \\\n"
         f"  --panel-url {base} --side {side}"
     )
 

@@ -129,9 +129,14 @@ ensure_engine() {
     return 0
   fi
   log "Installing HPX tunnel engine (one-time)..."
-  local installer panel_install_url
+  local installer panel_install_url prefer_github
   installer="$(mktemp)"
   panel_install_url=""
+  prefer_github="${HPX_PREFER_GITHUB:-}"
+  if [ -z "$prefer_github" ] && [ "${PULSE_SIDE:-}" = "iran" ]; then
+    prefer_github=1
+    log "Iran side — downloading engine from GitHub first (panel mirror often blocked)"
+  fi
   if [ -n "${PANEL_URL:-}" ]; then
     panel_install_url="${PANEL_URL%/}/api/hpx_pulse/agent/engine-install.sh"
   elif [ -n "${HPX_AGENT_ASSETS_BASE:-}" ]; then
@@ -149,6 +154,7 @@ ensure_engine() {
   # Panel mirror first; GitHub fallback when mirror is unreachable (common on some Iran routes).
   # Set HPX_NO_GITHUB_FALLBACK=1 to force panel/local only.
   if ! HPX_PANEL_URL="${PANEL_URL:-}" HPX_AGENT_ASSETS_BASE="${HPX_AGENT_ASSETS_BASE:-}" \
+      HPX_PREFER_GITHUB="${prefer_github:-0}" \
       HPX_NO_GITHUB_FALLBACK="${HPX_NO_GITHUB_FALLBACK:-0}" bash "$installer"; then
     rm -f "$installer"
     die "HPX tunnel engine install failed"

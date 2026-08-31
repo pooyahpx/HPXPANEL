@@ -18,7 +18,7 @@ LOCAL_DIRS=(
 # HTTP/1.1 avoids curl error 92 (PROTOCOL_ERROR) on some filtered routes.
 CURL=(curl --http1.1 --connect-timeout 30 --max-time 300 --retry 3 --retry-delay 2 -fsSL)
 # Panel mirror: fail fast so GitHub fallback kicks in when the panel port is blocked.
-PANEL_CURL=(curl --http1.1 --connect-timeout 15 --max-time 120 --retry 1 --retry-delay 2 -fsSL)
+PANEL_CURL=(curl --http1.1 --connect-timeout 8 --max-time 25 --retry 0 -fsSL)
 
 if [ -x "$TARGET" ]; then
   exit 0

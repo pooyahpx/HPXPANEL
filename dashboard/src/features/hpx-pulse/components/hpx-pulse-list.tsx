@@ -17,6 +17,52 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
+type JoinCommandSet = {
+  iran?: string
+  iranAlt?: string
+  abroad?: string
+  abroadAlt?: string
+}
+
+function JoinCommandBlock({
+  label,
+  primary,
+  alt,
+  onCopy,
+  t,
+}: {
+  label: string
+  primary: string
+  alt?: string
+  onCopy: (text: string, key: string) => void
+  t: (k: string, o?: { defaultValue: string }) => string
+}) {
+  return (
+    <div className="space-y-2">
+      <span className="text-muted-foreground font-medium">{label}</span>
+      <div className="space-y-1">
+        <p className="text-[10px] font-medium uppercase tracking-wide text-emerald-600 dark:text-emerald-400">
+          {t('hpxPulse.joinCommandPrimary', { defaultValue: 'Recommended (GitHub)' })}
+        </p>
+        <pre className="bg-muted overflow-x-auto rounded p-2 font-mono text-[11px]">{primary}</pre>
+        <Button size="sm" variant="secondary" onClick={() => onCopy(primary, label)}>
+          <Copy className="size-3" /> {label}
+        </Button>
+      </div>
+      {alt && (
+        <div className="space-y-1">
+          <p className="text-muted-foreground text-[10px] font-medium uppercase tracking-wide">
+            {t('hpxPulse.joinCommandAlt', { defaultValue: 'Alternative (panel URL)' })}
+          </p>
+          <pre className="bg-muted overflow-x-auto rounded p-2 font-mono text-[11px]">{alt}</pre>
+          <Button size="sm" variant="outline" onClick={() => onCopy(alt, `${label} alt`)}>
+            <Copy className="size-3" /> {label} (panel)
+          </Button>
+        </div>
+      )}
+    </div>
+  )
+}
 const statusTone: Record<string, string> = {
   running: 'bg-emerald-500/15 text-emerald-600 border-emerald-500/40 dark:text-emerald-400',
   starting: 'bg-blue-500/15 text-blue-600 border-blue-500/40',
@@ -165,7 +211,7 @@ export default function HpxPulseList() {
   const deleteMutation = useDeleteHpxPulse()
   const regenMutation = useRegeneratePulseTokens()
   const [wizardOpen, setWizardOpen] = useState(false)
-  const [joinCommands, setJoinCommands] = useState<{ iran?: string; abroad?: string } | null>(null)
+  const [joinCommands, setJoinCommands] = useState<JoinCommandSet | null>(null)
 
   useEffect(() => {
     const handler = () => setWizardOpen(true)
@@ -225,22 +271,22 @@ export default function HpxPulseList() {
             })}
           </p>
           {joinCommands.iran && (
-            <div className="space-y-1">
-              <span className="text-muted-foreground">Iran</span>
-              <pre className="bg-muted overflow-x-auto rounded p-2 font-mono text-[11px]">{joinCommands.iran}</pre>
-              <Button size="sm" variant="secondary" onClick={() => copy(joinCommands.iran!)}>
-                <Copy className="size-3" /> Iran
-              </Button>
-            </div>
+            <JoinCommandBlock
+              label="Iran"
+              primary={joinCommands.iran}
+              alt={joinCommands.iranAlt}
+              onCopy={copy}
+              t={t}
+            />
           )}
           {joinCommands.abroad && (
-            <div className="space-y-1">
-              <span className="text-muted-foreground">Abroad</span>
-              <pre className="bg-muted overflow-x-auto rounded p-2 font-mono text-[11px]">{joinCommands.abroad}</pre>
-              <Button size="sm" variant="secondary" onClick={() => copy(joinCommands.abroad!)}>
-                <Copy className="size-3" /> Abroad
-              </Button>
-            </div>
+            <JoinCommandBlock
+              label="Abroad"
+              primary={joinCommands.abroad}
+              alt={joinCommands.abroadAlt}
+              onCopy={copy}
+              t={t}
+            />
           )}
         </Card>
       )}
@@ -267,7 +313,12 @@ export default function HpxPulseList() {
               }
               onRegenerate={async () => {
                 const res = await regenMutation.mutateAsync(pulse.id)
-                setJoinCommands({ iran: res.iran_join_command ?? undefined, abroad: res.abroad_join_command ?? undefined })
+                setJoinCommands({
+                  iran: res.iran_join_command ?? undefined,
+                  iranAlt: res.iran_join_command_alt ?? undefined,
+                  abroad: res.abroad_join_command ?? undefined,
+                  abroadAlt: res.abroad_join_command_alt ?? undefined,
+                })
               }}
             />
           ))}
@@ -280,7 +331,9 @@ export default function HpxPulseList() {
         onCreated={res => {
           setJoinCommands({
             iran: res.iran_join_command ?? undefined,
+            iranAlt: res.iran_join_command_alt ?? undefined,
             abroad: res.abroad_join_command ?? undefined,
+            abroadAlt: res.abroad_join_command_alt ?? undefined,
           })
           refetch()
         }}

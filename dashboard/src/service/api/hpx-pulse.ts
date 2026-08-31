@@ -104,8 +104,10 @@ export interface HpxPulseActionResponse {
   message?: string | null
   iran_join_token?: string | null
   iran_join_command?: string | null
+  iran_join_command_alt?: string | null
   abroad_join_token?: string | null
   abroad_join_command?: string | null
+  abroad_join_command_alt?: string | null
   iran_join_expires_at?: string | null
   abroad_join_expires_at?: string | null
 }

@@ -53,15 +53,30 @@ def _config_hash(toml: str, side: str, pulse_id: int) -> str:
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
-def _build_join_command(panel_url: str | None, token: str, side: str) -> str:
+def _build_join_command_github(panel_url: str | None, token: str, side: str) -> str:
+    base = (panel_url or "https://YOUR_PANEL_HOST").rstrip("/")
+    return (
+        f"curl {_JOIN_CURL} \\\n"
+        f"  {GITHUB_AGENT_SCRIPT} | \\\n"
+        f"  sudo bash -s -- join {token} \\\n"
+        f"  --panel-url {base} --side {side}"
+    )
+
+
+def _build_join_command_panel(panel_url: str | None, token: str, side: str) -> str:
     base = (panel_url or "https://YOUR_PANEL_HOST").rstrip("/")
     panel_script = f"{base}/api/hpx_pulse/agent/hpx-pulse-agent.sh"
-    # GitHub first (reliable bootstrap); panel mirror as fallback with timeouts.
     return (
-        f"(curl {_JOIN_CURL} {GITHUB_AGENT_SCRIPT} || "
-        f"curl {_JOIN_CURL} {panel_script}) | "
-        f"sudo bash -s -- join {token} --panel-url {base} --side {side}"
+        f"curl {_JOIN_CURL} \\\n"
+        f"  {panel_script} | \\\n"
+        f"  sudo bash -s -- join {token} \\\n"
+        f"  --panel-url {base} --side {side}"
     )
+
+
+def _build_join_command(panel_url: str | None, token: str, side: str) -> str:
+    """Primary install command (GitHub bootstrap — works from Iran)."""
+    return _build_join_command_github(panel_url, token, side)
 
 
 def _pulse_status(db_pulse: HpxPulse) -> str:
@@ -149,7 +164,7 @@ class HpxPulseOperation(BaseOperation):
 
     async def _issue_join_tokens(
         self, db: AsyncSession, db_pulse: HpxPulse, *, panel_url: str | None
-    ) -> tuple[str, str, str, str, dt]:
+    ) -> tuple[str, str, str, str, str, str, dt]:
         expires_at = dt.now(UTC) + td(hours=JOIN_TOKEN_TTL_HOURS)
         iran_token = _mint_token("hpxpi")
         abroad_token = _mint_token("hpxpa")
@@ -167,9 +182,11 @@ class HpxPulseOperation(BaseOperation):
         db_pulse.message = "Waiting for Iran and abroad agents"
         db_pulse.last_status_change = dt.now(UTC)
         await db.flush()
-        iran_cmd = _build_join_command(panel_url, iran_token, "iran")
-        abroad_cmd = _build_join_command(panel_url, abroad_token, "abroad")
-        return iran_token, iran_cmd, abroad_token, abroad_cmd, expires_at
+        iran_cmd = _build_join_command_github(panel_url, iran_token, "iran")
+        iran_cmd_alt = _build_join_command_panel(panel_url, iran_token, "iran")
+        abroad_cmd = _build_join_command_github(panel_url, abroad_token, "abroad")
+        abroad_cmd_alt = _build_join_command_panel(panel_url, abroad_token, "abroad")
+        return iran_token, iran_cmd, iran_cmd_alt, abroad_token, abroad_cmd, abroad_cmd_alt, expires_at
 
     async def create_pulse(
         self,
@@ -215,7 +232,7 @@ class HpxPulseOperation(BaseOperation):
                 advice_json=advice.model_dump(mode="json"),
             )
             resolved_panel = await self._panel_url(panel_url)
-            iran_t, iran_c, abroad_t, abroad_c, exp = await self._issue_join_tokens(
+            iran_t, iran_c, iran_c_alt, abroad_t, abroad_c, abroad_c_alt, exp = await self._issue_join_tokens(
                 db, db_pulse, panel_url=resolved_panel
             )
             await db.commit()
@@ -228,8 +245,10 @@ class HpxPulseOperation(BaseOperation):
             message="Pulse created — run join commands on Iran and abroad servers",
             iran_join_token=iran_t,
             iran_join_command=iran_c,
+            iran_join_command_alt=iran_c_alt,
             abroad_join_token=abroad_t,
             abroad_join_command=abroad_c,
+            abroad_join_command_alt=abroad_c_alt,
             iran_join_expires_at=exp,
             abroad_join_expires_at=exp,
         )
@@ -272,7 +291,7 @@ class HpxPulseOperation(BaseOperation):
         if db_pulse is None:
             await self.raise_error(message="Pulse not found", code=404)
         resolved_panel = await self._panel_url(panel_url)
-        iran_t, iran_c, abroad_t, abroad_c, exp = await self._issue_join_tokens(
+        iran_t, iran_c, iran_c_alt, abroad_t, abroad_c, abroad_c_alt, exp = await self._issue_join_tokens(
             db, db_pulse, panel_url=resolved_panel
         )
         await db.commit()
@@ -280,8 +299,10 @@ class HpxPulseOperation(BaseOperation):
             pulse=_to_response(db_pulse),
             iran_join_token=iran_t,
             iran_join_command=iran_c,
+            iran_join_command_alt=iran_c_alt,
             abroad_join_token=abroad_t,
             abroad_join_command=abroad_c,
+            abroad_join_command_alt=abroad_c_alt,
             iran_join_expires_at=exp,
             abroad_join_expires_at=exp,
             message="Join tokens regenerated",

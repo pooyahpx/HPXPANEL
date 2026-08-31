@@ -113,8 +113,10 @@ class HpxPulseActionResponse(BaseModel):
     message: str | None = None
     iran_join_token: str | None = None
     iran_join_command: str | None = None
+    iran_join_command_alt: str | None = None
     abroad_join_token: str | None = None
     abroad_join_command: str | None = None
+    abroad_join_command_alt: str | None = None
     iran_join_expires_at: dt | None = None
     abroad_join_expires_at: dt | None = None
 

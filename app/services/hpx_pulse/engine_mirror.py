@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 _CODE_ROOT = Path(__file__).resolve().parents[3]
 _VERSION_FILE = _CODE_ROOT / "scripts" / "hpx-tunnel-engine.version"
 _INSTALL_SCRIPT = _CODE_ROOT / "scripts" / "hpx-tunnel-engine-install.sh"
+_AGENT_SCRIPT = _CODE_ROOT / "scripts" / "hpx-pulse-agent.sh"
 _BUNDLED_DIR = _CODE_ROOT / "bundled" / "tunnel-engine"
 _CACHE_DIR = Path(os.environ.get("HPX_DATA_DIR", "/var/lib/hpxpanel")) / "tunnel-engine"
 _ENGINE_REPO = os.environ.get("HPX_TUNNEL_ENGINE_REPO", "pooyahpx/HPXPANEL")
@@ -95,6 +96,10 @@ def cached_checksums_path() -> Path:
 
 def install_script_path() -> Path:
     return _INSTALL_SCRIPT
+
+
+def agent_script_path() -> Path:
+    return _AGENT_SCRIPT
 
 
 async def _download_to_path(url: str, dest: Path) -> None:

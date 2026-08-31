@@ -81,9 +81,12 @@ try_local_asset() {
 }
 
 try_panel_asset() {
-  local base="${HPX_AGENT_ASSETS_BASE:-}"
-  local panel_url="${HPX_PANEL_URL:-}"
-  [ -n "$base" ] || base="${panel_url%/}/api/hpx_pulse/agent"
+  local base="" panel_url="${HPX_PANEL_URL:-}"
+  if [ -n "$panel_url" ]; then
+    base="${panel_url%/}/api/hpx_pulse/agent"
+  elif [ -n "${HPX_AGENT_ASSETS_BASE:-}" ]; then
+    base="${HPX_AGENT_ASSETS_BASE%/}"
+  fi
   [ -n "$base" ] || return 1
 
   echo "Downloading HPX tunnel engine from panel mirror..." >&2
@@ -117,7 +120,7 @@ if try_local_asset; then
   :
 elif try_panel_asset; then
   :
-elif [ -n "${HPX_PANEL_URL:-}${HPX_AGENT_ASSETS_BASE:-}" ]; then
+elif [ "${HPX_NO_GITHUB_FALLBACK:-0}" = "1" ]; then
   echo "HPX tunnel engine download failed from panel mirror." >&2
   echo "Ask the panel admin to run: sudo hpxpanel update" >&2
   echo "Or copy ${asset} + SHA256SUMS to /opt/hpx-pulse/engine/ and retry." >&2
@@ -126,7 +129,10 @@ elif try_github_asset; then
   :
 else
   echo "HPX tunnel engine download failed (${ENGINE_REPO} ${release_tag})" >&2
-  echo "If GitHub is blocked, use panel join (downloads via panel URL) or place ${asset} locally." >&2
+  if [ -n "${HPX_PANEL_URL:-}${HPX_AGENT_ASSETS_BASE:-}" ]; then
+    echo "Panel mirror was unavailable — ask the admin to run: sudo hpxpanel update" >&2
+  fi
+  echo "If GitHub is blocked, place ${asset} + SHA256SUMS in /opt/hpx-pulse/engine/ and retry." >&2
   exit 1
 fi
 

@@ -37,10 +37,9 @@ from app.services.hpx_pulse.advisor import advise, profile_meta
 from app.services.hpx_pulse.engine_mirror import agent_assets_base
 from app.services.hpx_pulse.tunnel_render import mint_tunnel_token, render_for_side
 from app.utils.crypto import decrypt_secret, encrypt_secret, hash_api_key
+from app.utils.helpers import resolve_panel_base_url
 
 JOIN_TOKEN_TTL_HOURS = 24
-AGENT_SCRIPT_URL = "https://raw.githubusercontent.com/pooyahpx/HPXPANEL/main/scripts/hpx-pulse-agent.sh"
-
 
 def _mint_token(prefix: str) -> str:
     return f"{prefix}_{secrets.token_urlsafe(32)}"
@@ -53,8 +52,9 @@ def _config_hash(toml: str, side: str, pulse_id: int) -> str:
 
 def _build_join_command(panel_url: str | None, token: str, side: str) -> str:
     base = (panel_url or "https://YOUR_PANEL_HOST").rstrip("/")
+    agent_script = f"{base}/api/hpx_pulse/agent/hpx-pulse-agent.sh"
     return (
-        f"curl -fsSL {AGENT_SCRIPT_URL} | sudo bash -s -- join {token} "
+        f"curl --http1.1 -fsSL {agent_script} | sudo bash -s -- join {token} "
         f"--panel-url {base} --side {side}"
     )
 
@@ -120,6 +120,14 @@ def _desired_status(db_pulse: HpxPulse) -> str:
 
 
 class HpxPulseOperation(BaseOperation):
+    async def _panel_url(self, request_base: str | None = None) -> str | None:
+        resolved = await resolve_panel_base_url()
+        if resolved:
+            return resolved
+        if request_base:
+            return request_base.rstrip("/")
+        return None
+
     async def _secret_key(self, db: AsyncSession) -> str:
         return await get_jwt_secret_key(db)
 
@@ -201,7 +209,10 @@ class HpxPulseOperation(BaseOperation):
                 preset=chosen.preset,
                 advice_json=advice.model_dump(mode="json"),
             )
-            iran_t, iran_c, abroad_t, abroad_c, exp = await self._issue_join_tokens(db, db_pulse, panel_url=panel_url)
+            resolved_panel = await self._panel_url(panel_url)
+            iran_t, iran_c, abroad_t, abroad_c, exp = await self._issue_join_tokens(
+                db, db_pulse, panel_url=resolved_panel
+            )
             await db.commit()
         except IntegrityError:
             await db.rollback()
@@ -255,7 +266,10 @@ class HpxPulseOperation(BaseOperation):
         db_pulse = await get_hpx_pulse_by_id(db, pulse_id)
         if db_pulse is None:
             await self.raise_error(message="Pulse not found", code=404)
-        iran_t, iran_c, abroad_t, abroad_c, exp = await self._issue_join_tokens(db, db_pulse, panel_url=panel_url)
+        resolved_panel = await self._panel_url(panel_url)
+        iran_t, iran_c, abroad_t, abroad_c, exp = await self._issue_join_tokens(
+            db, db_pulse, panel_url=resolved_panel
+        )
         await db.commit()
         return HpxPulseActionResponse(
             pulse=_to_response(db_pulse),
@@ -331,6 +345,7 @@ class HpxPulseOperation(BaseOperation):
             )
         await db.commit()
 
+        resolved_panel = await self._panel_url(panel_url)
         return HpxPulseAgentBootstrap(
             pulse_id=db_pulse.id,
             name=db_pulse.name,
@@ -343,7 +358,7 @@ class HpxPulseOperation(BaseOperation):
             iran_public_ip=db_pulse.iran_public_ip,
             tunnel_mode=db_pulse.tunnel_mode,
             port_forwards=db_pulse.port_forwards or [],
-            agent_assets_base=agent_assets_base(panel_url),
+            agent_assets_base=agent_assets_base(resolved_panel),
         )
 
     async def _pulse_from_agent_key(self, db: AsyncSession, agent_key: str, side: str) -> HpxPulse:

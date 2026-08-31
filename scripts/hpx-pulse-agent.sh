@@ -66,8 +66,16 @@ install_self() {
     cp "${BASH_SOURCE[0]}" "$INSTALL_DIR/hpx-pulse-agent.sh" 2>/dev/null || true
   fi
   if [ ! -s "$INSTALL_DIR/hpx-pulse-agent.sh" ]; then
-    hp_curl "https://raw.githubusercontent.com/pooyahpx/HPXPANEL/main/scripts/hpx-pulse-agent.sh" \
-      -o "$INSTALL_DIR/hpx-pulse-agent.sh"
+    if [ -n "${PANEL_URL:-}" ] \
+      && hp_curl "${PANEL_URL%/}/api/hpx_pulse/agent/hpx-pulse-agent.sh" \
+        -o "$INSTALL_DIR/hpx-pulse-agent.sh"; then
+      :
+    elif hp_curl "https://raw.githubusercontent.com/pooyahpx/HPXPANEL/main/scripts/hpx-pulse-agent.sh" \
+      -o "$INSTALL_DIR/hpx-pulse-agent.sh"; then
+      :
+    else
+      die "HPX Pulse agent script download failed"
+    fi
   fi
   chmod 755 "$INSTALL_DIR/hpx-pulse-agent.sh"
   ln -sfn "$INSTALL_DIR/hpx-pulse-agent.sh" "$BIN_LINK"
@@ -117,10 +125,10 @@ ensure_engine() {
   local installer panel_install_url
   installer="$(mktemp)"
   panel_install_url=""
-  if [ -n "${HPX_AGENT_ASSETS_BASE:-}" ]; then
-    panel_install_url="${HPX_AGENT_ASSETS_BASE%/}/engine-install.sh"
-  elif [ -n "${PANEL_URL:-}" ]; then
+  if [ -n "${PANEL_URL:-}" ]; then
     panel_install_url="${PANEL_URL%/}/api/hpx_pulse/agent/engine-install.sh"
+  elif [ -n "${HPX_AGENT_ASSETS_BASE:-}" ]; then
+    panel_install_url="${HPX_AGENT_ASSETS_BASE%/}/engine-install.sh"
   fi
   if [ -n "$panel_install_url" ] && hp_curl "$panel_install_url" -o "$installer"; then
     log "Using panel-hosted engine installer"
@@ -131,7 +139,10 @@ ensure_engine() {
     die "HPX tunnel engine install script download failed"
   fi
   chmod 755 "$installer"
-  if ! HPX_PANEL_URL="${PANEL_URL:-}" HPX_AGENT_ASSETS_BASE="${HPX_AGENT_ASSETS_BASE:-}" bash "$installer"; then
+  local no_github=0
+  [ "${PULSE_SIDE:-}" = "iran" ] && no_github=1
+  if ! HPX_PANEL_URL="${PANEL_URL:-}" HPX_AGENT_ASSETS_BASE="${HPX_AGENT_ASSETS_BASE:-}" \
+      HPX_NO_GITHUB_FALLBACK="$no_github" bash "$installer"; then
     rm -f "$installer"
     die "HPX tunnel engine install failed"
   fi
@@ -556,7 +567,10 @@ cmd_sync() {
   need_root
   load_env
   # Pull latest agent script once so firewall/ping fixes apply without re-join.
-  if hp_curl "https://raw.githubusercontent.com/pooyahpx/HPXPANEL/main/scripts/hpx-pulse-agent.sh" \
+  if { [ -n "${PANEL_URL:-}" ] \
+      && hp_curl "${PANEL_URL%/}/api/hpx_pulse/agent/hpx-pulse-agent.sh" \
+        -o "$INSTALL_DIR/hpx-pulse-agent.sh.new" 2>/dev/null; } \
+    || hp_curl "https://raw.githubusercontent.com/pooyahpx/HPXPANEL/main/scripts/hpx-pulse-agent.sh" \
       -o "$INSTALL_DIR/hpx-pulse-agent.sh.new" 2>/dev/null; then
     if [ -s "$INSTALL_DIR/hpx-pulse-agent.sh.new" ] \
       && ! cmp -s "$INSTALL_DIR/hpx-pulse-agent.sh.new" "$INSTALL_DIR/hpx-pulse-agent.sh" 2>/dev/null; then

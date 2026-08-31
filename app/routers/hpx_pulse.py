@@ -131,6 +131,14 @@ async def get_hpx_pulse_engine_install_script():
     return PlainTextResponse(script.read_text(encoding="utf-8"), media_type="text/x-shellscript; charset=utf-8")
 
 
+@router.get("/agent/hpx-pulse-agent.sh", response_class=PlainTextResponse)
+async def get_hpx_pulse_agent_script():
+    script = engine_mirror.agent_script_path()
+    if not script.is_file():
+        raise HTTPException(status_code=404, detail="HPX Pulse agent script is not bundled with this panel build")
+    return PlainTextResponse(script.read_text(encoding="utf-8"), media_type="text/x-shellscript; charset=utf-8")
+
+
 @router.get("/agent/engine/SHA256SUMS", response_class=PlainTextResponse)
 async def download_hpx_pulse_engine_checksums():
     try:
@@ -184,4 +192,3 @@ async def hpx_pulse_agent_ack(
     side: str = Depends(_agent_side),
 ):
     await pulse_operator.agent_ack(db, agent_key=agent_key, side=side, model=model)
-    return None

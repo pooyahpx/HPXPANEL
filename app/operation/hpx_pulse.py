@@ -40,6 +40,9 @@ from app.utils.crypto import decrypt_secret, encrypt_secret, hash_api_key
 from app.utils.helpers import resolve_panel_base_url
 
 JOIN_TOKEN_TTL_HOURS = 24
+GITHUB_AGENT_SCRIPT = "https://raw.githubusercontent.com/pooyahpx/HPXPANEL/main/scripts/hpx-pulse-agent.sh"
+_JOIN_CURL = "--http1.1 --connect-timeout 20 --max-time 120 -fsSL"
+
 
 def _mint_token(prefix: str) -> str:
     return f"{prefix}_{secrets.token_urlsafe(32)}"
@@ -52,10 +55,12 @@ def _config_hash(toml: str, side: str, pulse_id: int) -> str:
 
 def _build_join_command(panel_url: str | None, token: str, side: str) -> str:
     base = (panel_url or "https://YOUR_PANEL_HOST").rstrip("/")
-    agent_script = f"{base}/api/hpx_pulse/agent/hpx-pulse-agent.sh"
+    panel_script = f"{base}/api/hpx_pulse/agent/hpx-pulse-agent.sh"
+    # GitHub first (reliable bootstrap); panel mirror as fallback with timeouts.
     return (
-        f"curl --http1.1 -fsSL {agent_script} | sudo bash -s -- join {token} "
-        f"--panel-url {base} --side {side}"
+        f"(curl {_JOIN_CURL} {GITHUB_AGENT_SCRIPT} || "
+        f"curl {_JOIN_CURL} {panel_script}) | "
+        f"sudo bash -s -- join {token} --panel-url {base} --side {side}"
     )
 
 

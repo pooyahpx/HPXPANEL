@@ -50,8 +50,15 @@ ensure_deps() {
   fix_hostname_resolution
   has curl || die "curl required"
   if ! has jq; then
-    apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq jq >/dev/null 2>&1 || \
-      dnf install -y -q jq >/dev/null 2>&1 || die "install jq"
+    if has timeout; then
+      timeout 90 apt-get update -qq \
+        && DEBIAN_FRONTEND=noninteractive timeout 120 apt-get install -y -qq jq >/dev/null 2>&1 \
+        || dnf install -y -q jq >/dev/null 2>&1 \
+        || die "install jq (apt/dnf timed out or unavailable)"
+    else
+      apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq jq >/dev/null 2>&1 || \
+        dnf install -y -q jq >/dev/null 2>&1 || die "install jq"
+    fi
   fi
 }
 
@@ -61,12 +68,12 @@ install_self() {
     cp "${BASH_SOURCE[0]}" "$INSTALL_DIR/hpx-pulse-agent.sh" 2>/dev/null || true
   fi
   if [ ! -s "$INSTALL_DIR/hpx-pulse-agent.sh" ]; then
-    if [ -n "${PANEL_URL:-}" ] \
-      && hp_curl "${PANEL_URL%/}/api/hpx_pulse/agent/hpx-pulse-agent.sh" \
+    if hp_curl "https://raw.githubusercontent.com/pooyahpx/HPXPANEL/main/scripts/hpx-pulse-agent.sh" \
         -o "$INSTALL_DIR/hpx-pulse-agent.sh"; then
       :
-    elif hp_curl "https://raw.githubusercontent.com/pooyahpx/HPXPANEL/main/scripts/hpx-pulse-agent.sh" \
-      -o "$INSTALL_DIR/hpx-pulse-agent.sh"; then
+    elif [ -n "${PANEL_URL:-}" ] \
+      && hp_curl "${PANEL_URL%/}/api/hpx_pulse/agent/hpx-pulse-agent.sh" \
+        -o "$INSTALL_DIR/hpx-pulse-agent.sh"; then
       :
     else
       die "HPX Pulse agent script download failed"
@@ -125,10 +132,10 @@ ensure_engine() {
   elif [ -n "${HPX_AGENT_ASSETS_BASE:-}" ]; then
     panel_install_url="${HPX_AGENT_ASSETS_BASE%/}/engine-install.sh"
   fi
-  if [ -n "$panel_install_url" ] && hp_curl "$panel_install_url" -o "$installer"; then
-    log "Using panel-hosted engine installer"
-  elif hp_curl "$ENGINE_INSTALL_URL" -o "$installer"; then
+  if hp_curl "$ENGINE_INSTALL_URL" -o "$installer"; then
     log "Using GitHub-hosted engine installer"
+  elif [ -n "$panel_install_url" ] && hp_curl "$panel_install_url" -o "$installer"; then
+    log "Using panel-hosted engine installer"
   else
     rm -f "$installer"
     die "HPX tunnel engine install script download failed"
@@ -509,7 +516,6 @@ send_heartbeat() {
 
 cmd_join() {
   need_root
-  ensure_deps
   local token="" panel_url="" side=""
   while [ $# -gt 0 ]; do
     case "$1" in
@@ -526,6 +532,9 @@ cmd_join() {
 
   PANEL_URL="${panel_url%/}"
   PULSE_SIDE="$side"
+  log "join starting (side=${side})..."
+
+  ensure_deps
   local host body claim
   host="$(hostname -f 2>/dev/null || hostname)"
   body=$(jq -nc --arg t "$token" --arg h "$host" --arg s "$side" '{join_token:$t, host:$h, side:$s}')
@@ -562,11 +571,11 @@ cmd_sync() {
   need_root
   load_env
   # Pull latest agent script once so firewall/ping fixes apply without re-join.
-  if { [ -n "${PANEL_URL:-}" ] \
+  if hp_curl "https://raw.githubusercontent.com/pooyahpx/HPXPANEL/main/scripts/hpx-pulse-agent.sh" \
+      -o "$INSTALL_DIR/hpx-pulse-agent.sh.new" 2>/dev/null \
+    || { [ -n "${PANEL_URL:-}" ] \
       && hp_curl "${PANEL_URL%/}/api/hpx_pulse/agent/hpx-pulse-agent.sh" \
-        -o "$INSTALL_DIR/hpx-pulse-agent.sh.new" 2>/dev/null; } \
-    || hp_curl "https://raw.githubusercontent.com/pooyahpx/HPXPANEL/main/scripts/hpx-pulse-agent.sh" \
-      -o "$INSTALL_DIR/hpx-pulse-agent.sh.new" 2>/dev/null; then
+        -o "$INSTALL_DIR/hpx-pulse-agent.sh.new" 2>/dev/null; }; then
     if [ -s "$INSTALL_DIR/hpx-pulse-agent.sh.new" ] \
       && ! cmp -s "$INSTALL_DIR/hpx-pulse-agent.sh.new" "$INSTALL_DIR/hpx-pulse-agent.sh" 2>/dev/null; then
       mv "$INSTALL_DIR/hpx-pulse-agent.sh.new" "$INSTALL_DIR/hpx-pulse-agent.sh"

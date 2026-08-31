@@ -7,9 +7,11 @@ import { useSidebar } from '@/components/ui/sidebar'
 interface VersionBadgeProps {
   currentVersion: string | null
   className?: string
+  /** Logo/header slot: dot only — never overlay text on the brand mark */
+  compact?: boolean
 }
 
-export function VersionBadge({ currentVersion, className }: VersionBadgeProps) {
+export function VersionBadge({ currentVersion, className, compact = false }: VersionBadgeProps) {
   const { t } = useTranslation()
   const { hasUpdate, latestVersion, releaseUrl, isLoading } = useVersionCheck(currentVersion)
   const { state, isMobile } = useSidebar()
@@ -19,8 +21,58 @@ export function VersionBadge({ currentVersion, className }: VersionBadgeProps) {
   }
 
   const releaseLink = releaseUrl || 'https://github.com/pooyahpx'
-  const showText = isMobile || state === 'expanded'
-  const showBadge = state === 'collapsed' && !isMobile
+  const showText = !compact && (isMobile || state === 'expanded')
+  const showBadge = !compact && state === 'collapsed' && !isMobile
+
+  if (compact) {
+    if (hasUpdate) {
+      return (
+        <Tooltip delayDuration={100}>
+          <TooltipTrigger asChild>
+            <a
+              href={releaseLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={cn(
+                'absolute right-0 bottom-0 h-2.5 w-2.5 rounded-full border-2 border-[hsl(var(--pixel-border))] bg-amber-500 dark:bg-amber-400',
+                className,
+              )}
+              aria-label={t('version.needsUpdate')}
+              onClick={e => e.stopPropagation()}
+            />
+          </TooltipTrigger>
+          <TooltipContent side="bottom" className="p-1.5">
+            <div className="space-y-0.5 text-[10px]">
+              <p className="font-medium">{t('version.newVersionAvailable')}</p>
+              <p>
+                {t('version.currentVersion')}: v{currentVersion} → {t('version.latestVersion')}: v{latestVersion}
+              </p>
+            </div>
+          </TooltipContent>
+        </Tooltip>
+      )
+    }
+
+    return (
+      <Tooltip delayDuration={100}>
+        <TooltipTrigger asChild>
+          <span
+            className={cn(
+              'absolute right-0 bottom-0 h-2.5 w-2.5 rounded-full border-2 border-[hsl(var(--pixel-border))] bg-emerald-500 dark:bg-emerald-400',
+              className,
+            )}
+            aria-label={t('version.upToDate')}
+          />
+        </TooltipTrigger>
+        <TooltipContent side="bottom" className="p-1.5">
+          <div className="space-y-0.5 text-[10px]">
+            <p className="font-medium">{t('version.runningLatest', { version: `v${currentVersion}` })}</p>
+            <p className="text-[9px]">{t('version.upToDate')}</p>
+          </div>
+        </TooltipContent>
+      </Tooltip>
+    )
+  }
 
   // Show badge when collapsed on desktop
   if (showBadge && hasUpdate) {

@@ -437,7 +437,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       aria-label="HPXPANEL home"
     >
       <img src={HPX_LOGO_URL} alt="HPXPANEL" className="h-full w-full object-cover" draggable={false} />
-      {canReadSystem && <VersionBadge currentVersion={systemVersion ?? null} />}
+      {canReadSystem && <VersionBadge currentVersion={systemVersion ?? null} compact className="z-10" />}
     </Link>
   )
 

@@ -52,6 +52,15 @@ hpxpanel cli forge-seal   # ساخت اولین ادمین
 
 **داشبورد:** `https://YOUR_DOMAIN:8000/dashboard/`
 
+**HPX Pulse — نصب دستی engine تونل** (سرور ایران، اگر `join` روی دانلود mirror پنل گیر کرد):
+```bash
+curl --http1.1 --connect-timeout 20 --max-time 300 -fsSL \
+  https://raw.githubusercontent.com/pooyahpx/HPXPANEL/main/scripts/hpx-tunnel-engine-install.sh | \
+  sudo env HPX_PREFER_GITHUB=1 bash
+
+sudo hpx-pulse-agent sync
+```
+
 ---
 
 ## 🔥 تنها پنلی که کل زرادخانه را یک‌جا دارد

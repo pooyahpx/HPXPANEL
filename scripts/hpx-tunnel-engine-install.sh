@@ -17,6 +17,8 @@ LOCAL_DIRS=(
 
 # HTTP/1.1 avoids curl error 92 (PROTOCOL_ERROR) on some filtered routes.
 CURL=(curl --http1.1 --connect-timeout 30 --max-time 300 --retry 3 --retry-delay 2 -fsSL)
+# Panel mirror: fail fast so GitHub fallback kicks in when the panel port is blocked.
+PANEL_CURL=(curl --http1.1 --connect-timeout 15 --max-time 120 --retry 1 --retry-delay 2 -fsSL)
 
 if [ -x "$TARGET" ]; then
   exit 0
@@ -90,17 +92,19 @@ try_panel_asset() {
   [ -n "$base" ] || return 1
 
   echo "Downloading HPX tunnel engine from panel mirror..." >&2
-  if ! "${CURL[@]}" "${base%/}/engine/${arch_key}" -o "$work/engine.tgz"; then
+  if ! "${PANEL_CURL[@]}" "${base%/}/engine/${arch_key}" -o "$work/engine.tgz"; then
+    echo "Panel mirror unreachable — will try GitHub if allowed." >&2
     return 1
   fi
 
-  if "${CURL[@]}" "${base%/}/engine/SHA256SUMS" -o "$work/SHA256SUMS" 2>/dev/null; then
+  if "${PANEL_CURL[@]}" "${base%/}/engine/SHA256SUMS" -o "$work/SHA256SUMS" 2>/dev/null; then
     verify_asset "$work/engine.tgz" "$work/SHA256SUMS" || return 1
   fi
   return 0
 }
 
 try_github_asset() {
+  echo "Downloading HPX tunnel engine from GitHub..." >&2
   local direct_url release_url
   direct_url="https://github.com/${ENGINE_REPO}/releases/download/${release_tag}/${asset}"
   if "${CURL[@]}" "$direct_url" -o "$work/engine.tgz"; then
@@ -117,6 +121,8 @@ try_github_asset() {
 }
 
 if try_local_asset; then
+  :
+elif [ "${HPX_PREFER_GITHUB:-0}" = "1" ] && try_github_asset; then
   :
 elif try_panel_asset; then
   :

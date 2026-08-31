@@ -31,6 +31,11 @@ hp_curl() {
   curl --http1.1 --connect-timeout 30 --max-time 120 --retry 3 --retry-delay 2 -fsSL "$@"
 }
 
+# Shorter timeout for panel mirror — fall back to GitHub quickly when panel port is blocked.
+hp_panel_curl() {
+  curl --http1.1 --connect-timeout 15 --max-time 120 --retry 1 --retry-delay 2 -fsSL "$@"
+}
+
 need_root() { [ "$(id -u)" -eq 0 ] || die "run as root (sudo)"; }
 
 fix_hostname_resolution() {
@@ -134,17 +139,17 @@ ensure_engine() {
   fi
   if hp_curl "$ENGINE_INSTALL_URL" -o "$installer"; then
     log "Using GitHub-hosted engine installer"
-  elif [ -n "$panel_install_url" ] && hp_curl "$panel_install_url" -o "$installer"; then
+  elif [ -n "$panel_install_url" ] && hp_panel_curl "$panel_install_url" -o "$installer"; then
     log "Using panel-hosted engine installer"
   else
     rm -f "$installer"
     die "HPX tunnel engine install script download failed"
   fi
   chmod 755 "$installer"
-  local no_github=0
-  [ "${PULSE_SIDE:-}" = "iran" ] && no_github=1
+  # Panel mirror first; GitHub fallback when mirror is unreachable (common on some Iran routes).
+  # Set HPX_NO_GITHUB_FALLBACK=1 to force panel/local only.
   if ! HPX_PANEL_URL="${PANEL_URL:-}" HPX_AGENT_ASSETS_BASE="${HPX_AGENT_ASSETS_BASE:-}" \
-      HPX_NO_GITHUB_FALLBACK="$no_github" bash "$installer"; then
+      HPX_NO_GITHUB_FALLBACK="${HPX_NO_GITHUB_FALLBACK:-0}" bash "$installer"; then
     rm -f "$installer"
     die "HPX tunnel engine install failed"
   fi

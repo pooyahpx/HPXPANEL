@@ -2198,6 +2198,11 @@
     "empty": "هنوز تونل Pulse ندارید. با ویزارد مشاور یکی بسازید.",
     "installCommands": "دستور نصب",
     "regenerate": "توکن‌ها",
+    "sync": "سینک",
+    "syncSuccess": "سینک در صف — agentها تنظیمات تونل را به‌روز می‌کنند",
+    "editTitle": "ویرایش Pulse",
+    "editDescription": "تنظیمات تونل را تغییر دهید — agentهای متصل ری‌استارت و سینک می‌شوند.",
+    "updateSuccess": "Pulse به‌روز شد — agentها سینک می‌شوند",
     "wizard": {
       "title": "مشاور HPX Pulse",
       "description": "مشخصات سرور را وارد کنید، پروفایل‌های HPX Reverse/Direct رتبه‌بندی می‌شوند، سپس agent ایران و خارج را نصب کنید."

@@ -66,6 +66,7 @@ export interface HpxPulseResponse {
   iran_agent_last_seen: string | null
   abroad_agent_last_seen: string | null
   message: string | null
+  latency_ms?: number | null
   created_at: string
 }
 
@@ -97,6 +98,20 @@ export interface HpxPulseCreate {
   domain?: string | null
   sni_hint?: string | null
   note?: string | null
+}
+
+export interface HpxPulseUpdate {
+  name?: string
+  iran_public_ip?: string
+  abroad_public_ip?: string
+  goal?: PulseGoal
+  profile_id?: string | null
+  control_port?: number
+  port_forwards?: string[]
+  domain?: string | null
+  sni_hint?: string | null
+  note?: string | null
+  enabled?: boolean
 }
 
 export interface HpxPulseActionResponse {
@@ -154,6 +169,24 @@ export function useRegeneratePulseTokens() {
   return useMutation({
     mutationFn: (id: number) =>
       fetcher<HpxPulseActionResponse>(`/api/hpx_pulse/${id}/join-token`, { method: 'POST' }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['hpx-pulses'] }),
+  })
+}
+
+export function useSyncHpxPulse() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) =>
+      fetcher<HpxPulseActionResponse>(`/api/hpx_pulse/${id}/sync`, { method: 'POST' }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['hpx-pulses'] }),
+  })
+}
+
+export function useUpdateHpxPulse() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, data }: { id: number; data: HpxPulseUpdate }) =>
+      fetcher<HpxPulseActionResponse>(`/api/hpx_pulse/${id}`, { method: 'PATCH', body: data }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['hpx-pulses'] }),
   })
 }

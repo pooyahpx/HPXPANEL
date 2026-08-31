@@ -13,6 +13,7 @@ from app.models.hpx_pulse import (
     HpxPulseCreate,
     HpxPulseResponse,
     HpxPulsesResponse,
+    HpxPulseUpdate,
     PulseAdviseRequest,
     PulseAdviseResponse,
 )
@@ -112,6 +113,25 @@ async def regenerate_hpx_pulse_tokens(
     return await pulse_operator.regenerate_tokens(
         db, admin=admin, pulse_id=pulse_id, panel_url=_request_base_url(request)
     )
+
+
+@router.post("/{pulse_id}/sync", response_model=HpxPulseActionResponse, responses={404: responses._404})
+async def sync_hpx_pulse(
+    pulse_id: int,
+    db: AsyncSession = Depends(get_db),
+    admin: AdminDetails = Depends(require_permission("hpx_pulse", "update")),
+):
+    return await pulse_operator.sync_pulse(db, admin=admin, pulse_id=pulse_id)
+
+
+@router.patch("/{pulse_id}", response_model=HpxPulseActionResponse, responses={404: responses._404, 409: responses._409})
+async def update_hpx_pulse(
+    pulse_id: int,
+    model: HpxPulseUpdate,
+    db: AsyncSession = Depends(get_db),
+    admin: AdminDetails = Depends(require_permission("hpx_pulse", "update")),
+):
+    return await pulse_operator.update_pulse(db, admin=admin, pulse_id=pulse_id, model=model)
 
 
 @router.post("/agent/claim", response_model=HpxPulseAgentBootstrap)

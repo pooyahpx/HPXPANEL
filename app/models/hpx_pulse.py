@@ -71,6 +71,20 @@ class HpxPulseCreate(BaseModel):
     note: str | None = Field(default=None, max_length=512)
 
 
+class HpxPulseUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=40)
+    iran_public_ip: str | None = Field(default=None, min_length=7, max_length=45)
+    abroad_public_ip: str | None = Field(default=None, min_length=7, max_length=45)
+    goal: PulseGoal | None = None
+    profile_id: str | None = None
+    control_port: int | None = Field(default=None, ge=1024, le=65535)
+    port_forwards: list[str] | None = None
+    domain: str | None = Field(default=None, max_length=255)
+    sni_hint: str | None = Field(default=None, max_length=255)
+    note: str | None = Field(default=None, max_length=512)
+    enabled: bool | None = None
+
+
 class HpxPulseResponse(BaseModel):
     id: int
     name: str

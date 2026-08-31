@@ -29,6 +29,7 @@ from app.models.hpx_pulse import (
     HpxPulseCreate,
     HpxPulseResponse,
     HpxPulsesResponse,
+    HpxPulseUpdate,
     PulseAdviseRequest,
     PulseAdviseResponse,
 )
@@ -307,6 +308,80 @@ class HpxPulseOperation(BaseOperation):
             abroad_join_expires_at=exp,
             message="Join tokens regenerated",
         )
+
+    async def sync_pulse(self, db: AsyncSession, *, admin: AdminDetails, pulse_id: int) -> HpxPulseActionResponse:
+        _ = admin
+        db_pulse = await get_hpx_pulse_by_id(db, pulse_id)
+        if db_pulse is None:
+            await self.raise_error(message="Pulse not found", code=404)
+        if not db_pulse.iran_agent_key_hash and not db_pulse.abroad_agent_key_hash:
+            await self.raise_error(message="No agents connected — run join commands first", code=400)
+
+        update: dict = {
+            "message": "Sync requested — agents will refresh tunnel config",
+            "last_status_change": dt.now(UTC),
+        }
+        if db_pulse.iran_agent_key_hash:
+            update["iran_agent_command"] = "restart"
+        if db_pulse.abroad_agent_key_hash:
+            update["abroad_agent_command"] = "restart"
+        db_pulse = await update_hpx_pulse(db, db_pulse, update)
+        await db.commit()
+        return HpxPulseActionResponse(
+            pulse=_to_response(db_pulse),
+            message="Sync queued for connected agents",
+        )
+
+    async def update_pulse(
+        self, db: AsyncSession, *, admin: AdminDetails, pulse_id: int, model: HpxPulseUpdate
+    ) -> HpxPulseActionResponse:
+        _ = admin
+        db_pulse = await get_hpx_pulse_by_id(db, pulse_id)
+        if db_pulse is None:
+            await self.raise_error(message="Pulse not found", code=404)
+
+        if model.name and model.name != db_pulse.name:
+            duplicates, _ = await get_hpx_pulses(db, offset=0, limit=1, name=model.name)
+            if any(item.id != db_pulse.id for item in duplicates):
+                await self.raise_error(message="Pulse name already exists", code=409)
+
+        update_data = model.model_dump(exclude_unset=True)
+        if not update_data:
+            await self.raise_error(message="No fields to update", code=422)
+
+        if model.profile_id is not None:
+            meta = profile_meta(model.profile_id)
+            update_data["profile_id"] = meta["profile_id"]
+            update_data["tunnel_mode"] = meta["tunnel_mode"]
+            update_data["carrier"] = meta.get("carrier")
+            update_data["preset"] = meta["preset"]
+
+        if model.goal is not None:
+            advise_req = PulseAdviseRequest(goal=model.goal, cpu_cores=1, ram_mb=1024)
+            advice = advise(
+                advise_req,
+                domain=update_data.get("domain", db_pulse.domain),
+                sni_hint=update_data.get("sni_hint", db_pulse.sni_hint),
+                profile_override=update_data.get("profile_id", db_pulse.profile_id),
+            )
+            update_data["advice_json"] = advice.model_dump(mode="json")
+            if model.profile_id is None:
+                chosen = next((p for p in advice.profiles if p.profile_id == advice.recommended_profile_id), advice.profiles[0])
+                update_data["profile_id"] = chosen.profile_id
+                update_data["tunnel_mode"] = chosen.tunnel_mode
+                update_data["carrier"] = chosen.carrier
+                update_data["preset"] = chosen.preset
+
+        if db_pulse.iran_agent_key_hash:
+            update_data.setdefault("iran_agent_command", "restart")
+        if db_pulse.abroad_agent_key_hash:
+            update_data.setdefault("abroad_agent_command", "restart")
+        update_data.setdefault("message", "Config updated — agents syncing")
+        update_data["last_status_change"] = dt.now(UTC)
+
+        db_pulse = await update_hpx_pulse(db, db_pulse, update_data)
+        await db.commit()
+        return HpxPulseActionResponse(pulse=_to_response(db_pulse), message="Pulse updated")
 
     async def claim_agent(
         self, db: AsyncSession, *, model: HpxPulseAgentClaimRequest, panel_url: str | None = None

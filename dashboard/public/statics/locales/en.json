@@ -306,6 +306,11 @@
     "empty": "No Pulse tunnels yet. Create one with the advisor wizard.",
     "installCommands": "Install commands",
     "regenerate": "Tokens",
+    "sync": "Sync",
+    "syncSuccess": "Sync queued — agents will refresh tunnel config",
+    "editTitle": "Edit Pulse",
+    "editDescription": "Update tunnel settings — connected agents will restart and sync.",
+    "updateSuccess": "Pulse updated — agents will sync",
     "wizard": {
       "title": "HPX Pulse Advisor",
       "description": "Enter host facts, get ranked HPX Reverse/Direct profiles, then deploy Iran and abroad agents."

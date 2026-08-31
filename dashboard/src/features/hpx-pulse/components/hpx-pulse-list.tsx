@@ -7,12 +7,13 @@ import {
   useDeleteHpxPulse,
   useGetHpxPulses,
   useRegeneratePulseTokens,
+  useSyncHpxPulse,
   type HpxPulseResponse,
 } from '@/service/api/hpx-pulse'
 import { useAdmin } from '@/hooks/use-admin'
 import { hasPermission } from '@/utils/rbac'
 import { cn } from '@/lib/utils'
-import { Activity, Copy, Plus, RefreshCw, Trash2, Zap } from 'lucide-react'
+import { Activity, Copy, Pencil, Plus, RefreshCw, Trash2, Zap } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -99,10 +100,18 @@ function PulseCard({
   pulse,
   onDelete,
   onRegenerate,
+  onSync,
+  onEdit,
+  canUpdate,
+  syncLoading,
 }: {
   pulse: HpxPulseResponse
   onDelete: () => void
   onRegenerate: () => void
+  onSync: () => void
+  onEdit: () => void
+  canUpdate: boolean
+  syncLoading: boolean
 }) {
   const { t, i18n } = useTranslation()
   const fa = i18n.language?.startsWith('fa')
@@ -138,6 +147,18 @@ function PulseCard({
           </p>
         </div>
         <div className="flex gap-1">
+          {canUpdate && (pulse.iran_claimed || pulse.abroad_claimed) && (
+            <Button size="sm" variant="outline" onClick={onSync} disabled={syncLoading}>
+              <RefreshCw className={cn('size-3.5', syncLoading && 'animate-spin')} />
+              {t('hpxPulse.sync', { defaultValue: 'Sync' })}
+            </Button>
+          )}
+          {canUpdate && (
+            <Button size="sm" variant="outline" onClick={onEdit}>
+              <Pencil className="size-3.5" />
+              {t('edit', { defaultValue: 'Edit' })}
+            </Button>
+          )}
           <Button size="sm" variant="outline" onClick={onRegenerate}>
             {t('hpxPulse.regenerate', { defaultValue: 'Tokens' })}
           </Button>
@@ -206,12 +227,16 @@ export default function HpxPulseList() {
   const { t } = useTranslation()
   const { admin } = useAdmin()
   const canCreate = hasPermission(admin, 'hpx_pulse', 'create')
+  const canUpdate = hasPermission(admin, 'hpx_pulse', 'update')
   const canDelete = hasPermission(admin, 'hpx_pulse', 'delete')
   const { data, isLoading, isError, error, refetch, isFetching } = useGetHpxPulses({ limit: 50, offset: 0 })
   const deleteMutation = useDeleteHpxPulse()
   const regenMutation = useRegeneratePulseTokens()
+  const syncMutation = useSyncHpxPulse()
   const [wizardOpen, setWizardOpen] = useState(false)
+  const [editingPulse, setEditingPulse] = useState<HpxPulseResponse | null>(null)
   const [joinCommands, setJoinCommands] = useState<JoinCommandSet | null>(null)
+  const [syncingId, setSyncingId] = useState<number | null>(null)
 
   useEffect(() => {
     const handler = () => setWizardOpen(true)
@@ -238,7 +263,7 @@ export default function HpxPulseList() {
             <RefreshCw className={`size-3.5 ${isFetching ? 'animate-spin' : ''}`} />
           </Button>
           {canCreate && (
-            <Button size="sm" onClick={() => setWizardOpen(true)}>
+            <Button size="sm" onClick={() => { setEditingPulse(null); setWizardOpen(true) }}>
               <Plus className="size-3.5" />
               {t('hpxPulse.add', { defaultValue: 'New Pulse' })}
             </Button>
@@ -303,6 +328,23 @@ export default function HpxPulseList() {
             <PulseCard
               key={pulse.id}
               pulse={pulse}
+              canUpdate={canUpdate}
+              syncLoading={syncingId === pulse.id}
+              onEdit={() => {
+                setEditingPulse(pulse)
+                setWizardOpen(true)
+              }}
+              onSync={async () => {
+                setSyncingId(pulse.id)
+                try {
+                  const res = await syncMutation.mutateAsync(pulse.id)
+                  toast.success(res.message ?? t('hpxPulse.syncSuccess', { defaultValue: 'Sync queued' }))
+                } catch (e) {
+                  toast.error((e as Error)?.message ?? t('error', { defaultValue: 'Error' }))
+                } finally {
+                  setSyncingId(null)
+                }
+              }}
               onDelete={
                 canDelete
                   ? async () => {
@@ -327,7 +369,11 @@ export default function HpxPulseList() {
 
       <HpxPulseWizard
         open={wizardOpen}
-        onOpenChange={setWizardOpen}
+        onOpenChange={open => {
+          setWizardOpen(open)
+          if (!open) setEditingPulse(null)
+        }}
+        editingPulse={editingPulse}
         onCreated={res => {
           setJoinCommands({
             iran: res.iran_join_command ?? undefined,

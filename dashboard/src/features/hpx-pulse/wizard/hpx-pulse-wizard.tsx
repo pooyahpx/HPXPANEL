@@ -8,11 +8,13 @@ import { Badge } from '@/components/ui/badge'
 import useDirDetection from '@/hooks/use-dir-detection'
 import useDynamicErrorHandler from '@/hooks/use-dynamic-errors'
 import { cn } from '@/lib/utils'
-import { toTunnelPortString } from '@/features/hpx-pulse/utils/port-forwards'
+import { toTunnelPortString, fromTunnelPortString } from '@/features/hpx-pulse/utils/port-forwards'
 import {
   useAdvisePulse,
   useCreateHpxPulse,
+  useUpdateHpxPulse,
   type HpxPulseActionResponse,
+  type HpxPulseResponse,
   type PulseAdviseResponse,
 } from '@/service/api/hpx-pulse'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -54,15 +56,32 @@ interface Props {
   onOpenChange: (open: boolean) => void
   onSuccess?: () => void
   onCreated?: (res: HpxPulseActionResponse) => void
+  editingPulse?: HpxPulseResponse | null
 }
 
-export default function HpxPulseWizard({ open, onOpenChange, onCreated }: Props) {
+function pulseToFormValues(pulse: HpxPulseResponse): FormValues {
+  const portForwards = (pulse.port_forwards ?? [])
+    .map(fromTunnelPortString)
+    .filter((row): row is NonNullable<typeof row> => row != null)
+  return {
+    name: pulse.name,
+    iran_public_ip: pulse.iran_public_ip,
+    abroad_public_ip: pulse.abroad_public_ip,
+    goal: pulse.goal,
+    control_port: pulse.control_port,
+    port_forwards: portForwards.length ? portForwards : [{ external_port: 443, internal_ip: '', internal_port: 443 }],
+  }
+}
+
+export default function HpxPulseWizard({ open, onOpenChange, onCreated, editingPulse }: Props) {
   const { t, i18n } = useTranslation()
   const dir = useDirDetection()
   const fa = i18n.language?.startsWith('fa')
   const handleError = useDynamicErrorHandler()
   const adviseMutation = useAdvisePulse()
   const createMutation = useCreateHpxPulse()
+  const updateMutation = useUpdateHpxPulse()
+  const isEditing = !!editingPulse
   const [advice, setAdvice] = useState<PulseAdviseResponse | null>(null)
   const [selectedProfile, setSelectedProfile] = useState<string | null>(null)
 
@@ -79,19 +98,24 @@ export default function HpxPulseWizard({ open, onOpenChange, onCreated }: Props)
   })
 
   useEffect(() => {
-    if (open) {
-      form.reset({
-        name: defaultPulseName(),
-        iran_public_ip: '',
-        abroad_public_ip: '',
-        goal: 'balanced',
-        control_port: randomTunnelPort(),
-        port_forwards: [{ external_port: 443, internal_ip: '', internal_port: 443 }],
-      })
-      setAdvice(null)
-      setSelectedProfile(null)
+    if (!open) return
+    if (editingPulse) {
+      form.reset(pulseToFormValues(editingPulse))
+      setAdvice(editingPulse.advice)
+      setSelectedProfile(editingPulse.profile_id)
+      return
     }
-  }, [open, form])
+    form.reset({
+      name: defaultPulseName(),
+      iran_public_ip: '',
+      abroad_public_ip: '',
+      goal: 'balanced',
+      control_port: randomTunnelPort(),
+      port_forwards: [{ external_port: 443, internal_ip: '', internal_port: 443 }],
+    })
+    setAdvice(null)
+    setSelectedProfile(null)
+  }, [open, editingPulse, form])
 
   const runAdvise = async (values?: FormValues) => {
     const v = values ?? form.getValues()
@@ -107,12 +131,32 @@ export default function HpxPulseWizard({ open, onOpenChange, onCreated }: Props)
     return res
   }
 
-  const create = async (values: FormValues) => {
+  const submit = async (values: FormValues) => {
     try {
       let profileId = selectedProfile ?? advice?.recommended_profile_id
       if (!profileId) {
         const res = await runAdvise(values)
         profileId = res.recommended_profile_id
+      }
+
+      const portForwards = (values.port_forwards ?? []).map(toTunnelPortString)
+
+      if (isEditing && editingPulse) {
+        await updateMutation.mutateAsync({
+          id: editingPulse.id,
+          data: {
+            name: values.name.trim(),
+            iran_public_ip: values.iran_public_ip.trim(),
+            abroad_public_ip: values.abroad_public_ip.trim(),
+            goal: values.goal,
+            profile_id: profileId,
+            control_port: values.control_port,
+            port_forwards: portForwards,
+          },
+        })
+        toast.success(t('hpxPulse.updateSuccess', { defaultValue: 'Pulse updated — agents will sync' }))
+        onOpenChange(false)
+        return
       }
 
       const res = await createMutation.mutateAsync({
@@ -126,7 +170,7 @@ export default function HpxPulseWizard({ open, onOpenChange, onCreated }: Props)
         packet_loss_pct: 0,
         profile_id: profileId,
         control_port: values.control_port,
-        port_forwards: (values.port_forwards ?? []).map(toTunnelPortString),
+        port_forwards: portForwards,
       })
       toast.success(t('hpxPulse.createSuccess', { defaultValue: 'Pulse created — copy install commands below' }))
       onCreated?.(res)
@@ -150,16 +194,22 @@ export default function HpxPulseWizard({ open, onOpenChange, onCreated }: Props)
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent dir={dir} className={cn('max-h-[90vh] overflow-y-auto sm:max-w-2xl', dir === 'rtl' && 'text-right')}>
         <DialogHeader>
-          <DialogTitle>{t('hpxPulse.wizard.title', { defaultValue: 'HPX Pulse Advisor' })}</DialogTitle>
+          <DialogTitle>
+            {isEditing
+              ? t('hpxPulse.editTitle', { defaultValue: 'Edit Pulse' })
+              : t('hpxPulse.wizard.title', { defaultValue: 'HPX Pulse Advisor' })}
+          </DialogTitle>
           <DialogDescription>
-            {t('hpxPulse.wizard.description', {
-              defaultValue: 'Enter host facts, get ranked HPX Reverse/Direct profiles, then deploy Iran and abroad agents.',
-            })}
+            {isEditing
+              ? t('hpxPulse.editDescription', { defaultValue: 'Update tunnel settings — connected agents will restart and sync.' })
+              : t('hpxPulse.wizard.description', {
+                  defaultValue: 'Enter host facts, get ranked HPX Reverse/Direct profiles, then deploy Iran and abroad agents.',
+                })}
           </DialogDescription>
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(create)} className="space-y-4">
+          <form onSubmit={form.handleSubmit(submit)} className="space-y-4">
             <div className="grid gap-3 sm:grid-cols-2">
               <FormField control={form.control} name="name" render={({ field }) => (
                 <FormItem>
@@ -308,8 +358,13 @@ export default function HpxPulseWizard({ open, onOpenChange, onCreated }: Props)
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 {t('cancel', { defaultValue: 'Cancel' })}
               </Button>
-              <LoaderButton type="submit" loading={createMutation.isPending || adviseMutation.isPending}>
-                {t('hpxPulse.create', { defaultValue: 'Create Pulse' })}
+              <LoaderButton
+                type="submit"
+                loading={createMutation.isPending || updateMutation.isPending || adviseMutation.isPending}
+              >
+                {isEditing
+                  ? t('save', { defaultValue: 'Save' })
+                  : t('hpxPulse.create', { defaultValue: 'Create Pulse' })}
               </LoaderButton>
             </div>
           </form>

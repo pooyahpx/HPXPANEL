@@ -10,11 +10,13 @@ from app.models.core import (
     CoresSimpleResponse,
     RemoveCoresResponse,
 )
+from app.models.openvpn_pki import OpenVPNPkiRequest, OpenVPNPkiResponse
 from app.models.reality_scan import RealityScanRequest, RealityScanResult
 from app.operation import OperatorType
 from app.operation.core import CoreOperation
 from app.operation.node import NodeOperation
 from app.utils import responses
+from app.utils.openvpn_pki import generate_openvpn_pki
 
 from .authentication import require_permission
 from .dependencies import get_core_list_query, get_core_simple_list_query
@@ -40,6 +42,19 @@ async def scan_reality_target(
     _: AdminDetails = Depends(require_permission("cores", "read")),
 ):
     return await core_operator.scan_reality_target(request)
+
+
+@router.post("/openvpn/generate-pki", response_model=OpenVPNPkiResponse)
+async def generate_openvpn_pki_material(
+    request: OpenVPNPkiRequest = OpenVPNPkiRequest(),
+    _: AdminDetails = Depends(require_permission("cores", "create")),
+):
+    """Generate OpenVPN CA, server certificate, server key, and TLS-Crypt key."""
+    bundle = generate_openvpn_pki(
+        ca_common_name=request.ca_common_name,
+        server_common_name=request.server_common_name,
+    )
+    return OpenVPNPkiResponse.model_validate(bundle)
 
 
 @router.get("/{core_id}", response_model=CoreResponse)

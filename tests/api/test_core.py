@@ -108,6 +108,20 @@ def test_openvpn_core_create(access_token):
     delete_core(access_token, core["id"])
 
 
+def test_openvpn_generate_pki(access_token):
+    response = client.post(
+        "/api/core/openvpn/generate-pki",
+        headers={"Authorization": f"Bearer {access_token}"},
+        json={},
+    )
+    assert response.status_code == status.HTTP_200_OK
+    data = response.json()
+    assert data["ca_cert"].startswith("-----BEGIN CERTIFICATE-----")
+    assert data["server_cert"].startswith("-----BEGIN CERTIFICATE-----")
+    assert data["server_key"].startswith("-----BEGIN")
+    assert data["tls_crypt_key"].startswith("-----BEGIN OpenVPN Static key V1-----")
+
+
 def test_core_update(access_token):
     """Test that the core update route is accessible."""
 

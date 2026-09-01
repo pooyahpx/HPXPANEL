@@ -1,5 +1,6 @@
 import { OpenVPNCertHelp } from '@/features/core-editor/components/openvpn/openvpn-cert-help'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -9,10 +10,17 @@ import {
   applyOpenVPNProtoPreset,
   OPENVPN_PROTO_PRESETS,
   resolveOpenVPNProtoPreset,
+  type OpenVPNCoreConfig,
   type OpenVPNProtoPreset,
 } from '@/features/core-editor/kit/openvpn-config'
 import { useCoreEditorStore } from '@/features/core-editor/state/core-editor-store'
+import { generateOpenVPNPki, type OpenVPNPkiBundle } from '@/service/api/openvpn'
+import { Loader2, Sparkles } from 'lucide-react'
+import { useCallback, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
+
+type OpenVPNPkiField = 'ca_cert' | 'server_cert' | 'server_key' | 'tls_crypt_key'
 
 function SecretTextarea({
   id,
@@ -20,16 +28,28 @@ function SecretTextarea({
   value,
   placeholder,
   onChange,
+  onGenerate,
+  generating,
 }: {
   id: string
   label: string
   value: string
   placeholder: string
   onChange: (value: string) => void
+  onGenerate: () => void
+  generating: boolean
 }) {
+  const { t } = useTranslation()
+
   return (
     <div className="space-y-2">
-      <Label htmlFor={id}>{label}</Label>
+      <div className="flex items-center justify-between gap-2">
+        <Label htmlFor={id}>{label}</Label>
+        <Button type="button" size="sm" variant="secondary" className="h-8 gap-1.5" onClick={onGenerate} disabled={generating}>
+          {generating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+          {t('coreEditor.openvpn.autoGenerate')}
+        </Button>
+      </div>
       <Textarea id={id} value={value} onChange={event => onChange(event.target.value)} placeholder={placeholder} dir="ltr" className="min-h-28 font-mono text-xs" />
     </div>
   )
@@ -40,14 +60,60 @@ export function OpenVPNCoreEditor() {
   const kind = useCoreEditorStore(s => s.kind)
   const draft = useCoreEditorStore(s => s.openvpnDraft)
   const updateOpenvpnDraft = useCoreEditorStore(s => s.updateOpenvpnDraft)
+  const pkiBundleRef = useRef<OpenVPNPkiBundle | null>(null)
+  const [generatingField, setGeneratingField] = useState<OpenVPNPkiField | 'all' | null>(null)
+
+  const ensurePkiBundle = useCallback(async (force = false) => {
+    if (!force && pkiBundleRef.current) return pkiBundleRef.current
+    const bundle = await generateOpenVPNPki()
+    pkiBundleRef.current = bundle
+    return bundle
+  }, [])
+
+  const fillField = useCallback(
+    async (field: OpenVPNPkiField, force = false) => {
+      setGeneratingField(field)
+      try {
+        const bundle = await ensurePkiBundle(force)
+        updateOpenvpnDraft(current => ({ ...current, [field]: bundle[field] }))
+        toast.success(t('coreEditor.openvpn.autoGenerateSuccess', { field: t(`coreEditor.openvpn.fields.${field}`) }))
+      } catch (error: unknown) {
+        const detail = (error as { data?: { detail?: string } })?.data?.detail || (error as Error)?.message
+        toast.error(detail ? String(detail) : t('coreEditor.openvpn.autoGenerateError'))
+      } finally {
+        setGeneratingField(null)
+      }
+    },
+    [ensurePkiBundle, t, updateOpenvpnDraft],
+  )
+
+  const fillAllFields = useCallback(async () => {
+    setGeneratingField('all')
+    try {
+      const bundle = await ensurePkiBundle(true)
+      updateOpenvpnDraft(current => ({
+        ...current,
+        ca_cert: bundle.ca_cert,
+        server_cert: bundle.server_cert,
+        server_key: bundle.server_key,
+        tls_crypt_key: bundle.tls_crypt_key,
+      }))
+      toast.success(t('coreEditor.openvpn.autoGenerateAllSuccess'))
+    } catch (error: unknown) {
+      const detail = (error as { data?: { detail?: string } })?.data?.detail || (error as Error)?.message
+      toast.error(detail ? String(detail) : t('coreEditor.openvpn.autoGenerateError'))
+    } finally {
+      setGeneratingField(null)
+    }
+  }, [ensurePkiBundle, t, updateOpenvpnDraft])
 
   if (kind !== 'openvpn' || !draft) return null
 
-  const updateString = (field: keyof typeof draft, value: string) => {
+  const updateString = (field: keyof OpenVPNCoreConfig, value: string) => {
     updateOpenvpnDraft(current => ({ ...current, [field]: value }))
   }
 
-  const updateNumber = (field: keyof typeof draft, value: number) => {
+  const updateNumber = (field: keyof OpenVPNCoreConfig, value: number) => {
     updateOpenvpnDraft(current => ({ ...current, [field]: value }))
   }
 
@@ -70,6 +136,8 @@ export function OpenVPNCoreEditor() {
     const next = applyOpenVPNProtoPreset(value as OpenVPNProtoPreset)
     updateOpenvpnDraft(current => ({ ...current, ...next }))
   }
+
+  const isGenerating = generatingField !== null
 
   return (
     <div className="space-y-6">
@@ -150,6 +218,13 @@ export function OpenVPNCoreEditor() {
 
       <OpenVPNCertHelp />
 
+      <div className="flex justify-end">
+        <Button type="button" variant="default" className="gap-1.5" onClick={() => void fillAllFields()} disabled={isGenerating}>
+          {generatingField === 'all' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+          {t('coreEditor.openvpn.autoGenerateAll')}
+        </Button>
+      </div>
+
       <div className="grid gap-4">
         <SecretTextarea
           id="openvpn-ca-cert"
@@ -157,6 +232,8 @@ export function OpenVPNCoreEditor() {
           value={draft.ca_cert}
           placeholder={t('coreEditor.openvpn.placeholders.ca_cert')}
           onChange={value => updateString('ca_cert', value)}
+          onGenerate={() => void fillField('ca_cert')}
+          generating={generatingField === 'ca_cert' || generatingField === 'all'}
         />
         <SecretTextarea
           id="openvpn-server-cert"
@@ -164,6 +241,8 @@ export function OpenVPNCoreEditor() {
           value={draft.server_cert}
           placeholder={t('coreEditor.openvpn.placeholders.server_cert')}
           onChange={value => updateString('server_cert', value)}
+          onGenerate={() => void fillField('server_cert')}
+          generating={generatingField === 'server_cert' || generatingField === 'all'}
         />
         <SecretTextarea
           id="openvpn-server-key"
@@ -171,6 +250,8 @@ export function OpenVPNCoreEditor() {
           value={draft.server_key}
           placeholder={t('coreEditor.openvpn.placeholders.server_key')}
           onChange={value => updateString('server_key', value)}
+          onGenerate={() => void fillField('server_key')}
+          generating={generatingField === 'server_key' || generatingField === 'all'}
         />
         <SecretTextarea
           id="openvpn-tls-crypt"
@@ -178,6 +259,8 @@ export function OpenVPNCoreEditor() {
           value={draft.tls_crypt_key}
           placeholder={t('coreEditor.openvpn.placeholders.tls_crypt_key')}
           onChange={value => updateString('tls_crypt_key', value)}
+          onGenerate={() => void fillField('tls_crypt_key')}
+          generating={generatingField === 'tls_crypt_key' || generatingField === 'all'}
         />
       </div>
     </div>

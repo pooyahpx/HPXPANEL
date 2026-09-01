@@ -869,6 +869,7 @@ class CoreType(str, Enum):
     wg = "wg"
     ikev2 = "ikev2"
     l2tp = "l2tp"
+    openvpn = "openvpn"
     mtproto = "mtproto"
     singbox = "singbox"
 

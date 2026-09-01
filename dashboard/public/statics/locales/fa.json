@@ -2039,7 +2039,7 @@
     "description": "دستیار هوشمند با context زنده پنل — Pulse، تونل‌ها و عیب‌یابی.",
     "notConfigured": "برای فعال‌سازی Copilot مقدار OPENAI_API_KEY را در .env پنل تنظیم کنید.",
     "context": "صفحه",
-    "emptyHint": "درباره Pulseها، تونل‌ها یا مشکلات پنل بپرس. می‌توانم داده زنده را بخوانم و تشخیص بدهم.",
+    "emptyHint": "درباره Pulseها، تونل‌ها، مشکلات پنل، یا import لینک vless/vmess بپرس. می‌توانم داده زنده را بخوانم و Host بسازم.",
     "placeholder": "از Copilot بپرس…",
     "thinking": "در حال فکر کردن…",
     "sendError": "ارتباط با Copilot برقرار نشد",
@@ -2047,7 +2047,8 @@
       "pulseStatus": "لیست Pulseهای من و وضعیت هر کدام",
       "diagnosePulse": "Pulseهای ناسالم را تشخیص بده و راه‌حل پیشنهاد کن",
       "syncHelp": "کی باید از دکمه Sync روی کارت Pulse استفاده کنم؟",
-      "panelUrl": "Agent ایران به پنل وصل نمی‌شود — چه چیزهایی را چک کنم؟"
+      "panelUrl": "Agent ایران به پنل وصل نمی‌شود — چه چیزهایی را چک کنم؟",
+      "importProxyLink": "این لینک vless را بگیر و Host مناسب توی پنل بساز (اول preview بده): vless://..."
     }
   },
   "hpxTunnel": {
@@ -2329,7 +2330,8 @@
     "xray": "Xray",
     "wg": "WireGuard",
     "ikev2": "IKEv2/IPsec",
-    "l2tp": "L2TP/IPsec"
+    "l2tp": "L2TP/IPsec",
+    "openvpn": "OpenVPN"
   },
   "coreConfigModal": {
     "addConfig": "افزودن پیکربندی هسته",
@@ -2486,7 +2488,8 @@
       "dns": "پیکربندی DNS و حل‌کننده",
       "bindings": "پشتیبان و مستثنا برای برچسب‌های ورودی",
       "ikev2": "تنظیمات سرور، گواهی و رمزنگاری IKEv2/IPsec",
-      "l2tp": "تنظیمات سرور، کلید مشترک و شبکه L2TP/IPsec"
+      "l2tp": "تنظیمات سرور، کلید مشترک و شبکه L2TP/IPsec",
+      "openvpn": "تنظیمات سرور OpenVPN، گواهی‌ها و شنونده"
     },
     "wg": {
       "interfaceBlurb": "تنظیمات رابط وایرگارد و مواد کلیدی این هسته.",
@@ -2544,6 +2547,31 @@
         "ca_cert": "-----BEGIN CERTIFICATE-----",
         "server_cert": "-----BEGIN CERTIFICATE-----",
         "server_key": "-----BEGIN PRIVATE KEY-----"
+      }
+    },
+    "openvpn": {
+      "title": "OpenVPN",
+      "description": "سرور OpenVPN مبتنی بر گواهی که با نودهای HPX همگام می‌شود. کاربران با گواهی کلاینت احراز هویت می‌کنند (CN = شناسه کاربر).",
+      "ports": "پورت پیش‌فرض: UDP/TCP 1194 (قابل تنظیم)",
+      "onePerLine": "در هر خط یک مقدار وارد کنید.",
+      "duplicateCnHint": "اجازه چند نشست همزمان با یک گواهی.",
+      "fields": {
+        "inbound_tag": "برچسب ورودی",
+        "port": "پورت",
+        "proto": "پروتکل",
+        "server_subnet": "محدوده نشانی کاربران",
+        "dns": "سرورهای DNS",
+        "duplicate_cn": "اجازه CN تکراری",
+        "ca_cert": "گواهی CA (PEM)",
+        "server_cert": "گواهی سرور (PEM)",
+        "server_key": "کلید خصوصی سرور (PEM)",
+        "tls_crypt_key": "کلید TLS-Crypt (اختیاری)"
+      },
+      "placeholders": {
+        "ca_cert": "-----BEGIN CERTIFICATE-----",
+        "server_cert": "-----BEGIN CERTIFICATE-----",
+        "server_key": "-----BEGIN PRIVATE KEY-----",
+        "tls_crypt_key": "-----BEGIN OpenVPN Static key V1-----"
       }
     },
     "field": {

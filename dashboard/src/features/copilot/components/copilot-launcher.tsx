@@ -16,6 +16,10 @@ export function CopilotLauncher() {
     retry: false,
   })
 
+  if (status && status.enabled === false) {
+    return null
+  }
+
   const configured = status?.configured ?? false
 
   return (
@@ -24,12 +28,12 @@ export function CopilotLauncher() {
         type="button"
         variant="outline"
         size="sm"
-        className="command-copilot gap-2"
+        className="command-copilot shrink-0 gap-2"
         onClick={() => setOpen(true)}
-        title={t('copilot.title')}
+        title={configured ? t('copilot.title') : t('copilot.notConfigured')}
       >
         <Sparkles className="h-4 w-4" />
-        <span className="hidden md:inline">{t('copilot.title')}</span>
+        <span className="max-[420px]:sr-only sm:inline">{t('copilot.title')}</span>
       </Button>
       <CopilotSheet open={open} onOpenChange={setOpen} configured={configured} />
     </>

@@ -58,7 +58,9 @@ export function useCoreDraftMonacoSync(debounceMs = 200) {
             ? JSON.stringify(s.xrayProfile)
             : (s.kind === 'ikev2' || s.kind === 'l2tp') && s.ipsecDraft
               ? JSON.stringify(s.ipsecDraft)
-              : ''
+              : s.kind === 'openvpn' && s.openvpnDraft
+                ? JSON.stringify(s.openvpnDraft)
+                : ''
       if (sig !== prevDraftSig.current) {
         prevDraftSig.current = sig
         if (!s.monacoDirty) debouncedSync()

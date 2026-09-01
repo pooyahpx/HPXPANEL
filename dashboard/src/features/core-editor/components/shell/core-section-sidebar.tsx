@@ -9,7 +9,7 @@ export function CoreSectionTabs({ className }: { className?: string }) {
   const kind = useCoreEditorStore(s => s.kind)
   const active = useCoreEditorStore(s => s.activeSection)
   const setActive = useCoreEditorStore(s => s.setActiveSection)
-  const items = kind === 'wg' ? WG_CORE_SECTION_NAV : kind === 'ikev2' || kind === 'l2tp' ? IPSEC_CORE_SECTION_NAV : XRAY_CORE_SECTION_NAV
+  const items = kind === 'wg' ? WG_CORE_SECTION_NAV : kind === 'ikev2' || kind === 'l2tp' || kind === 'openvpn' ? IPSEC_CORE_SECTION_NAV : XRAY_CORE_SECTION_NAV
 
   return (
     <div className={cn('flex w-full border-b px-4', className)} role="tablist" aria-label={t('coreEditor.section.label', { defaultValue: 'Section' })}>

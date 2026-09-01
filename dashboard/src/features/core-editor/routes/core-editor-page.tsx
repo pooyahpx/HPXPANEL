@@ -16,7 +16,8 @@ import { IpsecCoreEditor } from '@/features/core-editor/components/ipsec/ipsec-c
 import { XrayCoreEditor } from '@/features/core-editor/components/xray/xray-core-editor'
 import { profileToPersistedConfig } from '@/features/core-editor/kit/xray-adapter'
 import { getWireGuardPersistConfig } from '@/features/core-editor/kit/wireguard-adapter'
-import { validateIpsecConfig } from '@/features/core-editor/kit/ipsec-config'
+import { OpenVPNCoreEditor } from '@/features/core-editor/components/openvpn/openvpn-core-editor'
+import { validateOpenVPNConfig } from '@/features/core-editor/kit/openvpn-config'
 import type { DashboardCoreKind } from '@/features/core-editor/kit/core-kind'
 import { selectCoreEditorHasActualChanges } from '@/features/core-editor/kit/core-editor-change-state'
 import { useCoreEditorStore } from '@/features/core-editor/state/core-editor-store'
@@ -46,7 +47,7 @@ function loadingSectionPageHeaderProps(coreKind?: LoadingCoreKind): { title: str
       description: 'coreEditor.sectionDesc.inbounds',
     }
   }
-  if (coreKind === 'ikev2' || coreKind === 'l2tp') {
+  if (coreKind === 'ikev2' || coreKind === 'l2tp' || coreKind === 'openvpn') {
     return {
       title: 'coreEditor.section.configuration',
       description: `coreEditor.sectionDesc.${coreKind}`,
@@ -199,6 +200,7 @@ export default function CoreEditorPage() {
   const xrayProfile = useCoreEditorStore(s => s.xrayProfile)
   const wgDraft = useCoreEditorStore(s => s.wgDraft)
   const ipsecDraft = useCoreEditorStore(s => s.ipsecDraft)
+  const openvpnDraft = useCoreEditorStore(s => s.openvpnDraft)
   const xrayImportWarnings = useCoreEditorStore(s => s.xrayImportWarnings)
   const activeSection = useCoreEditorStore(s => s.activeSection)
 
@@ -225,7 +227,8 @@ export default function CoreEditorPage() {
   useEffect(() => {
     if (isNew) {
       const requestedKind = searchParams.get('kind')
-      const k: DashboardCoreKind = requestedKind === 'wg' || requestedKind === 'ikev2' || requestedKind === 'l2tp' ? requestedKind : 'xray'
+      const k: DashboardCoreKind =
+        requestedKind === 'wg' || requestedKind === 'ikev2' || requestedKind === 'l2tp' || requestedKind === 'openvpn' ? requestedKind : 'xray'
       const currentName = useCoreEditorStore.getState().coreName
       initNew(k, currentName)
     }
@@ -265,8 +268,14 @@ export default function CoreEditorPage() {
         issue: { path: issue.path, message: t(issue.messageKey) },
       }))
     }
+    if (kind === 'openvpn' && openvpnDraft) {
+      return validateOpenVPNConfig(openvpnDraft).map(issue => ({
+        source: 'openvpn' as const,
+        issue: { path: issue.path, message: t(issue.messageKey) },
+      }))
+    }
     return []
-  }, [hydrated, kind, wgDraft, xrayProfile, ipsecDraft, xrayPersistValidationItems, t])
+  }, [hydrated, kind, wgDraft, xrayProfile, ipsecDraft, openvpnDraft, xrayPersistValidationItems, t])
 
   const handleBack = useCallback(() => {
     if (hasActualChanges) {
@@ -373,6 +382,36 @@ export default function CoreEditorPage() {
         return
       }
 
+      if (kind === 'openvpn' && openvpnDraft) {
+        const data = {
+          name,
+          type: 'openvpn' as never,
+          config: openvpnDraft,
+          exclude_inbound_tags: [],
+          fallbacks_inbound_tags: [],
+        }
+        if (isNew) {
+          const res = await createMutation.mutateAsync({ data })
+          toast.success(t('coreConfigModal.createSuccess', { name }))
+          markClean()
+          queryClient.invalidateQueries({ queryKey: ['/api/cores'] })
+          queryClient.invalidateQueries({ queryKey: ['/api/cores/simple'] })
+          navigate(`/nodes/cores/${res.id}`, { replace: true })
+        } else if (validId) {
+          await modifyMutation.mutateAsync({
+            coreId: numericId,
+            data,
+            params: { restart_nodes: restartNodes },
+          })
+          toast.success(t('coreConfigModal.editSuccess', { name }))
+          markClean()
+          queryClient.invalidateQueries({ queryKey: ['/api/cores'] })
+          queryClient.invalidateQueries({ queryKey: ['/api/cores/simple'] })
+          queryClient.invalidateQueries({ queryKey: getGetCoreConfigQueryKey(numericId) })
+        }
+        return
+      }
+
       if (kind === 'xray' && xrayProfile) {
         const cfg = profileToPersistedConfig(xrayProfile)
         if (isNew) {
@@ -422,6 +461,7 @@ export default function CoreEditorPage() {
     kind,
     wgDraft,
     ipsecDraft,
+    openvpnDraft,
     xrayProfile,
     preSaveIssues,
     isNew,
@@ -471,7 +511,8 @@ export default function CoreEditorPage() {
             <Select
               value={kind}
               onValueChange={value => {
-                const nextKind: DashboardCoreKind = value === 'wg' || value === 'ikev2' || value === 'l2tp' ? value : 'xray'
+                const nextKind: DashboardCoreKind =
+                  value === 'wg' || value === 'ikev2' || value === 'l2tp' || value === 'openvpn' ? value : 'xray'
                 if (isNew) {
                   setSearchParams(
                     prev => {
@@ -495,6 +536,7 @@ export default function CoreEditorPage() {
                 <SelectItem value="wg">WireGuard</SelectItem>
                 <SelectItem value="ikev2">{t('coreTypes.ikev2')}</SelectItem>
                 <SelectItem value="l2tp">{t('coreTypes.l2tp')}</SelectItem>
+                <SelectItem value="openvpn">{t('coreTypes.openvpn')}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -529,7 +571,7 @@ export default function CoreEditorPage() {
         },
       }[section]
     }
-    if (kind === 'ikev2' || kind === 'l2tp') {
+    if (kind === 'ikev2' || kind === 'l2tp' || kind === 'openvpn') {
       const section = activeSection as IpsecCoreSection
       return {
         configuration: {
@@ -640,6 +682,8 @@ export default function CoreEditorPage() {
               <WireGuardCoreEditor />
             ) : kind === 'ikev2' || kind === 'l2tp' ? (
               <IpsecCoreEditor />
+            ) : kind === 'openvpn' ? (
+              <OpenVPNCoreEditor />
             ) : (
               <XrayCoreEditor headerAddPulse={headerAddPulse} headerAddEpoch={headerAddEpoch} />
             )}

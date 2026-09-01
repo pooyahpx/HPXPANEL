@@ -38,6 +38,7 @@ import type { CoreBackendType, CoreConfigFormValues } from '@/features/nodes/for
 import { VlessAdvancedGenerationModal, type VlessKeyVariant } from '@/features/core-editor/components/shared/vless-advanced-generation-modal'
 import { XrayInboundTagPicker } from '@/features/core-editor/components/shared/xray-inbound-tag-selectors'
 import { createDefaultIpsecConfig } from '@/features/core-editor/kit/ipsec-config'
+import { createDefaultOpenVPNConfig } from '@/features/core-editor/kit/openvpn-config'
 
 interface CoreConfigModalProps {
   isDialogOpen: boolean
@@ -256,6 +257,8 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
         defaultTemplate = createWireGuardCoreConfigJson(keyPair)
       } else if (nextBackendType === 'ikev2' || nextBackendType === 'l2tp') {
         defaultTemplate = JSON.stringify(createDefaultIpsecConfig(nextBackendType), null, 2)
+      } else if (nextBackendType === 'openvpn') {
+        defaultTemplate = JSON.stringify(createDefaultOpenVPNConfig(), null, 2)
       } else {
         defaultTemplate = DEFAULT_XRAY_CORE_CONFIG_JSON
       }
@@ -915,6 +918,7 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
                                 <SelectItem value="wg">WireGuard</SelectItem>
                                 <SelectItem value="ikev2">{t('coreTypes.ikev2')}</SelectItem>
                                 <SelectItem value="l2tp">{t('coreTypes.l2tp')}</SelectItem>
+                                <SelectItem value="openvpn">{t('coreTypes.openvpn')}</SelectItem>
                               </SelectContent>
                             </Select>
                           </FormControl>
@@ -922,10 +926,12 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
                         </FormItem>
                       )}
                     />
-                    {(backendType === 'ikev2' || backendType === 'l2tp') && (
+                    {(backendType === 'ikev2' || backendType === 'l2tp' || backendType === 'openvpn') && (
                       <div className="bg-muted/30 rounded-sm border p-3 text-xs">
-                        <p>{t(`coreEditor.ipsec.${backendType}Description`)}</p>
-                        <p className="text-muted-foreground mt-1 font-mono">{t(`coreEditor.ipsec.${backendType}Ports`)}</p>
+                        <p>{t(`coreEditor.${backendType === 'openvpn' ? 'openvpn' : 'ipsec'}.${backendType === 'openvpn' ? 'description' : `${backendType}Description`}`)}</p>
+                        <p className="text-muted-foreground mt-1 font-mono">
+                          {t(`coreEditor.${backendType === 'openvpn' ? 'openvpn' : 'ipsec'}.${backendType === 'openvpn' ? 'ports' : `${backendType}Ports`}`)}
+                        </p>
                       </div>
                     )}
 

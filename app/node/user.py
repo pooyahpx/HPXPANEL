@@ -126,6 +126,22 @@ def _serialize_user_for_node(
             "install a bridge release with an ikev2 Proxy field"
         )
 
+    needs_openvpn_credentials = ProxyProtocol.openvpn in allowed_protocols
+    bridge_has_openvpn = _has_proto_field(service.Proxy, "openvpn")
+    if needs_openvpn_credentials and bridge_has_openvpn:
+        openvpn_settings = user_settings.get("openvpn") or {}
+        serial = openvpn_settings.get("serial")
+        fingerprint = openvpn_settings.get("fingerprint")
+        if serial is not None:
+            proxy.openvpn.serial = str(serial)
+        if fingerprint is not None:
+            proxy.openvpn.fingerprint = str(fingerprint)
+    elif needs_openvpn_credentials and protocols_were_explicit:
+        raise RuntimeError(
+            "Installed node bridge cannot serialize OpenVPN credentials; "
+            "install a bridge release with an openvpn Proxy field"
+        )
+
     proto_user = create_user(
         str(id),
         proxy,

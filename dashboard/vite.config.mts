@@ -8,11 +8,19 @@ import { VitePWA } from 'vite-plugin-pwa'
 const backendTarget = process.env.VITE_BASE_API || `http://127.0.0.1:${process.env.UVICORN_PORT || 8000}`
 
 export default defineConfig({
-  base: process.env.BASE_URL,
+  base: process.env.BASE_URL || '/dashboard/',
   clearScreen: false,
   server: {
     host: true,
     proxy: {
+      '/api': {
+        target: backendTarget,
+        changeOrigin: true,
+      },
+      '/openapi.json': {
+        target: backendTarget,
+        changeOrigin: true,
+      },
       '/sub': {
         target: backendTarget,
         changeOrigin: true,

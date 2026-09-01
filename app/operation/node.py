@@ -77,6 +77,7 @@ def _backend_type_for_core(core_type: CoreType):
         CoreType.wg: "WIREGUARD",
         CoreType.ikev2: "IKEV2",
         CoreType.l2tp: "L2TP",
+        CoreType.openvpn: "OPENVPN",
     }
     name = names.get(core_type)
     if name is None:

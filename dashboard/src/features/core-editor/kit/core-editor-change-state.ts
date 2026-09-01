@@ -42,6 +42,9 @@ function currentConfigString(s: CoreEditorStoreState): string {
   if ((s.kind === 'ikev2' || s.kind === 'l2tp') && s.ipsecDraft) {
     return stableStringify(s.ipsecDraft)
   }
+  if (s.kind === 'openvpn' && s.openvpnDraft) {
+    return stableStringify(s.openvpnDraft)
+  }
   return ''
 }
 
@@ -56,6 +59,9 @@ function baselineConfigString(s: CoreEditorStoreState): string {
   }
   if ((s.kind === 'ikev2' || s.kind === 'l2tp') && s.ipsecBaseline) {
     return stableStringify(s.ipsecBaseline)
+  }
+  if (s.kind === 'openvpn' && s.openvpnBaseline) {
+    return stableStringify(s.openvpnBaseline)
   }
   return ''
 }

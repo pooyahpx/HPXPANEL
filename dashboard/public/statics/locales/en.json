@@ -147,7 +147,7 @@
     "description": "AI assistant with live panel context — Pulse, tunnels, and troubleshooting.",
     "notConfigured": "Set OPENAI_API_KEY in panel .env to enable Copilot.",
     "context": "Context",
-    "emptyHint": "Ask about your pulses, tunnels, or panel issues. I can list and diagnose live data.",
+    "emptyHint": "Ask about pulses, tunnels, panel issues, or paste a vless/vmess share link to import a Host.",
     "placeholder": "Ask Copilot…",
     "thinking": "Thinking…",
     "sendError": "Could not reach Copilot",
@@ -155,7 +155,8 @@
       "pulseStatus": "List my HPX Pulse tunnels and their status",
       "diagnosePulse": "Diagnose unhealthy Pulse tunnels and suggest fixes",
       "syncHelp": "When should I use Sync on a Pulse card?",
-      "panelUrl": "Iran agent cannot reach panel — what should I check?"
+      "panelUrl": "Iran agent cannot reach panel — what should I check?",
+      "importProxyLink": "Import this vless link into a Host (preview first, then confirm): vless://..."
     }
   },
   "hpxTunnel": {
@@ -2434,7 +2435,8 @@
     "xray": "Xray",
     "wg": "WireGuard",
     "ikev2": "IKEv2/IPsec",
-    "l2tp": "L2TP/IPsec"
+    "l2tp": "L2TP/IPsec",
+    "openvpn": "OpenVPN"
   },
   "coreConfigModal": {
     "addConfig": "Create Core Configuration",
@@ -2592,7 +2594,8 @@
       "dns": "DNS resolver and server config",
       "bindings": "Inbound tag fallbacks and exclusions",
       "ikev2": "IKEv2/IPsec server, certificate, and cryptographic settings",
-      "l2tp": "L2TP/IPsec server, pre-shared key, and network settings"
+      "l2tp": "L2TP/IPsec server, pre-shared key, and network settings",
+      "openvpn": "OpenVPN server, certificates, and listener settings"
     },
     "wg": {
       "interfaceBlurb": "WireGuard interface settings and key material for this core.",
@@ -2650,6 +2653,31 @@
         "ca_cert": "-----BEGIN CERTIFICATE-----",
         "server_cert": "-----BEGIN CERTIFICATE-----",
         "server_key": "-----BEGIN PRIVATE KEY-----"
+      }
+    },
+    "openvpn": {
+      "title": "OpenVPN",
+      "description": "Certificate-based OpenVPN server synced to HPX nodes. Users authenticate with client certificates (common name = user id).",
+      "ports": "Default port: UDP/TCP 1194 (configurable)",
+      "onePerLine": "Enter one value per line.",
+      "duplicateCnHint": "Allow multiple simultaneous sessions with the same certificate.",
+      "fields": {
+        "inbound_tag": "Inbound tag",
+        "port": "Port",
+        "proto": "Protocol",
+        "server_subnet": "Client address pool",
+        "dns": "DNS servers",
+        "duplicate_cn": "Allow duplicate CN",
+        "ca_cert": "CA certificate (PEM)",
+        "server_cert": "Server certificate (PEM)",
+        "server_key": "Server private key (PEM)",
+        "tls_crypt_key": "TLS-Crypt key (optional)"
+      },
+      "placeholders": {
+        "ca_cert": "-----BEGIN CERTIFICATE-----",
+        "server_cert": "-----BEGIN CERTIFICATE-----",
+        "server_key": "-----BEGIN PRIVATE KEY-----",
+        "tls_crypt_key": "-----BEGIN OpenVPN Static key V1-----"
       }
     },
     "field": {

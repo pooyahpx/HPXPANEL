@@ -77,6 +77,8 @@ export function XrayAdvancedSection() {
   const wgBaseline = useCoreEditorStore(s => s.wgBaseline)
   const ipsecDraft = useCoreEditorStore(s => s.ipsecDraft)
   const ipsecBaseline = useCoreEditorStore(s => s.ipsecBaseline)
+  const openvpnDraft = useCoreEditorStore(s => s.openvpnDraft)
+  const openvpnBaseline = useCoreEditorStore(s => s.openvpnBaseline)
   const [showDiff, setShowDiff] = useState(false)
   const [activeTab, setActiveTab] = useState<AdvancedTab>('all')
   const [tabDraft, setTabDraft] = useState<string>('')
@@ -171,13 +173,14 @@ export function XrayAdvancedSection() {
       if (kind === 'wg' && wgBaseline) full = draftToPersistedConfig(wgBaseline)
       else if (kind === 'xray' && xrayBaseline) full = profileToPersistedConfig(xrayBaseline)
       else if ((kind === 'ikev2' || kind === 'l2tp') && ipsecBaseline) full = ipsecBaseline
+      else if (kind === 'openvpn' && openvpnBaseline) full = openvpnBaseline
       else return {} as JsonValue
       const cloned = JSON.parse(JSON.stringify(full)) as Record<string, unknown>
       return (projectForTab(cloned, effectiveTab) ?? {}) as JsonValue
     } catch {
       return {} as JsonValue
     }
-  }, [kind, wgBaseline, xrayBaseline, ipsecBaseline, effectiveTab])
+  }, [kind, wgBaseline, xrayBaseline, ipsecBaseline, openvpnBaseline, effectiveTab])
 
   const afterJson = useMemo<JsonValue>(() => {
     try {
@@ -185,13 +188,14 @@ export function XrayAdvancedSection() {
       if (kind === 'wg' && wgDraft) full = draftToPersistedConfig(wgDraft)
       else if (kind === 'xray' && xrayProfile) full = profileToPersistedConfig(xrayProfile)
       else if ((kind === 'ikev2' || kind === 'l2tp') && ipsecDraft) full = ipsecDraft
+      else if (kind === 'openvpn' && openvpnDraft) full = openvpnDraft
       else return {} as JsonValue
       const cloned = JSON.parse(JSON.stringify(full)) as Record<string, unknown>
       return (projectForTab(cloned, effectiveTab) ?? {}) as JsonValue
     } catch {
       return {} as JsonValue
     }
-  }, [kind, wgDraft, xrayProfile, ipsecDraft, effectiveTab])
+  }, [kind, wgDraft, xrayProfile, ipsecDraft, openvpnDraft, effectiveTab])
 
   const editorValue = effectiveTab === 'all' ? monacoJson : tabDraft
   const editorOnChange = effectiveTab === 'all' ? handleAllJsonChange : handleTabJsonChange

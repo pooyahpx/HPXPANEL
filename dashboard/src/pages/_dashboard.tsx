@@ -47,13 +47,13 @@ export default function DashboardLayout() {
                   </div>
                 </div>
                 <QuestSearch compact className="max-w-2xl flex-1" />
-                <div className="hidden items-center gap-2 sm:flex">
+                <div className="flex shrink-0 items-center gap-2">
                   <CopilotLauncher />
-                  <span className="command-signal" aria-hidden="true">
+                  <span className="command-signal hidden sm:grid" aria-hidden="true">
                     <Radio className="h-3.5 w-3.5" />
                   </span>
-                  <span className="font-mono text-[10px] font-bold tracking-[0.12em] uppercase">Live uplink</span>
-                  <Activity className="h-4 w-4 text-emerald-400" />
+                  <span className="hidden font-mono text-[10px] font-bold tracking-[0.12em] uppercase sm:inline">Live uplink</span>
+                  <Activity className="hidden h-4 w-4 text-emerald-400 sm:block" />
                 </div>
               </div>
             </header>

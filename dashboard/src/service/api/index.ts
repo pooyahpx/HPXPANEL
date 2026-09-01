@@ -3,7 +3,7 @@
  * Do not edit manually.
  * HPXPANEL API
  * Unified GUI Censorship Resistant Solution
- * OpenAPI spec version: 2.1.0
+ * OpenAPI spec version: 3.9.7
  */
 import { useMutation, useQuery } from '@tanstack/react-query'
 import type {
@@ -187,6 +187,21 @@ export type GetUsersSubUpdateChartParams = {
   user_id?: number | null
   username?: string | null
   admin_id?: number | null
+}
+
+export type ListHpxPulsesParams = {
+  offset?: number
+  limit?: number
+  name?: string | null
+}
+
+export type ListHpxTunnelsParams = {
+  offset?: number | null
+  limit?: number | null
+  tunnel_id?: number | null
+  name?: string | null
+  role?: HpxTunnelRole | null
+  status?: HpxTunnelStatus | null
 }
 
 export type ClearUsageDataParams = {
@@ -528,6 +543,16 @@ export type XHttpSettingsXPaddingBytes = string | null
 
 export type XHttpSettingsNoGrpcHeader = boolean | null
 
+export type XHttpModes = (typeof XHttpModes)[keyof typeof XHttpModes]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const XHttpModes = {
+  auto: 'auto',
+  'packet-up': 'packet-up',
+  'stream-up': 'stream-up',
+  'stream-one': 'stream-one',
+} as const
+
 export type XHttpSettingsMode = XHttpModes | null
 
 export interface XHttpSettings {
@@ -555,21 +580,6 @@ export interface XHttpSettings {
   download_settings?: XHttpSettingsDownloadSettings
 }
 
-export type XHttpModes = (typeof XHttpModes)[keyof typeof XHttpModes]
-
-// eslint-disable-next-line @typescript-eslint/no-redeclare
-export const XHttpModes = {
-  auto: 'auto',
-  'packet-up': 'packet-up',
-  'stream-up': 'stream-up',
-  'stream-one': 'stream-one',
-} as const
-
-export interface WorkersHealth {
-  scheduler: WorkerHealth
-  node: WorkerHealth
-}
-
 export type WorkerHealthError = string | null
 
 export type WorkerHealthResponseTimeMs = number | null
@@ -578,6 +588,11 @@ export interface WorkerHealth {
   status: string
   response_time_ms?: WorkerHealthResponseTimeMs
   error?: WorkerHealthError
+}
+
+export interface WorkersHealth {
+  scheduler: WorkerHealth
+  node: WorkerHealth
 }
 
 export interface WireGuardSubnetUsage {
@@ -682,6 +697,18 @@ export type UsersPermissionsActivateNextPlanAnyOf = { [key: string]: PermissionS
 
 export type UsersPermissionsActivateNextPlan = boolean | UsersPermissionsActivateNextPlanAnyOf | null
 
+export interface UsersPermissions {
+  create?: UsersPermissionsCreate
+  read?: UsersPermissionsRead
+  read_simple?: UsersPermissionsReadSimple
+  update?: UsersPermissionsUpdate
+  delete?: UsersPermissionsDelete
+  reset_usage?: UsersPermissionsResetUsage
+  revoke_sub?: UsersPermissionsRevokeSub
+  set_owner?: UsersPermissionsSetOwner
+  activate_next_plan?: UsersPermissionsActivateNextPlan
+}
+
 export type UsersPermissionsSetOwnerAnyOf = { [key: string]: PermissionScope | number }
 
 export type UsersPermissionsSetOwner = boolean | UsersPermissionsSetOwnerAnyOf | null
@@ -705,18 +732,6 @@ export type UsersPermissionsUpdate = boolean | UsersPermissionsUpdateAnyOf | nul
 export type UsersPermissionsReadSimpleAnyOf = { [key: string]: PermissionScope | number }
 
 export type UsersPermissionsReadSimple = boolean | UsersPermissionsReadSimpleAnyOf | null
-
-export interface UsersPermissions {
-  create?: UsersPermissionsCreate
-  read?: UsersPermissionsRead
-  read_simple?: UsersPermissionsReadSimple
-  update?: UsersPermissionsUpdate
-  delete?: UsersPermissionsDelete
-  reset_usage?: UsersPermissionsResetUsage
-  revoke_sub?: UsersPermissionsRevokeSub
-  set_owner?: UsersPermissionsSetOwner
-  activate_next_plan?: UsersPermissionsActivateNextPlan
-}
 
 export type UsersPermissionsReadAnyOf = { [key: string]: PermissionScope | number }
 
@@ -869,6 +884,8 @@ export type UserTemplateCreateOnHoldTimeout = number | null
 
 export type UserTemplateCreateResetUsages = boolean | null
 
+export type UserTemplateCreateStatus = UserStatusCreate | null
+
 export type UserTemplateCreateExtraSettings = ExtraSettings | null
 
 export type UserTemplateCreateUsernameSuffix = string | null
@@ -946,8 +963,6 @@ export const UserStatusCreate = {
   on_hold: 'on_hold',
 } as const
 
-export type UserTemplateCreateStatus = UserStatusCreate | null
-
 export type UserStatus = (typeof UserStatus)[keyof typeof UserStatus]
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
@@ -984,6 +999,8 @@ export type UserResponseHwidLimit = number | null
 
 export type UserResponseAutoDeleteInDays = number | null
 
+export type UserResponseGroupQuotas = UserGroupQuotaResponse[] | null
+
 export type UserResponseGroupIds = number[] | null
 
 export type UserResponseOnHoldTimeout = string | number | null
@@ -1002,14 +1019,6 @@ export type UserResponseDataLimitResetStrategy = DataLimitResetStrategy | null
  */
 export type UserResponseDataLimit = number | null
 
-export interface UserGroupQuotaResponse {
-  group_id: number
-  data_limit?: number | null
-  used_traffic?: number
-  group_name?: string | null
-  is_limited?: boolean
-}
-
 export type UserResponseExpire = string | number | null
 
 export interface UserResponse {
@@ -1023,12 +1032,12 @@ export interface UserResponse {
   on_hold_expire_duration?: UserResponseOnHoldExpireDuration
   on_hold_timeout?: UserResponseOnHoldTimeout
   group_ids?: UserResponseGroupIds
+  group_quotas?: UserResponseGroupQuotas
   auto_delete_in_days?: UserResponseAutoDeleteInDays
   hwid_limit?: UserResponseHwidLimit
   /** Max concurrent unique IPs for this user. Empty = unlimited. Example: 2 blocks a 3rd IP. */
   ip_limit?: UserResponseIpLimit
   next_plan?: UserResponseNextPlan
-  group_quotas?: UserGroupQuotaResponse[]
   id: number
   username: string
   status: UserStatus
@@ -1064,6 +1073,8 @@ export type UserModifyHwidLimit = number | null
 
 export type UserModifyAutoDeleteInDays = number | null
 
+export type UserModifyGroupQuotas = UserGroupQuotaInput[] | null
+
 export type UserModifyGroupIds = number[] | null
 
 export type UserModifyOnHoldTimeout = string | number | null
@@ -1097,13 +1108,20 @@ export interface UserModify {
   on_hold_expire_duration?: UserModifyOnHoldExpireDuration
   on_hold_timeout?: UserModifyOnHoldTimeout
   group_ids?: UserModifyGroupIds
+  group_quotas?: UserModifyGroupQuotas
   auto_delete_in_days?: UserModifyAutoDeleteInDays
   hwid_limit?: UserModifyHwidLimit
   /** Max concurrent unique IPs for this user. Empty = unlimited. Example: 2 blocks a 3rd IP. */
   ip_limit?: UserModifyIpLimit
   next_plan?: UserModifyNextPlan
-  group_quotas?: UserGroupQuotaResponse[]
   status?: UserModifyStatus
+}
+
+/**
+ * User IP lists for all nodes
+ */
+export interface UserIPListAll {
+  nodes: UserIPListAllNodes
 }
 
 export type UserIPListIps = { [key: string]: number }
@@ -1116,13 +1134,6 @@ export interface UserIPList {
 }
 
 export type UserIPListAllNodes = { [key: string]: UserIPList | null }
-
-/**
- * User IP lists for all nodes
- */
-export interface UserIPListAll {
-  nodes: UserIPListAllNodes
-}
 
 export type UserHWIDResponseDeviceModel = string | null
 
@@ -1145,6 +1156,25 @@ export interface UserHWIDListResponse {
   count: number
 }
 
+export type UserGroupQuotaResponseGroupName = string | null
+
+export type UserGroupQuotaResponseDataLimit = number | null
+
+export interface UserGroupQuotaResponse {
+  group_id: number
+  data_limit?: UserGroupQuotaResponseDataLimit
+  used_traffic?: number
+  group_name?: UserGroupQuotaResponseGroupName
+  is_limited?: boolean
+}
+
+export type UserGroupQuotaInputDataLimit = number | null
+
+export interface UserGroupQuotaInput {
+  group_id: number
+  data_limit?: UserGroupQuotaInputDataLimit
+}
+
 export type UserCreateStatus = UserStatus | null
 
 export type UserCreateNextPlan = NextPlanModel | null
@@ -1157,6 +1187,8 @@ export type UserCreateIpLimit = number | null
 export type UserCreateHwidLimit = number | null
 
 export type UserCreateAutoDeleteInDays = number | null
+
+export type UserCreateGroupQuotas = UserGroupQuotaInput[] | null
 
 export type UserCreateGroupIds = number[] | null
 
@@ -1189,7 +1221,7 @@ export interface UserCreate {
   on_hold_expire_duration?: UserCreateOnHoldExpireDuration
   on_hold_timeout?: UserCreateOnHoldTimeout
   group_ids?: UserCreateGroupIds
-  group_quotas?: UserGroupQuotaResponse[]
+  group_quotas?: UserCreateGroupQuotas
   auto_delete_in_days?: UserCreateAutoDeleteInDays
   hwid_limit?: UserCreateHwidLimit
   /** Max concurrent unique IPs for this user. Empty = unlimited. Example: 2 blocks a 3rd IP. */
@@ -1265,9 +1297,9 @@ export interface Token {
   token_type?: string
 }
 
-export type TelegramMiniAppWebUrl = string | null
-
 export type TelegramPanelUrl = string | null
+
+export type TelegramMiniAppWebUrl = string | null
 
 export type TelegramProxyUrl = string | null
 
@@ -1391,6 +1423,8 @@ export type SubscriptionUserResponseIpLimit = number | null
 
 export type SubscriptionUserResponseHwidLimit = number | null
 
+export type SubscriptionUserResponseGroupQuotas = UserGroupQuotaResponse[] | null
+
 export type SubscriptionUserResponseGroupIds = number[] | null
 
 export type SubscriptionUserResponseOnHoldTimeout = string | number | null
@@ -1419,6 +1453,7 @@ export interface SubscriptionUserResponse {
   on_hold_expire_duration?: SubscriptionUserResponseOnHoldExpireDuration
   on_hold_timeout?: SubscriptionUserResponseOnHoldTimeout
   group_ids?: SubscriptionUserResponseGroupIds
+  group_quotas?: SubscriptionUserResponseGroupQuotas
   hwid_limit?: SubscriptionUserResponseHwidLimit
   /** Max concurrent unique IPs for this user. Empty = unlimited. Example: 2 blocks a 3rd IP. */
   ip_limit?: SubscriptionUserResponseIpLimit
@@ -1548,6 +1583,12 @@ export type SettingsPermissionsUpdateAnyOf = { [key: string]: PermissionScope | 
 
 export type SettingsPermissionsUpdate = boolean | SettingsPermissionsUpdateAnyOf | null
 
+export interface SettingsPermissions {
+  read?: SettingsPermissionsRead
+  read_general?: SettingsPermissionsReadGeneral
+  update?: SettingsPermissionsUpdate
+}
+
 export type SettingsPermissionsReadGeneralAnyOf = { [key: string]: PermissionScope | number }
 
 export type SettingsPermissionsReadGeneral = boolean | SettingsPermissionsReadGeneralAnyOf | null
@@ -1555,12 +1596,6 @@ export type SettingsPermissionsReadGeneral = boolean | SettingsPermissionsReadGe
 export type SettingsPermissionsReadAnyOf = { [key: string]: PermissionScope | number }
 
 export type SettingsPermissionsRead = boolean | SettingsPermissionsReadAnyOf | null
-
-export interface SettingsPermissions {
-  read?: SettingsPermissionsRead
-  read_general?: SettingsPermissionsReadGeneral
-  update?: SettingsPermissionsUpdate
-}
 
 export type RunMethod = (typeof RunMethod)[keyof typeof RunMethod]
 
@@ -1590,6 +1625,10 @@ export type RolePermissionsHosts = HostsPermissions | null
 
 export type RolePermissionsGroups = CRUDPermissions | null
 
+export type RolePermissionsHpxPulse = HpxPulsePermissions | null
+
+export type RolePermissionsHpxTunnels = HpxTunnelsPermissions | null
+
 export type RolePermissionsNodes = NodesPermissions | null
 
 export type RolePermissionsAdmins = AdminsPermissions | null
@@ -1604,6 +1643,8 @@ export interface RolePermissions {
   users?: RolePermissionsUsers
   admins?: RolePermissionsAdmins
   nodes?: RolePermissionsNodes
+  hpx_tunnels?: RolePermissionsHpxTunnels
+  hpx_pulse?: RolePermissionsHpxPulse
   groups?: RolePermissionsGroups
   hosts?: RolePermissionsHosts
   templates?: RolePermissionsTemplates
@@ -1695,6 +1736,11 @@ export interface RemoveUserTemplatesResponse {
  */
 export interface RemoveNodesResponse {
   nodes: string[]
+  count: number
+}
+
+export interface RemoveHpxTunnelsResponse {
+  tunnels: string[]
   count: number
 }
 
@@ -1809,6 +1855,71 @@ export interface RealityScanRequest {
   target: string
   /** Per-probe timeout in seconds (1-20, default 10) */
   timeout?: RealityScanRequestTimeout
+}
+
+export type PulseRealityFrontAdviceSni = string | null
+
+export interface PulseRealityFrontAdvice {
+  domain_on_iran?: boolean
+  sni?: PulseRealityFrontAdviceSni
+  dest?: string
+  checklist: string[]
+  checklist_fa: string[]
+}
+
+export type PulseProfileOptionCarrier = string | null
+
+export interface PulseProfileOption {
+  profile_id: string
+  title: string
+  title_fa: string
+  tunnel_mode: string
+  carrier?: PulseProfileOptionCarrier
+  preset: string
+  /**
+   * @minimum 0
+   * @maximum 100
+   */
+  score: number
+  reasons: string[]
+  reasons_fa: string[]
+  warnings?: string[]
+}
+
+export interface PulseAdviseResponse {
+  recommended_profile_id: string
+  profiles: PulseProfileOption[]
+  reality_front: PulseRealityFrontAdvice
+  warnings?: string[]
+}
+
+export type PulseAdviseRequestGoal = (typeof PulseAdviseRequestGoal)[keyof typeof PulseAdviseRequestGoal]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const PulseAdviseRequestGoal = {
+  stealth: 'stealth',
+  balanced: 'balanced',
+  speed: 'speed',
+} as const
+
+export type PulseAdviseRequestPacketLossPct = number | null
+
+export type PulseAdviseRequestUdpReachable = boolean | null
+
+export interface PulseAdviseRequest {
+  /**
+   * @minimum 1
+   * @maximum 128
+   */
+  cpu_cores?: number
+  /**
+   * @minimum 256
+   * @maximum 1048576
+   */
+  ram_mb?: number
+  udp_reachable?: PulseAdviseRequestUdpReachable
+  packet_loss_pct?: PulseAdviseRequestPacketLossPct
+  goal?: PulseAdviseRequestGoal
 }
 
 export interface ProxyTable {
@@ -2049,13 +2160,6 @@ export type NodesPermissionsCreate = boolean | NodesPermissionsCreateAnyOf | nul
 
 export type NodeUsageStatsListPeriod = Period | null
 
-export interface NodeUsageStatsList {
-  period?: NodeUsageStatsListPeriod
-  start: string
-  end: string
-  stats: NodeUsageStatsListStats
-}
-
 export interface NodeUsageStat {
   uplink: number
   downlink: number
@@ -2063,6 +2167,13 @@ export interface NodeUsageStat {
 }
 
 export type NodeUsageStatsListStats = { [key: string]: NodeUsageStat[] }
+
+export interface NodeUsageStatsList {
+  period?: NodeUsageStatsListPeriod
+  start: string
+  end: string
+  stats: NodeUsageStatsListStats
+}
 
 export type NodeStatus = (typeof NodeStatus)[keyof typeof NodeStatus]
 
@@ -2218,6 +2329,8 @@ export type NodeModifyKeepAlive = number | null
 
 export type NodeModifyServerCa = string | null
 
+export type NodeModifyConnectionType = NodeConnectionType | null
+
 export type NodeModifyUsageCoefficient = number | null
 
 export type NodeModifyPort = number | null
@@ -2252,21 +2365,6 @@ export interface NodeGeoFilesUpdate {
 
 export type NodeCreateProxyUrl = string | null
 
-export interface NodeCoreUpdate {
-  /** @pattern ^(latest|v?\d+\.\d+\.\d+)$ */
-  core_version?: string
-}
-
-export type NodeConnectionType = (typeof NodeConnectionType)[keyof typeof NodeConnectionType]
-
-// eslint-disable-next-line @typescript-eslint/no-redeclare
-export const NodeConnectionType = {
-  grpc: 'grpc',
-  rest: 'rest',
-} as const
-
-export type NodeModifyConnectionType = NodeConnectionType | null
-
 export interface NodeCreate {
   name: string
   address: string
@@ -2294,6 +2392,19 @@ export interface NodeCreate {
   internal_timeout?: number
   proxy_url?: NodeCreateProxyUrl
 }
+
+export interface NodeCoreUpdate {
+  /** @pattern ^(latest|v?\d+\.\d+\.\d+)$ */
+  core_version?: string
+}
+
+export type NodeConnectionType = (typeof NodeConnectionType)[keyof typeof NodeConnectionType]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const NodeConnectionType = {
+  grpc: 'grpc',
+  rest: 'rest',
+} as const
 
 export type NextPlanModelExpire = number | null
 
@@ -2415,6 +2526,928 @@ export type HwidsPermissionsReadAnyOf = { [key: string]: PermissionScope | numbe
 
 export type HwidsPermissionsRead = boolean | HwidsPermissionsReadAnyOf | null
 
+export interface HpxTunnelsResponse {
+  tunnels: HpxTunnelResponse[]
+  total: number
+}
+
+export type HpxTunnelsPermissionsLogsAnyOf = { [key: string]: PermissionScope | number }
+
+export type HpxTunnelsPermissionsLogs = boolean | HpxTunnelsPermissionsLogsAnyOf | null
+
+export type HpxTunnelsPermissionsStatsAnyOf = { [key: string]: PermissionScope | number }
+
+export type HpxTunnelsPermissionsStats = boolean | HpxTunnelsPermissionsStatsAnyOf | null
+
+export type HpxTunnelsPermissionsRestartAnyOf = { [key: string]: PermissionScope | number }
+
+export type HpxTunnelsPermissionsRestart = boolean | HpxTunnelsPermissionsRestartAnyOf | null
+
+export interface HpxTunnelsPermissions {
+  create?: HpxTunnelsPermissionsCreate
+  read?: HpxTunnelsPermissionsRead
+  read_simple?: HpxTunnelsPermissionsReadSimple
+  update?: HpxTunnelsPermissionsUpdate
+  delete?: HpxTunnelsPermissionsDelete
+  start?: HpxTunnelsPermissionsStart
+  stop?: HpxTunnelsPermissionsStop
+  restart?: HpxTunnelsPermissionsRestart
+  stats?: HpxTunnelsPermissionsStats
+  logs?: HpxTunnelsPermissionsLogs
+}
+
+export type HpxTunnelsPermissionsStopAnyOf = { [key: string]: PermissionScope | number }
+
+export type HpxTunnelsPermissionsStop = boolean | HpxTunnelsPermissionsStopAnyOf | null
+
+export type HpxTunnelsPermissionsStartAnyOf = { [key: string]: PermissionScope | number }
+
+export type HpxTunnelsPermissionsStart = boolean | HpxTunnelsPermissionsStartAnyOf | null
+
+export type HpxTunnelsPermissionsDeleteAnyOf = { [key: string]: PermissionScope | number }
+
+export type HpxTunnelsPermissionsDelete = boolean | HpxTunnelsPermissionsDeleteAnyOf | null
+
+export type HpxTunnelsPermissionsUpdateAnyOf = { [key: string]: PermissionScope | number }
+
+export type HpxTunnelsPermissionsUpdate = boolean | HpxTunnelsPermissionsUpdateAnyOf | null
+
+export type HpxTunnelsPermissionsReadSimpleAnyOf = { [key: string]: PermissionScope | number }
+
+export type HpxTunnelsPermissionsReadSimple = boolean | HpxTunnelsPermissionsReadSimpleAnyOf | null
+
+export type HpxTunnelsPermissionsReadAnyOf = { [key: string]: PermissionScope | number }
+
+export type HpxTunnelsPermissionsRead = boolean | HpxTunnelsPermissionsReadAnyOf | null
+
+export type HpxTunnelsPermissionsCreateAnyOf = { [key: string]: PermissionScope | number }
+
+export type HpxTunnelsPermissionsCreate = boolean | HpxTunnelsPermissionsCreateAnyOf | null
+
+export type HpxTunnelUpdateAutoHealEnabled = boolean | null
+
+export type HpxTunnelUpdateNote = string | null
+
+export type HpxTunnelUpdateAlertOnDown = boolean | null
+
+export type HpxTunnelUpdatePriority = number | null
+
+export type HpxTunnelUpdateAutoFailover = boolean | null
+
+export type HpxTunnelUpdateBackupTunnelId = number | null
+
+export type HpxTunnelUpdateDockerImage = string | null
+
+export type HpxTunnelUpdatePortForwards = HpxPortForward[] | null
+
+export type HpxTunnelUpdateOperatingMode = string | null
+
+export type HpxTunnelUpdateBandwidthLimit = string | null
+
+export type HpxTunnelUpdateDscpMark = number | null
+
+export type HpxTunnelUpdateKeepalive = number | null
+
+export type HpxTunnelUpdateMtu = number | null
+
+export type HpxTunnelUpdateSubnet = string | null
+
+export type HpxTunnelUpdateLocalIp = string | null
+
+export type HpxTunnelUpdateInterface = string | null
+
+export type HpxTunnelUpdateServerListen = string | null
+
+export type HpxTunnelUpdateRemoteIp = string | null
+
+export type HpxTunnelUpdatePassword = string | null
+
+export type HpxTunnelUpdateEnabled = boolean | null
+
+export type HpxTunnelUpdateName = string | null
+
+export interface HpxTunnelUpdate {
+  name?: HpxTunnelUpdateName
+  enabled?: HpxTunnelUpdateEnabled
+  password?: HpxTunnelUpdatePassword
+  remote_ip?: HpxTunnelUpdateRemoteIp
+  server_listen?: HpxTunnelUpdateServerListen
+  interface?: HpxTunnelUpdateInterface
+  local_ip?: HpxTunnelUpdateLocalIp
+  subnet?: HpxTunnelUpdateSubnet
+  mtu?: HpxTunnelUpdateMtu
+  keepalive?: HpxTunnelUpdateKeepalive
+  dscp_mark?: HpxTunnelUpdateDscpMark
+  bandwidth_limit?: HpxTunnelUpdateBandwidthLimit
+  operating_mode?: HpxTunnelUpdateOperatingMode
+  port_forwards?: HpxTunnelUpdatePortForwards
+  docker_image?: HpxTunnelUpdateDockerImage
+  backup_tunnel_id?: HpxTunnelUpdateBackupTunnelId
+  auto_failover?: HpxTunnelUpdateAutoFailover
+  priority?: HpxTunnelUpdatePriority
+  alert_on_down?: HpxTunnelUpdateAlertOnDown
+  note?: HpxTunnelUpdateNote
+  auto_heal_enabled?: HpxTunnelUpdateAutoHealEnabled
+}
+
+export type HpxTunnelStatus = (typeof HpxTunnelStatus)[keyof typeof HpxTunnelStatus]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const HpxTunnelStatus = {
+  running: 'running',
+  stopped: 'stopped',
+  starting: 'starting',
+  stopping: 'stopping',
+  error: 'error',
+  unhealthy: 'unhealthy',
+  pending_claim: 'pending_claim',
+} as const
+
+export type HpxTunnelStatsResponseMessage = string | null
+
+export type HpxTunnelStatsResponseUptimeSeconds = number | null
+
+export type HpxTunnelStatsResponsePacketLossPct = number | null
+
+export type HpxTunnelStatsResponseLatencyMs = number | null
+
+export type HpxTunnelStatsResponseInterfaceIp = string | null
+
+export interface HpxTunnelStatsResponse {
+  tunnel_id: number
+  status: HpxTunnelStatus
+  container_running: boolean
+  interface_up: boolean
+  interface_ip?: HpxTunnelStatsResponseInterfaceIp
+  latency_ms?: HpxTunnelStatsResponseLatencyMs
+  packet_loss_pct?: HpxTunnelStatsResponsePacketLossPct
+  bytes_up?: number
+  bytes_down?: number
+  uptime_seconds?: HpxTunnelStatsResponseUptimeSeconds
+  message?: HpxTunnelStatsResponseMessage
+}
+
+export type HpxTunnelSmartFixResponseRelatedNodesItem = { [key: string]: unknown }
+
+export interface HpxTunnelSmartFixResponse {
+  tunnel: HpxTunnelResponse
+  fixed: boolean
+  summary: string
+  steps: HpxDoctorStepResponse[]
+  findings: string[]
+  actions: string[]
+  related_nodes?: HpxTunnelSmartFixResponseRelatedNodesItem[]
+}
+
+export type HpxTunnelRole = (typeof HpxTunnelRole)[keyof typeof HpxTunnelRole]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const HpxTunnelRole = {
+  iran: 'iran',
+  foreign: 'foreign',
+} as const
+
+export type HpxTunnelResponseLastHealAction = string | null
+
+export type HpxTunnelResponseLastHealAt = string | null
+
+export type HpxTunnelResponseLastStatusChange = string | null
+
+export type HpxTunnelResponseMessage = string | null
+
+export type HpxTunnelResponsePacketLossPct = number | null
+
+export type HpxTunnelResponseLatencyMs = number | null
+
+export type HpxTunnelResponseLastHealthCheck = string | null
+
+export type HpxTunnelResponseJoinTokenExpiresAt = string | null
+
+export type HpxTunnelResponseAgentClaimedAt = string | null
+
+export type HpxTunnelResponseAgentLastSeen = string | null
+
+export type HpxTunnelResponseAgentHost = string | null
+
+export type HpxTunnelResponseNote = string | null
+
+export type HpxTunnelResponseBackupTunnelId = number | null
+
+export type HpxTunnelResponseOperatingMode = string | null
+
+export type HpxTunnelResponseBandwidthLimit = string | null
+
+export type HpxTunnelResponseDscpMark = number | null
+
+export type HpxTunnelResponseMtu = number | null
+
+export type HpxTunnelResponseRemoteIp = string | null
+
+export interface HpxTunnelResponse {
+  /**
+   * @minLength 1
+   * @maxLength 128
+   */
+  name: string
+  role: HpxTunnelRole
+  enabled?: boolean
+  remote_ip?: HpxTunnelResponseRemoteIp
+  /** @maxLength 45 */
+  server_listen?: string
+  /** @maxLength 32 */
+  interface?: string
+  /** @maxLength 45 */
+  local_ip?: string
+  /** @maxLength 64 */
+  subnet?: string
+  mtu?: HpxTunnelResponseMtu
+  /**
+   * @minimum 1
+   * @maximum 300
+   */
+  keepalive?: number
+  dscp_mark?: HpxTunnelResponseDscpMark
+  bandwidth_limit?: HpxTunnelResponseBandwidthLimit
+  operating_mode?: HpxTunnelResponseOperatingMode
+  port_forwards?: HpxPortForward[]
+  /** @maxLength 128 */
+  docker_image?: string
+  backup_tunnel_id?: HpxTunnelResponseBackupTunnelId
+  auto_failover?: boolean
+  /**
+   * @minimum 0
+   * @maximum 100
+   */
+  priority?: number
+  alert_on_down?: boolean
+  note?: HpxTunnelResponseNote
+  id: number
+  status: HpxTunnelStatus
+  container_name: string
+  has_password?: boolean
+  agent_claimed?: boolean
+  agent_host?: HpxTunnelResponseAgentHost
+  agent_last_seen?: HpxTunnelResponseAgentLastSeen
+  agent_claimed_at?: HpxTunnelResponseAgentClaimedAt
+  join_token_expires_at?: HpxTunnelResponseJoinTokenExpiresAt
+  last_health_check?: HpxTunnelResponseLastHealthCheck
+  latency_ms?: HpxTunnelResponseLatencyMs
+  packet_loss_pct?: HpxTunnelResponsePacketLossPct
+  message?: HpxTunnelResponseMessage
+  bytes_up?: number
+  bytes_down?: number
+  created_at: string
+  last_status_change?: HpxTunnelResponseLastStatusChange
+  auto_heal_enabled?: boolean
+  last_heal_at?: HpxTunnelResponseLastHealAt
+  last_heal_action?: HpxTunnelResponseLastHealAction
+}
+
+export type HpxTunnelRepairResponseMessage = string | null
+
+export interface HpxTunnelRepairResponse {
+  tunnel: HpxTunnelResponse
+  repaired: boolean
+  actions_taken: string[]
+  issues: HpxHealIssueResponse[]
+  message?: HpxTunnelRepairResponseMessage
+}
+
+export interface HpxTunnelJoinTokenResponse {
+  tunnel_id: number
+  join_token: string
+  join_command: string
+  join_expires_at: string
+}
+
+export type HpxTunnelDiagnoseResponseLastHealAction = string | null
+
+export type HpxTunnelDiagnoseResponseLastHealAt = string | null
+
+export interface HpxTunnelDiagnoseResponse {
+  tunnel_id: number
+  issues: HpxHealIssueResponse[]
+  auto_heal_enabled: boolean
+  last_heal_at?: HpxTunnelDiagnoseResponseLastHealAt
+  last_heal_action?: HpxTunnelDiagnoseResponseLastHealAction
+}
+
+export type HpxTunnelCreateNote = string | null
+
+export type HpxTunnelCreateBackupTunnelId = number | null
+
+export type HpxTunnelCreateOperatingMode = string | null
+
+export type HpxTunnelCreateBandwidthLimit = string | null
+
+export type HpxTunnelCreateDscpMark = number | null
+
+export type HpxTunnelCreateMtu = number | null
+
+export type HpxTunnelCreateRemoteIp = string | null
+
+export interface HpxTunnelCreate {
+  /**
+   * @minLength 1
+   * @maxLength 128
+   */
+  name: string
+  role: HpxTunnelRole
+  enabled?: boolean
+  remote_ip?: HpxTunnelCreateRemoteIp
+  /** @maxLength 45 */
+  server_listen?: string
+  /** @maxLength 32 */
+  interface?: string
+  /** @maxLength 45 */
+  local_ip?: string
+  /** @maxLength 64 */
+  subnet?: string
+  mtu?: HpxTunnelCreateMtu
+  /**
+   * @minimum 1
+   * @maximum 300
+   */
+  keepalive?: number
+  dscp_mark?: HpxTunnelCreateDscpMark
+  bandwidth_limit?: HpxTunnelCreateBandwidthLimit
+  operating_mode?: HpxTunnelCreateOperatingMode
+  port_forwards?: HpxPortForward[]
+  /** @maxLength 128 */
+  docker_image?: string
+  backup_tunnel_id?: HpxTunnelCreateBackupTunnelId
+  auto_failover?: boolean
+  /**
+   * @minimum 0
+   * @maximum 100
+   */
+  priority?: number
+  alert_on_down?: boolean
+  note?: HpxTunnelCreateNote
+  /**
+   * @minLength 4
+   * @maxLength 128
+   */
+  password: string
+  start_after_create?: boolean
+}
+
+export type HpxTunnelAgentHeartbeatRequestMessage = string | null
+
+export type HpxTunnelAgentHeartbeatRequestPacketLossPct = number | null
+
+export type HpxTunnelAgentHeartbeatRequestLatencyMs = number | null
+
+export type HpxTunnelAgentHeartbeatRequestHost = string | null
+
+export interface HpxTunnelAgentHeartbeatRequest {
+  status: HpxTunnelStatus
+  host?: HpxTunnelAgentHeartbeatRequestHost
+  latency_ms?: HpxTunnelAgentHeartbeatRequestLatencyMs
+  packet_loss_pct?: HpxTunnelAgentHeartbeatRequestPacketLossPct
+  bytes_up?: number
+  bytes_down?: number
+  message?: HpxTunnelAgentHeartbeatRequestMessage
+  container_running?: boolean
+  interface_up?: boolean
+}
+
+export type HpxTunnelAgentConfigResponseAgentCommand = string | null
+
+export type HpxTunnelAgentConfigResponseDscpMark = number | null
+
+export type HpxTunnelAgentConfigResponseMtu = number | null
+
+export type HpxTunnelAgentConfigResponseRemoteIp = string | null
+
+export interface HpxTunnelAgentConfigResponse {
+  tunnel_id: number
+  name: string
+  role: HpxTunnelRole
+  password: string
+  remote_ip?: HpxTunnelAgentConfigResponseRemoteIp
+  interface: string
+  local_ip: string
+  subnet: string
+  mtu?: HpxTunnelAgentConfigResponseMtu
+  keepalive: number
+  dscp_mark?: HpxTunnelAgentConfigResponseDscpMark
+  port_forwards?: HpxPortForward[]
+  docker_image: string
+  container_name: string
+  config_hash: string
+  desired_status: HpxTunnelStatus
+  agent_command?: HpxTunnelAgentConfigResponseAgentCommand
+  enabled?: boolean
+}
+
+export type HpxTunnelAgentClaimRequestHost = string | null
+
+export interface HpxTunnelAgentClaimRequest {
+  /**
+   * @minLength 16
+   * @maxLength 128
+   */
+  join_token: string
+  host?: HpxTunnelAgentClaimRequestHost
+}
+
+export type HpxTunnelAgentBootstrapAgentCommand = string | null
+
+export type HpxTunnelAgentBootstrapDscpMark = number | null
+
+export type HpxTunnelAgentBootstrapMtu = number | null
+
+export type HpxTunnelAgentBootstrapRemoteIp = string | null
+
+export interface HpxTunnelAgentBootstrap {
+  tunnel_id: number
+  name: string
+  role: HpxTunnelRole
+  password: string
+  remote_ip?: HpxTunnelAgentBootstrapRemoteIp
+  interface: string
+  local_ip: string
+  subnet: string
+  mtu?: HpxTunnelAgentBootstrapMtu
+  keepalive: number
+  dscp_mark?: HpxTunnelAgentBootstrapDscpMark
+  port_forwards?: HpxPortForward[]
+  docker_image: string
+  container_name: string
+  agent_key: string
+  config_hash: string
+  desired_status: HpxTunnelStatus
+  agent_command?: HpxTunnelAgentBootstrapAgentCommand
+}
+
+export type HpxTunnelAgentAckRequestMessage = string | null
+
+export type HpxTunnelAgentAckRequestStatus = HpxTunnelStatus | null
+
+export interface HpxTunnelAgentAckRequest {
+  /**
+   * @minLength 1
+   * @maxLength 32
+   */
+  command: string
+  status?: HpxTunnelAgentAckRequestStatus
+  message?: HpxTunnelAgentAckRequestMessage
+}
+
+export type HpxTunnelActionResponseJoinExpiresAt = string | null
+
+export type HpxTunnelActionResponseJoinCommand = string | null
+
+export type HpxTunnelActionResponseJoinToken = string | null
+
+export type HpxTunnelActionResponseMessage = string | null
+
+export interface HpxTunnelActionResponse {
+  tunnel: HpxTunnelResponse
+  message?: HpxTunnelActionResponseMessage
+  join_token?: HpxTunnelActionResponseJoinToken
+  join_command?: HpxTunnelActionResponseJoinCommand
+  join_expires_at?: HpxTunnelActionResponseJoinExpiresAt
+}
+
+export interface HpxPulsesResponse {
+  pulses: HpxPulseResponse[]
+  total: number
+}
+
+export type HpxPulseUpdateEnabled = boolean | null
+
+export type HpxPulseUpdateNote = string | null
+
+export type HpxPulseUpdateSniHint = string | null
+
+export type HpxPulseUpdateDomain = string | null
+
+export type HpxPulseUpdatePortForwards = string[] | null
+
+export type HpxPulseUpdateControlPort = number | null
+
+export type HpxPulseUpdateProfileId = string | null
+
+export type HpxPulseUpdateGoal = 'stealth' | 'balanced' | 'speed' | null
+
+export type HpxPulseUpdateAbroadPublicIp = string | null
+
+export type HpxPulseUpdateIranPublicIp = string | null
+
+export type HpxPulseUpdateName = string | null
+
+export interface HpxPulseUpdate {
+  name?: HpxPulseUpdateName
+  iran_public_ip?: HpxPulseUpdateIranPublicIp
+  abroad_public_ip?: HpxPulseUpdateAbroadPublicIp
+  goal?: HpxPulseUpdateGoal
+  profile_id?: HpxPulseUpdateProfileId
+  control_port?: HpxPulseUpdateControlPort
+  port_forwards?: HpxPulseUpdatePortForwards
+  domain?: HpxPulseUpdateDomain
+  sni_hint?: HpxPulseUpdateSniHint
+  note?: HpxPulseUpdateNote
+  enabled?: HpxPulseUpdateEnabled
+}
+
+export type HpxPulseResponsePacketLossPct = number | null
+
+export type HpxPulseResponseLatencyMs = number | null
+
+export type HpxPulseResponseMessage = string | null
+
+export type HpxPulseResponseAbroadJoinExpiresAt = string | null
+
+export type HpxPulseResponseIranJoinExpiresAt = string | null
+
+export type HpxPulseResponseAbroadAgentLastSeen = string | null
+
+export type HpxPulseResponseIranAgentLastSeen = string | null
+
+export type HpxPulseResponseAbroadAgentHost = string | null
+
+export type HpxPulseResponseIranAgentHost = string | null
+
+export type HpxPulseResponseAdvice = PulseAdviseResponse | null
+
+export type HpxPulseResponseNote = string | null
+
+export type HpxPulseResponseSniHint = string | null
+
+export type HpxPulseResponseDomain = string | null
+
+export type HpxPulseResponseCarrier = string | null
+
+export type HpxPulseResponseGoal = (typeof HpxPulseResponseGoal)[keyof typeof HpxPulseResponseGoal]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const HpxPulseResponseGoal = {
+  stealth: 'stealth',
+  balanced: 'balanced',
+  speed: 'speed',
+} as const
+
+export type HpxPulseResponseEngine = (typeof HpxPulseResponseEngine)[keyof typeof HpxPulseResponseEngine]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const HpxPulseResponseEngine = {
+  hpx: 'hpx',
+  native: 'native',
+} as const
+
+export type HpxPulseResponseStatus = (typeof HpxPulseResponseStatus)[keyof typeof HpxPulseResponseStatus]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const HpxPulseResponseStatus = {
+  pending_claim: 'pending_claim',
+  running: 'running',
+  starting: 'starting',
+  stopped: 'stopped',
+  stopping: 'stopping',
+  error: 'error',
+  unhealthy: 'unhealthy',
+  partial: 'partial',
+} as const
+
+export interface HpxPulseResponse {
+  id: number
+  name: string
+  status: HpxPulseResponseStatus
+  enabled: boolean
+  engine: HpxPulseResponseEngine
+  profile_id: string
+  goal: HpxPulseResponseGoal
+  tunnel_mode: string
+  carrier: HpxPulseResponseCarrier
+  preset: string
+  iran_public_ip: string
+  abroad_public_ip: string
+  control_port: number
+  local_ip_iran: string
+  local_ip_abroad: string
+  port_forwards: string[]
+  domain: HpxPulseResponseDomain
+  sni_hint: HpxPulseResponseSniHint
+  note: HpxPulseResponseNote
+  advice?: HpxPulseResponseAdvice
+  iran_claimed?: boolean
+  abroad_claimed?: boolean
+  iran_agent_host?: HpxPulseResponseIranAgentHost
+  abroad_agent_host?: HpxPulseResponseAbroadAgentHost
+  iran_agent_last_seen?: HpxPulseResponseIranAgentLastSeen
+  abroad_agent_last_seen?: HpxPulseResponseAbroadAgentLastSeen
+  iran_join_expires_at?: HpxPulseResponseIranJoinExpiresAt
+  abroad_join_expires_at?: HpxPulseResponseAbroadJoinExpiresAt
+  message?: HpxPulseResponseMessage
+  latency_ms?: HpxPulseResponseLatencyMs
+  packet_loss_pct?: HpxPulseResponsePacketLossPct
+  created_at: string
+}
+
+export type HpxPulsePermissionsDeleteAnyOf = { [key: string]: PermissionScope | number }
+
+export type HpxPulsePermissionsDelete = boolean | HpxPulsePermissionsDeleteAnyOf | null
+
+export type HpxPulsePermissionsUpdateAnyOf = { [key: string]: PermissionScope | number }
+
+export type HpxPulsePermissionsUpdate = boolean | HpxPulsePermissionsUpdateAnyOf | null
+
+export type HpxPulsePermissionsReadSimpleAnyOf = { [key: string]: PermissionScope | number }
+
+export type HpxPulsePermissionsReadSimple = boolean | HpxPulsePermissionsReadSimpleAnyOf | null
+
+export type HpxPulsePermissionsReadAnyOf = { [key: string]: PermissionScope | number }
+
+export type HpxPulsePermissionsRead = boolean | HpxPulsePermissionsReadAnyOf | null
+
+export interface HpxPulsePermissions {
+  create?: HpxPulsePermissionsCreate
+  read?: HpxPulsePermissionsRead
+  read_simple?: HpxPulsePermissionsReadSimple
+  update?: HpxPulsePermissionsUpdate
+  delete?: HpxPulsePermissionsDelete
+}
+
+export type HpxPulsePermissionsCreateAnyOf = { [key: string]: PermissionScope | number }
+
+export type HpxPulsePermissionsCreate = boolean | HpxPulsePermissionsCreateAnyOf | null
+
+export type HpxPulseCreateNote = string | null
+
+export type HpxPulseCreateSniHint = string | null
+
+export type HpxPulseCreateDomain = string | null
+
+export type HpxPulseCreateProfileId = string | null
+
+export type HpxPulseCreatePacketLossPct = number | null
+
+export type HpxPulseCreateUdpReachable = boolean | null
+
+export type HpxPulseCreateGoal = (typeof HpxPulseCreateGoal)[keyof typeof HpxPulseCreateGoal]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const HpxPulseCreateGoal = {
+  stealth: 'stealth',
+  balanced: 'balanced',
+  speed: 'speed',
+} as const
+
+export interface HpxPulseCreate {
+  /**
+   * @minLength 1
+   * @maxLength 40
+   */
+  name: string
+  /**
+   * @minLength 7
+   * @maxLength 45
+   */
+  iran_public_ip: string
+  /**
+   * @minLength 7
+   * @maxLength 45
+   */
+  abroad_public_ip: string
+  goal?: HpxPulseCreateGoal
+  /**
+   * @minimum 1
+   * @maximum 128
+   */
+  cpu_cores?: number
+  /** @minimum 256 */
+  ram_mb?: number
+  udp_reachable?: HpxPulseCreateUdpReachable
+  packet_loss_pct?: HpxPulseCreatePacketLossPct
+  profile_id?: HpxPulseCreateProfileId
+  /**
+   * @minimum 1024
+   * @maximum 65535
+   */
+  control_port?: number
+  port_forwards?: string[]
+  domain?: HpxPulseCreateDomain
+  sni_hint?: HpxPulseCreateSniHint
+  note?: HpxPulseCreateNote
+}
+
+export type HpxPulseAgentHeartbeatRequestForwardOk = boolean | null
+
+export type HpxPulseAgentHeartbeatRequestPacketLossPct = number | null
+
+export type HpxPulseAgentHeartbeatRequestLatencyMs = number | null
+
+export type HpxPulseAgentHeartbeatRequestMessage = string | null
+
+export type HpxPulseAgentHeartbeatRequestHost = string | null
+
+export type HpxPulseAgentHeartbeatRequestStatus = (typeof HpxPulseAgentHeartbeatRequestStatus)[keyof typeof HpxPulseAgentHeartbeatRequestStatus]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const HpxPulseAgentHeartbeatRequestStatus = {
+  pending_claim: 'pending_claim',
+  running: 'running',
+  starting: 'starting',
+  stopped: 'stopped',
+  stopping: 'stopping',
+  error: 'error',
+  unhealthy: 'unhealthy',
+  partial: 'partial',
+} as const
+
+export interface HpxPulseAgentHeartbeatRequest {
+  status?: HpxPulseAgentHeartbeatRequestStatus
+  host?: HpxPulseAgentHeartbeatRequestHost
+  message?: HpxPulseAgentHeartbeatRequestMessage
+  latency_ms?: HpxPulseAgentHeartbeatRequestLatencyMs
+  packet_loss_pct?: HpxPulseAgentHeartbeatRequestPacketLossPct
+  tunnel_running?: boolean
+  iface_up?: boolean
+  forward_ok?: HpxPulseAgentHeartbeatRequestForwardOk
+}
+
+export type HpxPulseAgentConfigResponseAbroadPublicIp = string | null
+
+export type HpxPulseAgentConfigResponseIranPublicIp = string | null
+
+export type HpxPulseAgentConfigResponseAgentCommand = string | null
+
+export type HpxPulseAgentConfigResponseDesiredStatus = (typeof HpxPulseAgentConfigResponseDesiredStatus)[keyof typeof HpxPulseAgentConfigResponseDesiredStatus]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const HpxPulseAgentConfigResponseDesiredStatus = {
+  pending_claim: 'pending_claim',
+  running: 'running',
+  starting: 'starting',
+  stopped: 'stopped',
+  stopping: 'stopping',
+  error: 'error',
+  unhealthy: 'unhealthy',
+  partial: 'partial',
+} as const
+
+export type HpxPulseAgentConfigResponseSide = (typeof HpxPulseAgentConfigResponseSide)[keyof typeof HpxPulseAgentConfigResponseSide]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const HpxPulseAgentConfigResponseSide = {
+  iran: 'iran',
+  abroad: 'abroad',
+} as const
+
+export interface HpxPulseAgentConfigResponse {
+  pulse_id: number
+  name: string
+  side: HpxPulseAgentConfigResponseSide
+  tunnel_toml: string
+  config_hash: string
+  desired_status: HpxPulseAgentConfigResponseDesiredStatus
+  agent_command?: HpxPulseAgentConfigResponseAgentCommand
+  enabled?: boolean
+  tunnel_mode?: string
+  control_port?: number
+  iran_public_ip?: HpxPulseAgentConfigResponseIranPublicIp
+  abroad_public_ip?: HpxPulseAgentConfigResponseAbroadPublicIp
+  port_forwards?: string[]
+}
+
+export type HpxPulseAgentClaimRequestSide = (typeof HpxPulseAgentClaimRequestSide)[keyof typeof HpxPulseAgentClaimRequestSide]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const HpxPulseAgentClaimRequestSide = {
+  iran: 'iran',
+  abroad: 'abroad',
+} as const
+
+export interface HpxPulseAgentClaimRequest {
+  /**
+   * @minLength 8
+   * @maxLength 256
+   */
+  join_token: string
+  /**
+   * @minLength 1
+   * @maxLength 255
+   */
+  host: string
+  side: HpxPulseAgentClaimRequestSide
+}
+
+export type HpxPulseAgentBootstrapAgentAssetsBase = string | null
+
+export type HpxPulseAgentBootstrapSide = (typeof HpxPulseAgentBootstrapSide)[keyof typeof HpxPulseAgentBootstrapSide]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const HpxPulseAgentBootstrapSide = {
+  iran: 'iran',
+  abroad: 'abroad',
+} as const
+
+export interface HpxPulseAgentBootstrap {
+  pulse_id: number
+  name: string
+  side: HpxPulseAgentBootstrapSide
+  agent_key: string
+  tunnel_toml: string
+  config_hash: string
+  control_port: number
+  abroad_public_ip: string
+  iran_public_ip: string
+  tunnel_mode?: string
+  port_forwards?: string[]
+  agent_assets_base?: HpxPulseAgentBootstrapAgentAssetsBase
+}
+
+export type HpxPulseAgentAckRequestMessage = string | null
+
+export interface HpxPulseAgentAckRequest {
+  command: string
+  status: string
+  message?: HpxPulseAgentAckRequestMessage
+}
+
+export type HpxPulseActionResponseAbroadJoinExpiresAt = string | null
+
+export type HpxPulseActionResponseIranJoinExpiresAt = string | null
+
+export type HpxPulseActionResponseAbroadJoinCommandAlt = string | null
+
+export type HpxPulseActionResponseAbroadJoinCommand = string | null
+
+export type HpxPulseActionResponseAbroadJoinToken = string | null
+
+export type HpxPulseActionResponseIranJoinCommandAlt = string | null
+
+export type HpxPulseActionResponseIranJoinCommand = string | null
+
+export type HpxPulseActionResponseIranJoinToken = string | null
+
+export type HpxPulseActionResponseMessage = string | null
+
+export interface HpxPulseActionResponse {
+  pulse: HpxPulseResponse
+  message?: HpxPulseActionResponseMessage
+  iran_join_token?: HpxPulseActionResponseIranJoinToken
+  iran_join_command?: HpxPulseActionResponseIranJoinCommand
+  iran_join_command_alt?: HpxPulseActionResponseIranJoinCommandAlt
+  abroad_join_token?: HpxPulseActionResponseAbroadJoinToken
+  abroad_join_command?: HpxPulseActionResponseAbroadJoinCommand
+  abroad_join_command_alt?: HpxPulseActionResponseAbroadJoinCommandAlt
+  iran_join_expires_at?: HpxPulseActionResponseIranJoinExpiresAt
+  abroad_join_expires_at?: HpxPulseActionResponseAbroadJoinExpiresAt
+}
+
+export type HpxPreflightResponseMessage = string | null
+
+export interface HpxPreflightResponse {
+  linux: boolean
+  docker: boolean
+  docker_sock: boolean
+  net_admin: boolean
+  ready: boolean
+  message?: HpxPreflightResponseMessage
+}
+
+export interface HpxPortForward {
+  /**
+   * @minimum 1
+   * @maximum 65535
+   */
+  external_port: number
+  /**
+   * @minLength 7
+   * @maxLength 45
+   */
+  internal_ip: string
+  /**
+   * @minimum 1
+   * @maximum 65535
+   */
+  internal_port: number
+}
+
+export type HpxPanelPublicIpResponseSource = string | null
+
+export type HpxPanelPublicIpResponseIp = string | null
+
+export interface HpxPanelPublicIpResponse {
+  ip?: HpxPanelPublicIpResponseIp
+  source?: HpxPanelPublicIpResponseSource
+}
+
+export interface HpxHealIssueResponse {
+  code: string
+  message: string
+  suggested_action: string
+}
+
+export interface HpxDoctorStepResponse {
+  title: string
+  detail: string
+  ok?: boolean
+}
+
 export type HostsPermissionsUpdateAnyOf = { [key: string]: PermissionScope | number }
 
 export type HostsPermissionsUpdate = boolean | HostsPermissionsUpdateAnyOf | null
@@ -2499,19 +3532,24 @@ export interface HTTPException {
 }
 
 /**
- * Lightweight group model with only id and name for performance.
- */
-export interface GroupSimple {
-  id: number
-  name: string
-}
-
-/**
  * Response model for lightweight group list.
  */
 export interface GroupsSimpleResponse {
   groups: GroupSimple[]
   total: number
+}
+
+export interface GroupsResponse {
+  groups: GroupResponse[]
+  total: number
+}
+
+/**
+ * Lightweight group model with only id and name for performance.
+ */
+export interface GroupSimple {
+  id: number
+  name: string
 }
 
 export type GroupResponseInboundTags = string[] | null
@@ -2526,11 +3564,6 @@ export interface GroupResponse {
   is_disabled?: boolean
   id: number
   total_users?: number
-}
-
-export interface GroupsResponse {
-  groups: GroupResponse[]
-  total: number
 }
 
 export type GroupModifyInboundTags = string[] | null
@@ -2693,21 +3726,15 @@ export const FinalMaskTcpType = {
 
 export type FinalMaskTcpLayerOutputSettingsAnyOf = { [key: string]: unknown }
 
-export type FinalMaskTcpLayerOutputSettings = FinalMaskTcpHeaderCustomSettings | XrayFragmentSettingsOutput | FinalMaskSudokuSettings | FinalMaskXmcSettings | FinalMaskTcpLayerOutputSettingsAnyOf
+export type FinalMaskTcpLayerInputSettingsAnyOf = { [key: string]: unknown }
 
-export interface FinalMaskTcpLayerOutput {
-  type: FinalMaskTcpType
-  settings?: FinalMaskTcpLayerOutputSettings
-  [key: string]: unknown
-}
+export type FinalMaskTcpLayerInputSettings = FinalMaskTcpHeaderCustomSettings | XrayFragmentSettingsInput | FinalMaskSudokuSettings | FinalMaskXmcSettings | FinalMaskTcpLayerInputSettingsAnyOf
 
 export interface FinalMaskTcpLayerInput {
   type: FinalMaskTcpType
   settings?: FinalMaskTcpLayerInputSettings
   [key: string]: unknown
 }
-
-export type FinalMaskTcpLayerInputSettingsAnyOf = { [key: string]: unknown }
 
 export type FinalMaskTcpHeaderCustomSettingsErrors = XrayNoiseSettings[][] | null
 
@@ -2722,7 +3749,13 @@ export interface FinalMaskTcpHeaderCustomSettings {
   [key: string]: unknown
 }
 
-export type FinalMaskTcpLayerInputSettings = FinalMaskTcpHeaderCustomSettings | XrayFragmentSettingsInput | FinalMaskSudokuSettings | FinalMaskXmcSettings | FinalMaskTcpLayerInputSettingsAnyOf
+export type FinalMaskTcpLayerOutputSettings = FinalMaskTcpHeaderCustomSettings | XrayFragmentSettingsOutput | FinalMaskSudokuSettings | FinalMaskXmcSettings | FinalMaskTcpLayerOutputSettingsAnyOf
+
+export interface FinalMaskTcpLayerOutput {
+  type: FinalMaskTcpType
+  settings?: FinalMaskTcpLayerOutputSettings
+  [key: string]: unknown
+}
 
 export type FinalMaskSudokuSettingsPaddingMax = number | null
 
@@ -2923,26 +3956,6 @@ export type CreateHostMuxSettings = MuxSettingsInput | null
 
 export type CreateHostTransportSettings = TransportSettings | null
 
-export type CreateHostHttpHeadersAnyOf = { [key: string]: string }
-
-export type CreateHostHttpHeaders = CreateHostHttpHeadersAnyOf | null
-
-export type CreateHostAllowinsecure = boolean | null
-
-export type CreateHostAlpn = ProxyHostALPN[] | null
-
-export type CreateHostPath = string | null
-
-export type CreateHostHost = string[] | null
-
-export type CreateHostSni = string[] | null
-
-export type CreateHostPort = number | null
-
-export type CreateHostInboundTag = string | null
-
-export type CreateHostId = number | null
-
 export interface CreateHost {
   id?: CreateHostId
   remark: string
@@ -2976,13 +3989,25 @@ export interface CreateHost {
   final_mask_settings?: CreateHostFinalMaskSettings
 }
 
-/**
- * Response model for lightweight core list.
- */
-export interface CoresSimpleResponse {
-  cores: CoreSimple[]
-  total: number
-}
+export type CreateHostHttpHeadersAnyOf = { [key: string]: string }
+
+export type CreateHostHttpHeaders = CreateHostHttpHeadersAnyOf | null
+
+export type CreateHostAllowinsecure = boolean | null
+
+export type CreateHostAlpn = ProxyHostALPN[] | null
+
+export type CreateHostPath = string | null
+
+export type CreateHostHost = string[] | null
+
+export type CreateHostSni = string[] | null
+
+export type CreateHostPort = number | null
+
+export type CreateHostInboundTag = string | null
+
+export type CreateHostId = number | null
 
 export type CoreType = (typeof CoreType)[keyof typeof CoreType]
 
@@ -2992,6 +4017,7 @@ export const CoreType = {
   wg: 'wg',
   ikev2: 'ikev2',
   l2tp: 'l2tp',
+  openvpn: 'openvpn',
   mtproto: 'mtproto',
   singbox: 'singbox',
 } as const
@@ -3007,9 +4033,12 @@ export interface CoreSimple {
   type?: CoreSimpleType
 }
 
-export interface CoreResponseList {
-  count: number
-  cores?: CoreResponse[]
+/**
+ * Response model for lightweight core list.
+ */
+export interface CoresSimpleResponse {
+  cores: CoreSimple[]
+  total: number
 }
 
 export type CoreResponseType = CoreType | null
@@ -3024,6 +4053,11 @@ export interface CoreResponse {
   fallbacks_inbound_tags: string[]
   id: number
   created_at: string
+}
+
+export interface CoreResponseList {
+  count: number
+  cores?: CoreResponse[]
 }
 
 export type CoreCreateFallbacksInboundTags = unknown[] | null
@@ -3042,6 +4076,46 @@ export interface CoreCreate {
   type?: CoreCreateType
   exclude_inbound_tags?: CoreCreateExcludeInboundTags
   fallbacks_inbound_tags?: CoreCreateFallbacksInboundTags
+}
+
+export interface CopilotStatusResponse {
+  enabled: boolean
+  configured: boolean
+  model: string
+}
+
+export type CopilotMessageRole = (typeof CopilotMessageRole)[keyof typeof CopilotMessageRole]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const CopilotMessageRole = {
+  user: 'user',
+  assistant: 'assistant',
+  system: 'system',
+} as const
+
+export interface CopilotMessage {
+  role: CopilotMessageRole
+  /**
+   * @minLength 1
+   * @maxLength 12000
+   */
+  content: string
+}
+
+export interface CopilotChatResponse {
+  reply: string
+  actions_taken?: string[]
+}
+
+export type CopilotChatRequestPagePath = string | null
+
+export interface CopilotChatRequest {
+  /**
+   * @minItems 1
+   * @maxItems 40
+   */
+  messages: CopilotMessage[]
+  page_path?: CopilotChatRequestPagePath
 }
 
 export interface Conflict {
@@ -3063,6 +4137,11 @@ export const ConfigFormat = {
   block: 'block',
 } as const
 
+export interface ClientTemplatesSimpleResponse {
+  templates: ClientTemplateSimple[]
+  total: number
+}
+
 export type ClientTemplateType = (typeof ClientTemplateType)[keyof typeof ClientTemplateType]
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
@@ -3079,11 +4158,6 @@ export interface ClientTemplateSimple {
   name: string
   template_type: ClientTemplateType
   is_default: boolean
-}
-
-export interface ClientTemplatesSimpleResponse {
-  templates: ClientTemplateSimple[]
-  total: number
 }
 
 export interface ClientTemplateResponse {
@@ -3152,6 +4226,10 @@ export type CRUDPermissionsReadSimpleAnyOf = { [key: string]: PermissionScope | 
 
 export type CRUDPermissionsReadSimple = boolean | CRUDPermissionsReadSimpleAnyOf | null
 
+export type CRUDPermissionsReadAnyOf = { [key: string]: PermissionScope | number }
+
+export type CRUDPermissionsRead = boolean | CRUDPermissionsReadAnyOf | null
+
 /**
  * Standard create/read/read_simple/update/delete permissions.
 Used directly by: groups, templates, client_templates, cores, admin_roles.
@@ -3164,10 +4242,6 @@ export interface CRUDPermissions {
   update?: CRUDPermissionsUpdate
   delete?: CRUDPermissionsDelete
 }
-
-export type CRUDPermissionsReadAnyOf = { [key: string]: PermissionScope | number }
-
-export type CRUDPermissionsRead = boolean | CRUDPermissionsReadAnyOf | null
 
 export type CRUDPermissionsCreateAnyOf = { [key: string]: PermissionScope | number }
 
@@ -3285,6 +4359,11 @@ export interface BulkNodesActionResponse {
  */
 export interface BulkNodeSelection {
   ids?: number[]
+}
+
+export interface BulkHpxTunnelSelection {
+  /** @minItems 1 */
+  ids: number[]
 }
 
 /**
@@ -3506,15 +4585,6 @@ export type AdminsPermissionsResetUsageAnyOf = { [key: string]: PermissionScope 
 
 export type AdminsPermissionsResetUsage = boolean | AdminsPermissionsResetUsageAnyOf | null
 
-export interface AdminsPermissions {
-  create?: AdminsPermissionsCreate
-  read?: AdminsPermissionsRead
-  read_simple?: AdminsPermissionsReadSimple
-  update?: AdminsPermissionsUpdate
-  delete?: AdminsPermissionsDelete
-  reset_usage?: AdminsPermissionsResetUsage
-}
-
 export type AdminsPermissionsDeleteAnyOf = { [key: string]: PermissionScope | number }
 
 export type AdminsPermissionsDelete = boolean | AdminsPermissionsDeleteAnyOf | null
@@ -3534,6 +4604,15 @@ export type AdminsPermissionsRead = boolean | AdminsPermissionsReadAnyOf | null
 export type AdminsPermissionsCreateAnyOf = { [key: string]: PermissionScope | number }
 
 export type AdminsPermissionsCreate = boolean | AdminsPermissionsCreateAnyOf | null
+
+export interface AdminsPermissions {
+  create?: AdminsPermissionsCreate
+  read?: AdminsPermissionsRead
+  read_simple?: AdminsPermissionsReadSimple
+  update?: AdminsPermissionsUpdate
+  delete?: AdminsPermissionsDelete
+  reset_usage?: AdminsPermissionsResetUsage
+}
 
 export type AdminStatus = (typeof AdminStatus)[keyof typeof AdminStatus]
 
@@ -3656,9 +4735,9 @@ export interface AdminNotificationEnable {
   usage_limit_warning_percentages?: number[]
 }
 
-export type AdminModifyPermissionOverrides = RoleLimits | null
-
 export type AdminModifyAccessOverrides = RoleAccess | null
+
+export type AdminModifyPermissionOverrides = RoleLimits | null
 
 export type AdminModifyRoleId = number | null
 
@@ -3704,9 +4783,9 @@ export interface AdminModify {
   access_overrides?: AdminModifyAccessOverrides
 }
 
-export type AdminDetailsPermissionOverrides = RoleLimits | null
-
 export type AdminDetailsAccessOverrides = RoleAccess | null
+
+export type AdminDetailsPermissionOverrides = RoleLimits | null
 
 export type AdminDetailsRole = AdminRoleData | null
 
@@ -3759,9 +4838,9 @@ export interface AdminDetails {
   readonly is_limited: boolean
 }
 
-export type AdminCreatePermissionOverrides = RoleLimits | null
-
 export type AdminCreateAccessOverrides = RoleAccess | null
+
+export type AdminCreatePermissionOverrides = RoleLimits | null
 
 export type AdminCreateNotificationEnable = UserNotificationEnable | null
 
@@ -10749,6 +11828,1886 @@ export const useBulkUpdateNodes = <
 }
 
 /**
+ * @summary Create Hpx Tunnel
+ */
+export const createHpxTunnel = (hpxTunnelCreate: BodyType<HpxTunnelCreate>, signal?: AbortSignal) => {
+  return orvalFetcher<HpxTunnelActionResponse>({ url: `/api/hpx_tunnel`, method: 'POST', headers: { 'Content-Type': 'application/json' }, data: hpxTunnelCreate, signal })
+}
+
+export const getCreateHpxTunnelMutationOptions = <
+  TData = Awaited<ReturnType<typeof createHpxTunnel>>,
+  TError = ErrorType<Unauthorized | Forbidden | Conflict | HTTPValidationError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { data: BodyType<HpxTunnelCreate> }, TContext>
+}) => {
+  const mutationKey = ['createHpxTunnel']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof createHpxTunnel>>, { data: BodyType<HpxTunnelCreate> }> = props => {
+    const { data } = props ?? {}
+
+    return createHpxTunnel(data)
+  }
+
+  return { mutationFn, ...mutationOptions } as UseMutationOptions<TData, TError, { data: BodyType<HpxTunnelCreate> }, TContext>
+}
+
+export type CreateHpxTunnelMutationResult = NonNullable<Awaited<ReturnType<typeof createHpxTunnel>>>
+export type CreateHpxTunnelMutationBody = BodyType<HpxTunnelCreate>
+export type CreateHpxTunnelMutationError = ErrorType<Unauthorized | Forbidden | Conflict | HTTPValidationError>
+
+/**
+ * @summary Create Hpx Tunnel
+ */
+export const useCreateHpxTunnel = <TData = Awaited<ReturnType<typeof createHpxTunnel>>, TError = ErrorType<Unauthorized | Forbidden | Conflict | HTTPValidationError>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { data: BodyType<HpxTunnelCreate> }, TContext>
+}): UseMutationResult<TData, TError, { data: BodyType<HpxTunnelCreate> }, TContext> => {
+  const mutationOptions = getCreateHpxTunnelMutationOptions(options)
+
+  return useMutation(mutationOptions)
+}
+
+/**
+ * @summary List Hpx Tunnels
+ */
+export const listHpxTunnels = (params?: ListHpxTunnelsParams, signal?: AbortSignal) => {
+  return orvalFetcher<HpxTunnelsResponse>({ url: `/api/hpx_tunnels`, method: 'GET', params, signal })
+}
+
+export const getListHpxTunnelsQueryKey = (params?: ListHpxTunnelsParams) => {
+  return [`/api/hpx_tunnels`, ...(params ? [params] : [])] as const
+}
+
+export const getListHpxTunnelsQueryOptions = <TData = Awaited<ReturnType<typeof listHpxTunnels>>, TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>>(
+  params?: ListHpxTunnelsParams,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof listHpxTunnels>>, TError, TData>> },
+) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey = queryOptions?.queryKey ?? getListHpxTunnelsQueryKey(params)
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listHpxTunnels>>> = ({ signal }) => listHpxTunnels(params, signal)
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<Awaited<ReturnType<typeof listHpxTunnels>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListHpxTunnelsQueryResult = NonNullable<Awaited<ReturnType<typeof listHpxTunnels>>>
+export type ListHpxTunnelsQueryError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>
+
+export function useListHpxTunnels<TData = Awaited<ReturnType<typeof listHpxTunnels>>, TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>>(
+  params: undefined | ListHpxTunnelsParams,
+  options: {
+    query: Partial<UseQueryOptions<Awaited<ReturnType<typeof listHpxTunnels>>, TError, TData>> &
+      Pick<DefinedInitialDataOptions<Awaited<ReturnType<typeof listHpxTunnels>>, TError, TData>, 'initialData'>
+  },
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListHpxTunnels<TData = Awaited<ReturnType<typeof listHpxTunnels>>, TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>>(
+  params?: ListHpxTunnelsParams,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof listHpxTunnels>>, TError, TData>> &
+      Pick<UndefinedInitialDataOptions<Awaited<ReturnType<typeof listHpxTunnels>>, TError, TData>, 'initialData'>
+  },
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListHpxTunnels<TData = Awaited<ReturnType<typeof listHpxTunnels>>, TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>>(
+  params?: ListHpxTunnelsParams,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof listHpxTunnels>>, TError, TData>> },
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List Hpx Tunnels
+ */
+
+export function useListHpxTunnels<TData = Awaited<ReturnType<typeof listHpxTunnels>>, TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>>(
+  params?: ListHpxTunnelsParams,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof listHpxTunnels>>, TError, TData>> },
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getListHpxTunnelsQueryOptions(params, options)
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
+}
+
+/**
+ * @summary Bulk Delete Hpx Tunnels
+ */
+export const bulkDeleteHpxTunnels = (bulkHpxTunnelSelection: BodyType<BulkHpxTunnelSelection>, signal?: AbortSignal) => {
+  return orvalFetcher<RemoveHpxTunnelsResponse>({ url: `/api/hpx_tunnels/bulk/delete`, method: 'POST', headers: { 'Content-Type': 'application/json' }, data: bulkHpxTunnelSelection, signal })
+}
+
+export const getBulkDeleteHpxTunnelsMutationOptions = <
+  TData = Awaited<ReturnType<typeof bulkDeleteHpxTunnels>>,
+  TError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { data: BodyType<BulkHpxTunnelSelection> }, TContext>
+}) => {
+  const mutationKey = ['bulkDeleteHpxTunnels']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof bulkDeleteHpxTunnels>>, { data: BodyType<BulkHpxTunnelSelection> }> = props => {
+    const { data } = props ?? {}
+
+    return bulkDeleteHpxTunnels(data)
+  }
+
+  return { mutationFn, ...mutationOptions } as UseMutationOptions<TData, TError, { data: BodyType<BulkHpxTunnelSelection> }, TContext>
+}
+
+export type BulkDeleteHpxTunnelsMutationResult = NonNullable<Awaited<ReturnType<typeof bulkDeleteHpxTunnels>>>
+export type BulkDeleteHpxTunnelsMutationBody = BodyType<BulkHpxTunnelSelection>
+export type BulkDeleteHpxTunnelsMutationError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>
+
+/**
+ * @summary Bulk Delete Hpx Tunnels
+ */
+export const useBulkDeleteHpxTunnels = <
+  TData = Awaited<ReturnType<typeof bulkDeleteHpxTunnels>>,
+  TError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { data: BodyType<BulkHpxTunnelSelection> }, TContext>
+}): UseMutationResult<TData, TError, { data: BodyType<BulkHpxTunnelSelection> }, TContext> => {
+  const mutationOptions = getBulkDeleteHpxTunnelsMutationOptions(options)
+
+  return useMutation(mutationOptions)
+}
+
+/**
+ * @summary Hpx Tunnel Preflight
+ */
+export const hpxTunnelPreflight = (signal?: AbortSignal) => {
+  return orvalFetcher<HpxPreflightResponse>({ url: `/api/hpx_tunnel/preflight`, method: 'GET', signal })
+}
+
+export const getHpxTunnelPreflightQueryKey = () => {
+  return [`/api/hpx_tunnel/preflight`] as const
+}
+
+export const getHpxTunnelPreflightQueryOptions = <TData = Awaited<ReturnType<typeof hpxTunnelPreflight>>, TError = ErrorType<Unauthorized | Forbidden>>(options?: {
+  query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof hpxTunnelPreflight>>, TError, TData>>
+}) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey = queryOptions?.queryKey ?? getHpxTunnelPreflightQueryKey()
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof hpxTunnelPreflight>>> = ({ signal }) => hpxTunnelPreflight(signal)
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<Awaited<ReturnType<typeof hpxTunnelPreflight>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type HpxTunnelPreflightQueryResult = NonNullable<Awaited<ReturnType<typeof hpxTunnelPreflight>>>
+export type HpxTunnelPreflightQueryError = ErrorType<Unauthorized | Forbidden>
+
+export function useHpxTunnelPreflight<TData = Awaited<ReturnType<typeof hpxTunnelPreflight>>, TError = ErrorType<Unauthorized | Forbidden>>(options: {
+  query: Partial<UseQueryOptions<Awaited<ReturnType<typeof hpxTunnelPreflight>>, TError, TData>> &
+    Pick<DefinedInitialDataOptions<Awaited<ReturnType<typeof hpxTunnelPreflight>>, TError, TData>, 'initialData'>
+}): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useHpxTunnelPreflight<TData = Awaited<ReturnType<typeof hpxTunnelPreflight>>, TError = ErrorType<Unauthorized | Forbidden>>(options?: {
+  query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof hpxTunnelPreflight>>, TError, TData>> &
+    Pick<UndefinedInitialDataOptions<Awaited<ReturnType<typeof hpxTunnelPreflight>>, TError, TData>, 'initialData'>
+}): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useHpxTunnelPreflight<TData = Awaited<ReturnType<typeof hpxTunnelPreflight>>, TError = ErrorType<Unauthorized | Forbidden>>(options?: {
+  query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof hpxTunnelPreflight>>, TError, TData>>
+}): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Hpx Tunnel Preflight
+ */
+
+export function useHpxTunnelPreflight<TData = Awaited<ReturnType<typeof hpxTunnelPreflight>>, TError = ErrorType<Unauthorized | Forbidden>>(options?: {
+  query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof hpxTunnelPreflight>>, TError, TData>>
+}): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getHpxTunnelPreflightQueryOptions(options)
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
+}
+
+/**
+ * @summary Hpx Tunnel Panel Public Ip
+ */
+export const hpxTunnelPanelPublicIp = (signal?: AbortSignal) => {
+  return orvalFetcher<HpxPanelPublicIpResponse>({ url: `/api/hpx_tunnel/panel-public-ip`, method: 'GET', signal })
+}
+
+export const getHpxTunnelPanelPublicIpQueryKey = () => {
+  return [`/api/hpx_tunnel/panel-public-ip`] as const
+}
+
+export const getHpxTunnelPanelPublicIpQueryOptions = <TData = Awaited<ReturnType<typeof hpxTunnelPanelPublicIp>>, TError = ErrorType<Unauthorized | Forbidden>>(options?: {
+  query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof hpxTunnelPanelPublicIp>>, TError, TData>>
+}) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey = queryOptions?.queryKey ?? getHpxTunnelPanelPublicIpQueryKey()
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof hpxTunnelPanelPublicIp>>> = ({ signal }) => hpxTunnelPanelPublicIp(signal)
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<Awaited<ReturnType<typeof hpxTunnelPanelPublicIp>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type HpxTunnelPanelPublicIpQueryResult = NonNullable<Awaited<ReturnType<typeof hpxTunnelPanelPublicIp>>>
+export type HpxTunnelPanelPublicIpQueryError = ErrorType<Unauthorized | Forbidden>
+
+export function useHpxTunnelPanelPublicIp<TData = Awaited<ReturnType<typeof hpxTunnelPanelPublicIp>>, TError = ErrorType<Unauthorized | Forbidden>>(options: {
+  query: Partial<UseQueryOptions<Awaited<ReturnType<typeof hpxTunnelPanelPublicIp>>, TError, TData>> &
+    Pick<DefinedInitialDataOptions<Awaited<ReturnType<typeof hpxTunnelPanelPublicIp>>, TError, TData>, 'initialData'>
+}): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useHpxTunnelPanelPublicIp<TData = Awaited<ReturnType<typeof hpxTunnelPanelPublicIp>>, TError = ErrorType<Unauthorized | Forbidden>>(options?: {
+  query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof hpxTunnelPanelPublicIp>>, TError, TData>> &
+    Pick<UndefinedInitialDataOptions<Awaited<ReturnType<typeof hpxTunnelPanelPublicIp>>, TError, TData>, 'initialData'>
+}): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useHpxTunnelPanelPublicIp<TData = Awaited<ReturnType<typeof hpxTunnelPanelPublicIp>>, TError = ErrorType<Unauthorized | Forbidden>>(options?: {
+  query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof hpxTunnelPanelPublicIp>>, TError, TData>>
+}): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Hpx Tunnel Panel Public Ip
+ */
+
+export function useHpxTunnelPanelPublicIp<TData = Awaited<ReturnType<typeof hpxTunnelPanelPublicIp>>, TError = ErrorType<Unauthorized | Forbidden>>(options?: {
+  query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof hpxTunnelPanelPublicIp>>, TError, TData>>
+}): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getHpxTunnelPanelPublicIpQueryOptions(options)
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
+}
+
+/**
+ * @summary Claim Hpx Tunnel Agent
+ */
+export const claimHpxTunnelAgent = (hpxTunnelAgentClaimRequest: BodyType<HpxTunnelAgentClaimRequest>, signal?: AbortSignal) => {
+  return orvalFetcher<HpxTunnelAgentBootstrap>({ url: `/api/hpx_tunnel/agent/claim`, method: 'POST', headers: { 'Content-Type': 'application/json' }, data: hpxTunnelAgentClaimRequest, signal })
+}
+
+export const getClaimHpxTunnelAgentMutationOptions = <
+  TData = Awaited<ReturnType<typeof claimHpxTunnelAgent>>,
+  TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { data: BodyType<HpxTunnelAgentClaimRequest> }, TContext>
+}) => {
+  const mutationKey = ['claimHpxTunnelAgent']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof claimHpxTunnelAgent>>, { data: BodyType<HpxTunnelAgentClaimRequest> }> = props => {
+    const { data } = props ?? {}
+
+    return claimHpxTunnelAgent(data)
+  }
+
+  return { mutationFn, ...mutationOptions } as UseMutationOptions<TData, TError, { data: BodyType<HpxTunnelAgentClaimRequest> }, TContext>
+}
+
+export type ClaimHpxTunnelAgentMutationResult = NonNullable<Awaited<ReturnType<typeof claimHpxTunnelAgent>>>
+export type ClaimHpxTunnelAgentMutationBody = BodyType<HpxTunnelAgentClaimRequest>
+export type ClaimHpxTunnelAgentMutationError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>
+
+/**
+ * @summary Claim Hpx Tunnel Agent
+ */
+export const useClaimHpxTunnelAgent = <TData = Awaited<ReturnType<typeof claimHpxTunnelAgent>>, TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { data: BodyType<HpxTunnelAgentClaimRequest> }, TContext>
+}): UseMutationResult<TData, TError, { data: BodyType<HpxTunnelAgentClaimRequest> }, TContext> => {
+  const mutationOptions = getClaimHpxTunnelAgentMutationOptions(options)
+
+  return useMutation(mutationOptions)
+}
+
+/**
+ * @summary Get Hpx Tunnel Agent Config
+ */
+export const getHpxTunnelAgentConfig = (signal?: AbortSignal) => {
+  return orvalFetcher<HpxTunnelAgentConfigResponse>({ url: `/api/hpx_tunnel/agent/config`, method: 'GET', signal })
+}
+
+export const getGetHpxTunnelAgentConfigQueryKey = () => {
+  return [`/api/hpx_tunnel/agent/config`] as const
+}
+
+export const getGetHpxTunnelAgentConfigQueryOptions = <TData = Awaited<ReturnType<typeof getHpxTunnelAgentConfig>>, TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>>(options?: {
+  query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getHpxTunnelAgentConfig>>, TError, TData>>
+}) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey = queryOptions?.queryKey ?? getGetHpxTunnelAgentConfigQueryKey()
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getHpxTunnelAgentConfig>>> = ({ signal }) => getHpxTunnelAgentConfig(signal)
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<Awaited<ReturnType<typeof getHpxTunnelAgentConfig>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetHpxTunnelAgentConfigQueryResult = NonNullable<Awaited<ReturnType<typeof getHpxTunnelAgentConfig>>>
+export type GetHpxTunnelAgentConfigQueryError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>
+
+export function useGetHpxTunnelAgentConfig<TData = Awaited<ReturnType<typeof getHpxTunnelAgentConfig>>, TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>>(options: {
+  query: Partial<UseQueryOptions<Awaited<ReturnType<typeof getHpxTunnelAgentConfig>>, TError, TData>> &
+    Pick<DefinedInitialDataOptions<Awaited<ReturnType<typeof getHpxTunnelAgentConfig>>, TError, TData>, 'initialData'>
+}): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetHpxTunnelAgentConfig<TData = Awaited<ReturnType<typeof getHpxTunnelAgentConfig>>, TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>>(options?: {
+  query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getHpxTunnelAgentConfig>>, TError, TData>> &
+    Pick<UndefinedInitialDataOptions<Awaited<ReturnType<typeof getHpxTunnelAgentConfig>>, TError, TData>, 'initialData'>
+}): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetHpxTunnelAgentConfig<TData = Awaited<ReturnType<typeof getHpxTunnelAgentConfig>>, TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>>(options?: {
+  query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getHpxTunnelAgentConfig>>, TError, TData>>
+}): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get Hpx Tunnel Agent Config
+ */
+
+export function useGetHpxTunnelAgentConfig<TData = Awaited<ReturnType<typeof getHpxTunnelAgentConfig>>, TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>>(options?: {
+  query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getHpxTunnelAgentConfig>>, TError, TData>>
+}): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getGetHpxTunnelAgentConfigQueryOptions(options)
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
+}
+
+/**
+ * @summary Hpx Tunnel Agent Heartbeat
+ */
+export const hpxTunnelAgentHeartbeat = (hpxTunnelAgentHeartbeatRequest: BodyType<HpxTunnelAgentHeartbeatRequest>, signal?: AbortSignal) => {
+  return orvalFetcher<HpxTunnelAgentConfigResponse>({
+    url: `/api/hpx_tunnel/agent/heartbeat`,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    data: hpxTunnelAgentHeartbeatRequest,
+    signal,
+  })
+}
+
+export const getHpxTunnelAgentHeartbeatMutationOptions = <
+  TData = Awaited<ReturnType<typeof hpxTunnelAgentHeartbeat>>,
+  TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { data: BodyType<HpxTunnelAgentHeartbeatRequest> }, TContext>
+}) => {
+  const mutationKey = ['hpxTunnelAgentHeartbeat']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof hpxTunnelAgentHeartbeat>>, { data: BodyType<HpxTunnelAgentHeartbeatRequest> }> = props => {
+    const { data } = props ?? {}
+
+    return hpxTunnelAgentHeartbeat(data)
+  }
+
+  return { mutationFn, ...mutationOptions } as UseMutationOptions<TData, TError, { data: BodyType<HpxTunnelAgentHeartbeatRequest> }, TContext>
+}
+
+export type HpxTunnelAgentHeartbeatMutationResult = NonNullable<Awaited<ReturnType<typeof hpxTunnelAgentHeartbeat>>>
+export type HpxTunnelAgentHeartbeatMutationBody = BodyType<HpxTunnelAgentHeartbeatRequest>
+export type HpxTunnelAgentHeartbeatMutationError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>
+
+/**
+ * @summary Hpx Tunnel Agent Heartbeat
+ */
+export const useHpxTunnelAgentHeartbeat = <
+  TData = Awaited<ReturnType<typeof hpxTunnelAgentHeartbeat>>,
+  TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { data: BodyType<HpxTunnelAgentHeartbeatRequest> }, TContext>
+}): UseMutationResult<TData, TError, { data: BodyType<HpxTunnelAgentHeartbeatRequest> }, TContext> => {
+  const mutationOptions = getHpxTunnelAgentHeartbeatMutationOptions(options)
+
+  return useMutation(mutationOptions)
+}
+
+/**
+ * @summary Hpx Tunnel Agent Ack
+ */
+export const hpxTunnelAgentAck = (hpxTunnelAgentAckRequest: BodyType<HpxTunnelAgentAckRequest>, signal?: AbortSignal) => {
+  return orvalFetcher<HpxTunnelAgentConfigResponse>({ url: `/api/hpx_tunnel/agent/ack`, method: 'POST', headers: { 'Content-Type': 'application/json' }, data: hpxTunnelAgentAckRequest, signal })
+}
+
+export const getHpxTunnelAgentAckMutationOptions = <
+  TData = Awaited<ReturnType<typeof hpxTunnelAgentAck>>,
+  TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { data: BodyType<HpxTunnelAgentAckRequest> }, TContext>
+}) => {
+  const mutationKey = ['hpxTunnelAgentAck']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof hpxTunnelAgentAck>>, { data: BodyType<HpxTunnelAgentAckRequest> }> = props => {
+    const { data } = props ?? {}
+
+    return hpxTunnelAgentAck(data)
+  }
+
+  return { mutationFn, ...mutationOptions } as UseMutationOptions<TData, TError, { data: BodyType<HpxTunnelAgentAckRequest> }, TContext>
+}
+
+export type HpxTunnelAgentAckMutationResult = NonNullable<Awaited<ReturnType<typeof hpxTunnelAgentAck>>>
+export type HpxTunnelAgentAckMutationBody = BodyType<HpxTunnelAgentAckRequest>
+export type HpxTunnelAgentAckMutationError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>
+
+/**
+ * @summary Hpx Tunnel Agent Ack
+ */
+export const useHpxTunnelAgentAck = <TData = Awaited<ReturnType<typeof hpxTunnelAgentAck>>, TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { data: BodyType<HpxTunnelAgentAckRequest> }, TContext>
+}): UseMutationResult<TData, TError, { data: BodyType<HpxTunnelAgentAckRequest> }, TContext> => {
+  const mutationOptions = getHpxTunnelAgentAckMutationOptions(options)
+
+  return useMutation(mutationOptions)
+}
+
+/**
+ * @summary Get Hpx Tunnel
+ */
+export const getHpxTunnel = (tunnelId: number, signal?: AbortSignal) => {
+  return orvalFetcher<HpxTunnelResponse>({ url: `/api/hpx_tunnel/${tunnelId}`, method: 'GET', signal })
+}
+
+export const getGetHpxTunnelQueryKey = (tunnelId: number) => {
+  return [`/api/hpx_tunnel/${tunnelId}`] as const
+}
+
+export const getGetHpxTunnelQueryOptions = <TData = Awaited<ReturnType<typeof getHpxTunnel>>, TError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>>(
+  tunnelId: number,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getHpxTunnel>>, TError, TData>> },
+) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey = queryOptions?.queryKey ?? getGetHpxTunnelQueryKey(tunnelId)
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getHpxTunnel>>> = ({ signal }) => getHpxTunnel(tunnelId, signal)
+
+  return { queryKey, queryFn, enabled: !!tunnelId, ...queryOptions } as UseQueryOptions<Awaited<ReturnType<typeof getHpxTunnel>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetHpxTunnelQueryResult = NonNullable<Awaited<ReturnType<typeof getHpxTunnel>>>
+export type GetHpxTunnelQueryError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>
+
+export function useGetHpxTunnel<TData = Awaited<ReturnType<typeof getHpxTunnel>>, TError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>>(
+  tunnelId: number,
+  options: {
+    query: Partial<UseQueryOptions<Awaited<ReturnType<typeof getHpxTunnel>>, TError, TData>> & Pick<DefinedInitialDataOptions<Awaited<ReturnType<typeof getHpxTunnel>>, TError, TData>, 'initialData'>
+  },
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetHpxTunnel<TData = Awaited<ReturnType<typeof getHpxTunnel>>, TError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>>(
+  tunnelId: number,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getHpxTunnel>>, TError, TData>> &
+      Pick<UndefinedInitialDataOptions<Awaited<ReturnType<typeof getHpxTunnel>>, TError, TData>, 'initialData'>
+  },
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetHpxTunnel<TData = Awaited<ReturnType<typeof getHpxTunnel>>, TError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>>(
+  tunnelId: number,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getHpxTunnel>>, TError, TData>> },
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get Hpx Tunnel
+ */
+
+export function useGetHpxTunnel<TData = Awaited<ReturnType<typeof getHpxTunnel>>, TError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>>(
+  tunnelId: number,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getHpxTunnel>>, TError, TData>> },
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getGetHpxTunnelQueryOptions(tunnelId, options)
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
+}
+
+/**
+ * @summary Modify Hpx Tunnel
+ */
+export const modifyHpxTunnel = (tunnelId: number, hpxTunnelUpdate: BodyType<HpxTunnelUpdate>) => {
+  return orvalFetcher<HpxTunnelResponse>({ url: `/api/hpx_tunnel/${tunnelId}`, method: 'PATCH', headers: { 'Content-Type': 'application/json' }, data: hpxTunnelUpdate })
+}
+
+export const getModifyHpxTunnelMutationOptions = <
+  TData = Awaited<ReturnType<typeof modifyHpxTunnel>>,
+  TError = ErrorType<Unauthorized | Forbidden | NotFound | Conflict | HTTPValidationError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { tunnelId: number; data: BodyType<HpxTunnelUpdate> }, TContext>
+}) => {
+  const mutationKey = ['modifyHpxTunnel']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof modifyHpxTunnel>>, { tunnelId: number; data: BodyType<HpxTunnelUpdate> }> = props => {
+    const { tunnelId, data } = props ?? {}
+
+    return modifyHpxTunnel(tunnelId, data)
+  }
+
+  return { mutationFn, ...mutationOptions } as UseMutationOptions<TData, TError, { tunnelId: number; data: BodyType<HpxTunnelUpdate> }, TContext>
+}
+
+export type ModifyHpxTunnelMutationResult = NonNullable<Awaited<ReturnType<typeof modifyHpxTunnel>>>
+export type ModifyHpxTunnelMutationBody = BodyType<HpxTunnelUpdate>
+export type ModifyHpxTunnelMutationError = ErrorType<Unauthorized | Forbidden | NotFound | Conflict | HTTPValidationError>
+
+/**
+ * @summary Modify Hpx Tunnel
+ */
+export const useModifyHpxTunnel = <
+  TData = Awaited<ReturnType<typeof modifyHpxTunnel>>,
+  TError = ErrorType<Unauthorized | Forbidden | NotFound | Conflict | HTTPValidationError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { tunnelId: number; data: BodyType<HpxTunnelUpdate> }, TContext>
+}): UseMutationResult<TData, TError, { tunnelId: number; data: BodyType<HpxTunnelUpdate> }, TContext> => {
+  const mutationOptions = getModifyHpxTunnelMutationOptions(options)
+
+  return useMutation(mutationOptions)
+}
+
+/**
+ * @summary Remove Hpx Tunnel
+ */
+export const removeHpxTunnel = (tunnelId: number) => {
+  return orvalFetcher<void>({ url: `/api/hpx_tunnel/${tunnelId}`, method: 'DELETE' })
+}
+
+export const getRemoveHpxTunnelMutationOptions = <
+  TData = Awaited<ReturnType<typeof removeHpxTunnel>>,
+  TError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { tunnelId: number }, TContext>
+}) => {
+  const mutationKey = ['removeHpxTunnel']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof removeHpxTunnel>>, { tunnelId: number }> = props => {
+    const { tunnelId } = props ?? {}
+
+    return removeHpxTunnel(tunnelId)
+  }
+
+  return { mutationFn, ...mutationOptions } as UseMutationOptions<TData, TError, { tunnelId: number }, TContext>
+}
+
+export type RemoveHpxTunnelMutationResult = NonNullable<Awaited<ReturnType<typeof removeHpxTunnel>>>
+
+export type RemoveHpxTunnelMutationError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>
+
+/**
+ * @summary Remove Hpx Tunnel
+ */
+export const useRemoveHpxTunnel = <TData = Awaited<ReturnType<typeof removeHpxTunnel>>, TError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { tunnelId: number }, TContext>
+}): UseMutationResult<TData, TError, { tunnelId: number }, TContext> => {
+  const mutationOptions = getRemoveHpxTunnelMutationOptions(options)
+
+  return useMutation(mutationOptions)
+}
+
+/**
+ * @summary Regenerate Hpx Tunnel Join Token
+ */
+export const regenerateHpxTunnelJoinToken = (tunnelId: number, signal?: AbortSignal) => {
+  return orvalFetcher<HpxTunnelJoinTokenResponse>({ url: `/api/hpx_tunnel/${tunnelId}/join-token`, method: 'POST', signal })
+}
+
+export const getRegenerateHpxTunnelJoinTokenMutationOptions = <
+  TData = Awaited<ReturnType<typeof regenerateHpxTunnelJoinToken>>,
+  TError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { tunnelId: number }, TContext>
+}) => {
+  const mutationKey = ['regenerateHpxTunnelJoinToken']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof regenerateHpxTunnelJoinToken>>, { tunnelId: number }> = props => {
+    const { tunnelId } = props ?? {}
+
+    return regenerateHpxTunnelJoinToken(tunnelId)
+  }
+
+  return { mutationFn, ...mutationOptions } as UseMutationOptions<TData, TError, { tunnelId: number }, TContext>
+}
+
+export type RegenerateHpxTunnelJoinTokenMutationResult = NonNullable<Awaited<ReturnType<typeof regenerateHpxTunnelJoinToken>>>
+
+export type RegenerateHpxTunnelJoinTokenMutationError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>
+
+/**
+ * @summary Regenerate Hpx Tunnel Join Token
+ */
+export const useRegenerateHpxTunnelJoinToken = <
+  TData = Awaited<ReturnType<typeof regenerateHpxTunnelJoinToken>>,
+  TError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { tunnelId: number }, TContext>
+}): UseMutationResult<TData, TError, { tunnelId: number }, TContext> => {
+  const mutationOptions = getRegenerateHpxTunnelJoinTokenMutationOptions(options)
+
+  return useMutation(mutationOptions)
+}
+
+/**
+ * @summary Start Hpx Tunnel
+ */
+export const startHpxTunnel = (tunnelId: number, signal?: AbortSignal) => {
+  return orvalFetcher<HpxTunnelActionResponse>({ url: `/api/hpx_tunnel/${tunnelId}/start`, method: 'POST', signal })
+}
+
+export const getStartHpxTunnelMutationOptions = <
+  TData = Awaited<ReturnType<typeof startHpxTunnel>>,
+  TError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { tunnelId: number }, TContext>
+}) => {
+  const mutationKey = ['startHpxTunnel']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof startHpxTunnel>>, { tunnelId: number }> = props => {
+    const { tunnelId } = props ?? {}
+
+    return startHpxTunnel(tunnelId)
+  }
+
+  return { mutationFn, ...mutationOptions } as UseMutationOptions<TData, TError, { tunnelId: number }, TContext>
+}
+
+export type StartHpxTunnelMutationResult = NonNullable<Awaited<ReturnType<typeof startHpxTunnel>>>
+
+export type StartHpxTunnelMutationError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>
+
+/**
+ * @summary Start Hpx Tunnel
+ */
+export const useStartHpxTunnel = <TData = Awaited<ReturnType<typeof startHpxTunnel>>, TError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { tunnelId: number }, TContext>
+}): UseMutationResult<TData, TError, { tunnelId: number }, TContext> => {
+  const mutationOptions = getStartHpxTunnelMutationOptions(options)
+
+  return useMutation(mutationOptions)
+}
+
+/**
+ * @summary Stop Hpx Tunnel
+ */
+export const stopHpxTunnel = (tunnelId: number, signal?: AbortSignal) => {
+  return orvalFetcher<HpxTunnelActionResponse>({ url: `/api/hpx_tunnel/${tunnelId}/stop`, method: 'POST', signal })
+}
+
+export const getStopHpxTunnelMutationOptions = <
+  TData = Awaited<ReturnType<typeof stopHpxTunnel>>,
+  TError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { tunnelId: number }, TContext>
+}) => {
+  const mutationKey = ['stopHpxTunnel']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof stopHpxTunnel>>, { tunnelId: number }> = props => {
+    const { tunnelId } = props ?? {}
+
+    return stopHpxTunnel(tunnelId)
+  }
+
+  return { mutationFn, ...mutationOptions } as UseMutationOptions<TData, TError, { tunnelId: number }, TContext>
+}
+
+export type StopHpxTunnelMutationResult = NonNullable<Awaited<ReturnType<typeof stopHpxTunnel>>>
+
+export type StopHpxTunnelMutationError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>
+
+/**
+ * @summary Stop Hpx Tunnel
+ */
+export const useStopHpxTunnel = <TData = Awaited<ReturnType<typeof stopHpxTunnel>>, TError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { tunnelId: number }, TContext>
+}): UseMutationResult<TData, TError, { tunnelId: number }, TContext> => {
+  const mutationOptions = getStopHpxTunnelMutationOptions(options)
+
+  return useMutation(mutationOptions)
+}
+
+/**
+ * @summary Restart Hpx Tunnel
+ */
+export const restartHpxTunnel = (tunnelId: number, signal?: AbortSignal) => {
+  return orvalFetcher<HpxTunnelActionResponse>({ url: `/api/hpx_tunnel/${tunnelId}/restart`, method: 'POST', signal })
+}
+
+export const getRestartHpxTunnelMutationOptions = <
+  TData = Awaited<ReturnType<typeof restartHpxTunnel>>,
+  TError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { tunnelId: number }, TContext>
+}) => {
+  const mutationKey = ['restartHpxTunnel']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof restartHpxTunnel>>, { tunnelId: number }> = props => {
+    const { tunnelId } = props ?? {}
+
+    return restartHpxTunnel(tunnelId)
+  }
+
+  return { mutationFn, ...mutationOptions } as UseMutationOptions<TData, TError, { tunnelId: number }, TContext>
+}
+
+export type RestartHpxTunnelMutationResult = NonNullable<Awaited<ReturnType<typeof restartHpxTunnel>>>
+
+export type RestartHpxTunnelMutationError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>
+
+/**
+ * @summary Restart Hpx Tunnel
+ */
+export const useRestartHpxTunnel = <TData = Awaited<ReturnType<typeof restartHpxTunnel>>, TError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { tunnelId: number }, TContext>
+}): UseMutationResult<TData, TError, { tunnelId: number }, TContext> => {
+  const mutationOptions = getRestartHpxTunnelMutationOptions(options)
+
+  return useMutation(mutationOptions)
+}
+
+/**
+ * @summary Get Hpx Tunnel Stats
+ */
+export const getHpxTunnelStats = (tunnelId: number, signal?: AbortSignal) => {
+  return orvalFetcher<HpxTunnelStatsResponse>({ url: `/api/hpx_tunnel/${tunnelId}/stats`, method: 'GET', signal })
+}
+
+export const getGetHpxTunnelStatsQueryKey = (tunnelId: number) => {
+  return [`/api/hpx_tunnel/${tunnelId}/stats`] as const
+}
+
+export const getGetHpxTunnelStatsQueryOptions = <TData = Awaited<ReturnType<typeof getHpxTunnelStats>>, TError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>>(
+  tunnelId: number,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getHpxTunnelStats>>, TError, TData>> },
+) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey = queryOptions?.queryKey ?? getGetHpxTunnelStatsQueryKey(tunnelId)
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getHpxTunnelStats>>> = ({ signal }) => getHpxTunnelStats(tunnelId, signal)
+
+  return { queryKey, queryFn, enabled: !!tunnelId, ...queryOptions } as UseQueryOptions<Awaited<ReturnType<typeof getHpxTunnelStats>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetHpxTunnelStatsQueryResult = NonNullable<Awaited<ReturnType<typeof getHpxTunnelStats>>>
+export type GetHpxTunnelStatsQueryError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>
+
+export function useGetHpxTunnelStats<TData = Awaited<ReturnType<typeof getHpxTunnelStats>>, TError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>>(
+  tunnelId: number,
+  options: {
+    query: Partial<UseQueryOptions<Awaited<ReturnType<typeof getHpxTunnelStats>>, TError, TData>> &
+      Pick<DefinedInitialDataOptions<Awaited<ReturnType<typeof getHpxTunnelStats>>, TError, TData>, 'initialData'>
+  },
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetHpxTunnelStats<TData = Awaited<ReturnType<typeof getHpxTunnelStats>>, TError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>>(
+  tunnelId: number,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getHpxTunnelStats>>, TError, TData>> &
+      Pick<UndefinedInitialDataOptions<Awaited<ReturnType<typeof getHpxTunnelStats>>, TError, TData>, 'initialData'>
+  },
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetHpxTunnelStats<TData = Awaited<ReturnType<typeof getHpxTunnelStats>>, TError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>>(
+  tunnelId: number,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getHpxTunnelStats>>, TError, TData>> },
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get Hpx Tunnel Stats
+ */
+
+export function useGetHpxTunnelStats<TData = Awaited<ReturnType<typeof getHpxTunnelStats>>, TError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>>(
+  tunnelId: number,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getHpxTunnelStats>>, TError, TData>> },
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getGetHpxTunnelStatsQueryOptions(tunnelId, options)
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
+}
+
+/**
+ * @summary Diagnose Hpx Tunnel
+ */
+export const diagnoseHpxTunnel = (tunnelId: number, signal?: AbortSignal) => {
+  return orvalFetcher<HpxTunnelDiagnoseResponse>({ url: `/api/hpx_tunnel/${tunnelId}/diagnose`, method: 'POST', signal })
+}
+
+export const getDiagnoseHpxTunnelMutationOptions = <
+  TData = Awaited<ReturnType<typeof diagnoseHpxTunnel>>,
+  TError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { tunnelId: number }, TContext>
+}) => {
+  const mutationKey = ['diagnoseHpxTunnel']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof diagnoseHpxTunnel>>, { tunnelId: number }> = props => {
+    const { tunnelId } = props ?? {}
+
+    return diagnoseHpxTunnel(tunnelId)
+  }
+
+  return { mutationFn, ...mutationOptions } as UseMutationOptions<TData, TError, { tunnelId: number }, TContext>
+}
+
+export type DiagnoseHpxTunnelMutationResult = NonNullable<Awaited<ReturnType<typeof diagnoseHpxTunnel>>>
+
+export type DiagnoseHpxTunnelMutationError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>
+
+/**
+ * @summary Diagnose Hpx Tunnel
+ */
+export const useDiagnoseHpxTunnel = <
+  TData = Awaited<ReturnType<typeof diagnoseHpxTunnel>>,
+  TError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { tunnelId: number }, TContext>
+}): UseMutationResult<TData, TError, { tunnelId: number }, TContext> => {
+  const mutationOptions = getDiagnoseHpxTunnelMutationOptions(options)
+
+  return useMutation(mutationOptions)
+}
+
+/**
+ * @summary Repair Hpx Tunnel
+ */
+export const repairHpxTunnel = (tunnelId: number, signal?: AbortSignal) => {
+  return orvalFetcher<HpxTunnelRepairResponse>({ url: `/api/hpx_tunnel/${tunnelId}/repair`, method: 'POST', signal })
+}
+
+export const getRepairHpxTunnelMutationOptions = <
+  TData = Awaited<ReturnType<typeof repairHpxTunnel>>,
+  TError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { tunnelId: number }, TContext>
+}) => {
+  const mutationKey = ['repairHpxTunnel']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof repairHpxTunnel>>, { tunnelId: number }> = props => {
+    const { tunnelId } = props ?? {}
+
+    return repairHpxTunnel(tunnelId)
+  }
+
+  return { mutationFn, ...mutationOptions } as UseMutationOptions<TData, TError, { tunnelId: number }, TContext>
+}
+
+export type RepairHpxTunnelMutationResult = NonNullable<Awaited<ReturnType<typeof repairHpxTunnel>>>
+
+export type RepairHpxTunnelMutationError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>
+
+/**
+ * @summary Repair Hpx Tunnel
+ */
+export const useRepairHpxTunnel = <TData = Awaited<ReturnType<typeof repairHpxTunnel>>, TError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { tunnelId: number }, TContext>
+}): UseMutationResult<TData, TError, { tunnelId: number }, TContext> => {
+  const mutationOptions = getRepairHpxTunnelMutationOptions(options)
+
+  return useMutation(mutationOptions)
+}
+
+/**
+ * @summary Smart Fix Hpx Tunnel
+ */
+export const smartFixHpxTunnel = (tunnelId: number, signal?: AbortSignal) => {
+  return orvalFetcher<HpxTunnelSmartFixResponse>({ url: `/api/hpx_tunnel/${tunnelId}/smart-fix`, method: 'POST', signal })
+}
+
+export const getSmartFixHpxTunnelMutationOptions = <
+  TData = Awaited<ReturnType<typeof smartFixHpxTunnel>>,
+  TError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { tunnelId: number }, TContext>
+}) => {
+  const mutationKey = ['smartFixHpxTunnel']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof smartFixHpxTunnel>>, { tunnelId: number }> = props => {
+    const { tunnelId } = props ?? {}
+
+    return smartFixHpxTunnel(tunnelId)
+  }
+
+  return { mutationFn, ...mutationOptions } as UseMutationOptions<TData, TError, { tunnelId: number }, TContext>
+}
+
+export type SmartFixHpxTunnelMutationResult = NonNullable<Awaited<ReturnType<typeof smartFixHpxTunnel>>>
+
+export type SmartFixHpxTunnelMutationError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>
+
+/**
+ * @summary Smart Fix Hpx Tunnel
+ */
+export const useSmartFixHpxTunnel = <
+  TData = Awaited<ReturnType<typeof smartFixHpxTunnel>>,
+  TError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { tunnelId: number }, TContext>
+}): UseMutationResult<TData, TError, { tunnelId: number }, TContext> => {
+  const mutationOptions = getSmartFixHpxTunnelMutationOptions(options)
+
+  return useMutation(mutationOptions)
+}
+
+/**
+ * @summary Get Hpx Tunnel Logs
+ */
+export const getHpxTunnelLogs = (tunnelId: number, signal?: AbortSignal) => {
+  return orvalFetcher<string>({ url: `/api/hpx_tunnel/${tunnelId}/logs`, method: 'GET', signal })
+}
+
+export const getGetHpxTunnelLogsQueryKey = (tunnelId: number) => {
+  return [`/api/hpx_tunnel/${tunnelId}/logs`] as const
+}
+
+export const getGetHpxTunnelLogsQueryOptions = <TData = Awaited<ReturnType<typeof getHpxTunnelLogs>>, TError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>>(
+  tunnelId: number,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getHpxTunnelLogs>>, TError, TData>> },
+) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey = queryOptions?.queryKey ?? getGetHpxTunnelLogsQueryKey(tunnelId)
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getHpxTunnelLogs>>> = ({ signal }) => getHpxTunnelLogs(tunnelId, signal)
+
+  return { queryKey, queryFn, enabled: !!tunnelId, ...queryOptions } as UseQueryOptions<Awaited<ReturnType<typeof getHpxTunnelLogs>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetHpxTunnelLogsQueryResult = NonNullable<Awaited<ReturnType<typeof getHpxTunnelLogs>>>
+export type GetHpxTunnelLogsQueryError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>
+
+export function useGetHpxTunnelLogs<TData = Awaited<ReturnType<typeof getHpxTunnelLogs>>, TError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>>(
+  tunnelId: number,
+  options: {
+    query: Partial<UseQueryOptions<Awaited<ReturnType<typeof getHpxTunnelLogs>>, TError, TData>> &
+      Pick<DefinedInitialDataOptions<Awaited<ReturnType<typeof getHpxTunnelLogs>>, TError, TData>, 'initialData'>
+  },
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetHpxTunnelLogs<TData = Awaited<ReturnType<typeof getHpxTunnelLogs>>, TError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>>(
+  tunnelId: number,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getHpxTunnelLogs>>, TError, TData>> &
+      Pick<UndefinedInitialDataOptions<Awaited<ReturnType<typeof getHpxTunnelLogs>>, TError, TData>, 'initialData'>
+  },
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetHpxTunnelLogs<TData = Awaited<ReturnType<typeof getHpxTunnelLogs>>, TError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>>(
+  tunnelId: number,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getHpxTunnelLogs>>, TError, TData>> },
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get Hpx Tunnel Logs
+ */
+
+export function useGetHpxTunnelLogs<TData = Awaited<ReturnType<typeof getHpxTunnelLogs>>, TError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>>(
+  tunnelId: number,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getHpxTunnelLogs>>, TError, TData>> },
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getGetHpxTunnelLogsQueryOptions(tunnelId, options)
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
+}
+
+/**
+ * @summary Advise Hpx Pulse
+ */
+export const adviseHpxPulse = (pulseAdviseRequest: BodyType<PulseAdviseRequest>, signal?: AbortSignal) => {
+  return orvalFetcher<PulseAdviseResponse>({ url: `/api/hpx_pulse/advise`, method: 'POST', headers: { 'Content-Type': 'application/json' }, data: pulseAdviseRequest, signal })
+}
+
+export const getAdviseHpxPulseMutationOptions = <TData = Awaited<ReturnType<typeof adviseHpxPulse>>, TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { data: BodyType<PulseAdviseRequest> }, TContext>
+}) => {
+  const mutationKey = ['adviseHpxPulse']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof adviseHpxPulse>>, { data: BodyType<PulseAdviseRequest> }> = props => {
+    const { data } = props ?? {}
+
+    return adviseHpxPulse(data)
+  }
+
+  return { mutationFn, ...mutationOptions } as UseMutationOptions<TData, TError, { data: BodyType<PulseAdviseRequest> }, TContext>
+}
+
+export type AdviseHpxPulseMutationResult = NonNullable<Awaited<ReturnType<typeof adviseHpxPulse>>>
+export type AdviseHpxPulseMutationBody = BodyType<PulseAdviseRequest>
+export type AdviseHpxPulseMutationError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>
+
+/**
+ * @summary Advise Hpx Pulse
+ */
+export const useAdviseHpxPulse = <TData = Awaited<ReturnType<typeof adviseHpxPulse>>, TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { data: BodyType<PulseAdviseRequest> }, TContext>
+}): UseMutationResult<TData, TError, { data: BodyType<PulseAdviseRequest> }, TContext> => {
+  const mutationOptions = getAdviseHpxPulseMutationOptions(options)
+
+  return useMutation(mutationOptions)
+}
+
+/**
+ * @summary Create Hpx Pulse
+ */
+export const createHpxPulse = (hpxPulseCreate: BodyType<HpxPulseCreate>, signal?: AbortSignal) => {
+  return orvalFetcher<HpxPulseActionResponse>({ url: `/api/hpx_pulse`, method: 'POST', headers: { 'Content-Type': 'application/json' }, data: hpxPulseCreate, signal })
+}
+
+export const getCreateHpxPulseMutationOptions = <
+  TData = Awaited<ReturnType<typeof createHpxPulse>>,
+  TError = ErrorType<Unauthorized | Forbidden | Conflict | HTTPValidationError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { data: BodyType<HpxPulseCreate> }, TContext>
+}) => {
+  const mutationKey = ['createHpxPulse']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof createHpxPulse>>, { data: BodyType<HpxPulseCreate> }> = props => {
+    const { data } = props ?? {}
+
+    return createHpxPulse(data)
+  }
+
+  return { mutationFn, ...mutationOptions } as UseMutationOptions<TData, TError, { data: BodyType<HpxPulseCreate> }, TContext>
+}
+
+export type CreateHpxPulseMutationResult = NonNullable<Awaited<ReturnType<typeof createHpxPulse>>>
+export type CreateHpxPulseMutationBody = BodyType<HpxPulseCreate>
+export type CreateHpxPulseMutationError = ErrorType<Unauthorized | Forbidden | Conflict | HTTPValidationError>
+
+/**
+ * @summary Create Hpx Pulse
+ */
+export const useCreateHpxPulse = <TData = Awaited<ReturnType<typeof createHpxPulse>>, TError = ErrorType<Unauthorized | Forbidden | Conflict | HTTPValidationError>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { data: BodyType<HpxPulseCreate> }, TContext>
+}): UseMutationResult<TData, TError, { data: BodyType<HpxPulseCreate> }, TContext> => {
+  const mutationOptions = getCreateHpxPulseMutationOptions(options)
+
+  return useMutation(mutationOptions)
+}
+
+/**
+ * @summary List Hpx Pulses
+ */
+export const listHpxPulses = (params?: ListHpxPulsesParams, signal?: AbortSignal) => {
+  return orvalFetcher<HpxPulsesResponse>({ url: `/api/hpx_pulses`, method: 'GET', params, signal })
+}
+
+export const getListHpxPulsesQueryKey = (params?: ListHpxPulsesParams) => {
+  return [`/api/hpx_pulses`, ...(params ? [params] : [])] as const
+}
+
+export const getListHpxPulsesQueryOptions = <TData = Awaited<ReturnType<typeof listHpxPulses>>, TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>>(
+  params?: ListHpxPulsesParams,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof listHpxPulses>>, TError, TData>> },
+) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey = queryOptions?.queryKey ?? getListHpxPulsesQueryKey(params)
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listHpxPulses>>> = ({ signal }) => listHpxPulses(params, signal)
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<Awaited<ReturnType<typeof listHpxPulses>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListHpxPulsesQueryResult = NonNullable<Awaited<ReturnType<typeof listHpxPulses>>>
+export type ListHpxPulsesQueryError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>
+
+export function useListHpxPulses<TData = Awaited<ReturnType<typeof listHpxPulses>>, TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>>(
+  params: undefined | ListHpxPulsesParams,
+  options: {
+    query: Partial<UseQueryOptions<Awaited<ReturnType<typeof listHpxPulses>>, TError, TData>> & Pick<DefinedInitialDataOptions<Awaited<ReturnType<typeof listHpxPulses>>, TError, TData>, 'initialData'>
+  },
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListHpxPulses<TData = Awaited<ReturnType<typeof listHpxPulses>>, TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>>(
+  params?: ListHpxPulsesParams,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof listHpxPulses>>, TError, TData>> &
+      Pick<UndefinedInitialDataOptions<Awaited<ReturnType<typeof listHpxPulses>>, TError, TData>, 'initialData'>
+  },
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListHpxPulses<TData = Awaited<ReturnType<typeof listHpxPulses>>, TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>>(
+  params?: ListHpxPulsesParams,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof listHpxPulses>>, TError, TData>> },
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List Hpx Pulses
+ */
+
+export function useListHpxPulses<TData = Awaited<ReturnType<typeof listHpxPulses>>, TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>>(
+  params?: ListHpxPulsesParams,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof listHpxPulses>>, TError, TData>> },
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getListHpxPulsesQueryOptions(params, options)
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
+}
+
+/**
+ * @summary Get Hpx Pulse
+ */
+export const getHpxPulse = (pulseId: number, signal?: AbortSignal) => {
+  return orvalFetcher<HpxPulseResponse>({ url: `/api/hpx_pulse/${pulseId}`, method: 'GET', signal })
+}
+
+export const getGetHpxPulseQueryKey = (pulseId: number) => {
+  return [`/api/hpx_pulse/${pulseId}`] as const
+}
+
+export const getGetHpxPulseQueryOptions = <TData = Awaited<ReturnType<typeof getHpxPulse>>, TError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>>(
+  pulseId: number,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getHpxPulse>>, TError, TData>> },
+) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey = queryOptions?.queryKey ?? getGetHpxPulseQueryKey(pulseId)
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getHpxPulse>>> = ({ signal }) => getHpxPulse(pulseId, signal)
+
+  return { queryKey, queryFn, enabled: !!pulseId, ...queryOptions } as UseQueryOptions<Awaited<ReturnType<typeof getHpxPulse>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetHpxPulseQueryResult = NonNullable<Awaited<ReturnType<typeof getHpxPulse>>>
+export type GetHpxPulseQueryError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>
+
+export function useGetHpxPulse<TData = Awaited<ReturnType<typeof getHpxPulse>>, TError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>>(
+  pulseId: number,
+  options: {
+    query: Partial<UseQueryOptions<Awaited<ReturnType<typeof getHpxPulse>>, TError, TData>> & Pick<DefinedInitialDataOptions<Awaited<ReturnType<typeof getHpxPulse>>, TError, TData>, 'initialData'>
+  },
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetHpxPulse<TData = Awaited<ReturnType<typeof getHpxPulse>>, TError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>>(
+  pulseId: number,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getHpxPulse>>, TError, TData>> & Pick<UndefinedInitialDataOptions<Awaited<ReturnType<typeof getHpxPulse>>, TError, TData>, 'initialData'>
+  },
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetHpxPulse<TData = Awaited<ReturnType<typeof getHpxPulse>>, TError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>>(
+  pulseId: number,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getHpxPulse>>, TError, TData>> },
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get Hpx Pulse
+ */
+
+export function useGetHpxPulse<TData = Awaited<ReturnType<typeof getHpxPulse>>, TError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>>(
+  pulseId: number,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getHpxPulse>>, TError, TData>> },
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getGetHpxPulseQueryOptions(pulseId, options)
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
+}
+
+/**
+ * @summary Delete Hpx Pulse
+ */
+export const deleteHpxPulse = (pulseId: number) => {
+  return orvalFetcher<HpxPulseActionResponse>({ url: `/api/hpx_pulse/${pulseId}`, method: 'DELETE' })
+}
+
+export const getDeleteHpxPulseMutationOptions = <
+  TData = Awaited<ReturnType<typeof deleteHpxPulse>>,
+  TError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { pulseId: number }, TContext>
+}) => {
+  const mutationKey = ['deleteHpxPulse']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteHpxPulse>>, { pulseId: number }> = props => {
+    const { pulseId } = props ?? {}
+
+    return deleteHpxPulse(pulseId)
+  }
+
+  return { mutationFn, ...mutationOptions } as UseMutationOptions<TData, TError, { pulseId: number }, TContext>
+}
+
+export type DeleteHpxPulseMutationResult = NonNullable<Awaited<ReturnType<typeof deleteHpxPulse>>>
+
+export type DeleteHpxPulseMutationError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>
+
+/**
+ * @summary Delete Hpx Pulse
+ */
+export const useDeleteHpxPulse = <TData = Awaited<ReturnType<typeof deleteHpxPulse>>, TError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { pulseId: number }, TContext>
+}): UseMutationResult<TData, TError, { pulseId: number }, TContext> => {
+  const mutationOptions = getDeleteHpxPulseMutationOptions(options)
+
+  return useMutation(mutationOptions)
+}
+
+/**
+ * @summary Update Hpx Pulse
+ */
+export const updateHpxPulse = (pulseId: number, hpxPulseUpdate: BodyType<HpxPulseUpdate>) => {
+  return orvalFetcher<HpxPulseActionResponse>({ url: `/api/hpx_pulse/${pulseId}`, method: 'PATCH', headers: { 'Content-Type': 'application/json' }, data: hpxPulseUpdate })
+}
+
+export const getUpdateHpxPulseMutationOptions = <
+  TData = Awaited<ReturnType<typeof updateHpxPulse>>,
+  TError = ErrorType<Unauthorized | Forbidden | NotFound | Conflict | HTTPValidationError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { pulseId: number; data: BodyType<HpxPulseUpdate> }, TContext>
+}) => {
+  const mutationKey = ['updateHpxPulse']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateHpxPulse>>, { pulseId: number; data: BodyType<HpxPulseUpdate> }> = props => {
+    const { pulseId, data } = props ?? {}
+
+    return updateHpxPulse(pulseId, data)
+  }
+
+  return { mutationFn, ...mutationOptions } as UseMutationOptions<TData, TError, { pulseId: number; data: BodyType<HpxPulseUpdate> }, TContext>
+}
+
+export type UpdateHpxPulseMutationResult = NonNullable<Awaited<ReturnType<typeof updateHpxPulse>>>
+export type UpdateHpxPulseMutationBody = BodyType<HpxPulseUpdate>
+export type UpdateHpxPulseMutationError = ErrorType<Unauthorized | Forbidden | NotFound | Conflict | HTTPValidationError>
+
+/**
+ * @summary Update Hpx Pulse
+ */
+export const useUpdateHpxPulse = <
+  TData = Awaited<ReturnType<typeof updateHpxPulse>>,
+  TError = ErrorType<Unauthorized | Forbidden | NotFound | Conflict | HTTPValidationError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { pulseId: number; data: BodyType<HpxPulseUpdate> }, TContext>
+}): UseMutationResult<TData, TError, { pulseId: number; data: BodyType<HpxPulseUpdate> }, TContext> => {
+  const mutationOptions = getUpdateHpxPulseMutationOptions(options)
+
+  return useMutation(mutationOptions)
+}
+
+/**
+ * @summary Regenerate Hpx Pulse Tokens
+ */
+export const regenerateHpxPulseTokens = (pulseId: number, signal?: AbortSignal) => {
+  return orvalFetcher<HpxPulseActionResponse>({ url: `/api/hpx_pulse/${pulseId}/join-token`, method: 'POST', signal })
+}
+
+export const getRegenerateHpxPulseTokensMutationOptions = <
+  TData = Awaited<ReturnType<typeof regenerateHpxPulseTokens>>,
+  TError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { pulseId: number }, TContext>
+}) => {
+  const mutationKey = ['regenerateHpxPulseTokens']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof regenerateHpxPulseTokens>>, { pulseId: number }> = props => {
+    const { pulseId } = props ?? {}
+
+    return regenerateHpxPulseTokens(pulseId)
+  }
+
+  return { mutationFn, ...mutationOptions } as UseMutationOptions<TData, TError, { pulseId: number }, TContext>
+}
+
+export type RegenerateHpxPulseTokensMutationResult = NonNullable<Awaited<ReturnType<typeof regenerateHpxPulseTokens>>>
+
+export type RegenerateHpxPulseTokensMutationError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>
+
+/**
+ * @summary Regenerate Hpx Pulse Tokens
+ */
+export const useRegenerateHpxPulseTokens = <
+  TData = Awaited<ReturnType<typeof regenerateHpxPulseTokens>>,
+  TError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { pulseId: number }, TContext>
+}): UseMutationResult<TData, TError, { pulseId: number }, TContext> => {
+  const mutationOptions = getRegenerateHpxPulseTokensMutationOptions(options)
+
+  return useMutation(mutationOptions)
+}
+
+/**
+ * @summary Sync Hpx Pulse
+ */
+export const syncHpxPulse = (pulseId: number, signal?: AbortSignal) => {
+  return orvalFetcher<HpxPulseActionResponse>({ url: `/api/hpx_pulse/${pulseId}/sync`, method: 'POST', signal })
+}
+
+export const getSyncHpxPulseMutationOptions = <
+  TData = Awaited<ReturnType<typeof syncHpxPulse>>,
+  TError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { pulseId: number }, TContext>
+}) => {
+  const mutationKey = ['syncHpxPulse']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof syncHpxPulse>>, { pulseId: number }> = props => {
+    const { pulseId } = props ?? {}
+
+    return syncHpxPulse(pulseId)
+  }
+
+  return { mutationFn, ...mutationOptions } as UseMutationOptions<TData, TError, { pulseId: number }, TContext>
+}
+
+export type SyncHpxPulseMutationResult = NonNullable<Awaited<ReturnType<typeof syncHpxPulse>>>
+
+export type SyncHpxPulseMutationError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>
+
+/**
+ * @summary Sync Hpx Pulse
+ */
+export const useSyncHpxPulse = <TData = Awaited<ReturnType<typeof syncHpxPulse>>, TError = ErrorType<Unauthorized | Forbidden | NotFound | HTTPValidationError>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { pulseId: number }, TContext>
+}): UseMutationResult<TData, TError, { pulseId: number }, TContext> => {
+  const mutationOptions = getSyncHpxPulseMutationOptions(options)
+
+  return useMutation(mutationOptions)
+}
+
+/**
+ * @summary Claim Hpx Pulse Agent
+ */
+export const claimHpxPulseAgent = (hpxPulseAgentClaimRequest: BodyType<HpxPulseAgentClaimRequest>, signal?: AbortSignal) => {
+  return orvalFetcher<HpxPulseAgentBootstrap>({ url: `/api/hpx_pulse/agent/claim`, method: 'POST', headers: { 'Content-Type': 'application/json' }, data: hpxPulseAgentClaimRequest, signal })
+}
+
+export const getClaimHpxPulseAgentMutationOptions = <
+  TData = Awaited<ReturnType<typeof claimHpxPulseAgent>>,
+  TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { data: BodyType<HpxPulseAgentClaimRequest> }, TContext>
+}) => {
+  const mutationKey = ['claimHpxPulseAgent']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof claimHpxPulseAgent>>, { data: BodyType<HpxPulseAgentClaimRequest> }> = props => {
+    const { data } = props ?? {}
+
+    return claimHpxPulseAgent(data)
+  }
+
+  return { mutationFn, ...mutationOptions } as UseMutationOptions<TData, TError, { data: BodyType<HpxPulseAgentClaimRequest> }, TContext>
+}
+
+export type ClaimHpxPulseAgentMutationResult = NonNullable<Awaited<ReturnType<typeof claimHpxPulseAgent>>>
+export type ClaimHpxPulseAgentMutationBody = BodyType<HpxPulseAgentClaimRequest>
+export type ClaimHpxPulseAgentMutationError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>
+
+/**
+ * @summary Claim Hpx Pulse Agent
+ */
+export const useClaimHpxPulseAgent = <TData = Awaited<ReturnType<typeof claimHpxPulseAgent>>, TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { data: BodyType<HpxPulseAgentClaimRequest> }, TContext>
+}): UseMutationResult<TData, TError, { data: BodyType<HpxPulseAgentClaimRequest> }, TContext> => {
+  const mutationOptions = getClaimHpxPulseAgentMutationOptions(options)
+
+  return useMutation(mutationOptions)
+}
+
+/**
+ * @summary Get Hpx Pulse Engine Install Script
+ */
+export const getHpxPulseEngineInstallScript = (signal?: AbortSignal) => {
+  return orvalFetcher<string>({ url: `/api/hpx_pulse/agent/engine-install.sh`, method: 'GET', signal })
+}
+
+export const getGetHpxPulseEngineInstallScriptQueryKey = () => {
+  return [`/api/hpx_pulse/agent/engine-install.sh`] as const
+}
+
+export const getGetHpxPulseEngineInstallScriptQueryOptions = <TData = Awaited<ReturnType<typeof getHpxPulseEngineInstallScript>>, TError = ErrorType<Unauthorized | Forbidden>>(options?: {
+  query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getHpxPulseEngineInstallScript>>, TError, TData>>
+}) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey = queryOptions?.queryKey ?? getGetHpxPulseEngineInstallScriptQueryKey()
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getHpxPulseEngineInstallScript>>> = ({ signal }) => getHpxPulseEngineInstallScript(signal)
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<Awaited<ReturnType<typeof getHpxPulseEngineInstallScript>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetHpxPulseEngineInstallScriptQueryResult = NonNullable<Awaited<ReturnType<typeof getHpxPulseEngineInstallScript>>>
+export type GetHpxPulseEngineInstallScriptQueryError = ErrorType<Unauthorized | Forbidden>
+
+export function useGetHpxPulseEngineInstallScript<TData = Awaited<ReturnType<typeof getHpxPulseEngineInstallScript>>, TError = ErrorType<Unauthorized | Forbidden>>(options: {
+  query: Partial<UseQueryOptions<Awaited<ReturnType<typeof getHpxPulseEngineInstallScript>>, TError, TData>> &
+    Pick<DefinedInitialDataOptions<Awaited<ReturnType<typeof getHpxPulseEngineInstallScript>>, TError, TData>, 'initialData'>
+}): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetHpxPulseEngineInstallScript<TData = Awaited<ReturnType<typeof getHpxPulseEngineInstallScript>>, TError = ErrorType<Unauthorized | Forbidden>>(options?: {
+  query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getHpxPulseEngineInstallScript>>, TError, TData>> &
+    Pick<UndefinedInitialDataOptions<Awaited<ReturnType<typeof getHpxPulseEngineInstallScript>>, TError, TData>, 'initialData'>
+}): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetHpxPulseEngineInstallScript<TData = Awaited<ReturnType<typeof getHpxPulseEngineInstallScript>>, TError = ErrorType<Unauthorized | Forbidden>>(options?: {
+  query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getHpxPulseEngineInstallScript>>, TError, TData>>
+}): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get Hpx Pulse Engine Install Script
+ */
+
+export function useGetHpxPulseEngineInstallScript<TData = Awaited<ReturnType<typeof getHpxPulseEngineInstallScript>>, TError = ErrorType<Unauthorized | Forbidden>>(options?: {
+  query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getHpxPulseEngineInstallScript>>, TError, TData>>
+}): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getGetHpxPulseEngineInstallScriptQueryOptions(options)
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
+}
+
+/**
+ * @summary Get Hpx Pulse Agent Script
+ */
+export const getHpxPulseAgentScript = (signal?: AbortSignal) => {
+  return orvalFetcher<string>({ url: `/api/hpx_pulse/agent/hpx-pulse-agent.sh`, method: 'GET', signal })
+}
+
+export const getGetHpxPulseAgentScriptQueryKey = () => {
+  return [`/api/hpx_pulse/agent/hpx-pulse-agent.sh`] as const
+}
+
+export const getGetHpxPulseAgentScriptQueryOptions = <TData = Awaited<ReturnType<typeof getHpxPulseAgentScript>>, TError = ErrorType<Unauthorized | Forbidden>>(options?: {
+  query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getHpxPulseAgentScript>>, TError, TData>>
+}) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey = queryOptions?.queryKey ?? getGetHpxPulseAgentScriptQueryKey()
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getHpxPulseAgentScript>>> = ({ signal }) => getHpxPulseAgentScript(signal)
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<Awaited<ReturnType<typeof getHpxPulseAgentScript>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetHpxPulseAgentScriptQueryResult = NonNullable<Awaited<ReturnType<typeof getHpxPulseAgentScript>>>
+export type GetHpxPulseAgentScriptQueryError = ErrorType<Unauthorized | Forbidden>
+
+export function useGetHpxPulseAgentScript<TData = Awaited<ReturnType<typeof getHpxPulseAgentScript>>, TError = ErrorType<Unauthorized | Forbidden>>(options: {
+  query: Partial<UseQueryOptions<Awaited<ReturnType<typeof getHpxPulseAgentScript>>, TError, TData>> &
+    Pick<DefinedInitialDataOptions<Awaited<ReturnType<typeof getHpxPulseAgentScript>>, TError, TData>, 'initialData'>
+}): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetHpxPulseAgentScript<TData = Awaited<ReturnType<typeof getHpxPulseAgentScript>>, TError = ErrorType<Unauthorized | Forbidden>>(options?: {
+  query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getHpxPulseAgentScript>>, TError, TData>> &
+    Pick<UndefinedInitialDataOptions<Awaited<ReturnType<typeof getHpxPulseAgentScript>>, TError, TData>, 'initialData'>
+}): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetHpxPulseAgentScript<TData = Awaited<ReturnType<typeof getHpxPulseAgentScript>>, TError = ErrorType<Unauthorized | Forbidden>>(options?: {
+  query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getHpxPulseAgentScript>>, TError, TData>>
+}): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get Hpx Pulse Agent Script
+ */
+
+export function useGetHpxPulseAgentScript<TData = Awaited<ReturnType<typeof getHpxPulseAgentScript>>, TError = ErrorType<Unauthorized | Forbidden>>(options?: {
+  query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getHpxPulseAgentScript>>, TError, TData>>
+}): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getGetHpxPulseAgentScriptQueryOptions(options)
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
+}
+
+/**
+ * @summary Download Hpx Pulse Engine Checksums
+ */
+export const downloadHpxPulseEngineChecksums = (signal?: AbortSignal) => {
+  return orvalFetcher<string>({ url: `/api/hpx_pulse/agent/engine/SHA256SUMS`, method: 'GET', signal })
+}
+
+export const getDownloadHpxPulseEngineChecksumsQueryKey = () => {
+  return [`/api/hpx_pulse/agent/engine/SHA256SUMS`] as const
+}
+
+export const getDownloadHpxPulseEngineChecksumsQueryOptions = <TData = Awaited<ReturnType<typeof downloadHpxPulseEngineChecksums>>, TError = ErrorType<Unauthorized | Forbidden>>(options?: {
+  query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof downloadHpxPulseEngineChecksums>>, TError, TData>>
+}) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey = queryOptions?.queryKey ?? getDownloadHpxPulseEngineChecksumsQueryKey()
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof downloadHpxPulseEngineChecksums>>> = ({ signal }) => downloadHpxPulseEngineChecksums(signal)
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<Awaited<ReturnType<typeof downloadHpxPulseEngineChecksums>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type DownloadHpxPulseEngineChecksumsQueryResult = NonNullable<Awaited<ReturnType<typeof downloadHpxPulseEngineChecksums>>>
+export type DownloadHpxPulseEngineChecksumsQueryError = ErrorType<Unauthorized | Forbidden>
+
+export function useDownloadHpxPulseEngineChecksums<TData = Awaited<ReturnType<typeof downloadHpxPulseEngineChecksums>>, TError = ErrorType<Unauthorized | Forbidden>>(options: {
+  query: Partial<UseQueryOptions<Awaited<ReturnType<typeof downloadHpxPulseEngineChecksums>>, TError, TData>> &
+    Pick<DefinedInitialDataOptions<Awaited<ReturnType<typeof downloadHpxPulseEngineChecksums>>, TError, TData>, 'initialData'>
+}): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useDownloadHpxPulseEngineChecksums<TData = Awaited<ReturnType<typeof downloadHpxPulseEngineChecksums>>, TError = ErrorType<Unauthorized | Forbidden>>(options?: {
+  query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof downloadHpxPulseEngineChecksums>>, TError, TData>> &
+    Pick<UndefinedInitialDataOptions<Awaited<ReturnType<typeof downloadHpxPulseEngineChecksums>>, TError, TData>, 'initialData'>
+}): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useDownloadHpxPulseEngineChecksums<TData = Awaited<ReturnType<typeof downloadHpxPulseEngineChecksums>>, TError = ErrorType<Unauthorized | Forbidden>>(options?: {
+  query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof downloadHpxPulseEngineChecksums>>, TError, TData>>
+}): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Download Hpx Pulse Engine Checksums
+ */
+
+export function useDownloadHpxPulseEngineChecksums<TData = Awaited<ReturnType<typeof downloadHpxPulseEngineChecksums>>, TError = ErrorType<Unauthorized | Forbidden>>(options?: {
+  query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof downloadHpxPulseEngineChecksums>>, TError, TData>>
+}): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getDownloadHpxPulseEngineChecksumsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
+}
+
+/**
+ * @summary Download Hpx Pulse Engine
+ */
+export const downloadHpxPulseEngine = (arch: string, signal?: AbortSignal) => {
+  return orvalFetcher<unknown>({ url: `/api/hpx_pulse/agent/engine/${arch}`, method: 'GET', signal })
+}
+
+export const getDownloadHpxPulseEngineQueryKey = (arch: string) => {
+  return [`/api/hpx_pulse/agent/engine/${arch}`] as const
+}
+
+export const getDownloadHpxPulseEngineQueryOptions = <TData = Awaited<ReturnType<typeof downloadHpxPulseEngine>>, TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>>(
+  arch: string,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof downloadHpxPulseEngine>>, TError, TData>> },
+) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey = queryOptions?.queryKey ?? getDownloadHpxPulseEngineQueryKey(arch)
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof downloadHpxPulseEngine>>> = ({ signal }) => downloadHpxPulseEngine(arch, signal)
+
+  return { queryKey, queryFn, enabled: !!arch, ...queryOptions } as UseQueryOptions<Awaited<ReturnType<typeof downloadHpxPulseEngine>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type DownloadHpxPulseEngineQueryResult = NonNullable<Awaited<ReturnType<typeof downloadHpxPulseEngine>>>
+export type DownloadHpxPulseEngineQueryError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>
+
+export function useDownloadHpxPulseEngine<TData = Awaited<ReturnType<typeof downloadHpxPulseEngine>>, TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>>(
+  arch: string,
+  options: {
+    query: Partial<UseQueryOptions<Awaited<ReturnType<typeof downloadHpxPulseEngine>>, TError, TData>> &
+      Pick<DefinedInitialDataOptions<Awaited<ReturnType<typeof downloadHpxPulseEngine>>, TError, TData>, 'initialData'>
+  },
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useDownloadHpxPulseEngine<TData = Awaited<ReturnType<typeof downloadHpxPulseEngine>>, TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>>(
+  arch: string,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof downloadHpxPulseEngine>>, TError, TData>> &
+      Pick<UndefinedInitialDataOptions<Awaited<ReturnType<typeof downloadHpxPulseEngine>>, TError, TData>, 'initialData'>
+  },
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useDownloadHpxPulseEngine<TData = Awaited<ReturnType<typeof downloadHpxPulseEngine>>, TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>>(
+  arch: string,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof downloadHpxPulseEngine>>, TError, TData>> },
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Download Hpx Pulse Engine
+ */
+
+export function useDownloadHpxPulseEngine<TData = Awaited<ReturnType<typeof downloadHpxPulseEngine>>, TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>>(
+  arch: string,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof downloadHpxPulseEngine>>, TError, TData>> },
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getDownloadHpxPulseEngineQueryOptions(arch, options)
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
+}
+
+/**
+ * @summary Get Hpx Pulse Agent Config
+ */
+export const getHpxPulseAgentConfig = (signal?: AbortSignal) => {
+  return orvalFetcher<HpxPulseAgentConfigResponse>({ url: `/api/hpx_pulse/agent/config`, method: 'GET', signal })
+}
+
+export const getGetHpxPulseAgentConfigQueryKey = () => {
+  return [`/api/hpx_pulse/agent/config`] as const
+}
+
+export const getGetHpxPulseAgentConfigQueryOptions = <TData = Awaited<ReturnType<typeof getHpxPulseAgentConfig>>, TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>>(options?: {
+  query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getHpxPulseAgentConfig>>, TError, TData>>
+}) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey = queryOptions?.queryKey ?? getGetHpxPulseAgentConfigQueryKey()
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getHpxPulseAgentConfig>>> = ({ signal }) => getHpxPulseAgentConfig(signal)
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<Awaited<ReturnType<typeof getHpxPulseAgentConfig>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetHpxPulseAgentConfigQueryResult = NonNullable<Awaited<ReturnType<typeof getHpxPulseAgentConfig>>>
+export type GetHpxPulseAgentConfigQueryError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>
+
+export function useGetHpxPulseAgentConfig<TData = Awaited<ReturnType<typeof getHpxPulseAgentConfig>>, TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>>(options: {
+  query: Partial<UseQueryOptions<Awaited<ReturnType<typeof getHpxPulseAgentConfig>>, TError, TData>> &
+    Pick<DefinedInitialDataOptions<Awaited<ReturnType<typeof getHpxPulseAgentConfig>>, TError, TData>, 'initialData'>
+}): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetHpxPulseAgentConfig<TData = Awaited<ReturnType<typeof getHpxPulseAgentConfig>>, TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>>(options?: {
+  query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getHpxPulseAgentConfig>>, TError, TData>> &
+    Pick<UndefinedInitialDataOptions<Awaited<ReturnType<typeof getHpxPulseAgentConfig>>, TError, TData>, 'initialData'>
+}): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetHpxPulseAgentConfig<TData = Awaited<ReturnType<typeof getHpxPulseAgentConfig>>, TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>>(options?: {
+  query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getHpxPulseAgentConfig>>, TError, TData>>
+}): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get Hpx Pulse Agent Config
+ */
+
+export function useGetHpxPulseAgentConfig<TData = Awaited<ReturnType<typeof getHpxPulseAgentConfig>>, TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>>(options?: {
+  query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getHpxPulseAgentConfig>>, TError, TData>>
+}): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getGetHpxPulseAgentConfigQueryOptions(options)
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
+}
+
+/**
+ * @summary Hpx Pulse Agent Heartbeat
+ */
+export const hpxPulseAgentHeartbeat = (hpxPulseAgentHeartbeatRequest: BodyType<HpxPulseAgentHeartbeatRequest>, signal?: AbortSignal) => {
+  return orvalFetcher<HpxPulseAgentConfigResponse>({
+    url: `/api/hpx_pulse/agent/heartbeat`,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    data: hpxPulseAgentHeartbeatRequest,
+    signal,
+  })
+}
+
+export const getHpxPulseAgentHeartbeatMutationOptions = <
+  TData = Awaited<ReturnType<typeof hpxPulseAgentHeartbeat>>,
+  TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { data: BodyType<HpxPulseAgentHeartbeatRequest> }, TContext>
+}) => {
+  const mutationKey = ['hpxPulseAgentHeartbeat']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof hpxPulseAgentHeartbeat>>, { data: BodyType<HpxPulseAgentHeartbeatRequest> }> = props => {
+    const { data } = props ?? {}
+
+    return hpxPulseAgentHeartbeat(data)
+  }
+
+  return { mutationFn, ...mutationOptions } as UseMutationOptions<TData, TError, { data: BodyType<HpxPulseAgentHeartbeatRequest> }, TContext>
+}
+
+export type HpxPulseAgentHeartbeatMutationResult = NonNullable<Awaited<ReturnType<typeof hpxPulseAgentHeartbeat>>>
+export type HpxPulseAgentHeartbeatMutationBody = BodyType<HpxPulseAgentHeartbeatRequest>
+export type HpxPulseAgentHeartbeatMutationError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>
+
+/**
+ * @summary Hpx Pulse Agent Heartbeat
+ */
+export const useHpxPulseAgentHeartbeat = <
+  TData = Awaited<ReturnType<typeof hpxPulseAgentHeartbeat>>,
+  TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { data: BodyType<HpxPulseAgentHeartbeatRequest> }, TContext>
+}): UseMutationResult<TData, TError, { data: BodyType<HpxPulseAgentHeartbeatRequest> }, TContext> => {
+  const mutationOptions = getHpxPulseAgentHeartbeatMutationOptions(options)
+
+  return useMutation(mutationOptions)
+}
+
+/**
+ * @summary Hpx Pulse Agent Ack
+ */
+export const hpxPulseAgentAck = (hpxPulseAgentAckRequest: BodyType<HpxPulseAgentAckRequest>, signal?: AbortSignal) => {
+  return orvalFetcher<void>({ url: `/api/hpx_pulse/agent/ack`, method: 'POST', headers: { 'Content-Type': 'application/json' }, data: hpxPulseAgentAckRequest, signal })
+}
+
+export const getHpxPulseAgentAckMutationOptions = <
+  TData = Awaited<ReturnType<typeof hpxPulseAgentAck>>,
+  TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { data: BodyType<HpxPulseAgentAckRequest> }, TContext>
+}) => {
+  const mutationKey = ['hpxPulseAgentAck']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof hpxPulseAgentAck>>, { data: BodyType<HpxPulseAgentAckRequest> }> = props => {
+    const { data } = props ?? {}
+
+    return hpxPulseAgentAck(data)
+  }
+
+  return { mutationFn, ...mutationOptions } as UseMutationOptions<TData, TError, { data: BodyType<HpxPulseAgentAckRequest> }, TContext>
+}
+
+export type HpxPulseAgentAckMutationResult = NonNullable<Awaited<ReturnType<typeof hpxPulseAgentAck>>>
+export type HpxPulseAgentAckMutationBody = BodyType<HpxPulseAgentAckRequest>
+export type HpxPulseAgentAckMutationError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>
+
+/**
+ * @summary Hpx Pulse Agent Ack
+ */
+export const useHpxPulseAgentAck = <TData = Awaited<ReturnType<typeof hpxPulseAgentAck>>, TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { data: BodyType<HpxPulseAgentAckRequest> }, TContext>
+}): UseMutationResult<TData, TError, { data: BodyType<HpxPulseAgentAckRequest> }, TContext> => {
+  const mutationOptions = getHpxPulseAgentAckMutationOptions(options)
+
+  return useMutation(mutationOptions)
+}
+
+/**
  * Create a new user
 
 - **username**: 3 to 32 characters, can include a-z, 0-9, and underscores.
@@ -13704,6 +16663,99 @@ export const useBulkModifyUsersProxySettings = <
   mutation?: UseMutationOptions<TData, TError, { data: BodyType<BulkUsersProxy> }, TContext>
 }): UseMutationResult<TData, TError, { data: BodyType<BulkUsersProxy> }, TContext> => {
   const mutationOptions = getBulkModifyUsersProxySettingsMutationOptions(options)
+
+  return useMutation(mutationOptions)
+}
+
+/**
+ * @summary Copilot Status
+ */
+export const copilotStatus = (signal?: AbortSignal) => {
+  return orvalFetcher<CopilotStatusResponse>({ url: `/api/copilot/status`, method: 'GET', signal })
+}
+
+export const getCopilotStatusQueryKey = () => {
+  return [`/api/copilot/status`] as const
+}
+
+export const getCopilotStatusQueryOptions = <TData = Awaited<ReturnType<typeof copilotStatus>>, TError = ErrorType<Unauthorized | Forbidden>>(options?: {
+  query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof copilotStatus>>, TError, TData>>
+}) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey = queryOptions?.queryKey ?? getCopilotStatusQueryKey()
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof copilotStatus>>> = ({ signal }) => copilotStatus(signal)
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<Awaited<ReturnType<typeof copilotStatus>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type CopilotStatusQueryResult = NonNullable<Awaited<ReturnType<typeof copilotStatus>>>
+export type CopilotStatusQueryError = ErrorType<Unauthorized | Forbidden>
+
+export function useCopilotStatus<TData = Awaited<ReturnType<typeof copilotStatus>>, TError = ErrorType<Unauthorized | Forbidden>>(options: {
+  query: Partial<UseQueryOptions<Awaited<ReturnType<typeof copilotStatus>>, TError, TData>> & Pick<DefinedInitialDataOptions<Awaited<ReturnType<typeof copilotStatus>>, TError, TData>, 'initialData'>
+}): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useCopilotStatus<TData = Awaited<ReturnType<typeof copilotStatus>>, TError = ErrorType<Unauthorized | Forbidden>>(options?: {
+  query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof copilotStatus>>, TError, TData>> &
+    Pick<UndefinedInitialDataOptions<Awaited<ReturnType<typeof copilotStatus>>, TError, TData>, 'initialData'>
+}): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useCopilotStatus<TData = Awaited<ReturnType<typeof copilotStatus>>, TError = ErrorType<Unauthorized | Forbidden>>(options?: {
+  query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof copilotStatus>>, TError, TData>>
+}): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Copilot Status
+ */
+
+export function useCopilotStatus<TData = Awaited<ReturnType<typeof copilotStatus>>, TError = ErrorType<Unauthorized | Forbidden>>(options?: {
+  query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof copilotStatus>>, TError, TData>>
+}): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getCopilotStatusQueryOptions(options)
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
+}
+
+/**
+ * @summary Copilot Chat
+ */
+export const copilotChat = (copilotChatRequest: BodyType<CopilotChatRequest>, signal?: AbortSignal) => {
+  return orvalFetcher<CopilotChatResponse>({ url: `/api/copilot/chat`, method: 'POST', headers: { 'Content-Type': 'application/json' }, data: copilotChatRequest, signal })
+}
+
+export const getCopilotChatMutationOptions = <TData = Awaited<ReturnType<typeof copilotChat>>, TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { data: BodyType<CopilotChatRequest> }, TContext>
+}) => {
+  const mutationKey = ['copilotChat']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof copilotChat>>, { data: BodyType<CopilotChatRequest> }> = props => {
+    const { data } = props ?? {}
+
+    return copilotChat(data)
+  }
+
+  return { mutationFn, ...mutationOptions } as UseMutationOptions<TData, TError, { data: BodyType<CopilotChatRequest> }, TContext>
+}
+
+export type CopilotChatMutationResult = NonNullable<Awaited<ReturnType<typeof copilotChat>>>
+export type CopilotChatMutationBody = BodyType<CopilotChatRequest>
+export type CopilotChatMutationError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>
+
+/**
+ * @summary Copilot Chat
+ */
+export const useCopilotChat = <TData = Awaited<ReturnType<typeof copilotChat>>, TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<TData, TError, { data: BodyType<CopilotChatRequest> }, TContext>
+}): UseMutationResult<TData, TError, { data: BodyType<CopilotChatRequest> }, TContext> => {
+  const mutationOptions = getCopilotChatMutationOptions(options)
 
   return useMutation(mutationOptions)
 }

@@ -43,6 +43,11 @@ class IKEv2Settings(BaseModel):
     password: str = Field(default_factory=random_password, min_length=1)
 
 
+class OpenVPNSettings(BaseModel):
+    serial: str = ""
+    fingerprint: str = ""
+
+
 class WireGuardPeerIPs(BaseModel):
     peer_ips: list[str] = Field(default_factory=list)
 
@@ -111,6 +116,7 @@ class ProxyTable(BaseModel):
     wireguard: WireGuardSettings = Field(default_factory=WireGuardSettings)
     hysteria: HysteriaSettings = Field(default_factory=HysteriaSettings)
     ikev2: IKEv2Settings = Field(default_factory=IKEv2Settings)
+    openvpn: OpenVPNSettings = Field(default_factory=OpenVPNSettings)
 
     @property
     def l2tp(self) -> IKEv2Settings:

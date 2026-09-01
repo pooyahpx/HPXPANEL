@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
 // Keep this local extension until `bun run gen:api` picks up the backend enum.
-export const coreBackendTypes = ['xray', 'wg', 'ikev2', 'l2tp', 'mtproto', 'singbox'] as const
+export const coreBackendTypes = ['xray', 'wg', 'ikev2', 'l2tp', 'openvpn', 'mtproto', 'singbox'] as const
 export type CoreBackendType = (typeof coreBackendTypes)[number]
 
 export const coreConfigFormSchema = z.object({

@@ -9,7 +9,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useLocation } from 'react-router'
 
-const STARTER_KEYS = ['pulseStatus', 'diagnosePulse', 'syncHelp', 'panelUrl'] as const
+const STARTER_KEYS = ['pulseStatus', 'diagnosePulse', 'syncHelp', 'panelUrl', 'importProxyLink'] as const
 
 type ChatEntry = CopilotMessage & { id: string }
 

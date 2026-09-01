@@ -11,6 +11,8 @@ from app.operation.hpx_pulse import HpxPulseOperation
 from app.operation.hpx_tunnel import HpxTunnelOperation
 from app.operation.permissions import PermissionDenied, enforce_permission
 from app.services.copilot.context import diagnose_pulse
+from app.services.copilot.host_import import import_proxy_link as run_proxy_link_import
+from app.services.copilot.host_import import list_core_inbound_options
 
 _pulse_op_instance: HpxPulseOperation | None = None
 _tunnel_op_instance: HpxTunnelOperation | None = None
@@ -118,6 +120,50 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_core_inbounds",
+            "description": "List Xray inbound tags from loaded core configs (for linking a Host).",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "import_proxy_link",
+            "description": (
+                "Parse a client share link (vless://, vmess://, trojan://, ss://) and create a HPXPANEL Host. "
+                "Always preview first with confirm=false, then create with confirm=true after the admin agrees. "
+                "Requires inbound_tag from list_core_inbounds. Optional create_user with username + group_ids."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "link": {"type": "string", "description": "Full share link URI"},
+                    "inbound_tag": {"type": "string", "description": "Existing core inbound tag"},
+                    "confirm": {
+                        "type": "boolean",
+                        "description": "false = preview only, true = create host (and optional user)",
+                        "default": False,
+                    },
+                    "remark_override": {"type": "string", "description": "Optional host remark override"},
+                    "create_user": {
+                        "type": "boolean",
+                        "description": "Also create a user with UUID/password from the link",
+                        "default": False,
+                    },
+                    "username": {"type": "string"},
+                    "group_ids": {
+                        "type": "array",
+                        "items": {"type": "integer"},
+                        "description": "Group IDs required when create_user=true",
+                    },
+                },
+                "required": ["link", "inbound_tag"],
+            },
+        },
+    },
 ]
 
 
@@ -213,6 +259,40 @@ async def execute_tool(
             return {"tunnel_id": result.tunnel.id, "status": result.tunnel.status, "message": result.message}, (
                 f"Restarted tunnel #{result.tunnel.id}"
             )
+
+        if name == "list_core_inbounds":
+            enforce_permission(admin, "hosts", "read")
+            inbounds = await list_core_inbound_options()
+            return {"total": len(inbounds), "inbounds": inbounds}, f"Listed {len(inbounds)} inbound(s)"
+
+        if name == "import_proxy_link":
+            if arguments.get("confirm"):
+                enforce_permission(admin, "hosts", "create")
+                if arguments.get("create_user"):
+                    enforce_permission(admin, "users", "create")
+            else:
+                enforce_permission(admin, "hosts", "read")
+
+            group_ids_raw = arguments.get("group_ids") or []
+            group_ids = [int(item) for item in group_ids_raw] if group_ids_raw else None
+
+            result = await run_proxy_link_import(
+                db,
+                admin=admin,
+                link=str(arguments.get("link") or ""),
+                inbound_tag=str(arguments.get("inbound_tag") or ""),
+                confirm=bool(arguments.get("confirm")),
+                remark_override=arguments.get("remark_override"),
+                create_user=bool(arguments.get("create_user")),
+                username=arguments.get("username"),
+                group_ids=group_ids,
+            )
+            if arguments.get("confirm") and result.get("host_id"):
+                label = f"Imported host #{result['host_id']}"
+                if result.get("username"):
+                    label += f" + user {result['username']}"
+                return result, label
+            return result, "Previewed proxy link import"
 
         return {"error": f"Unknown tool: {name}"}, None
     except PermissionDenied as exc:

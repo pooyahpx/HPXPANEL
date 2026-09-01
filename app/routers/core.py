@@ -46,7 +46,7 @@ async def scan_reality_target(
 
 @router.post("/openvpn/generate-pki", response_model=OpenVPNPkiResponse)
 async def generate_openvpn_pki_material(
-    request: OpenVPNPkiRequest = OpenVPNPkiRequest(),
+    request: OpenVPNPkiRequest,
     _: AdminDetails = Depends(require_permission("cores", "create")),
 ):
     """Generate OpenVPN CA, server certificate, server key, and TLS-Crypt key."""

@@ -57,12 +57,14 @@ async def _chat_completion(messages: list[dict[str, Any]], *, tools: list[dict[s
     }
 
     timeout = aiohttp.ClientTimeout(total=120.0)
-    async with aiohttp.ClientSession(timeout=timeout) as session:
-        async with session.post(url, headers=headers, json=payload) as response:
-            if response.status >= 400:
-                detail = (await response.text())[:500]
-                raise CopilotProviderError(f"LLM request failed ({response.status}): {detail}")
-            return await response.json()
+    async with (
+        aiohttp.ClientSession(timeout=timeout) as session,
+        session.post(url, headers=headers, json=payload) as response,
+    ):
+        if response.status >= 400:
+            detail = (await response.text())[:500]
+            raise CopilotProviderError(f"LLM request failed ({response.status}): {detail}")
+        return await response.json()
 
 
 async def run_copilot_chat(

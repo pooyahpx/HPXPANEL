@@ -165,9 +165,107 @@ collect_forward_listen_ports() {
   printf '%s\n' "${ports[@]}"
 }
 
+is_port_listening() {
+  local port="$1"
+  [ -n "$port" ] || return 1
+  if has ss; then
+    ss -tlnH "sport = :${port}" 2>/dev/null | grep -q .
+    return $?
+  fi
+  if has netstat; then
+    netstat -tln 2>/dev/null | grep -q ":${port} "
+    return $?
+  fi
+  return 1
+}
+
+pulse_registration_active() {
+  local pid="$1" env_file="${AGENTS_DIR}/${pid}.env"
+  [ -f "$env_file" ] || return 1
+  (
+    load_env_file "$env_file"
+    PULSE_ID="$pid"
+    case "${TUNNEL_MODE:-direct_l3}" in
+      direct_l3)
+        tunnel_service_active && exit 0
+        tunnel_iface_up && exit 0
+        ;;
+      reverse_*)
+        tunnel_service_active && exit 0
+        ;;
+      *)
+        tunnel_service_active && exit 0
+        ;;
+    esac
+    exit 1
+  )
+}
+
+remove_pulse_local_state() {
+  local pid="$1" svc saved_pulse_id saved_side
+  [ -n "$pid" ] || return 0
+  saved_pulse_id="${PULSE_ID:-}"
+  saved_side="${PULSE_SIDE:-}"
+  if [ -f "${AGENTS_DIR}/${pid}.env" ]; then
+    load_env_file "${AGENTS_DIR}/${pid}.env"
+    PULSE_ID="$pid"
+  fi
+  svc="$(tunnel_service_name)"
+  systemctl stop "${svc}.service" 2>/dev/null || true
+  systemctl disable "${svc}.service" 2>/dev/null || true
+  rm -f "/etc/systemd/system/${svc}.service"
+  rm -f "${AGENTS_DIR}/${pid}.env"
+  rm -f "${ETC_DIR}/l3-pulse-${pid}.toml"
+  systemctl daemon-reload 2>/dev/null || true
+  PULSE_ID="$saved_pulse_id"
+  PULSE_SIDE="$saved_side"
+}
+
+prune_stale_agent_registrations() {
+  [ -d "$AGENTS_DIR" ] || return 0
+  local env_file existing_id
+  for env_file in "$AGENTS_DIR"/*.env; do
+    [ -f "$env_file" ] || continue
+    existing_id="$(basename "$env_file" .env)"
+    [ "$existing_id" = "${PULSE_ID:-}" ] && continue
+    if pulse_registration_active "$existing_id"; then
+      continue
+    fi
+    log "removing stale local registration for pulse ${existing_id} (stopped / deleted from panel)"
+    remove_pulse_local_state "$existing_id"
+  done
+}
+
+free_orphan_listen_port() {
+  local port="$1" env_file existing_id
+  is_port_listening "$port" || return 0
+  for env_file in "$AGENTS_DIR"/*.env; do
+    [ -f "$env_file" ] || continue
+    existing_id="$(basename "$env_file" .env)"
+    [ "$existing_id" = "${PULSE_ID:-}" ] && continue
+    pulse_registration_active "$existing_id" || continue
+    load_env_file "$env_file"
+    while IFS= read -r p; do
+      if [ "$p" = "$port" ]; then
+        warn "port ${port} still held by active pulse ${existing_id}"
+        return 1
+      fi
+    done < <(collect_forward_listen_ports "${PORT_FORWARDS:-}")
+  done
+  warn "port ${port} held by orphan process — releasing for new join"
+  if has fuser; then
+    fuser -k "${port}/tcp" 2>/dev/null || true
+  else
+    pkill -f hpx-tunnel-engi 2>/dev/null || true
+  fi
+  sleep 1
+  return 0
+}
+
 check_local_forward_conflicts() {
   [ "${PULSE_SIDE:-}" = "iran" ] || return 0
   [ -d "$AGENTS_DIR" ] || return 0
+  prune_stale_agent_registrations
   local env_file existing_id port new_port
   while IFS= read -r new_port; do
     [ -n "$new_port" ] || continue
@@ -175,13 +273,15 @@ check_local_forward_conflicts() {
       [ -f "$env_file" ] || continue
       existing_id="$(basename "$env_file" .env)"
       [ "$existing_id" = "${PULSE_ID:-}" ] && continue
+      pulse_registration_active "$existing_id" || continue
       while IFS= read -r port; do
         [ -n "$port" ] || continue
         if [ "$port" = "$new_port" ]; then
-          die "Iran listen port ${port} already used by pulse ${existing_id} on this server — use one pulse with multiple forwards, or different external ports"
+          die "Iran listen port ${port} already used by active pulse ${existing_id} — stop it (sudo hpx-pulse-agent leave ${existing_id}) or use different external ports"
         fi
       done < <(collect_forward_listen_ports "$(grep '^PORT_FORWARDS=' "$env_file" | cut -d= -f2-)")
     done
+    free_orphan_listen_port "$new_port" || die "Iran listen port ${new_port} already in use — run: sudo hpx-pulse-agent leave ${existing_id:-ID}"
   done < <(collect_forward_listen_ports "${PORT_FORWARDS:-}")
 }
 
@@ -936,10 +1036,34 @@ cmd_status() {
   fi
 }
 
+cmd_leave() {
+  need_root
+  ensure_deps
+  local pid="${1:-}" env_file
+  if [ -n "$pid" ]; then
+    log "removing local pulse ${pid}..."
+    remove_pulse_local_state "$pid"
+    log "pulse ${pid} removed from this server"
+    return
+  fi
+  if [ ! -d "$AGENTS_DIR" ] || ! compgen -G "$AGENTS_DIR/*.env" >/dev/null; then
+    log "no local pulse registrations under ${AGENTS_DIR}"
+    return
+  fi
+  for env_file in "$AGENTS_DIR"/*.env; do
+    [ -f "$env_file" ] || continue
+    pid="$(basename "$env_file" .env)"
+    log "removing local pulse ${pid}..."
+    remove_pulse_local_state "$pid"
+  done
+  log "all local pulse registrations removed"
+}
+
 usage() {
   cat <<EOF
 HPX Pulse Agent
   join TOKEN --panel-url URL --side iran|abroad
+  leave [PULSE_ID]        remove stopped/deleted pulse from this server (frees ports)
   set-panel-url URL       when :8000 is blocked from Iran, use https://domain (443)
   install-engine [--force]  install hpx-tunnel-engine (GitHub-first on Iran)
   uninstall-engine        remove engine binary (for reinstall tests)
@@ -962,6 +1086,7 @@ main() {
   shift || true
   case "$cmd" in
     join) cmd_join "$@" ;;
+    leave) cmd_leave "$@" ;;
     set-panel-url) cmd_set_panel_url "$@" ;;
     install-engine) shift; cmd_install_engine "$@" ;;
     uninstall-engine) cmd_uninstall_engine ;;

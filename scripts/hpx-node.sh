@@ -6,15 +6,14 @@
 # as a Docker container, then prints Address + Port + API key + Server CA for
 # HPXPANEL -> Nodes.
 #
-# One-liner (Linux) — save to a file first so cmdline stays short:
-#   curl -fsSL https://github.com/pooyahpx/HPXNODE/raw/main/scripts/install.sh -o /tmp/hpx-node.sh
-#   sudo bash /tmp/hpx-node.sh install -y
+# One-liner (Linux) — prompts only Node Port + API Port, then installs:
+#   sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXNODE/raw/main/scripts/install.sh)" @ install
 #
-# Or:
-#   sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXNODE/raw/main/scripts/install.sh)" @ install -y
+# Non-interactive (custom ports):
+#   sudo bash -c "$(curl -fsSL .../install.sh)" @ install -y --service-port 63000 --api-port 63001
 #
-# Interactive menu:
-#   sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXNODE/raw/main/scripts/install.sh)"
+# Full interactive menu (backends, image, instance name):
+#   sudo bash -c "$(curl -fsSL .../install.sh)" @ menu
 #
 set -euo pipefail
 
@@ -37,10 +36,12 @@ DATA_DIR="${DATA_DIR:-/var/lib/hpx-node}"
 CONTAINER_DATA="/var/lib/hpx-node"
 
 SERVICE_PORT="${SERVICE_PORT:-62050}"
+API_PORT="${API_PORT:-}"
 API_KEY=""
 BUILD_FROM_SOURCE=0
 ASSUME_YES=0
 QUIET="${QUIET:-0}"
+PORTS_FROM_CLI=0
 
 XRAY_ON=1; OVPN_ON=1; WG_ON=1; IKEV2_ON=1
 
@@ -149,6 +150,32 @@ ask_num() {
     if [[ "$ans" =~ ^[0-9]+$ ]] && [ "$ans" -ge 1 ] && [ "$ans" -le 65535 ]; then echo "$ans"; return; fi
     warn "Please enter a port between 1 and 65535."
   done
+}
+
+default_api_port() {
+  echo $((SERVICE_PORT + 1))
+}
+
+resolve_api_port() {
+  if [ -z "$API_PORT" ]; then
+    API_PORT="$(default_api_port)"
+  fi
+}
+
+prompt_panel_ports() {
+  [ "$ASSUME_YES" = 1 ] && return 0
+  [ "$PORTS_FROM_CLI" = 1 ] && resolve_api_port && return 0
+  echo
+  echo -e "  ${c_bld}HPX Node${c_off} ${c_dim}— set panel link ports${c_off}"
+  echo -e "  ${c_dim}Use the same values in HPXPANEL → Nodes → Create Node.${c_off}"
+  echo
+  SERVICE_PORT="$(ask_num "Node port (gRPC)" "$SERVICE_PORT")"
+  resolve_api_port
+  API_PORT="$(ask_num "API port (panel field)" "$API_PORT")"
+  if [ "$API_PORT" = "$SERVICE_PORT" ]; then
+    warn "API port equals Node port — panel default is usually Node port + 1."
+  fi
+  echo
 }
 
 require_root() { [ "$(id -u)" -eq 0 ] || die "run as root (sudo)"; }
@@ -366,6 +393,7 @@ Install options:
   --disable <list>   xray,openvpn,wireguard,ikev2 (comma)
   --api-key <uuid>   (default: auto-generate)
   --service-port <n> panel "Node Port" (default: ${SERVICE_PORT})
+  --api-port <n>     panel "API Port" (default: Node port + 1)
   --image <ref>      pull image (default: ${IMAGE})
   --build            build from source instead of pull
   --branch <name> | --repo <url>
@@ -400,7 +428,8 @@ parse_install_args() {
         echo "$d" | grep -qi ",ikev2,"     && IKEV2_ON=0
         shift 2 ;;
       --api-key) API_KEY="$2"; shift 2 ;;
-      --service-port|--port) SERVICE_PORT="$2"; shift 2 ;;
+      --service-port|--port) SERVICE_PORT="$2"; PORTS_FROM_CLI=1; shift 2 ;;
+      --api-port) API_PORT="$2"; PORTS_FROM_CLI=1; shift 2 ;;
       --image) IMAGE="$2"; shift 2 ;;
       --build) BUILD_FROM_SOURCE=1; shift ;;
       --branch) BRANCH="$2"; shift 2 ;;
@@ -506,6 +535,7 @@ write_compose() {
     echo "    environment:"
     echo "      API_KEY: \"${API_KEY}\""
     echo "      SERVICE_PORT: ${SERVICE_PORT}"
+    echo "      PANEL_API_PORT: ${API_PORT}"
     echo "      SERVICE_PROTOCOL: \"grpc\""
     echo "      HPX_NODE_WG_HOST_ROUTING: \"1\""
     [ "$XRAY_ON"  -eq 0 ] && echo "      HPX_NODE_DISABLE_XRAY: \"1\""
@@ -548,12 +578,13 @@ print_summary() {
   echo -e "  Instance    : ${c_bld}${NODE_NAME:-default}${c_off}"
   echo -e "  Backends    : ${c_bld}${backends# }${c_off}"
   echo -e "  ${c_bld}Address${c_off}     : ${c_cyn}${c_bld}${ip}${c_off}"
-  echo -e "  ${c_bld}Node port${c_off}   : ${c_cyn}${c_bld}${SERVICE_PORT}${c_off}   ${c_dim}(panel field: Node Port)${c_off}"
+  echo -e "  ${c_bld}Node port${c_off}   : ${c_cyn}${c_bld}${SERVICE_PORT}${c_off}   ${c_dim}(panel: Node Port)${c_off}"
+  echo -e "  ${c_bld}API port${c_off}    : ${c_cyn}${c_bld}${API_PORT}${c_off}   ${c_dim}(panel: API Port)${c_off}"
   echo -e "  ${c_yel}${c_bld}API key${c_off}     : ${c_bld}${API_KEY}${c_off}"
   echo -e "  Data        : ${DATA_DIR}"
   echo -e "  Compose     : ${COMPOSE_FILE}"
   echo
-  echo -e "  ${c_dim}In HPXPANEL create a node with the same Address / Port / API key.${c_off}"
+  echo -e "  ${c_dim}In HPXPANEL create a node with the same Address / Node Port / API Port / API key.${c_off}"
   echo -e "  ${c_dim}More instances on this host: install -y --name other --service-port <free-port>${c_off}"
   echo -e "  ${c_dim}Docs: ${PANEL_DOCS}${c_off}"
   echo
@@ -611,6 +642,7 @@ EOF
 run_install() {
   require_root
   apply_instance
+  resolve_api_port
   assert_port_free
   : > "$STEP_LOG"
   [ -z "$API_KEY" ] && API_KEY="$(gen_uuid)"
@@ -649,6 +681,8 @@ run_install() {
 install_command() {
   parse_install_args "$@"
   require_root
+  prompt_panel_ports
+  resolve_api_port
   run_install
 }
 
@@ -736,7 +770,7 @@ main() {
     menu) cmd="menu"; shift ;;
     install|update|uninstall|restart|status|logs|list) cmd="$1"; shift ;;
     -h|--help) usage; exit 0 ;;
-    "") cmd="menu" ;;
+    "") cmd="install" ;;
     -*) cmd="install" ;;
     *) die "unknown command: $1 (see --help)" ;;
   esac

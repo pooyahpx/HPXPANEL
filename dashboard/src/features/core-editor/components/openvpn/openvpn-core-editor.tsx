@@ -94,6 +94,7 @@ export function OpenVPNCoreEditor() {
       updateOpenvpnDraft(current => ({
         ...current,
         ca_cert: bundle.ca_cert,
+        ca_key: bundle.ca_key,
         server_cert: bundle.server_cert,
         server_key: bundle.server_key,
         tls_crypt_key: bundle.tls_crypt_key,

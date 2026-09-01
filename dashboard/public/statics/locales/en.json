@@ -523,13 +523,16 @@
         "outline": "Outline",
         "outlineDescription": "Outline VPN configuration format",
         "wireguard": "WireGuard",
-        "wireguardDescription": "WireGuard configuration format"
+        "wireguardDescription": "WireGuard configuration format",
+        "openvpn": "OpenVPN",
+        "openvpnDescription": "OpenVPN client profile (.ovpn) for OpenVPN Connect"
       },
       "configFormats": {
         "links": "Links",
         "links_base64": "Links (Base64)",
         "xray": "Xray",
         "wireguard": "WireGuard",
+        "openvpn": "OpenVPN",
         "sing_box": "Sing-box",
         "clash": "Clash",
         "clash_meta": "Clash Meta",
@@ -2050,6 +2053,7 @@
     "proxySettings.wireguardPublicKey": "WireGuard Public key",
     "proxySettings.generateWireGuardKeyPair": "WireGuard keypair",
     "proxySettings.wireguardGenerated": "WireGuard keypair generated",
+    "proxySettings.openvpnManaged": "OpenVPN client certificates are generated automatically when the user is assigned to an OpenVPN group. Download the .ovpn profile from the subscription menu after creation.",
     "proxySettings.ipsecSharedTitle": "IKEv2 / L2TP credentials",
     "proxySettings.ipsecSharedDescription": "IKEv2 and L2TP/IPsec share this username and password.",
     "proxySettings.ipsecUsername": "IPsec username",

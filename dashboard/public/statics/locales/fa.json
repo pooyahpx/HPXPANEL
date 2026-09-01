@@ -191,13 +191,16 @@
         "outline": "Outline",
         "outlineDescription": "فرمت پیکربندی Outline VPN",
         "wireguard": "WireGuard",
-        "wireguardDescription": "فرمت پیکربندی وایرگارد"
+        "wireguardDescription": "فرمت پیکربندی وایرگارد",
+        "openvpn": "OpenVPN",
+        "openvpnDescription": "فایل پروفایل OpenVPN (.ovpn) برای OpenVPN Connect"
       },
       "configFormats": {
         "links": "لینک‌ها",
         "links_base64": "لینک‌ها (Base64)",
         "xray": "Xray",
         "wireguard": "WireGuard",
+        "openvpn": "OpenVPN",
         "sing_box": "Sing-box",
         "clash": "Clash",
         "clash_meta": "Clash Meta",
@@ -1656,6 +1659,7 @@
   "userDialog.proxySettings.wireguardPublicKey": "کلید عمومی وایرگارد",
   "userDialog.proxySettings.generateWireGuardKeyPair": "جفت‌کلید وایرگارد",
   "userDialog.proxySettings.wireguardGenerated": "جفت‌کلید وایرگارد تولید شد",
+  "userDialog.proxySettings.openvpnManaged": "گواهی کلاینت OpenVPN هنگام اختصاص کاربر به گروه OpenVPN به‌صورت خودکار ساخته می‌شود. پس از ساخت کاربر، فایل .ovpn را از منوی اشتراک دانلود کنید.",
   "userDialog.proxySettings.desc": "تنظیمات اختصاصی پروتکل برای این کاربر را پیکربندی کنید.",
   "userDialog.expireDate": "تاریخ انقضا",
   "username": "نام کاربری",

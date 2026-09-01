@@ -28,6 +28,7 @@ from app.nats import is_nats_enabled
 from app.nats.client import setup_nats_kv
 from app.nats.message import MessageTopic
 from app.nats.router import router
+from app.utils.openvpn import get_openvpn_core_for_inbounds
 from app.utils.logger import get_logger
 from config import runtime_settings
 from role import Role
@@ -112,6 +113,37 @@ async def _prepare_subscription_inbound_data(
             wireguard_mtu=wg_over.mtu,
             wireguard_reserved=reserved,
             wireguard_dns=dns,
+            fragment_settings=host.fragment_settings.model_dump() if host.fragment_settings else None,
+            noise_settings=host.noise_settings.model_dump() if host.noise_settings else None,
+            finalmask=final_mask_settings,
+            finalmask_link=finalmask_link,
+            priority=host.priority,
+            status=list(host.status) if host.status else None,
+            subscription_templates=host.subscription_templates.model_dump(exclude_none=True)
+            if host.subscription_templates
+            else None,
+        )
+
+    if protocol == "openvpn":
+        core = await get_openvpn_core_for_inbounds({host.inbound_tag})
+        core_config = dict(core) if core is not None else {}
+        return SubscriptionInboundData(
+            remark=host.remark,
+            inbound_tag=host.inbound_tag,
+            protocol=protocol,
+            address=list(host.address) if host.address else ["{SERVER_IP}"],
+            port=[host.port] if host.port else [inbound_config.get("port")],
+            network=inbound_config.get("network", core_config.get("proto", "udp")),
+            tls_config=TLSConfig(),
+            transport_config=TCPTransportConfig(path="", host=[]),
+            mux_settings=None,
+            openvpn_ca_cert=str(core_config.get("ca_cert") or ""),
+            openvpn_tls_crypt_key=str(core_config.get("tls_crypt_key") or ""),
+            openvpn_cipher=str(core_config.get("cipher") or "AES-256-GCM"),
+            openvpn_auth=str(core_config.get("auth") or "SHA256"),
+            openvpn_proto=str(core_config.get("proto") or "udp"),
+            openvpn_device=str(core_config.get("device") or "tun"),
+            openvpn_dns=list(core_config.get("dns") or []),
             fragment_settings=host.fragment_settings.model_dump() if host.fragment_settings else None,
             noise_settings=host.noise_settings.model_dump() if host.noise_settings else None,
             finalmask=final_mask_settings,

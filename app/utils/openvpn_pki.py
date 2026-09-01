@@ -98,7 +98,62 @@ def generate_openvpn_pki(
 
     return {
         "ca_cert": _pem_certificate(ca_cert),
+        "ca_key": _pem_private_key(ca_key),
         "server_cert": _pem_certificate(server_cert),
         "server_key": _pem_private_key(server_key),
         "tls_crypt_key": generate_tls_crypt_key(),
     }
+
+
+def sign_client_certificate(
+    *,
+    ca_key_pem: str,
+    ca_cert_pem: str,
+    common_name: str,
+    valid_days: int = 3650,
+) -> tuple[str, str]:
+    ca_key = serialization.load_pem_private_key(ca_key_pem.encode(), password=None)
+    ca_cert = x509.load_pem_x509_certificate(ca_cert_pem.encode())
+    client_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, common_name)])
+    now = datetime.now(UTC)
+    expires = now + timedelta(days=valid_days)
+
+    client_cert = (
+        x509.CertificateBuilder()
+        .subject_name(subject)
+        .issuer_name(ca_cert.subject)
+        .public_key(client_key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(now)
+        .not_valid_after(expires)
+        .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
+        .add_extension(
+            x509.KeyUsage(
+                digital_signature=True,
+                key_encipherment=True,
+                content_commitment=False,
+                data_encipherment=False,
+                key_cert_sign=False,
+                crl_sign=False,
+                key_agreement=False,
+                encipher_only=False,
+                decipher_only=False,
+            ),
+            critical=True,
+        )
+        .add_extension(x509.ExtendedKeyUsage([ExtendedKeyUsageOID.CLIENT_AUTH]), critical=False)
+        .sign(ca_key, hashes.SHA256())
+    )
+    return _pem_certificate(client_cert), _pem_private_key(client_key)
+
+
+def cert_serial_hex(client_cert_pem: str) -> str:
+    cert = x509.load_pem_x509_certificate(client_cert_pem.encode())
+    return format(cert.serial_number, "x")
+
+
+def cert_fingerprint_sha256(client_cert_pem: str) -> str:
+    cert = x509.load_pem_x509_certificate(client_cert_pem.encode())
+    digest = cert.fingerprint(hashes.SHA256()).hex()
+    return f"sha256:{digest}"

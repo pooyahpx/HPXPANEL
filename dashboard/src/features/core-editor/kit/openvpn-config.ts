@@ -14,6 +14,7 @@ export interface OpenVPNCoreConfig {
   push: string[]
   extra_server_directives: string[]
   ca_cert: string
+  ca_key?: string
   server_cert: string
   server_key: string
   tls_crypt_key: string
@@ -78,6 +79,7 @@ export function createDefaultOpenVPNConfig(): OpenVPNCoreConfig {
     push: [],
     extra_server_directives: [],
     ca_cert: '',
+    ca_key: '',
     server_cert: '',
     server_key: '',
     tls_crypt_key: '',
@@ -133,6 +135,7 @@ export function normalizeOpenVPNConfig(value: unknown): OpenVPNCoreConfig {
     extra_server_directives:
       config.extra_server_directives === undefined ? defaults.extra_server_directives : stringArray(config.extra_server_directives),
     ca_cert: stringValue(config.ca_cert),
+    ca_key: stringValue(config.ca_key),
     server_cert: stringValue(config.server_cert),
     server_key: stringValue(config.server_key),
     tls_crypt_key: stringValue(config.tls_crypt_key),

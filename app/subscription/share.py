@@ -20,6 +20,7 @@ from app.utils.system import readable_size
 from . import (
     ClashConfiguration,
     ClashMetaConfiguration,
+    OpenVPNConfiguration,
     OutlineConfiguration,
     SingBoxConfiguration,
     StandardLinks,
@@ -42,6 +43,7 @@ def _build_subscription_config(
     | ClashMetaConfiguration
     | OutlineConfiguration
     | WireGuardConfiguration
+    | OpenVPNConfiguration
     | None
 ):
     common_kwargs = {
@@ -70,6 +72,8 @@ def _build_subscription_config(
         return OutlineConfiguration()
     if config_format == "wireguard":
         return WireGuardConfiguration()
+    if config_format == "openvpn":
+        return OpenVPNConfiguration()
     if config_format == "xray":
         return XrayConfiguration(
             xray_template_content=client_templates["XRAY_SUBSCRIPTION_TEMPLATE"],
@@ -385,7 +389,8 @@ async def _prepare_download_settings(
     | ClashConfiguration
     | ClashMetaConfiguration
     | OutlineConfiguration
-    | WireGuardConfiguration,
+    | WireGuardConfiguration
+    | OpenVPNConfiguration,
 ) -> SubscriptionInboundData | dict | None:
     result = await process_host(download_data, format_variables, inbounds, proxies, custom_variables)
 
@@ -417,7 +422,8 @@ async def process_inbounds_and_tags(
     | ClashConfiguration
     | ClashMetaConfiguration
     | OutlineConfiguration
-    | WireGuardConfiguration,
+    | WireGuardConfiguration
+    | OpenVPNConfiguration,
     client_templates: dict[str, str],
     xray_template_overrides: dict[int, str] | None = None,
     randomize_order: bool = False,

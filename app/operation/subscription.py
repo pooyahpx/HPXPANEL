@@ -78,6 +78,12 @@ client_config = {
         "as_base64": False,
         "extension": ".zip",
     },
+    ConfigFormat.openvpn: {
+        "config_format": "openvpn",
+        "media_type": "application/x-openvpn-profile",
+        "as_base64": False,
+        "extension": ".ovpn",
+    },
     ConfigFormat.xray: {
         "config_format": "xray",
         "media_type": "application/json",

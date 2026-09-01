@@ -1,6 +1,6 @@
 import { $fetch } from '@/service/http'
 
-export type SubscriptionContentFormat = 'links' | 'links_base64' | 'xray' | 'wireguard' | 'sing_box' | 'clash' | 'clash_meta' | 'outline'
+export type SubscriptionContentFormat = 'links' | 'links_base64' | 'xray' | 'wireguard' | 'openvpn' | 'sing_box' | 'clash' | 'clash_meta' | 'outline'
 
 const WIREGUARD_PROTOCOL = 'wireguard://'
 const TEXT_FILE_MIME_TYPE = 'text/plain;charset=utf-8'

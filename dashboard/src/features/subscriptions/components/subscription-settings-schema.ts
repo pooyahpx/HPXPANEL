@@ -111,7 +111,7 @@ export const subscriptionSchema = z.object({
   rules: z.array(
     z.object({
       pattern: z.string().min(1, 'Pattern is required'),
-      target: z.enum(['links', 'links_base64', 'xray', 'wireguard', 'sing_box', 'clash', 'clash_meta', 'outline', 'block']),
+      target: z.enum(['links', 'links_base64', 'xray', 'wireguard', 'openvpn', 'sing_box', 'clash', 'clash_meta', 'outline', 'block']),
       response_headers: z.record(z.string()).optional(),
     }),
   ),
@@ -122,6 +122,7 @@ export const subscriptionSchema = z.object({
       links_base64: z.boolean().optional(),
       xray: z.boolean().optional(),
       wireguard: z.boolean().optional(),
+      openvpn: z.boolean().optional(),
       sing_box: z.boolean().optional(),
       clash: z.boolean().optional(),
       clash_meta: z.boolean().optional(),

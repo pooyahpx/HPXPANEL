@@ -3,6 +3,7 @@ from pydantic import BaseModel, Field
 
 class OpenVPNPkiResponse(BaseModel):
     ca_cert: str
+    ca_key: str
     server_cert: str
     server_key: str
     tls_crypt_key: str

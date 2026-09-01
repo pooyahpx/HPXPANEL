@@ -46,6 +46,8 @@ class IKEv2Settings(BaseModel):
 class OpenVPNSettings(BaseModel):
     serial: str = ""
     fingerprint: str = ""
+    client_cert: str = ""
+    client_key: str = ""
 
 
 class WireGuardPeerIPs(BaseModel):

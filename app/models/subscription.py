@@ -275,6 +275,15 @@ class SubscriptionInboundData(BaseModel):
     wireguard_reserved: str | None = Field(default=None)
     wireguard_dns: list[str] | None = Field(default=None)
 
+    # OpenVPN specific
+    openvpn_ca_cert: str = Field("")
+    openvpn_tls_crypt_key: str = Field("")
+    openvpn_cipher: str = Field("AES-256-GCM")
+    openvpn_auth: str = Field("SHA256")
+    openvpn_proto: str = Field("udp")
+    openvpn_device: str = Field("tun")
+    openvpn_dns: list[str] = Field(default_factory=list)
+
     # Flow (from inbound, user can override)
     inbound_flow: str = Field("")
 

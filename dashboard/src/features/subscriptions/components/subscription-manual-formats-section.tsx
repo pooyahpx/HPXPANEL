@@ -99,6 +99,25 @@ export function SubscriptionManualFormatsSection({ form }: SubscriptionManualFor
 
         <FormField
           control={form.control}
+          name="manual_sub_request.openvpn"
+          render={({ field }) => (
+            <FormItem className="bg-card hover:bg-accent/50 flex flex-row items-center justify-between space-y-0 rounded-lg border p-3 transition-colors sm:p-4">
+              <div className="space-y-0.5">
+                <FormLabel className="flex cursor-pointer items-center gap-2 text-xs font-medium sm:text-sm">
+                  <GlobeLock className="h-4 w-4" />
+                  {t('settings.subscriptions.formats.openvpn')}
+                </FormLabel>
+                <FormDescription className="text-muted-foreground text-xs">{t('settings.subscriptions.formats.openvpnDescription')}</FormDescription>
+              </div>
+              <FormControl>
+                <Switch checked={field.value} onCheckedChange={field.onChange} />
+              </FormControl>
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
           name="manual_sub_request.sing_box"
           render={({ field }) => (
             <FormItem className="bg-card hover:bg-accent/50 flex flex-row items-center justify-between space-y-0 rounded-lg border p-3 transition-colors sm:p-4">

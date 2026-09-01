@@ -130,6 +130,11 @@ class OpenVPNConfig(dict):
         self["server_cert"] = self._required_string("server_cert")
         self["server_key"] = self._required_string("server_key")
         self["tls_crypt_key"] = self._optional_string("tls_crypt_key")
+        ca_key = self._optional_string("ca_key")
+        if ca_key:
+            self["ca_key"] = ca_key
+        else:
+            self.pop("ca_key", None)
 
         listeners = self.get("listeners")
         if listeners in (None, []):
@@ -172,7 +177,9 @@ class OpenVPNConfig(dict):
         self._inbounds_by_tag = {tag: self._metadata()}
 
     def to_str(self, **json_kwargs) -> str:
-        return json.dumps(self, **json_kwargs)
+        payload = dict(self)
+        payload.pop("ca_key", None)
+        return json.dumps(payload, **json_kwargs)
 
     @property
     def inbounds_by_tag(self) -> dict:

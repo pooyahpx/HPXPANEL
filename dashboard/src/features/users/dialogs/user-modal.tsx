@@ -2376,6 +2376,12 @@ function UserModal({ isDialogOpen, onOpenChange, form, editingUser, editingUserI
                               </FormItem>
                             )}
                           />
+                          <p className="text-muted-foreground mb-2 text-xs">
+                            {t('userDialog.proxySettings.openvpnManaged', {
+                              defaultValue:
+                                'OpenVPN client certificates are generated automatically when the user is assigned to an OpenVPN group. Download the .ovpn profile from the subscription menu after creation.',
+                            })}
+                          </p>
                         </AccordionContent>
                       </AccordionItem>
                     </Accordion>

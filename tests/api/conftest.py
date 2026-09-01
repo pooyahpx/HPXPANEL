@@ -136,6 +136,7 @@ def mock_settings(monkeypatch: pytest.MonkeyPatch):
                 "links_base64": True,
                 "xray": True,
                 "wireguard": True,
+                "openvpn": True,
                 "sing_box": True,
                 "clash": True,
                 "clash_meta": True,

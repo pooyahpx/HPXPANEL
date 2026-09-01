@@ -39,7 +39,7 @@ export interface SubscribeLink {
   icon: React.ComponentType<{ className?: string }>
 }
 
-const DOWNLOAD_ONLY_PROTOCOLS = ['clash', 'clash-meta', 'sing-box', 'wireguard']
+const DOWNLOAD_ONLY_PROTOCOLS = ['clash', 'clash-meta', 'sing-box', 'wireguard', 'openvpn']
 
 type ActionButtonsModalState = {
   subscribeUrl: string
@@ -340,6 +340,7 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user, isModalHost = true, rende
       { protocol: 'links (base64)', format: 'links_base64', icon: Code },
       { protocol: 'xray', format: 'xray', icon: XrayIcon },
       { protocol: 'wireguard', format: 'wireguard', icon: WireguardIcon },
+      { protocol: 'openvpn', format: 'openvpn', icon: GlobeLock },
       { protocol: 'clash', format: 'clash', icon: Cat },
       { protocol: 'clash-meta', format: 'clash_meta', icon: MihomoIcon },
       { protocol: 'outline', format: 'outline', icon: GlobeLock },
@@ -601,7 +602,7 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user, isModalHost = true, rende
         const url = window.URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = url
-        const ext = type === 'wireguard' ? 'zip' : 'yaml'
+        const ext = type === 'wireguard' ? 'zip' : type === 'openvpn' ? 'ovpn' : 'yaml'
         a.download = `${user.username}.${ext}`
         document.body.appendChild(a)
         a.click()

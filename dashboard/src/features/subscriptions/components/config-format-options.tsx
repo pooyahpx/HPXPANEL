@@ -6,6 +6,7 @@ export const configFormatOptions = [
   { value: 'links_base64', label: 'settings.subscriptions.configFormats.links_base64', icon: Code },
   { value: 'xray', label: 'settings.subscriptions.configFormats.xray', icon: XrayIcon },
   { value: 'wireguard', label: 'settings.subscriptions.configFormats.wireguard', icon: WireguardIcon },
+  { value: 'openvpn', label: 'settings.subscriptions.configFormats.openvpn', icon: GlobeLock },
   { value: 'sing_box', label: 'settings.subscriptions.configFormats.sing_box', icon: SingboxIcon },
   { value: 'clash', label: 'settings.subscriptions.configFormats.clash', icon: Cat },
   { value: 'clash_meta', label: 'settings.subscriptions.configFormats.clash_meta', icon: MihomoIcon },

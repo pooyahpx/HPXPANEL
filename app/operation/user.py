@@ -51,6 +51,7 @@ from app.db.crud.user import (
     remove_users,
     reset_user_by_next,
     reset_user_data_usage,
+    refresh_and_load_user,
     revoke_user_sub,
     set_owner,
 )
@@ -119,6 +120,7 @@ from app.utils.jwt import create_subscription_token
 from app.utils.logger import get_logger
 from app.utils.system import readable_duration, readable_size
 from app.utils.wireguard import ensure_unique_wireguard_public_key, prepare_wireguard_keys
+from app.utils.openvpn import ensure_openvpn_credentials
 from config import subscription_env_settings, usage_settings
 
 
@@ -443,6 +445,8 @@ class UserOperation(BaseOperation):
             db_users = await create_users_bulk(db, users_to_create, groups, db_admin, commit=commit)
         except ValueError as exc:  # WireGuard subnet exhausted
             await self.raise_error(message=str(exc), code=400, db=db)
+        for db_user in db_users:
+            await self._finalize_openvpn_proxy_settings(db, db_user, groups, commit=commit)
         if not commit:
             for user in db_users:
                 await load_user_attrs(user, load_admin_role=True)
@@ -492,16 +496,57 @@ class UserOperation(BaseOperation):
         proxy_settings: ProxyTable,
         *,
         exclude_user_id: int | None = None,
+        user_id: int | None = None,
+        force_openvpn: bool = False,
     ) -> ProxyTable:
         try:
-            return await prepare_wireguard_keys(
+            proxy_settings = await prepare_wireguard_keys(
                 db,
                 proxy_settings,
                 groups,
                 exclude_user_id=exclude_user_id,
             )
+            if user_id is not None:
+                proxy_settings = await ensure_openvpn_credentials(
+                    db,
+                    user_id,
+                    proxy_settings,
+                    groups,
+                    force=force_openvpn,
+                )
+            return proxy_settings
         except ValueError as exc:
             await self.raise_error(message=str(exc), code=400, db=db)
+
+    async def _finalize_openvpn_proxy_settings(
+        self,
+        db: AsyncSession,
+        db_user: User,
+        groups: list,
+        *,
+        force: bool = False,
+        commit: bool = True,
+    ) -> None:
+        proxy_settings = ProxyTable.model_validate(db_user.proxy_settings)
+        try:
+            updated = await ensure_openvpn_credentials(
+                db,
+                db_user.id,
+                proxy_settings,
+                groups,
+                force=force,
+            )
+        except ValueError as exc:
+            await self.raise_error(message=str(exc), code=400, db=db)
+
+        updated_data = updated.dict()
+        if updated_data != db_user.proxy_settings:
+            db_user.proxy_settings = updated_data
+            if commit:
+                await db.commit()
+                await refresh_and_load_user(db, db_user)
+            else:
+                await db.flush()
 
     async def _prepare_revoked_proxy_settings(self, db: AsyncSession, db_user: User) -> ProxyTable:
         groups = db_user.__dict__.get("groups")
@@ -513,6 +558,8 @@ class UserOperation(BaseOperation):
             groups,
             ProxyTable.model_validate(build_revoked_proxy_settings(db_user)),
             exclude_user_id=db_user.id,
+            user_id=db_user.id,
+            force_openvpn=True,
         )
 
     async def _get_validated_template_with_access(
@@ -744,6 +791,7 @@ class UserOperation(BaseOperation):
         except ValueError as exc:  # WireGuard subnet exhausted
             await self.raise_error(message=str(exc), code=400, db=db)
 
+        await self._finalize_openvpn_proxy_settings(db, db_user, all_groups)
         user = await self.update_user(db_user)
 
         logger.info(f'New user "{db_user.username}" with id "{db_user.id}" added by admin "{admin.username}"')
@@ -877,6 +925,7 @@ class UserOperation(BaseOperation):
             effective_groups,
             proxy_settings_to_prepare,
             exclude_user_id=db_user.id,
+            user_id=db_user.id,
         )
         if modified_user.proxy_settings is not None or prepared_proxy_settings.dict() != current_proxy_settings_data:
             modified_user.proxy_settings = prepared_proxy_settings

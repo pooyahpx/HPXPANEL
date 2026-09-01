@@ -207,6 +207,7 @@ export default function CoreEditorPage() {
   const [discardOpen, setDiscardOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [nameSubmitAttempted, setNameSubmitAttempted] = useState(false)
+  const [configValidationAttempted, setConfigValidationAttempted] = useState(false)
   const [headerAddPulse, setHeaderAddPulse] = useState<SectionHeaderAddPulse>({ target: '', n: 0 })
   const [headerAddEpoch, setHeaderAddEpoch] = useState(0)
 
@@ -250,6 +251,28 @@ export default function CoreEditorPage() {
 
   const xrayPersistValidationItems = useXrayPersistValidationItems()
 
+  useEffect(() => {
+    setConfigValidationAttempted(false)
+    setNameSubmitAttempted(false)
+  }, [isNew, kind, validId])
+
+  const mapNativeConfigIssues = useCallback(
+    (source: 'ipsec' | 'openvpn', issues: Array<{ path: string; messageKey: string }>): ValidationListItem[] => {
+      const prefix = source === 'openvpn' ? 'coreEditor.openvpn.fields' : 'coreEditor.ipsec.fields'
+      return issues.map(issue => ({
+        source,
+        issue: {
+          path: issue.path,
+          message: t(issue.messageKey, {
+            field: t(`${prefix}.${issue.path}`, { defaultValue: issue.path }),
+            defaultValue: `${issue.path} is required`,
+          }),
+        },
+      }))
+    },
+    [t],
+  )
+
   const preSaveIssues = useMemo((): ValidationListItem[] => {
     if (!hydrated) return []
     if (kind === 'wg' && wgDraft) {
@@ -263,19 +286,13 @@ export default function CoreEditorPage() {
     }
     if (kind === 'xray' && xrayProfile) return xrayPersistValidationItems
     if ((kind === 'ikev2' || kind === 'l2tp') && ipsecDraft) {
-      return validateIpsecConfig(kind, ipsecDraft).map(issue => ({
-        source: 'ipsec' as const,
-        issue: { path: issue.path, message: t(issue.messageKey) },
-      }))
+      return mapNativeConfigIssues('ipsec', validateIpsecConfig(kind, ipsecDraft))
     }
     if (kind === 'openvpn' && openvpnDraft) {
-      return validateOpenVPNConfig(openvpnDraft).map(issue => ({
-        source: 'openvpn' as const,
-        issue: { path: issue.path, message: t(issue.messageKey) },
-      }))
+      return mapNativeConfigIssues('openvpn', validateOpenVPNConfig(openvpnDraft))
     }
     return []
-  }, [hydrated, kind, wgDraft, xrayProfile, ipsecDraft, openvpnDraft, xrayPersistValidationItems, t])
+  }, [hydrated, kind, wgDraft, xrayProfile, ipsecDraft, openvpnDraft, xrayPersistValidationItems, mapNativeConfigIssues])
 
   const handleBack = useCallback(() => {
     if (hasActualChanges) {
@@ -292,6 +309,7 @@ export default function CoreEditorPage() {
   }, [discardDraft, navigate])
 
   const handleSave = useCallback(async () => {
+    setConfigValidationAttempted(true)
     const name = coreName.trim()
     if (!name) {
       setNameSubmitAttempted(true)
@@ -677,7 +695,7 @@ export default function CoreEditorPage() {
         }
         main={
           <div className="space-y-6">
-            <ValidationSummary items={preSaveIssues} />
+            <ValidationSummary items={configValidationAttempted || !isNew ? preSaveIssues : []} />
             {kind === 'wg' ? (
               <WireGuardCoreEditor />
             ) : kind === 'ikev2' || kind === 'l2tp' ? (

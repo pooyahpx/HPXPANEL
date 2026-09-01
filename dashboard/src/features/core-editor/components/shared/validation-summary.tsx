@@ -11,6 +11,7 @@ export type ValidationListItem =
   | { source: 'xray'; issue: Issue }
   | { source: 'wireguard'; issue: WireGuardValidationIssue }
   | { source: 'ipsec'; issue: { path: string; message: string } }
+  | { source: 'openvpn'; issue: { path: string; message: string } }
 
 export function validationListItemPath(item: ValidationListItem): string {
   const p = item.issue.path
@@ -114,6 +115,11 @@ export function ValidationSummary({ items, className }: ValidationSummaryProps) 
                 </>
               )}
               {row.source === 'wireguard' && (
+                <>
+                  {row.issue.path}: {row.issue.message}
+                </>
+              )}
+              {(row.source === 'ipsec' || row.source === 'openvpn') && (
                 <>
                   {row.issue.path}: {row.issue.message}
                 </>

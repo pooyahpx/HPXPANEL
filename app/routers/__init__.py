@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+import logging
+
 from fastapi import APIRouter
 
 from . import (
@@ -12,7 +16,6 @@ from . import (
     hwid,
     hpx_tunnel,
     hpx_pulse,
-    copilot,
     node,
     settings,
     setup,
@@ -21,6 +24,8 @@ from . import (
     user,
     user_template,
 )
+
+logger = logging.getLogger(__name__)
 
 api_router = APIRouter()
 
@@ -39,12 +44,18 @@ routers = [
     node.router,
     hpx_tunnel.router,
     hpx_pulse.router,
-    copilot.router,
     user.router,
     subscription.router,
     user_template.router,
     hwid.router,
 ]
+
+try:
+    from . import copilot
+
+    routers.insert(-3, copilot.router)
+except Exception as exc:
+    logger.warning("HPX Copilot disabled — failed to load router: %s", exc)
 
 for router in routers:
     api_router.include_router(router)

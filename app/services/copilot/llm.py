@@ -1,15 +1,18 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any
 
-import httpx
+import aiohttp
 
 from app.models.admin import AdminDetails
 from app.models.copilot import CopilotMessage
 from app.services.copilot.context import build_panel_snapshot
 from app.services.copilot.tools import TOOL_DEFINITIONS, execute_tool, tool_result_content
 from config import copilot_settings
+
+logger = logging.getLogger(__name__)
 
 
 class CopilotNotConfiguredError(RuntimeError):
@@ -53,14 +56,13 @@ async def _chat_completion(messages: list[dict[str, Any]], *, tools: list[dict[s
         "Content-Type": "application/json",
     }
 
-    async with httpx.AsyncClient(timeout=120.0) as client:
-        response = await client.post(url, headers=headers, json=payload)
-
-    if response.status_code >= 400:
-        detail = response.text[:500]
-        raise CopilotProviderError(f"LLM request failed ({response.status_code}): {detail}")
-
-    return response.json()
+    timeout = aiohttp.ClientTimeout(total=120.0)
+    async with aiohttp.ClientSession(timeout=timeout) as session:
+        async with session.post(url, headers=headers, json=payload) as response:
+            if response.status >= 400:
+                detail = (await response.text())[:500]
+                raise CopilotProviderError(f"LLM request failed ({response.status}): {detail}")
+            return await response.json()
 
 
 async def run_copilot_chat(

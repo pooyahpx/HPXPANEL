@@ -20,6 +20,47 @@ export interface OpenVPNCoreConfig {
   listeners: Array<{ port: number; proto: string }>
 }
 
+export type OpenVPNProtoPreset = 'udp-1194' | 'tcp-443' | 'tcp-1194'
+
+export const OPENVPN_PROTO_PRESETS: Record<
+  OpenVPNProtoPreset,
+  { proto: 'udp' | 'tcp'; port: number; labelKey: string; hintKey: string }
+> = {
+  'udp-1194': {
+    proto: 'udp',
+    port: 1194,
+    labelKey: 'coreEditor.openvpn.protoPresets.udp1194',
+    hintKey: 'coreEditor.openvpn.protoPresets.udp1194Hint',
+  },
+  'tcp-443': {
+    proto: 'tcp',
+    port: 443,
+    labelKey: 'coreEditor.openvpn.protoPresets.tcp443',
+    hintKey: 'coreEditor.openvpn.protoPresets.tcp443Hint',
+  },
+  'tcp-1194': {
+    proto: 'tcp',
+    port: 1194,
+    labelKey: 'coreEditor.openvpn.protoPresets.tcp1194',
+    hintKey: 'coreEditor.openvpn.protoPresets.tcp1194Hint',
+  },
+}
+
+export function resolveOpenVPNProtoPreset(proto: string, port: number): OpenVPNProtoPreset | 'custom' {
+  const normalized = proto.trim().toLowerCase()
+  for (const [key, preset] of Object.entries(OPENVPN_PROTO_PRESETS) as Array<
+    [OpenVPNProtoPreset, (typeof OPENVPN_PROTO_PRESETS)[OpenVPNProtoPreset]]
+  >) {
+    if (preset.proto === normalized && preset.port === port) return key
+  }
+  return 'custom'
+}
+
+export function applyOpenVPNProtoPreset(preset: OpenVPNProtoPreset): Pick<OpenVPNCoreConfig, 'proto' | 'port'> {
+  const selected = OPENVPN_PROTO_PRESETS[preset]
+  return { proto: selected.proto, port: selected.port }
+}
+
 export function createDefaultOpenVPNConfig(): OpenVPNCoreConfig {
   return {
     inbound_tag: 'openvpn',

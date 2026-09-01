@@ -1,8 +1,16 @@
+import { OpenVPNCertHelp } from '@/features/core-editor/components/openvpn/openvpn-cert-help'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
+import {
+  applyOpenVPNProtoPreset,
+  OPENVPN_PROTO_PRESETS,
+  resolveOpenVPNProtoPreset,
+  type OpenVPNProtoPreset,
+} from '@/features/core-editor/kit/openvpn-config'
 import { useCoreEditorStore } from '@/features/core-editor/state/core-editor-store'
 import { useTranslation } from 'react-i18next'
 
@@ -53,13 +61,22 @@ export function OpenVPNCoreEditor() {
     }))
   }
 
+  const protoPreset = resolveOpenVPNProtoPreset(draft.proto, draft.port)
+  const activePresetHint =
+    protoPreset !== 'custom' ? t(OPENVPN_PROTO_PRESETS[protoPreset].hintKey) : t('coreEditor.openvpn.protoPresets.customHint')
+
+  const onProtoPresetChange = (value: string) => {
+    if (value === 'custom') return
+    const next = applyOpenVPNProtoPreset(value as OpenVPNProtoPreset)
+    updateOpenvpnDraft(current => ({ ...current, ...next }))
+  }
+
   return (
     <div className="space-y-6">
       <Alert>
         <AlertTitle>{t('coreEditor.openvpn.title')}</AlertTitle>
         <AlertDescription>
           <p>{t('coreEditor.openvpn.description')}</p>
-          <p className="text-muted-foreground mt-1 font-mono text-xs">{t('coreEditor.openvpn.ports')}</p>
         </AlertDescription>
       </Alert>
 
@@ -67,6 +84,31 @@ export function OpenVPNCoreEditor() {
         <div className="space-y-2">
           <Label htmlFor="openvpn-inbound-tag">{t('coreEditor.openvpn.fields.inbound_tag')}</Label>
           <Input id="openvpn-inbound-tag" value={draft.inbound_tag} onChange={event => updateString('inbound_tag', event.target.value)} dir="ltr" />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="openvpn-proto-preset">{t('coreEditor.openvpn.fields.proto')}</Label>
+          <Select value={protoPreset === 'custom' ? '' : protoPreset} onValueChange={onProtoPresetChange}>
+            <SelectTrigger id="openvpn-proto-preset" className="h-10 w-full min-w-0" dir="ltr">
+              <SelectValue
+                placeholder={
+                  protoPreset === 'custom'
+                    ? t('coreEditor.openvpn.protoPresets.custom', {
+                        proto: draft.proto.toUpperCase(),
+                        port: draft.port,
+                      })
+                    : t('coreEditor.openvpn.fields.proto')
+                }
+              />
+            </SelectTrigger>
+            <SelectContent>
+              {(Object.keys(OPENVPN_PROTO_PRESETS) as OpenVPNProtoPreset[]).map(key => (
+                <SelectItem key={key} value={key}>
+                  {t(OPENVPN_PROTO_PRESETS[key].labelKey)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-muted-foreground text-xs">{activePresetHint}</p>
         </div>
         <div className="space-y-2">
           <Label htmlFor="openvpn-port">{t('coreEditor.openvpn.fields.port')}</Label>
@@ -79,10 +121,10 @@ export function OpenVPNCoreEditor() {
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="openvpn-proto">{t('coreEditor.openvpn.fields.proto')}</Label>
-          <Input id="openvpn-proto" value={draft.proto} onChange={event => updateString('proto', event.target.value)} placeholder="udp" dir="ltr" />
+          <Label htmlFor="openvpn-proto">{t('coreEditor.openvpn.fields.protoValue')}</Label>
+          <Input id="openvpn-proto" value={draft.proto} readOnly dir="ltr" className="bg-muted" />
         </div>
-        <div className="space-y-2">
+        <div className="space-y-2 md:col-span-2">
           <Label htmlFor="openvpn-subnet">{t('coreEditor.openvpn.fields.server_subnet')}</Label>
           <Input
             id="openvpn-subnet"
@@ -105,6 +147,8 @@ export function OpenVPNCoreEditor() {
           <Switch checked={draft.duplicate_cn} onCheckedChange={checked => updateOpenvpnDraft(current => ({ ...current, duplicate_cn: checked }))} />
         </div>
       </div>
+
+      <OpenVPNCertHelp />
 
       <div className="grid gap-4">
         <SecretTextarea

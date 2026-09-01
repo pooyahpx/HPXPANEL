@@ -1315,11 +1315,72 @@ verify_and_start_container() {
     [ "$container_running" = true ] && { echo "$container_name"; return 0; } || { echo ""; return 1; }
 }
 
+HPXPANEL_SCRIPTS_DIR="${HPXPANEL_SCRIPTS_DIR:-/usr/local/lib/hpxpanel-scripts}"
+HPXNODE_INSTALLER_REPO="${HPXNODE_INSTALLER_REPO:-pooyahpx/HPXNODE}"
+HPXNODE_INSTALLER_PATH="${HPXNODE_INSTALLER_PATH:-scripts/install.sh}"
+
+bundle_hpx_node_installer() {
+    local target="${HPXPANEL_SCRIPTS_DIR}/hpx-node.sh"
+    local tmp_file=""
+
+    mkdir -p "$HPXPANEL_SCRIPTS_DIR" || return 1
+
+    if [ -f "$SCRIPT_DIR/hpx-node.sh" ]; then
+        install -m 755 "$SCRIPT_DIR/hpx-node.sh" "$target"
+        return 0
+    fi
+
+    tmp_file=$(mktemp) || return 1
+    if curl -fsSL "$(github_raw_url "$HPXNODE_INSTALLER_REPO" "$HPXNODE_INSTALLER_PATH")" -o "$tmp_file"; then
+        install -m 755 "$tmp_file" "$target"
+        rm -f "$tmp_file"
+        return 0
+    fi
+
+    rm -f "$tmp_file"
+    return 1
+}
+
+resolve_hpx_node_installer() {
+    local candidate=""
+    local tmp_file=""
+
+    for candidate in \
+        "$SCRIPT_DIR/hpx-node.sh" \
+        "${HPXPANEL_SCRIPTS_DIR}/hpx-node.sh" \
+        "/usr/local/bin/hpx-node.sh"; do
+        if [ -f "$candidate" ]; then
+            printf '%s' "$candidate"
+            return 0
+        fi
+    done
+
+    tmp_file=$(mktemp) || return 1
+    if curl -fsSL "$(github_raw_url "$HPXNODE_INSTALLER_REPO" "$HPXNODE_INSTALLER_PATH")" -o "$tmp_file"; then
+        chmod 755 "$tmp_file"
+        printf '%s' "$tmp_file"
+        return 0
+    fi
+
+    rm -f "$tmp_file"
+    return 1
+}
+
 install_hpxpanel_script() {
     FETCH_REPO="pooyahpx/HPXPANEL"
     colorized_echo blue "Installing HPXPANEL CLI"
-    install_shared_libs_from_repo "$FETCH_REPO" common.sh system.sh docker.sh github.sh env.sh hpxpanel-backup.sh hpxpanel-restore.sh
-    github_install_script_from_repo "$FETCH_REPO" "scripts/hpxpanel.sh" "hpxpanel"
+    if [ "$running_from_checkout" = true ] && [ -f "$SCRIPT_DIR/hpxpanel.sh" ]; then
+        install_shared_libs_from_local "$SCRIPT_DIR" common.sh system.sh docker.sh github.sh env.sh hpxpanel-backup.sh hpxpanel-restore.sh
+        install -m 755 "$SCRIPT_DIR/hpxpanel.sh" "/usr/local/bin/hpxpanel"
+    else
+        install_shared_libs_from_repo "$FETCH_REPO" common.sh system.sh docker.sh github.sh env.sh hpxpanel-backup.sh hpxpanel-restore.sh
+        github_install_script_from_repo "$FETCH_REPO" "scripts/hpxpanel.sh" "hpxpanel"
+    fi
+    if bundle_hpx_node_installer; then
+        colorized_echo green "HPX node installer bundled for offline install-node"
+    else
+        colorized_echo yellow "Warning: could not bundle HPX node installer (install-node will try GitHub)"
+    fi
     colorized_echo green "HPXPANEL CLI installed successfully"
 }
 
@@ -1925,8 +1986,15 @@ install_command() {
     colorized_echo red "(Not recommended for commercial use)"
     echo
     read -p "Do you want to install HPXPANEL node? (y/n) " install_node_choice
-    if [[ $install_node_choice =~ ^[Yy]$ ]]; then
+    install_node_choice="${install_node_choice//[[:space:]]/}"
+    if [[ $install_node_choice =~ ^[Yy]([Ee][Ss])?$ ]]; then
+        set +e
         install_node_command
+        node_install_rc=$?
+        set -e
+        if [ "$node_install_rc" -ne 0 ]; then
+            colorized_echo yellow "Retry later with: hpxpanel install-node"
+        fi
     else
         colorized_echo yellow "Skipping node installation."
     fi
@@ -2433,25 +2501,52 @@ edit_env_command() {
 }
 
 install_node_command() {
+    local installer=""
+    local tmp_installer=""
+    local rc=0
+
     colorized_echo blue "=============================="
     colorized_echo magenta "   Install HPXPANEL Node   "
     colorized_echo blue "=============================="
     echo
 
-    if [ "$(id -u)" = "0" ]; then
-        colorized_echo blue "Running node installation as root..."
-        bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXNODE/raw/main/scripts/install.sh)" @ install -y
-    else
-        colorized_echo blue "Running node installation with sudo..."
-        sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXNODE/raw/main/scripts/install.sh)" @ install -y
+    if ! installer=$(resolve_hpx_node_installer); then
+        colorized_echo red "Could not find or download the HPX node installer."
+        colorized_echo yellow "Check network access to GitHub or run from the HPXPANEL repo checkout."
+        return 1
     fi
 
-    if [ $? -eq 0 ]; then
-        colorized_echo green "Node installation completed successfully!"
+    case "$installer" in
+        /tmp/* | "${TMPDIR:-/tmp}"/*)
+            tmp_installer="$installer"
+            ;;
+    esac
+
+    colorized_echo blue "Running node installer: ${installer}"
+    echo
+
+    if [ "$(id -u)" = "0" ]; then
+        bash "$installer" install -y || rc=$?
     else
-        colorized_echo red "Node installation failed."
-        exit 1
+        sudo bash "$installer" install -y || rc=$?
     fi
+
+    if [ -n "$tmp_installer" ]; then
+        rm -f "$tmp_installer"
+    fi
+
+    if [ "$rc" -eq 0 ]; then
+        colorized_echo green "Node installation completed successfully!"
+        colorized_echo cyan "Add the node in HPXPANEL -> Nodes using the Address / ports / API key / Server CA above."
+        return 0
+    fi
+
+    colorized_echo red "Node installation failed (exit code ${rc})."
+    if [ -f /tmp/hpx-node-install.log ]; then
+        colorized_echo yellow "Last lines from /tmp/hpx-node-install.log:"
+        tail -n 20 /tmp/hpx-node-install.log >&2 || true
+    fi
+    return 1
 }
 
 generate_completion() {

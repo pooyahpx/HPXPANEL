@@ -215,6 +215,42 @@ class JobSettings(EnvSettings):
     )
 
 
+class CopilotSettings(EnvSettings):
+    enabled: bool = Field(default=True, validation_alias="COPILOT_ENABLED")
+    api_key: str = Field(default="", validation_alias="OPENAI_API_KEY")
+    model: str = Field(default="gpt-4o-mini", validation_alias="COPILOT_MODEL")
+    base_url: str = Field(default="https://api.openai.com", validation_alias="COPILOT_BASE_URL")
+    max_tool_rounds: int = Field(default=6, ge=1, le=12, validation_alias="COPILOT_MAX_TOOL_ROUNDS")
+
+    @field_validator("enabled", mode="before")
+    @classmethod
+    def parse_enabled(cls, value: Any) -> bool:
+        if isinstance(value, bool):
+            return value
+        if value is None:
+            return True
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in {"", "1", "true", "yes", "on"}:
+                return True
+            if normalized in {"0", "false", "no", "off"}:
+                return False
+        return bool(value)
+
+    @field_validator("max_tool_rounds", mode="before")
+    @classmethod
+    def parse_max_tool_rounds(cls, value: Any) -> Any:
+        if value is None:
+            return 6
+        if isinstance(value, str) and not value.strip():
+            return 6
+        return value
+
+    @cached_property
+    def is_configured(self) -> bool:
+        return self.enabled and bool(self.api_key.strip())
+
+
 class FeatureSettings(EnvSettings):
     stop_nodes_on_shutdown: bool = Field(default=True, validation_alias="STOP_NODES_ON_SHUTDOWN")
 
@@ -233,6 +269,7 @@ logging_settings = LoggingSettings()
 auth_settings = AuthSettings()
 usage_settings = UsageSettings()
 job_settings = JobSettings()
+copilot_settings = CopilotSettings()
 feature_settings = FeatureSettings()
 
 if not database_settings.is_postgresql:

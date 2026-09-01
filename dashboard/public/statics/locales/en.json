@@ -142,6 +142,22 @@
     "reconnectAllFailed": "Failed to reconnect all nodes",
     "reconnectAllPrompt": "Are you sure you want to reconnect all nodes? This will temporarily disconnect all active connections and may take a few moments to complete."
   },
+  "copilot": {
+    "title": "HPX Copilot",
+    "description": "AI assistant with live panel context — Pulse, tunnels, and troubleshooting.",
+    "notConfigured": "Set OPENAI_API_KEY in panel .env to enable Copilot.",
+    "context": "Context",
+    "emptyHint": "Ask about your pulses, tunnels, or panel issues. I can list and diagnose live data.",
+    "placeholder": "Ask Copilot…",
+    "thinking": "Thinking…",
+    "sendError": "Could not reach Copilot",
+    "starters": {
+      "pulseStatus": "List my HPX Pulse tunnels and their status",
+      "diagnosePulse": "Diagnose unhealthy Pulse tunnels and suggest fixes",
+      "syncHelp": "When should I use Sync on a Pulse card?",
+      "panelUrl": "Iran agent cannot reach panel — what should I check?"
+    }
+  },
   "hpxTunnel": {
     "title": "HPX ICMP",
     "description": "Manage encrypted ICMP tunnels (ChaCha20) powered by HPX — bridge Iran ↔ Foreign over ping packets.",
@@ -3834,14 +3850,18 @@
   "version": {
     "title": "Version",
     "newVersionAvailable": "New version available!",
+    "updateReady": "Update ready",
     "currentVersion": "Current",
     "latestVersion": "Latest",
-    "clickToUpdate": "A new version is available for download",
+    "clickToUpdate": "A new HPXPANEL release is ready — update your server in one SSH command.",
     "upToDate": "Up to date",
     "runningLatest": "Running {{version}}",
     "updateBanner": "Update available: {{current}} → {{latest}}",
     "updateBannerMobile": "Update: {{latest}}",
-    "updateCommandLabel": "Connect via SSH and run:",
+    "updateCommandLabel": "SSH command",
+    "copyUpdateCommand": "Copy command",
+    "viewRelease": "Release notes",
+    "commandCopied": "Update command copied",
     "closeBanner": "Close update notification",
     "needsUpdate": "Needs update"
   }

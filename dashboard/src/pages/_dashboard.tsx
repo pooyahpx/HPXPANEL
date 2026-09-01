@@ -11,6 +11,7 @@ import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
 import { getCurrentAdmin } from '@/service/api'
 import { Outlet } from 'react-router'
 import TopbarAd from '@/components/common/topbar-ad'
+import { CopilotLauncher } from '@/features/copilot/components/copilot-launcher'
 import { Activity, Command, Radio } from 'lucide-react'
 
 export const clientLoader = async (): Promise<any> => {
@@ -47,6 +48,7 @@ export default function DashboardLayout() {
                 </div>
                 <QuestSearch compact className="max-w-2xl flex-1" />
                 <div className="hidden items-center gap-2 sm:flex">
+                  <CopilotLauncher />
                   <span className="command-signal" aria-hidden="true">
                     <Radio className="h-3.5 w-3.5" />
                   </span>

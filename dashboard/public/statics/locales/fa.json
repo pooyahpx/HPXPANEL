@@ -2034,6 +2034,22 @@
     "reconnectAllFailed": "اتصال مجدد همه گره‌ها با خطا مواجه شد",
     "reconnectAllPrompt": "آیا مطمئن هستید که می‌خواهید همه گره‌ها را مجدداً متصل کنید؟ این عمل موقتاً تمام اتصالات فعال را قطع می‌کند و ممکن است چند لحظه طول بکشد."
   },
+  "copilot": {
+    "title": "HPX Copilot",
+    "description": "دستیار هوشمند با context زنده پنل — Pulse، تونل‌ها و عیب‌یابی.",
+    "notConfigured": "برای فعال‌سازی Copilot مقدار OPENAI_API_KEY را در .env پنل تنظیم کنید.",
+    "context": "صفحه",
+    "emptyHint": "درباره Pulseها، تونل‌ها یا مشکلات پنل بپرس. می‌توانم داده زنده را بخوانم و تشخیص بدهم.",
+    "placeholder": "از Copilot بپرس…",
+    "thinking": "در حال فکر کردن…",
+    "sendError": "ارتباط با Copilot برقرار نشد",
+    "starters": {
+      "pulseStatus": "لیست Pulseهای من و وضعیت هر کدام",
+      "diagnosePulse": "Pulseهای ناسالم را تشخیص بده و راه‌حل پیشنهاد کن",
+      "syncHelp": "کی باید از دکمه Sync روی کارت Pulse استفاده کنم؟",
+      "panelUrl": "Agent ایران به پنل وصل نمی‌شود — چه چیزهایی را چک کنم؟"
+    }
+  },
   "hpxTunnel": {
     "title": "تونل HPX ICMP",
     "description": "مدیریت تونل ICMP رمزنگاری‌شده (ChaCha20) — پل ایران ↔ خارج روی بسته‌های ping.",
@@ -3807,14 +3823,18 @@
   "version": {
     "title": "نسخه",
     "newVersionAvailable": "نسخه جدید موجود است!",
+    "updateReady": "آماده آپدیت",
     "currentVersion": "نسخه فعلی",
     "latestVersion": "آخرین نسخه",
-    "clickToUpdate": "نسخه جدید برای دانلود موجود است",
+    "clickToUpdate": "نسخه جدید HPXPANEL آماده است — با یک دستور SSH سرور را آپدیت کنید.",
     "upToDate": "به روز است",
     "runningLatest": "نسخه {{version}} در حال اجرا",
     "updateBanner": "به‌روزرسانی موجود: {{current}} → {{latest}}",
     "updateBannerMobile": "به‌روزرسانی: {{latest}}",
-    "updateCommandLabel": "از طریق SSH متصل شوید و اجرا کنید:",
+    "updateCommandLabel": "دستور SSH",
+    "copyUpdateCommand": "کپی دستور",
+    "viewRelease": "یادداشت انتشار",
+    "commandCopied": "دستور آپدیت کپی شد",
     "closeBanner": "بستن اعلان به‌روزرسانی",
     "needsUpdate": "نیاز به به‌روزرسانی"
   }

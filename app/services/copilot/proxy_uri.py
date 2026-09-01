@@ -256,7 +256,7 @@ def parse_proxy_link(uri: str) -> ParsedProxyLink:
         return parse_vmess_uri(raw)
     if lowered.startswith("trojan://"):
         return parse_trojan_uri(raw)
-    if lowered.startswith("ss://") or lowered.startswith("shadowsocks://"):
+    if lowered.startswith(("ss://", "shadowsocks://")):
         return parse_shadowsocks_uri(raw)
 
     raise ProxyUriParseError("Unsupported link scheme — use vless://, vmess://, trojan://, or ss://")

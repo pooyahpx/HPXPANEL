@@ -141,7 +141,7 @@ class OpenVPNConfig(dict):
             seen: set[str] = set()
             for item in listeners:
                 if not isinstance(item, dict):
-                    raise ValueError("each listener must be an object")
+                    raise TypeError("each listener must be an object")
                 listener_port = item.get("port", self["port"])
                 if not isinstance(listener_port, int) or listener_port <= 0 or listener_port > 65535:
                     raise ValueError("listener port must be between 1 and 65535")

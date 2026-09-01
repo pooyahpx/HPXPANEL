@@ -12,8 +12,22 @@ from app.operation.hpx_tunnel import HpxTunnelOperation
 from app.operation.permissions import PermissionDenied, enforce_permission
 from app.services.copilot.context import diagnose_pulse
 
-_pulse_op = HpxPulseOperation(operator_type=OperatorType.API)
-_tunnel_op = HpxTunnelOperation(operator_type=OperatorType.API)
+_pulse_op_instance: HpxPulseOperation | None = None
+_tunnel_op_instance: HpxTunnelOperation | None = None
+
+
+def _get_pulse_op() -> HpxPulseOperation:
+    global _pulse_op_instance
+    if _pulse_op_instance is None:
+        _pulse_op_instance = HpxPulseOperation(operator_type=OperatorType.API)
+    return _pulse_op_instance
+
+
+def _get_tunnel_op() -> HpxTunnelOperation:
+    global _tunnel_op_instance
+    if _tunnel_op_instance is None:
+        _tunnel_op_instance = HpxTunnelOperation(operator_type=OperatorType.API)
+    return _tunnel_op_instance
 
 TOOL_DEFINITIONS: list[dict[str, Any]] = [
     {
@@ -157,24 +171,24 @@ async def execute_tool(
         if name == "list_hpx_pulses":
             enforce_permission(admin, "hpx_pulse", "read")
             limit = max(1, min(int(arguments.get("limit") or 10), 20))
-            resp = await _pulse_op.list_pulses(
+            resp = await _get_pulse_op().list_pulses(
                 db, admin=admin, offset=0, limit=limit, name=arguments.get("name")
             )
             return {"total": resp.total, "pulses": [_pulse_summary(p) for p in resp.pulses]}, f"Listed {len(resp.pulses)} pulse(s)"
 
         if name == "get_hpx_pulse":
             enforce_permission(admin, "hpx_pulse", "read")
-            pulse = await _pulse_op.get_pulse(db, admin=admin, pulse_id=int(arguments["pulse_id"]))
+            pulse = await _get_pulse_op().get_pulse(db, admin=admin, pulse_id=int(arguments["pulse_id"]))
             return _pulse_summary(pulse), f"Fetched pulse #{pulse.id}"
 
         if name == "diagnose_hpx_pulse":
             enforce_permission(admin, "hpx_pulse", "read")
-            pulse = await _pulse_op.get_pulse(db, admin=admin, pulse_id=int(arguments["pulse_id"]))
+            pulse = await _get_pulse_op().get_pulse(db, admin=admin, pulse_id=int(arguments["pulse_id"]))
             return diagnose_pulse(pulse), f"Diagnosed pulse #{pulse.id}"
 
         if name == "sync_hpx_pulse":
             enforce_permission(admin, "hpx_pulse", "update")
-            result = await _pulse_op.sync_pulse(db, admin=admin, pulse_id=int(arguments["pulse_id"]))
+            result = await _get_pulse_op().sync_pulse(db, admin=admin, pulse_id=int(arguments["pulse_id"]))
             return {
                 "pulse_id": result.pulse.id,
                 "message": result.message,
@@ -185,17 +199,17 @@ async def execute_tool(
             enforce_permission(admin, "hpx_tunnels", "read")
             limit = max(1, min(int(arguments.get("limit") or 10), 20))
             query = HpxTunnelsQuery(offset=0, limit=limit, name=arguments.get("name"))
-            resp = await _tunnel_op.list_tunnels(db, admin=admin, query=query)
+            resp = await _get_tunnel_op().list_tunnels(db, admin=admin, query=query)
             return {"total": resp.total, "tunnels": [_tunnel_summary(t) for t in resp.tunnels]}, f"Listed {len(resp.tunnels)} tunnel(s)"
 
         if name == "get_hpx_tunnel":
             enforce_permission(admin, "hpx_tunnels", "read")
-            tunnel = await _tunnel_op.get_tunnel(db, admin=admin, tunnel_id=int(arguments["tunnel_id"]))
+            tunnel = await _get_tunnel_op().get_tunnel(db, admin=admin, tunnel_id=int(arguments["tunnel_id"]))
             return _tunnel_summary(tunnel), f"Fetched tunnel #{tunnel.id}"
 
         if name == "restart_hpx_tunnel":
             enforce_permission(admin, "hpx_tunnels", "restart")
-            result = await _tunnel_op.restart_tunnel_action(db, admin=admin, tunnel_id=int(arguments["tunnel_id"]))
+            result = await _get_tunnel_op().restart_tunnel_action(db, admin=admin, tunnel_id=int(arguments["tunnel_id"]))
             return {"tunnel_id": result.tunnel.id, "status": result.tunnel.status, "message": result.message}, (
                 f"Restarted tunnel #{result.tunnel.id}"
             )

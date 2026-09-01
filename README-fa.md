@@ -206,6 +206,8 @@ sudo hpx-pulse-agent sync
 
 تست از ایران: `curl -I --connect-timeout 10 https://ss.hiby.online/api/hpx_pulse/agent/hpx-pulse-agent.sh`
 
+**چند Pulse روی یک سرور ایران:** از v3.8.21 هر pulse سرویس جدا `hpx-pulse-tunnel-<id>` دارد. پورت listen ایران (مثلاً `443`) را بین دو pulse مشترک نکنید — بهتر است **یک pulse با چند port forward** (`443`، `2053`، …) بسازید.
+
 ---
 
 ## خلاصه — چرا اپراتورها می‌آیند اینجا

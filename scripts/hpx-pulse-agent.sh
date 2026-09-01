@@ -13,11 +13,13 @@ if [ "${1:-}" = "@" ]; then shift; fi
 
 INSTALL_DIR="${INSTALL_DIR:-/opt/hpx-pulse}"
 ETC_DIR="${ETC_DIR:-/etc/hpx-pulse}"
+AGENTS_DIR="${ETC_DIR}/agents"
 ENV_FILE="$ETC_DIR/agent.env"
 BIN_LINK="${BIN_LINK:-/usr/local/bin/hpx-pulse-agent}"
 SERVICE_NAME="${SERVICE_NAME:-hpx-pulse-agent}"
 TIMER_NAME="${TIMER_NAME:-hpx-pulse-agent.timer}"
-TUNNEL_SERVICE="${TUNNEL_SERVICE:-hpx-pulse-tunnel}"
+LEGACY_TUNNEL_SERVICE="hpx-pulse-tunnel"
+TUNNEL_SERVICE="${TUNNEL_SERVICE:-$LEGACY_TUNNEL_SERVICE}"
 ENGINE_INSTALL_URL="https://raw.githubusercontent.com/pooyahpx/HPXPANEL/main/scripts/hpx-tunnel-engine-install.sh"
 ENGINE_BIN="${ENGINE_BIN:-/usr/local/bin/hpx-tunnel-engine}"
 
@@ -88,8 +90,9 @@ install_self() {
   ln -sfn "$INSTALL_DIR/hpx-pulse-agent.sh" "$BIN_LINK"
 }
 
-write_env() {
-  cat >"$ENV_FILE" <<EOF
+write_env_file() {
+  local dest="$1"
+  cat >"$dest" <<EOF
 PANEL_URL=${PANEL_URL:-}
 AGENT_KEY=${AGENT_KEY:-}
 PULSE_SIDE=${PULSE_SIDE:-}
@@ -103,13 +106,100 @@ ABROAD_PUBLIC_IP=${ABROAD_PUBLIC_IP:-}
 PORT_FORWARDS=${PORT_FORWARDS:-}
 HPX_AGENT_ASSETS_BASE=${HPX_AGENT_ASSETS_BASE:-}
 EOF
-  chmod 600 "$ENV_FILE"
+  chmod 600 "$dest"
+}
+
+write_env() {
+  write_env_file "$ENV_FILE"
+  if [ -n "${PULSE_ID:-}" ] && [ "${PULSE_ID}" != "0" ]; then
+    mkdir -p "$AGENTS_DIR"
+    write_env_file "${AGENTS_DIR}/${PULSE_ID}.env"
+  fi
+}
+
+load_env_file() {
+  local file="$1"
+  [ -f "$file" ] || return 1
+  # shellcheck disable=SC1090
+  set -a; source "$file"; set +a
+  return 0
 }
 
 load_env() {
-  [ -f "$ENV_FILE" ] || die "agent not configured — run join first"
-  # shellcheck disable=SC1090
-  set -a; source "$ENV_FILE"; set +a
+  load_env_file "$ENV_FILE" || die "agent not configured — run join first"
+}
+
+for_each_pulse_env() {
+  local fn="$1" ran=0 env_file
+  if [ -d "$AGENTS_DIR" ]; then
+    for env_file in "$AGENTS_DIR"/*.env; do
+      [ -f "$env_file" ] || continue
+      load_env_file "$env_file" || continue
+      "$fn"
+      ran=1
+    done
+  fi
+  if [ "$ran" = 0 ]; then
+    load_env
+    "$fn"
+  fi
+}
+
+tunnel_service_name() {
+  if [ -n "${PULSE_ID:-}" ] && [ "${PULSE_ID}" != "0" ]; then
+    echo "hpx-pulse-tunnel-${PULSE_ID}"
+  else
+    echo "${TUNNEL_SERVICE}"
+  fi
+}
+
+collect_forward_listen_ports() {
+  local raw="$1" pf left ports=()
+  raw="${raw//[\[\]\"]/}"
+  IFS=',' read -ra pf <<< "$raw"
+  for left in "${pf[@]}"; do
+    left="${left%%=*}"
+    left="${left// /}"
+    [[ "$left" =~ ^[0-9]+$ ]] && ports+=("$left")
+  done
+  printf '%s\n' "${ports[@]}"
+}
+
+check_local_forward_conflicts() {
+  [ "${PULSE_SIDE:-}" = "iran" ] || return 0
+  [ -d "$AGENTS_DIR" ] || return 0
+  local env_file existing_id port new_port
+  while IFS= read -r new_port; do
+    [ -n "$new_port" ] || continue
+    for env_file in "$AGENTS_DIR"/*.env; do
+      [ -f "$env_file" ] || continue
+      existing_id="$(basename "$env_file" .env)"
+      [ "$existing_id" = "${PULSE_ID:-}" ] && continue
+      while IFS= read -r port; do
+        [ -n "$port" ] || continue
+        if [ "$port" = "$new_port" ]; then
+          die "Iran listen port ${port} already used by pulse ${existing_id} on this server — use one pulse with multiple forwards, or different external ports"
+        fi
+      done < <(collect_forward_listen_ports "$(grep '^PORT_FORWARDS=' "$env_file" | cut -d= -f2-)")
+    done
+  done < <(collect_forward_listen_ports "${PORT_FORWARDS:-}")
+}
+
+migrate_legacy_agent_registration() {
+  [ -n "${PULSE_ID:-}" ] && [ "${PULSE_ID}" != "0" ] || return 0
+  mkdir -p "$AGENTS_DIR"
+  if [ ! -f "${AGENTS_DIR}/${PULSE_ID}.env" ]; then
+    write_env_file "${AGENTS_DIR}/${PULSE_ID}.env"
+    log "registered pulse ${PULSE_ID} for multi-tunnel sync"
+  fi
+  local cfg id
+  for cfg in "$ETC_DIR"/l3-pulse-*.toml; do
+    [ -f "$cfg" ] || continue
+    id="${cfg##*/l3-pulse-}"
+    id="${id%.toml}"
+    [ -f "${AGENTS_DIR}/${id}.env" ] && continue
+    warn "tunnel config pulse ${id} exists but no agent registration — re-join Iran token for pulse ${id}"
+  done
 }
 
 panel_api_bases() {
@@ -225,7 +315,16 @@ tunnel_iface_up() {
 }
 
 tunnel_service_active() {
-  systemctl is-active --quiet "${TUNNEL_SERVICE}.service" 2>/dev/null
+  systemctl is-active --quiet "$(tunnel_service_name).service" 2>/dev/null
+}
+
+retire_legacy_tunnel_service() {
+  local svc="$1"
+  [ "$svc" = "$LEGACY_TUNNEL_SERVICE" ] && return 0
+  if [ -f "/etc/systemd/system/${LEGACY_TUNNEL_SERVICE}.service" ]; then
+    systemctl stop "${LEGACY_TUNNEL_SERVICE}.service" 2>/dev/null || true
+    systemctl disable "${LEGACY_TUNNEL_SERVICE}.service" 2>/dev/null || true
+  fi
 }
 
 tunnel_port_listening() {
@@ -261,12 +360,13 @@ tunnel_link_up() {
 }
 
 install_tunnel_systemd() {
-  local cfg="$1"
-  local engine_bin
+  local cfg="$1" engine_bin svc
   engine_bin="$(engine_bin)"
-  cat >"/etc/systemd/system/${TUNNEL_SERVICE}.service" <<EOF
+  svc="$(tunnel_service_name)"
+  retire_legacy_tunnel_service "$svc"
+  cat >"/etc/systemd/system/${svc}.service" <<EOF
 [Unit]
-Description=HPX Pulse tunnel
+Description=HPX Pulse tunnel (pulse ${PULSE_ID:-?})
 After=network-online.target
 Wants=network-online.target
 
@@ -281,8 +381,8 @@ Nice=-5
 WantedBy=multi-user.target
 EOF
   systemctl daemon-reload
-  systemctl enable "${TUNNEL_SERVICE}.service" >/dev/null
-  systemctl restart "${TUNNEL_SERVICE}.service"
+  systemctl enable "${svc}.service" >/dev/null
+  systemctl restart "${svc}.service"
 }
 
 apply_tunnel_config() {
@@ -298,9 +398,9 @@ apply_tunnel_config() {
   install_tunnel_systemd "$cfg"
   sleep 2
   if tunnel_service_active; then
-    log "HPX tunnel service started"
+    log "HPX tunnel service started ($(tunnel_service_name))"
   else
-    warn "HPX tunnel service not active yet — check: systemctl status ${TUNNEL_SERVICE}"
+    warn "HPX tunnel service not active yet — check: systemctl status $(tunnel_service_name)"
   fi
   check_abroad_backends
 }
@@ -321,8 +421,6 @@ open_iran_firewall() {
     left="${left// /}"
     [[ "$left" =~ ^[0-9]+$ ]] && ports+=("$left")
   done
-
-  local p
   for p in "${ports[@]}"; do
     if has ufw && ufw status 2>/dev/null | grep -qi "Status: active"; then
       ufw allow "${p}/tcp" >/dev/null 2>&1 || true
@@ -378,7 +476,7 @@ install_agent_systemd() {
   cat >"/etc/systemd/system/${SERVICE_NAME}.service" <<EOF
 [Unit]
 Description=HPX Pulse Agent sync
-After=network-online.target ${TUNNEL_SERVICE}.service
+After=network-online.target
 Wants=network-online.target
 
 [Service]
@@ -406,7 +504,7 @@ EOF
   cat >"/etc/systemd/system/${SERVICE_NAME}-ping.service" <<EOF
 [Unit]
 Description=HPX Pulse live ping
-After=network-online.target ${TUNNEL_SERVICE}.service
+After=network-online.target
 
 [Service]
 Type=oneshot
@@ -433,7 +531,32 @@ EOF
 }
 
 cmd_ping() {
-  load_env
+  need_root
+  for_each_pulse_env send_heartbeat
+}
+
+sync_pulse_from_panel() {
+  local cfg hash toml command
+  cfg=$(api GET "/api/hpx_pulse/agent/config")
+  hash=$(echo "$cfg" | jq -r '.config_hash')
+  command=$(echo "$cfg" | jq -r '.agent_command // empty')
+  toml=$(echo "$cfg" | jq -r '.tunnel_toml // .backpack_toml // empty')
+  TUNNEL_MODE=$(echo "$cfg" | jq -r '.tunnel_mode // "direct_l3"')
+  CONTROL_PORT=$(echo "$cfg" | jq -r '.control_port // empty')
+  IRAN_PUBLIC_IP=$(echo "$cfg" | jq -r '.iran_public_ip // empty')
+  ABROAD_PUBLIC_IP=$(echo "$cfg" | jq -r '.abroad_public_ip // empty')
+  PORT_FORWARDS=$(echo "$cfg" | jq -c '.port_forwards // []')
+
+  if [ "$hash" != "${CONFIG_HASH:-}" ] || [ "$command" = "start" ] || [ "$command" = "restart" ]; then
+    apply_tunnel_config "$toml"
+    CONFIG_HASH="$hash"
+    api POST "/api/hpx_pulse/agent/ack" \
+      "$(jq -nc --arg c "${command:-start}" '{command:$c, status:"running", message:"HPX config applied"}')" >/dev/null || true
+  else
+    open_iran_firewall
+    check_abroad_backends
+  fi
+  write_env
   send_heartbeat
 }
 
@@ -638,6 +761,7 @@ cmd_join() {
 
   install_self
   write_env
+  check_local_forward_conflicts
   ensure_engine
   apply_tunnel_config "$(echo "$claim" | jq -r '.tunnel_toml // .backpack_toml // empty')"
   write_env
@@ -660,7 +784,12 @@ cmd_join() {
 
 cmd_sync() {
   need_root
-  load_env
+  load_env 2>/dev/null || {
+    local f
+    for f in "$AGENTS_DIR"/*.env; do
+      [ -f "$f" ] && load_env_file "$f" && break
+    done
+  }
   # Pull latest agent script once so firewall/ping fixes apply without re-join.
   if hp_curl "https://raw.githubusercontent.com/pooyahpx/HPXPANEL/main/scripts/hpx-pulse-agent.sh" \
       -o "$INSTALL_DIR/hpx-pulse-agent.sh.new" 2>/dev/null \
@@ -678,30 +807,9 @@ cmd_sync() {
     rm -f "$INSTALL_DIR/hpx-pulse-agent.sh.new"
   fi
   ensure_engine
-  local cfg hash toml command
-  cfg=$(api GET "/api/hpx_pulse/agent/config")
-  hash=$(echo "$cfg" | jq -r '.config_hash')
-  command=$(echo "$cfg" | jq -r '.agent_command // empty')
-  toml=$(echo "$cfg" | jq -r '.tunnel_toml // .backpack_toml // empty')
-  TUNNEL_MODE=$(echo "$cfg" | jq -r '.tunnel_mode // "direct_l3"')
-  CONTROL_PORT=$(echo "$cfg" | jq -r '.control_port // empty')
-  IRAN_PUBLIC_IP=$(echo "$cfg" | jq -r '.iran_public_ip // empty')
-  ABROAD_PUBLIC_IP=$(echo "$cfg" | jq -r '.abroad_public_ip // empty')
-  PORT_FORWARDS=$(echo "$cfg" | jq -c '.port_forwards // []')
-
-  if [ "$hash" != "${CONFIG_HASH:-}" ] || [ "$command" = "start" ] || [ "$command" = "restart" ]; then
-    apply_tunnel_config "$toml"
-    CONFIG_HASH="$hash"
-    api POST "/api/hpx_pulse/agent/ack" \
-      "$(jq -nc --arg c "${command:-start}" '{command:$c, status:"running", message:"HPX config applied"}')" >/dev/null || true
-  else
-    # Still refresh firewall + backend checks even when config unchanged.
-    open_iran_firewall
-    check_abroad_backends
-  fi
-
-  write_env
-  send_heartbeat
+  load_env 2>/dev/null || true
+  migrate_legacy_agent_registration
+  for_each_pulse_env sync_pulse_from_panel
 }
 
 cmd_set_panel_url() {
@@ -712,8 +820,15 @@ cmd_set_panel_url() {
   load_env 2>/dev/null || true
   PANEL_URL="$url"
   write_env
+  local env_file
+  if [ -d "$AGENTS_DIR" ]; then
+    for env_file in "$AGENTS_DIR"/*.env; do
+      [ -f "$env_file" ] || continue
+      sed -i "s|^PANEL_URL=.*|PANEL_URL=${PANEL_URL}|" "$env_file"
+    done
+  fi
   log "PANEL_URL set to ${PANEL_URL}"
-  send_heartbeat && log "heartbeat OK — panel should show connected" \
+  for_each_pulse_env send_heartbeat && log "heartbeat OK — panel should show connected" \
     || warn "still cannot reach panel — open port 443 from Iran or set PANEL_URL_FALLBACK"
 }
 
@@ -729,15 +844,42 @@ cmd_install_engine() {
 }
 
 cmd_status() {
-  load_env 2>/dev/null || true
+  local env_file svc
   echo "HPX Pulse Agent"
+  if [ -d "$AGENTS_DIR" ] && compgen -G "$AGENTS_DIR/*.env" >/dev/null; then
+    for env_file in "$AGENTS_DIR"/*.env; do
+      [ -f "$env_file" ] || continue
+      load_env_file "$env_file" || continue
+      svc="$(tunnel_service_name)"
+      echo "  --- pulse ${PULSE_ID:-?} ---"
+      echo "  panel : ${PANEL_URL:-not set}"
+      echo "  side  : ${PULSE_SIDE:-?}"
+      echo "  mode  : ${TUNNEL_MODE:-direct_l3}"
+      echo "  config: ${TUNNEL_CFG:-$(tunnel_cfg_path 2>/dev/null || echo '?')}"
+      echo "  forwards: ${PORT_FORWARDS:-[]}"
+      if tunnel_service_active; then
+        echo "  tunnel: running (${svc})"
+      else
+        echo "  tunnel: stopped (${svc})"
+      fi
+      if [ "${PULSE_SIDE:-}" = "iran" ] && [[ "${TUNNEL_MODE:-}" == reverse_* ]]; then
+        if tunnel_port_listening; then
+          echo "  link  : control port ${CONTROL_PORT:-?} listening"
+        else
+          echo "  link  : control port not listening"
+        fi
+      fi
+    done
+    return
+  fi
+  load_env 2>/dev/null || true
   echo "  panel : ${PANEL_URL:-not set}"
   echo "  side  : ${PULSE_SIDE:-?}"
   echo "  mode  : ${TUNNEL_MODE:-direct_l3}"
   echo "  pulse : ${PULSE_ID:-?}"
   echo "  config: ${TUNNEL_CFG:-$(tunnel_cfg_path 2>/dev/null || echo '?')}"
   if tunnel_service_active; then
-    echo "  tunnel: running (${TUNNEL_SERVICE})"
+    echo "  tunnel: running ($(tunnel_service_name))"
   else
     echo "  tunnel: stopped"
   fi

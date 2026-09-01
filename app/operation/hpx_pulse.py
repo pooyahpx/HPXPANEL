@@ -203,6 +203,18 @@ class HpxPulseOperation(BaseOperation):
         if duplicates:
             await self.raise_error(message="Pulse name already exists", code=409)
 
+        same_iran_warning = ""
+        if model.iran_public_ip:
+            peers, _ = await get_hpx_pulses(db, offset=0, limit=50)
+            for peer in peers:
+                if peer.iran_public_ip == model.iran_public_ip and peer.iran_agent_key_hash:
+                    same_iran_warning = (
+                        " — same Iran IP already has an active agent; "
+                        "each pulse needs its own control port and non-overlapping forward ports, "
+                        "or add forwards to the existing pulse"
+                    )
+                    break
+
         advise_req = PulseAdviseRequest(
             cpu_cores=model.cpu_cores,
             ram_mb=model.ram_mb,
@@ -244,7 +256,7 @@ class HpxPulseOperation(BaseOperation):
 
         return HpxPulseActionResponse(
             pulse=_to_response(db_pulse),
-            message="Pulse created — run join commands on Iran and abroad servers",
+            message="Pulse created — run join commands on Iran and abroad servers" + same_iran_warning,
             iran_join_token=iran_t,
             iran_join_command=iran_c,
             iran_join_command_alt=iran_c_alt,

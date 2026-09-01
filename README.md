@@ -206,6 +206,8 @@ sudo hpx-pulse-agent sync
 
 Test from Iran: `curl -I --connect-timeout 10 https://ss.hiby.online/api/hpx_pulse/agent/hpx-pulse-agent.sh`
 
+**Multiple pulses on one Iran server:** each pulse gets its own `hpx-pulse-tunnel-<id>` service (v3.8.21+). Do **not** reuse the same Iran listen port (e.g. two pulses both forwarding `443`). Prefer **one pulse with multiple port forwards** (`443`, `2053`, …) when they share the same Iran VPS.
+
 ---
 
 ## TL;DR — why operators switch

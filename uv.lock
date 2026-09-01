@@ -582,6 +582,7 @@ dependencies = [
     { name = "cryptography" },
     { name = "deprecated" },
     { name = "fastapi" },
+    { name = "httpx" },
     { name = "jdatetime" },
     { name = "jinja2" },
     { name = "nats-py" },
@@ -606,7 +607,6 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "httpx" },
     { name = "psycopg", extra = ["binary"] },
     { name = "pymysql" },
     { name = "pytest" },
@@ -635,6 +635,7 @@ requires-dist = [
     { name = "cryptography", specifier = "==49.0.0" },
     { name = "deprecated", specifier = "==1.2.13" },
     { name = "fastapi", specifier = ">=0.140.0" },
+    { name = "httpx", specifier = ">=0.28.1" },
     { name = "jdatetime", specifier = ">=6.0.1" },
     { name = "jinja2", specifier = ">=3.1.6" },
     { name = "nats-py", specifier = ">=2.15.0" },
@@ -659,7 +660,6 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "httpx", specifier = ">=0.28.1" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.3.4" },
     { name = "pymysql", specifier = ">=1.2.0" },
     { name = "pytest", specifier = ">=9.1.1" },

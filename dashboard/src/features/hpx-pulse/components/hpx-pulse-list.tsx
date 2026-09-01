@@ -29,38 +29,43 @@ function JoinCommandBlock({
   label,
   primary,
   alt,
+  primaryHint,
   onCopy,
   t,
 }: {
   label: string
   primary: string
   alt?: string
+  primaryHint?: string
   onCopy: (text: string, key: string) => void
   t: (k: string, o?: { defaultValue: string }) => string
 }) {
+  const hint =
+    primaryHint ??
+    t('hpxPulse.joinCommandPrimaryGithub', { defaultValue: 'Recommended (GitHub)' })
   return (
     <div className="space-y-2">
       <span className="text-muted-foreground font-medium">{label}</span>
       <div className="space-y-1">
         <p className="text-[10px] font-medium uppercase tracking-wide text-emerald-600 dark:text-emerald-400">
-          {t('hpxPulse.joinCommandPrimary', { defaultValue: 'Recommended (GitHub)' })}
+          {hint}
         </p>
         <pre className="bg-muted overflow-x-auto rounded p-2 font-mono text-[11px]">{primary}</pre>
         <Button size="sm" variant="secondary" onClick={() => onCopy(primary, label)}>
           <Copy className="size-3" /> {label}
         </Button>
       </div>
-      {alt && (
+      {alt ? (
         <div className="space-y-1">
           <p className="text-muted-foreground text-[10px] font-medium uppercase tracking-wide">
-            {t('hpxPulse.joinCommandAlt', { defaultValue: 'Alternative (panel URL)' })}
+            {t('hpxPulse.joinCommandAltPanel', { defaultValue: 'Alternative (panel URL)' })}
           </p>
           <pre className="bg-muted overflow-x-auto rounded p-2 font-mono text-[11px]">{alt}</pre>
           <Button size="sm" variant="outline" onClick={() => onCopy(alt, `${label} alt`)}>
             <Copy className="size-3" /> {label} (panel)
           </Button>
         </div>
-      )}
+      ) : null}
     </div>
   )
 }
@@ -308,7 +313,7 @@ export default function HpxPulseList() {
             <JoinCommandBlock
               label="Abroad"
               primary={joinCommands.abroad}
-              alt={joinCommands.abroadAlt}
+              primaryHint={t('hpxPulse.joinCommandPrimaryPanel', { defaultValue: 'Recommended (panel URL)' })}
               onCopy={copy}
               t={t}
             />

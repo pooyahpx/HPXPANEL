@@ -68,10 +68,11 @@ def _build_join_command_github(panel_url: str | None, token: str, side: str) -> 
 def _build_join_command_panel(panel_url: str | None, token: str, side: str) -> str:
     base = (panel_url or "https://YOUR_PANEL_HOST").rstrip("/")
     panel_script = f"{base}/api/hpx_pulse/agent/hpx-pulse-agent.sh"
+    runner = "sudo env HPX_PREFER_GITHUB=1 bash" if side == "iran" else "sudo bash"
     return (
         f"curl {_JOIN_CURL} \\\n"
         f"  {panel_script} | \\\n"
-        f"  sudo bash -s -- join {token} \\\n"
+        f"  {runner} -s -- join {token} \\\n"
         f"  --panel-url {base} --side {side}"
     )
 
@@ -186,8 +187,8 @@ class HpxPulseOperation(BaseOperation):
         await db.flush()
         iran_cmd = _build_join_command_github(panel_url, iran_token, "iran")
         iran_cmd_alt = _build_join_command_panel(panel_url, iran_token, "iran")
-        abroad_cmd = _build_join_command_github(panel_url, abroad_token, "abroad")
-        abroad_cmd_alt = _build_join_command_panel(panel_url, abroad_token, "abroad")
+        abroad_cmd = _build_join_command_panel(panel_url, abroad_token, "abroad")
+        abroad_cmd_alt = ""
         return iran_token, iran_cmd, iran_cmd_alt, abroad_token, abroad_cmd, abroad_cmd_alt, expires_at
 
     async def create_pulse(

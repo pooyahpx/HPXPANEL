@@ -46,6 +46,68 @@ def test_wireguard_core_create(access_token):
     delete_core(access_token, core["id"])
 
 
+def test_ikev2_core_create(access_token):
+    core = create_core(
+        access_token,
+        name=unique_name("ikev2_core"),
+        config={
+            "inbound_tag": unique_name("ike"),
+            "server_addr": "vpn.example.com",
+            "pool": "10.30.0.0/24",
+            "ca_cert": "-----BEGIN CERTIFICATE-----\nCA\n-----END CERTIFICATE-----",
+            "server_cert": "-----BEGIN CERTIFICATE-----\nSERVER\n-----END CERTIFICATE-----",
+            "server_key": "-----BEGIN PRIVATE KEY-----\nKEY\n-----END PRIVATE KEY-----",
+        },
+        type="ikev2",
+        fallbacks=[],
+    )
+    assert core["type"] == "ikev2"
+    assert core["config"]["server_addr"] == "vpn.example.com"
+    assert core["fallbacks_inbound_tags"] == []
+    delete_core(access_token, core["id"])
+
+
+def test_l2tp_core_create(access_token):
+    tag = unique_name("l2tp")
+    core = create_core(
+        access_token,
+        name=unique_name("l2tp_core"),
+        config={
+            "inbound_tag": tag,
+            "psk": "a sufficiently secret PSK",
+            "pool": "10.31.0.0/24",
+        },
+        type="l2tp",
+        fallbacks=[],
+    )
+    assert core["type"] == "l2tp"
+    assert core["config"]["inbound_tag"] == tag
+    assert core["config"]["pool"] == "10.31.0.0/24"
+    delete_core(access_token, core["id"])
+
+
+def test_openvpn_core_create(access_token):
+    tag = unique_name("ovpn")
+    core = create_core(
+        access_token,
+        name=unique_name("openvpn_core"),
+        config={
+            "inbound_tag": tag,
+            "port": 1194,
+            "proto": "udp",
+            "server_subnet": "10.29.0.0/16",
+            "ca_cert": "-----BEGIN CERTIFICATE-----\nCA\n-----END CERTIFICATE-----",
+            "server_cert": "-----BEGIN CERTIFICATE-----\nSERVER\n-----END CERTIFICATE-----",
+            "server_key": "-----BEGIN PRIVATE KEY-----\nKEY\n-----END PRIVATE KEY-----",
+        },
+        type="openvpn",
+        fallbacks=[],
+    )
+    assert core["type"] == "openvpn"
+    assert core["config"]["proto"] == "udp"
+    delete_core(access_token, core["id"])
+
+
 def test_core_update(access_token):
     """Test that the core update route is accessible."""
 

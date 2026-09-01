@@ -244,14 +244,17 @@ api() {
 }
 
 ensure_engine() {
-  if [ -x "$ENGINE_BIN" ]; then
+  if [ -x "$ENGINE_BIN" ] && [ "${HPX_ENGINE_FORCE:-0}" != "1" ]; then
     return 0
   fi
-  if [ -x /usr/local/bin/backpack ] && [ ! -x "$ENGINE_BIN" ]; then
+  if [ "${HPX_ENGINE_FORCE:-0}" = "1" ]; then
+    rm -f "$ENGINE_BIN"
+  fi
+  if [ -x /usr/local/bin/backpack ] && [ ! -x "$ENGINE_BIN" ] && [ "${HPX_ENGINE_FORCE:-0}" != "1" ]; then
     ln -sf /usr/local/bin/backpack "$ENGINE_BIN"
     return 0
   fi
-  log "Installing HPX tunnel engine (one-time)..."
+  log "Installing HPX tunnel engine..."
   local installer panel_install_url prefer_github
   installer="$(mktemp)"
   panel_install_url=""
@@ -278,6 +281,7 @@ ensure_engine() {
   run_engine_install() {
     HPX_PANEL_URL="${PANEL_URL:-}" HPX_AGENT_ASSETS_BASE="${HPX_AGENT_ASSETS_BASE:-}" \
       HPX_PREFER_GITHUB="${1:-0}" \
+      HPX_ENGINE_FORCE="${HPX_ENGINE_FORCE:-0}" \
       HPX_NO_GITHUB_FALLBACK="${HPX_NO_GITHUB_FALLBACK:-0}" bash "$installer"
   }
   if run_engine_install "${prefer_github:-0}"; then
@@ -832,14 +836,46 @@ cmd_set_panel_url() {
     || warn "still cannot reach panel — open port 443 from Iran or set PANEL_URL_FALLBACK"
 }
 
+cmd_uninstall_engine() {
+  need_root
+  echo ""
+  echo "  ┌────────────────────────────────────────┐"
+  echo "  │  HPX TUNNEL ENGINE — uninstall          │"
+  echo "  └────────────────────────────────────────┘"
+  echo ""
+  if [ -e "$ENGINE_BIN" ] || [ -L "$ENGINE_BIN" ]; then
+    rm -f "$ENGINE_BIN"
+    log "removed ${ENGINE_BIN}"
+  else
+    warn "not installed at ${ENGINE_BIN}"
+  fi
+  echo ""
+  echo "  ╔════════════════════════════════════════╗"
+  echo "  ║       ✓  ENGINE REMOVED                ║"
+  echo "  ╚════════════════════════════════════════╝"
+  echo ""
+  log "Reinstall: sudo hpx-pulse-agent install-engine --force"
+  log "Or: curl .../hpx-tunnel-engine-install.sh | sudo env HPX_PREFER_GITHUB=1 bash"
+  echo ""
+}
+
 cmd_install_engine() {
   need_root
+  local force=0
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --force|-f) force=1; shift ;;
+      *) die "usage: install-engine [--force]" ;;
+    esac
+  done
   load_env 2>/dev/null || true
   if [ -z "${HPX_PREFER_GITHUB:-}" ] && { [ "${PULSE_SIDE:-}" = "iran" ] || [ -z "${PULSE_SIDE:-}" ]; }; then
     HPX_PREFER_GITHUB=1
   fi
   export HPX_PREFER_GITHUB
+  [ "$force" = 1 ] && export HPX_ENGINE_FORCE=1
   ensure_engine
+  [ -x "$ENGINE_BIN" ] || die "engine install failed"
   log "HPX tunnel engine ready: $(engine_bin)"
 }
 
@@ -905,12 +941,19 @@ usage() {
 HPX Pulse Agent
   join TOKEN --panel-url URL --side iran|abroad
   set-panel-url URL       when :8000 is blocked from Iran, use https://domain (443)
-  install-engine          install hpx-tunnel-engine binary (GitHub-first on Iran)
+  install-engine [--force]  install hpx-tunnel-engine (GitHub-first on Iran)
+  uninstall-engine        remove engine binary (for reinstall tests)
   sync | ping | status
 
 Engine manual install (if join hangs on panel mirror):
   curl --http1.1 -fsSL .../hpx-tunnel-engine-install.sh | sudo env HPX_PREFER_GITHUB=1 bash
   sudo hpx-pulse-agent sync
+
+Engine reinstall test:
+  sudo hpx-pulse-agent uninstall-engine
+  sudo hpx-pulse-agent install-engine --force
+  # or one-liner:
+  HPX_ENGINE_FORCE=1 curl .../hpx-tunnel-engine-install.sh | sudo env HPX_PREFER_GITHUB=1 bash
 EOF
 }
 
@@ -920,7 +963,8 @@ main() {
   case "$cmd" in
     join) cmd_join "$@" ;;
     set-panel-url) cmd_set_panel_url "$@" ;;
-    install-engine) cmd_install_engine ;;
+    install-engine) shift; cmd_install_engine "$@" ;;
+    uninstall-engine) cmd_uninstall_engine ;;
     sync) cmd_sync ;;
     ping) cmd_ping ;;
     status) cmd_status ;;

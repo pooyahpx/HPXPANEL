@@ -178,6 +178,15 @@ sudo hpx-pulse-agent install-engine
 sudo hpx-pulse-agent sync
 ```
 
+**Engine reinstall (testing):**
+```bash
+sudo hpx-pulse-agent uninstall-engine
+sudo hpx-pulse-agent install-engine --force
+# or without agent CLI:
+sudo rm -f /usr/local/bin/hpx-tunnel-engine
+HPX_ENGINE_FORCE=1 curl .../hpx-tunnel-engine-install.sh | sudo env HPX_PREFER_GITHUB=1 bash
+```
+
 **Verify:**
 
 ```bash

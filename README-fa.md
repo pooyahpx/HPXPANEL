@@ -178,6 +178,12 @@ sudo hpx-pulse-agent install-engine
 sudo hpx-pulse-agent sync
 ```
 
+**تست نصب مجدد engine:**
+```bash
+sudo hpx-pulse-agent uninstall-engine
+sudo hpx-pulse-agent install-engine --force
+```
+
 **بررسی:**
 
 ```bash

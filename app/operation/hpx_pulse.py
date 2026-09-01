@@ -293,8 +293,22 @@ class HpxPulseOperation(BaseOperation):
         if db_pulse is None:
             await self.raise_error(message="Pulse not found", code=404)
         resp = _to_response(db_pulse)
-        await delete_hpx_pulse(db, db_pulse)
+        # Signal agents to uninstall before keys are removed (sync/ping runs every few seconds).
+        await update_hpx_pulse(
+            db,
+            db_pulse,
+            {
+                "iran_agent_command": "leave",
+                "abroad_agent_command": "leave",
+                "status": HpxPulseStatus.stopped,
+                "message": "Pulse deleted from panel — agents will uninstall",
+            },
+        )
         await db.commit()
+        db_pulse = await get_hpx_pulse_by_id(db, pulse_id)
+        if db_pulse is not None:
+            await delete_hpx_pulse(db, db_pulse)
+            await db.commit()
         return HpxPulseActionResponse(pulse=resp, message="Pulse deleted from panel")
 
     async def regenerate_tokens(

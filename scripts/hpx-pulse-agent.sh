@@ -180,7 +180,8 @@ is_port_listening() {
 }
 
 pulse_registration_active() {
-  local pid="$1" env_file="${AGENTS_DIR}/${pid}.env"
+  local pid="$1"
+  local env_file="${AGENTS_DIR}/${pid}.env"
   [ -f "$env_file" ] || return 1
   (
     load_env_file "$env_file"
@@ -202,13 +203,17 @@ pulse_registration_active() {
 }
 
 remove_pulse_local_state() {
-  local pid="$1" svc saved_pulse_id saved_side
+  local pid="$1" svc saved_pulse_id saved_side port
   [ -n "$pid" ] || return 0
   saved_pulse_id="${PULSE_ID:-}"
   saved_side="${PULSE_SIDE:-}"
   if [ -f "${AGENTS_DIR}/${pid}.env" ]; then
     load_env_file "${AGENTS_DIR}/${pid}.env"
     PULSE_ID="$pid"
+    while IFS= read -r port; do
+      [ -n "$port" ] || continue
+      free_orphan_listen_port "$port" || true
+    done < <(collect_forward_listen_ports "${PORT_FORWARDS:-}")
   fi
   svc="$(tunnel_service_name)"
   systemctl stop "${svc}.service" 2>/dev/null || true
@@ -319,17 +324,37 @@ panel_api_bases() {
   fi
 }
 
-api() {
+API_LAST_HTTP_CODE="000"
+
+panel_registration_revoked() {
+  [ "$API_LAST_HTTP_CODE" = "401" ] || [ "$API_LAST_HTTP_CODE" = "404" ]
+}
+
+cleanup_revoked_pulse() {
+  local pid="${1:-${PULSE_ID:-}}"
+  [ -n "$pid" ] || return 0
+  log "pulse ${pid} no longer on panel — removing local tunnel (${PULSE_SIDE:-?})"
+  remove_pulse_local_state "$pid"
+}
+
+api_request() {
   local method="$1" path="$2" body="${3:-}"
-  local base url attempt resp
+  local base url attempt tmp http_code resp
+  API_LAST_HTTP_CODE="000"
   while IFS= read -r base; do
     [ -n "$base" ] || continue
     url="${base%/}${path}"
     for attempt in 1 2 3; do
-      local args=(--http1.1 --connect-timeout 15 --max-time 90 -fsSL -X "$method"
-        -H "X-HPX-Pulse-Agent-Key: ${AGENT_KEY}" -H "X-HPX-Pulse-Side: ${PULSE_SIDE}" -H "Accept: application/json")
+      tmp="$(mktemp)"
+      local args=(--http1.1 --connect-timeout 15 --max-time 90 -sS -X "$method"
+        -H "X-HPX-Pulse-Agent-Key: ${AGENT_KEY}" -H "X-HPX-Pulse-Side: ${PULSE_SIDE}" -H "Accept: application/json"
+        -w "%{http_code}" -o "$tmp")
       [ -n "$body" ] && args+=(-H "Content-Type: application/json" -d "$body")
-      if resp=$(curl "${args[@]}" "$url" 2>/dev/null); then
+      http_code=$(curl "${args[@]}" "$url" 2>/dev/null) || http_code="000"
+      API_LAST_HTTP_CODE="$http_code"
+      if [ "$http_code" = "200" ]; then
+        resp=$(cat "$tmp")
+        rm -f "$tmp"
         if [ "$base" != "${PANEL_URL%/}" ]; then
           log "panel API reachable at ${base} (was ${PANEL_URL}) — updating PANEL_URL"
           PANEL_URL="$base"
@@ -337,10 +362,63 @@ api() {
         printf '%s' "$resp"
         return 0
       fi
+      rm -f "$tmp"
+      [ "$http_code" != "000" ] && return 1
       [ "$attempt" -lt 3 ] && sleep 2
     done
   done < <(panel_api_bases)
   return 1
+}
+
+api() {
+  api_request "$@"
+}
+
+verify_registrations_with_panel() {
+  [ -d "$AGENTS_DIR" ] || return 0
+  local env_file pid saved_panel saved_key saved_side saved_id cfg command
+  saved_panel="${PANEL_URL:-}"
+  saved_key="${AGENT_KEY:-}"
+  saved_side="${PULSE_SIDE:-}"
+  saved_id="${PULSE_ID:-}"
+  for env_file in "$AGENTS_DIR"/*.env; do
+    [ -f "$env_file" ] || continue
+    load_env_file "$env_file" || continue
+    pid="$(basename "$env_file" .env)"
+    PULSE_ID="$pid"
+    if cfg=$(api_request GET "/api/hpx_pulse/agent/config"); then
+      command=$(echo "$cfg" | jq -r '.agent_command // empty' 2>/dev/null || true)
+      if [ "$command" = "leave" ] || [ "$command" = "uninstall" ]; then
+        log "panel requested local removal for pulse ${pid}"
+        remove_pulse_local_state "$pid"
+      fi
+      continue
+    fi
+    if panel_registration_revoked; then
+      cleanup_revoked_pulse "$pid"
+    fi
+  done
+  PANEL_URL="$saved_panel"
+  AGENT_KEY="$saved_key"
+  PULSE_SIDE="$saved_side"
+  PULSE_ID="$saved_id"
+}
+
+prune_orphan_configs() {
+  local cfg id svc
+  for cfg in "$ETC_DIR"/l3-pulse-*.toml; do
+    [ -f "$cfg" ] || continue
+    id="${cfg##*/l3-pulse-}"
+    id="${id%.toml}"
+    [ -f "${AGENTS_DIR}/${id}.env" ] && continue
+    log "removing orphan tunnel config ${cfg}"
+    svc="hpx-pulse-tunnel-${id}"
+    systemctl stop "${svc}.service" 2>/dev/null || true
+    systemctl disable "${svc}.service" 2>/dev/null || true
+    rm -f "/etc/systemd/system/${svc}.service"
+    rm -f "$cfg"
+  done
+  systemctl daemon-reload 2>/dev/null || true
 }
 
 ensure_engine() {
@@ -636,14 +714,29 @@ EOF
 
 cmd_ping() {
   need_root
+  ensure_deps
+  prune_orphan_configs
+  verify_registrations_with_panel
   for_each_pulse_env send_heartbeat
 }
 
 sync_pulse_from_panel() {
   local cfg hash toml command
-  cfg=$(api GET "/api/hpx_pulse/agent/config")
+  if ! cfg=$(api_request GET "/api/hpx_pulse/agent/config"); then
+    if panel_registration_revoked; then
+      cleanup_revoked_pulse "${PULSE_ID:-}"
+      return 0
+    fi
+    warn "panel config fetch failed (HTTP ${API_LAST_HTTP_CODE:-?})"
+    return 1
+  fi
   hash=$(echo "$cfg" | jq -r '.config_hash')
   command=$(echo "$cfg" | jq -r '.agent_command // empty')
+  if [ "$command" = "leave" ] || [ "$command" = "uninstall" ]; then
+    log "panel requested local removal for pulse ${PULSE_ID}"
+    remove_pulse_local_state "$PULSE_ID"
+    return 0
+  fi
   toml=$(echo "$cfg" | jq -r '.tunnel_toml // .backpack_toml // empty')
   TUNNEL_MODE=$(echo "$cfg" | jq -r '.tunnel_mode // "direct_l3"')
   CONTROL_PORT=$(echo "$cfg" | jq -r '.control_port // empty')
@@ -770,7 +863,7 @@ send_heartbeat() {
   [ -n "$lat" ] && lat_json="$lat"
   # Iran must not overwrite abroad's diagnostic message every 5s.
   if [ "${PULSE_SIDE:-}" = "iran" ] && [[ "${TUNNEL_MODE:-}" == reverse_* ]]; then
-    api POST "/api/hpx_pulse/agent/heartbeat" \
+    api_request POST "/api/hpx_pulse/agent/heartbeat" \
       "$(jq -nc \
         --arg s "running" \
         --arg h "$(hostname -f 2>/dev/null || hostname)" \
@@ -779,7 +872,7 @@ send_heartbeat() {
         '{status:$s, host:$h, tunnel_running:$tr, iface_up:$iu}')" \
       >/dev/null && hb_ok=1
   else
-    api POST "/api/hpx_pulse/agent/heartbeat" \
+    api_request POST "/api/hpx_pulse/agent/heartbeat" \
       "$(jq -nc \
         --arg s "running" \
         --arg h "$(hostname -f 2>/dev/null || hostname)" \
@@ -791,7 +884,13 @@ send_heartbeat() {
         '{status:$s, host:$h, tunnel_running:$tr, iface_up:$iu, latency_ms:($lm|tonumber? // null), forward_ok:$fo, message:$m}')" \
       >/dev/null && hb_ok=1
   fi
-  [ "$hb_ok" = 1 ] || warn "heartbeat to panel failed — try: hpx-pulse-agent set-panel-url https://domain (no :8000)"
+  if [ "$hb_ok" != 1 ]; then
+    if panel_registration_revoked; then
+      cleanup_revoked_pulse "${PULSE_ID:-}"
+      return 0
+    fi
+    warn "heartbeat to panel failed (HTTP ${API_LAST_HTTP_CODE:-?}) — try: hpx-pulse-agent set-panel-url https://domain (no :8000)"
+  fi
   [ "$hb_ok" = 1 ]
 }
 
@@ -865,6 +964,8 @@ cmd_join() {
 
   install_self
   write_env
+  prune_orphan_configs
+  verify_registrations_with_panel
   check_local_forward_conflicts
   ensure_engine
   apply_tunnel_config "$(echo "$claim" | jq -r '.tunnel_toml // .backpack_toml // empty')"
@@ -913,6 +1014,8 @@ cmd_sync() {
   ensure_engine
   load_env 2>/dev/null || true
   migrate_legacy_agent_registration
+  prune_orphan_configs
+  verify_registrations_with_panel
   for_each_pulse_env sync_pulse_from_panel
 }
 

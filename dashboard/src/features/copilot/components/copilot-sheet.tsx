@@ -4,14 +4,45 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '
 import { Textarea } from '@/components/ui/textarea'
 import { sendCopilotChat, type CopilotMessage } from '@/service/api/copilot'
 import { cn } from '@/lib/utils'
-import { Bot, Loader2, Send, Sparkles, User } from 'lucide-react'
+import { Bot, ExternalLink, Loader2, Send, Sparkles, User } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useLocation } from 'react-router'
 
 const STARTER_KEYS = ['pulseStatus', 'diagnosePulse', 'syncHelp', 'panelUrl', 'importProxyLink'] as const
+const GROQ_API_KEYS_URL = 'https://console.groq.com/keys'
 
 type ChatEntry = CopilotMessage & { id: string }
+
+function CopilotSetupHelp() {
+  const { t } = useTranslation()
+
+  return (
+    <div className="bg-muted/60 space-y-2 rounded-lg border p-3 text-sm">
+      <p className="font-medium">{t('copilot.setupTitle')}</p>
+      <p className="text-muted-foreground text-xs leading-relaxed">{t('copilot.setupIntro')}</p>
+      <a
+        href={GROQ_API_KEYS_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-primary inline-flex items-center gap-1.5 text-xs font-medium hover:underline"
+      >
+        {t('copilot.getApiKey')}
+        <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+      </a>
+      <pre
+        className="bg-background text-muted-foreground overflow-x-auto rounded-md border p-2 font-mono text-[10px] leading-relaxed"
+        dir="ltr"
+      >
+        {`COPILOT_ENABLED=true
+COPILOT_PROVIDER=groq
+OPENAI_API_KEY=gsk_...
+COPILOT_MODEL=openai/gpt-oss-20b`}
+      </pre>
+      <p className="text-muted-foreground text-[11px]">{t('copilot.setupRestart')}</p>
+    </div>
+  )
+}
 
 function newId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
@@ -95,6 +126,7 @@ export function CopilotSheet({ open, onOpenChange, configured }: CopilotSheetPro
           <SheetDescription className="text-start">
             {configured ? t('copilot.description') : t('copilot.notConfigured')}
           </SheetDescription>
+          {!configured && <CopilotSetupHelp />}
           <p className="text-muted-foreground font-mono text-[10px] tracking-wide uppercase">
             {t('copilot.context')}: {pagePath}
           </p>

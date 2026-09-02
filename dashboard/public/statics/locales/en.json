@@ -169,7 +169,11 @@
   "copilot": {
     "title": "HPX Copilot",
     "description": "AI assistant with live panel context — Pulse, tunnels, and troubleshooting.",
-    "notConfigured": "Set COPILOT_PROVIDER=groq and OPENAI_API_KEY (Groq key from console.groq.com) in panel .env.",
+    "notConfigured": "Set COPILOT_PROVIDER=groq and OPENAI_API_KEY in panel .env to enable Copilot.",
+    "setupTitle": "Enable Copilot (free Groq API)",
+    "setupIntro": "Create a free API key on Groq, paste it into the panel .env on your server, then restart the panel.",
+    "getApiKey": "Get Groq API key",
+    "setupRestart": "After editing .env run: hpxpanel restart",
     "context": "Context",
     "emptyHint": "Ask about pulses, tunnels, panel issues, or paste a vless/vmess share link to import a Host.",
     "placeholder": "Ask Copilot…",

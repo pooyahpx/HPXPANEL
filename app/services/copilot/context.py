@@ -121,5 +121,9 @@ async def build_panel_snapshot(
         snapshot["page_hint"] = "User is on HPX Pulse UI — prioritize Pulse tools and status."
     elif "icmp" in page or "hpx-tunnel" in page or "hpx_tunnel" in page:
         snapshot["page_hint"] = "User is on HPX ICMP UI — ICMP tunnels; Pulse is a different product."
+    elif "node" in page:
+        snapshot["page_hint"] = "User is on Nodes UI — use list_nodes / diagnose_node."
+    elif "user" in page:
+        snapshot["page_hint"] = "User is on Users UI — use list_users / get_user for subscription issues."
 
     return snapshot

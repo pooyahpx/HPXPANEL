@@ -9,12 +9,24 @@ from app.models.hpx_tunnel import HpxTunnelsQuery
 from app.operation import OperatorType
 from app.operation.hpx_pulse import HpxPulseOperation
 from app.operation.hpx_tunnel import HpxTunnelOperation
+from app.operation.node import NodeOperation
+from app.operation.user import UserOperation
 from app.operation.permissions import PermissionDenied, enforce_permission
+from app.models.node import NodeListQuery, NodeResponse
+from app.models.user import UserListQuery
 from app.services.copilot.context import diagnose_pulse
 from app.services.copilot.host_import import import_proxy_link as run_proxy_link_import, list_core_inbound_options
+from app.services.copilot.panel_ops import (
+    build_panel_health,
+    diagnose_node_live,
+    node_summary,
+    user_summary,
+)
 
 _pulse_op_instance: HpxPulseOperation | None = None
 _tunnel_op_instance: HpxTunnelOperation | None = None
+_node_op_instance: NodeOperation | None = None
+_user_op_instance: UserOperation | None = None
 
 
 def _get_pulse_op() -> HpxPulseOperation:
@@ -29,6 +41,20 @@ def _get_tunnel_op() -> HpxTunnelOperation:
     if _tunnel_op_instance is None:
         _tunnel_op_instance = HpxTunnelOperation(operator_type=OperatorType.API)
     return _tunnel_op_instance
+
+
+def _get_node_op() -> NodeOperation:
+    global _node_op_instance
+    if _node_op_instance is None:
+        _node_op_instance = NodeOperation(operator_type=OperatorType.API)
+    return _node_op_instance
+
+
+def _get_user_op() -> UserOperation:
+    global _user_op_instance
+    if _user_op_instance is None:
+        _user_op_instance = UserOperation(operator_type=OperatorType.API)
+    return _user_op_instance
 
 
 TOOL_DEFINITIONS: list[dict[str, Any]] = [
@@ -47,6 +73,88 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                 "properties": {
                     "limit": {"type": "integer", "description": "Max items per product (1-20)", "default": 10},
                 },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "panel_health",
+            "description": (
+                "Panel health snapshot: version, CPU/RAM/disk, user counts, NATS workers, "
+                "node status summary, and recent node errors. Use for general panel troubleshooting."
+            ),
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_nodes",
+            "description": "List HPX edge nodes (Xray/VPN agents) with connection status and traffic.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "limit": {"type": "integer", "description": "Max items (1-20)", "default": 10},
+                    "search": {"type": "string", "description": "Optional name/address search"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_node",
+            "description": "Get one edge node by id with full details.",
+            "parameters": {
+                "type": "object",
+                "properties": {"node_id": {"type": "integer"}},
+                "required": ["node_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "diagnose_node",
+            "description": (
+                "Diagnose an edge node: DB status, live CPU/RAM, outbound latency, connection issues. "
+                "Suggests sync/reconnect steps. Requires node_id from list_nodes."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {"node_id": {"type": "integer"}},
+                "required": ["node_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_users",
+            "description": "List panel users with traffic, limits, expiry, and status (subscription troubleshooting).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "limit": {"type": "integer", "description": "Max items (1-20)", "default": 10},
+                    "search": {"type": "string", "description": "Search username"},
+                    "username": {"type": "string", "description": "Exact username filter"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_user",
+            "description": "Get one user by id — traffic, data_limit, expire, groups, online_at, limits.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "user_id": {"type": "integer"},
+                    "include_subscription_url": {"type": "boolean", "default": False},
+                },
+                "required": ["user_id"],
             },
         },
     },
@@ -303,6 +411,55 @@ async def execute_tool(
             pulse_n = len(overview["hpx_pulse"].get("items") or [])
             icmp_n = len(overview["hpx_icmp"].get("items") or [])
             return overview, f"Overview: {pulse_n} Pulse(s), {icmp_n} ICMP tunnel(s)"
+
+        if name == "panel_health":
+            enforce_permission(admin, "system", "read")
+            health = await build_panel_health(db, admin=admin)
+            return health, "Panel health snapshot"
+
+        if name == "list_nodes":
+            enforce_permission(admin, "nodes", "read")
+            limit = max(1, min(int(arguments.get("limit") or 10), 20))
+            query = NodeListQuery(offset=0, limit=limit, search=arguments.get("search") or None)
+            resp = await _get_node_op().get_db_nodes(db, query)
+            return {
+                "total": resp.total,
+                "nodes": [node_summary(n) for n in resp.nodes],
+            }, f"Listed {len(resp.nodes)} node(s)"
+
+        if name == "get_node":
+            enforce_permission(admin, "nodes", "read")
+            db_node = await _get_node_op().get_validated_node(db, int(arguments["node_id"]))
+            node = NodeResponse.model_validate(db_node)
+            return node_summary(node), f"Fetched node #{node.id}"
+
+        if name == "diagnose_node":
+            enforce_permission(admin, "nodes", "read")
+            diagnosis = await diagnose_node_live(db, admin=admin, node_id=int(arguments["node_id"]))
+            return diagnosis, f"Diagnosed node #{arguments['node_id']}"
+
+        if name == "list_users":
+            enforce_permission(admin, "users", "read")
+            limit = max(1, min(int(arguments.get("limit") or 10), 20))
+            username = arguments.get("username")
+            query = UserListQuery(
+                offset=0,
+                limit=limit,
+                search=arguments.get("search") or None,
+                username=[username] if username else None,
+            )
+            resp = await _get_user_op().get_users(db, admin=admin, query=query)
+            return {
+                "total": resp.total,
+                "users": [user_summary(u) for u in resp.users],
+            }, f"Listed {len(resp.users)} user(s)"
+
+        if name == "get_user":
+            enforce_permission(admin, "users", "read")
+            user = await _get_user_op().get_user_by_id(db, int(arguments["user_id"]), admin)
+            return user_summary(user, include_subscription_url=bool(arguments.get("include_subscription_url"))), (
+                f"Fetched user {user.username}"
+            )
 
         if name == "list_hpx_pulses":
             enforce_permission(admin, "hpx_pulse", "read")

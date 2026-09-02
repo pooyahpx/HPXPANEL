@@ -384,8 +384,10 @@ Commands:
   (none) / menu     Interactive menu
   install           Install / reinstall (use -y for no prompts)
   list              List all node instances on this server
-  update | restart | status | logs
+  update | restart | status | logs | info
   uninstall
+
+info               Show Address / ports / API key / Server CA (alias: hpxnode)
 
 Install options:
   --name <id>        Instance name for multi-node on one server
@@ -551,6 +553,45 @@ write_compose() {
 compose_up() { dc up -d $([ "$BUILD_FROM_SOURCE" = 1 ] && echo --build); }
 pull_image() { dc pull; }
 
+load_config_from_compose() {
+  apply_instance
+  [ -f "$COMPOSE_FILE" ] || die "no install found at $COMPOSE_FILE (try --name <id>)"
+
+  API_KEY="$(grep -E '^\s+API_KEY:' "$COMPOSE_FILE" | head -1 | sed -E 's/.*API_KEY:[[:space:]]*"?([^"]*)"?/\1/')"
+  SERVICE_PORT="$(grep -E '^\s+SERVICE_PORT:' "$COMPOSE_FILE" | head -1 | awk '{print $2}')"
+  API_PORT="$(grep -E '^\s+PANEL_API_PORT:' "$COMPOSE_FILE" | head -1 | awk '{print $2}')"
+
+  XRAY_ON=1
+  OVPN_ON=1
+  WG_ON=1
+  IKEV2_ON=1
+  grep -q 'HPX_NODE_DISABLE_XRAY' "$COMPOSE_FILE" && XRAY_ON=0
+  grep -q 'HPX_NODE_DISABLE_OPENVPN' "$COMPOSE_FILE" && OVPN_ON=0
+  grep -q 'HPX_NODE_DISABLE_WIREGUARD' "$COMPOSE_FILE" && WG_ON=0
+  grep -q 'HPX_NODE_DISABLE_IKEV2' "$COMPOSE_FILE" && IKEV2_ON=0
+
+  BUILD_FROM_SOURCE=0
+  grep -q 'build:' "$COMPOSE_FILE" && BUILD_FROM_SOURCE=1
+}
+
+save_credentials_file() {
+  local ca="" cert_file="$DATA_DIR/certs/ssl_cert.pem"
+  [ -s "$cert_file" ] && ca="$(cat "$cert_file")"
+  mkdir -p "$DATA_DIR"
+  {
+    echo "# HPX node — paste into HPXPANEL -> Nodes"
+    echo "# Re-show anytime: hpxnode"
+    echo "Address: $(curl -fsS4 --max-time 5 https://api.ipify.org 2>/dev/null || echo '<server-ip>')"
+    echo "Node port: ${SERVICE_PORT}"
+    echo "API port: ${API_PORT}"
+    echo "API key: ${API_KEY}"
+    echo
+    echo "Server CA:"
+    [ -n "$ca" ] && echo "$ca" || echo "(not ready yet — run: hpxnode)"
+  } >"$DATA_DIR/register-in-panel.txt"
+  chmod 600 "$DATA_DIR/register-in-panel.txt" 2>/dev/null || true
+}
+
 print_summary() {
   local ca="" i cert_file="$DATA_DIR/certs/ssl_cert.pem"
   echo
@@ -594,8 +635,12 @@ print_summary() {
     echo "$ca"
   else
     warn "Server CA not ready yet — run:"
-    echo -e "  ${c_dim}cat ${cert_file}${c_off}"
+    echo -e "  ${c_dim}hpxnode${c_off}  ${c_dim}or${c_off}  cat ${cert_file}"
   fi
+  echo
+  save_credentials_file
+  echo -e "  ${c_dim}Saved to:${c_off} ${DATA_DIR}/register-in-panel.txt"
+  echo -e "  ${c_dim}Show again:${c_off} ${c_bld}hpxnode${c_off}"
   echo
   echo -e "  ${c_dim}Logs:${c_off}  sudo ${SERVICE} logs   ${c_dim}or${c_off}  $COMPOSE_CMD -f ${COMPOSE_FILE} logs -f"
   warn "Open SERVICE_PORT (${SERVICE_PORT}) and your VPN ports on any cloud firewall."
@@ -628,6 +673,12 @@ fi
 exec bash -c "\$(curl -fsSL ${REPO}/raw/main/scripts/install.sh)" @ "\$@"
 EOF
   chmod +x /usr/local/bin/hpx-node 2>/dev/null || true
+
+  cat > /usr/local/bin/hpxnode <<EOF
+#!/usr/bin/env bash
+exec /usr/local/bin/hpx-node info "\$@"
+EOF
+  chmod +x /usr/local/bin/hpxnode 2>/dev/null || true
 
   # Per-instance shortcut: hpx-node-shop1 status
   if [ -n "$NODE_NAME" ]; then
@@ -673,7 +724,7 @@ run_install() {
       fi
     fi
   fi
-  run_step_live "Starting HPX node container" compose_up
+  run_step      "Starting HPX node container" compose_up
   run_step      "Installing hpx-node CLI"     install_cli_wrapper
   print_summary
 }
@@ -684,6 +735,11 @@ install_command() {
   prompt_panel_ports
   resolve_api_port
   run_install
+}
+
+info_command() {
+  load_config_from_compose
+  print_summary
 }
 
 list_command() {
@@ -768,7 +824,7 @@ main() {
   local cmd="menu"
   case "${1:-}" in
     menu) cmd="menu"; shift ;;
-    install|update|uninstall|restart|status|logs|list) cmd="$1"; shift ;;
+    install|update|uninstall|restart|status|logs|info|list) cmd="$1"; shift ;;
     -h|--help) usage; exit 0 ;;
     "") cmd="install" ;;
     -*) cmd="install" ;;
@@ -784,6 +840,7 @@ main() {
     restart)   parse_install_args "$@"; restart_command ;;
     status)    parse_install_args "$@"; status_command ;;
     logs)      parse_install_args "$@"; logs_command ;;
+    info)      parse_install_args "$@"; info_command ;;
   esac
 }
 

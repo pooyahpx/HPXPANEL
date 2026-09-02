@@ -1316,8 +1316,8 @@ verify_and_start_container() {
 }
 
 HPXPANEL_SCRIPTS_DIR="${HPXPANEL_SCRIPTS_DIR:-/usr/local/lib/hpxpanel-scripts}"
-HPXNODE_INSTALLER_REPO="${HPXNODE_INSTALLER_REPO:-pooyahpx/HPXNODE}"
-HPXNODE_INSTALLER_PATH="${HPXNODE_INSTALLER_PATH:-scripts/install.sh}"
+HPXNODE_INSTALLER_REPO="${HPXNODE_INSTALLER_REPO:-pooyahpx/HPXPANEL}"
+HPXNODE_INSTALLER_PATH="${HPXNODE_INSTALLER_PATH:-scripts/hpx-node.sh}"
 
 bundle_hpx_node_installer() {
     local target="${HPXPANEL_SCRIPTS_DIR}/hpx-node.sh"
@@ -1987,19 +1987,38 @@ install_command() {
     echo
     read -p "Do you want to install HPXPANEL node? (y/n) " install_node_choice
     install_node_choice="${install_node_choice//[[:space:]]/}"
+    local node_installed_ok=false
+    local show_panel_logs=""
     if [[ $install_node_choice =~ ^[Yy]([Ee][Ss])?$ ]]; then
         set +e
         install_node_command
         node_install_rc=$?
         set -e
-        if [ "$node_install_rc" -ne 0 ]; then
+        if [ "$node_install_rc" -eq 0 ]; then
+            node_installed_ok=true
+            echo
+            colorized_echo green "Node credentials (run 'hpxnode' anytime to show again):"
+            echo
+            show_hpxnode_credentials_if_available
+        else
             colorized_echo yellow "Retry later with: hpxpanel install-node"
         fi
     else
         colorized_echo yellow "Skipping node installation."
     fi
 
-    follow_hpxpanel_logs
+    echo
+    if [ "$node_installed_ok" = true ]; then
+        read -p "Show panel logs now? (y/n, Enter=no): " show_panel_logs
+        show_panel_logs="${show_panel_logs//[[:space:]]/}"
+        if [[ $show_panel_logs =~ ^[Yy]([Ee][Ss])?$ ]]; then
+            follow_hpxpanel_logs
+        else
+            colorized_echo cyan "Tip: hpxpanel logs — panel logs | hpxnode — node credentials"
+        fi
+    else
+        follow_hpxpanel_logs
+    fi
 }
 
 down_hpxpanel() {
@@ -2500,6 +2519,24 @@ edit_env_command() {
     fi
 }
 
+show_hpxnode_credentials_if_available() {
+    if command -v hpxnode >/dev/null 2>&1; then
+        hpxnode "$@" 2>/dev/null || true
+        return 0
+    fi
+    if command -v hpx-node >/dev/null 2>&1; then
+        hpx-node info "$@" 2>/dev/null || true
+        return 0
+    fi
+    if [ -f "${HPXPANEL_SCRIPTS_DIR}/hpx-node.sh" ]; then
+        bash "${HPXPANEL_SCRIPTS_DIR}/hpx-node.sh" info "$@" 2>/dev/null || true
+        return 0
+    fi
+    if [ -f /opt/hpx-node/hpx-node.sh ]; then
+        bash /opt/hpx-node/hpx-node.sh info "$@" 2>/dev/null || true
+    fi
+}
+
 install_node_command() {
     local installer=""
     local tmp_installer=""
@@ -2537,7 +2574,7 @@ install_node_command() {
 
     if [ "$rc" -eq 0 ]; then
         colorized_echo green "Node installation completed successfully!"
-        colorized_echo cyan "Add the node in HPXPANEL -> Nodes using the Address / ports / API key / Server CA above."
+        colorized_echo cyan "Run 'hpxnode' anytime to show Address / ports / API key / Server CA."
         return 0
     fi
 
@@ -2609,6 +2646,7 @@ usage() {
     colorized_echo yellow "  purge           $(tput sgr0)– Full wipe (app+data+DB) for clean reinstall"
     colorized_echo yellow "  install-script  $(tput sgr0)– Install HPXPANEL script"
     colorized_echo yellow "  install-node    $(tput sgr0)– Install HPXPANEL node"
+    colorized_echo yellow "  hpxnode         $(tput sgr0)– Show node Address / API key / Server CA"
     colorized_echo yellow "  ssl             $(tput sgr0)– Issue / reconfigure Let's Encrypt SSL"
     colorized_echo yellow "  backup          $(tput sgr0)– Manual backup launch"
     colorized_echo yellow "  backup-service  $(tput sgr0)– hpxpanel Backup service to backup to TG, and a new job in crontab"

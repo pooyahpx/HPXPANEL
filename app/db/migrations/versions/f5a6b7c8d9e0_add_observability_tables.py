@@ -18,7 +18,7 @@ depends_on = None
 def upgrade() -> None:
     op.create_table(
         "system_stats",
-        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("id", sa.BigInteger(), autoincrement=True, nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("mem_total", sa.BigInteger(), nullable=False),
         sa.Column("mem_used", sa.BigInteger(), nullable=False),
@@ -34,10 +34,10 @@ def upgrade() -> None:
 
     op.create_table(
         "observability_alert_events",
-        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("id", sa.BigInteger(), autoincrement=True, nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("scope", sa.String(length=32), nullable=False),
-        sa.Column("node_id", sa.Integer(), nullable=True),
+        sa.Column("node_id", sa.BigInteger(), nullable=True),
         sa.Column("metric", sa.String(length=64), nullable=False),
         sa.Column("value", sa.Float(), nullable=False),
         sa.Column("threshold", sa.Float(), nullable=False),
@@ -52,22 +52,31 @@ def upgrade() -> None:
         unique=False,
     )
     op.create_index("ix_node_stats_created_at", "node_stats", ["created_at"], unique=False)
+    op.create_index(
+        "ix_node_stats_node_id_created_at",
+        "node_stats",
+        ["node_id", "created_at"],
+        unique=False,
+    )
 
     bind = op.get_bind()
     if bind.dialect.name == "postgresql":
-        op.execute(
-            "CREATE INDEX IF NOT EXISTS ix_node_stats_node_id_created_at ON node_stats (node_id, created_at DESC)"
-        )
-        try:
-            op.execute("CREATE EXTENSION IF NOT EXISTS timescaledb")
-            op.execute(
-                "SELECT create_hypertable('system_stats', 'created_at', if_not_exists => TRUE, migrate_data => TRUE)"
-            )
-            op.execute(
-                "SELECT create_hypertable('node_stats', 'created_at', if_not_exists => TRUE, migrate_data => TRUE)"
-            )
-        except Exception:
-            pass
+        timescale_available = bind.execute(
+            sa.text("SELECT 1 FROM pg_available_extensions WHERE name = 'timescaledb' LIMIT 1")
+        ).scalar()
+        if timescale_available:
+            with op.get_context().autocommit_block():
+                op.execute("CREATE EXTENSION IF NOT EXISTS timescaledb")
+                for table in ("system_stats", "node_stats"):
+                    try:
+                        op.execute(
+                            sa.text(
+                                f"SELECT create_hypertable('{table}', 'created_at', "
+                                "if_not_exists => TRUE, migrate_data => TRUE)"
+                            )
+                        )
+                    except Exception:
+                        pass
 
 
 def downgrade() -> None:
@@ -75,7 +84,5 @@ def downgrade() -> None:
     op.drop_table("observability_alert_events")
     op.drop_index("ix_system_stats_created_at", table_name="system_stats")
     op.drop_table("system_stats")
-    bind = op.get_bind()
-    if bind.dialect.name == "postgresql":
-        op.execute("DROP INDEX IF EXISTS ix_node_stats_node_id_created_at")
+    op.drop_index("ix_node_stats_node_id_created_at", table_name="node_stats")
     op.drop_index("ix_node_stats_created_at", table_name="node_stats")

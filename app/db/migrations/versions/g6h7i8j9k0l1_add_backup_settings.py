@@ -32,8 +32,6 @@ DEFAULT_BACKUP = {
 
 
 def upgrade() -> None:
-    bind = op.get_bind()
-    dialect = bind.dialect.name
     default_str = json.dumps(DEFAULT_BACKUP).replace("'", "''")
 
     with op.batch_alter_table("settings") as batch_op:
@@ -41,9 +39,8 @@ def upgrade() -> None:
 
     op.execute(f"UPDATE settings SET backup = '{default_str}'")
 
-    if dialect != "sqlite":
-        with op.batch_alter_table("settings") as batch_op:
-            batch_op.alter_column("backup", existing_type=sa.JSON(), nullable=False)
+    with op.batch_alter_table("settings") as batch_op:
+        batch_op.alter_column("backup", existing_type=sa.JSON(), nullable=False)
 
 
 def downgrade() -> None:

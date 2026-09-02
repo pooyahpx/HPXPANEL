@@ -218,7 +218,7 @@ class User(Base, CreatedAtUTCMixin):
     )
     hwids: Mapped[list[UserHWID]] = relationship(back_populates="user", cascade="all, delete-orphan", init=False)
     groups: Mapped[list[Group]] = relationship(secondary=users_groups_association, back_populates="users", init=False)
-    group_quotas: Mapped[list["UserGroupQuota"]] = relationship(
+    group_quotas: Mapped[list[UserGroupQuota]] = relationship(
         back_populates="user", cascade="all, delete-orphan", init=False, lazy="noload"
     )
     proxy_settings: Mapped[dict[str, Any]] = mapped_column(
@@ -914,6 +914,10 @@ class ClientTemplate(Base):
 
 class NodeStat(Base, CreatedAtUTCMixin):
     __tablename__ = "node_stats"
+    __table_args__ = (
+        Index("ix_node_stats_created_at", "created_at"),
+        Index("ix_node_stats_node_id_created_at", "node_id", "created_at"),
+    )
     node_id: Mapped[int] = fk_id_column("nodes.id")
     node: Mapped[Node] = relationship(back_populates="stats", init=False)
     mem_total: Mapped[int] = mapped_column(BigInteger, unique=False, nullable=False)
@@ -928,6 +932,7 @@ class SystemStat(Base, CreatedAtUTCMixin):
     """Control-plane resource snapshots for historical charts."""
 
     __tablename__ = "system_stats"
+    __table_args__ = (Index("ix_system_stats_created_at", "created_at"),)
     mem_total: Mapped[int] = mapped_column(BigInteger, nullable=False)
     mem_used: Mapped[int] = mapped_column(BigInteger, nullable=False)
     cpu_cores: Mapped[int] = mapped_column(nullable=False)
@@ -940,6 +945,7 @@ class SystemStat(Base, CreatedAtUTCMixin):
 
 class ObservabilityAlertEvent(Base, CreatedAtUTCMixin):
     __tablename__ = "observability_alert_events"
+    __table_args__ = (Index("ix_observability_alert_events_created_at", "created_at"),)
     scope: Mapped[str] = mapped_column(String(32), nullable=False)
     node_id: Mapped[int | None] = fk_id_column("nodes.id", ondelete="SET NULL", nullable=True)
     metric: Mapped[str] = mapped_column(String(64), nullable=False)

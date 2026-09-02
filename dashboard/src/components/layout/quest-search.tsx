@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router'
 import type { LucideIcon } from 'lucide-react'
-import { Activity, Group, LayoutDashboardIcon, LayoutTemplate, ListTodo, Palette, PieChart, Radar, Settings2, Share2Icon, UserCog, UsersIcon, Key, Layers, Bell, Database, Cpu, Search } from 'lucide-react'
+import { Activity, Group, HardDriveDownload, LayoutDashboardIcon, LayoutTemplate, ListTodo, Palette, PieChart, Radar, Settings2, Share2Icon, UserCog, UsersIcon, Key, Layers, Bell, Database, Cpu, Search } from 'lucide-react'
 import { useAdmin } from '@/hooks/use-admin'
 import { cn } from '@/lib/utils'
 import { canReadResourcePage, hasPermission, isOwner } from '@/utils/rbac'
@@ -62,6 +62,7 @@ function useQuestItems(): QuestItem[] {
       items.push({ id: 'settings', title: 'settings.title', url: '/settings', icon: Settings2 })
       items.push({ id: 'notifications', title: 'settings.notifications.title', url: '/settings/notifications', icon: Bell })
       items.push({ id: 'cleanup', title: 'settings.cleanup.title', url: '/settings/cleanup', icon: Database })
+      items.push({ id: 'backup', title: 'settings.backup.title', url: '/settings/backup', icon: HardDriveDownload, keywords: 'backup restore sftp archive' })
     }
     items.push({ id: 'theme', title: 'theme.title', url: '/settings/theme', icon: Palette })
 

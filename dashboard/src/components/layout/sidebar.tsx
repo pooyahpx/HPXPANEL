@@ -31,6 +31,7 @@ import {
   Fingerprint,
   GithubIcon,
   Group,
+  HardDriveDownload,
   Key,
   Layers,
   LayoutDashboardIcon,
@@ -401,6 +402,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   title: 'settings.cleanup.title',
                   url: '/settings/cleanup',
                   icon: Database,
+                },
+                {
+                  title: 'settings.backup.title',
+                  url: '/settings/backup',
+                  icon: HardDriveDownload,
                 },
               ]
             : []),

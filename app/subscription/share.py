@@ -324,7 +324,11 @@ async def process_host(
 
     address = ""
     if inbound.address:
-        address = random.choice(inbound.address).replace("*", salt)
+        if isinstance(inbound.address, list):
+            if inbound.address:
+                address = random.choice(inbound.address).replace("*", salt)
+        else:
+            address = str(inbound.address).replace("*", salt)
 
     # Select random port from list
     port = random.choice(inbound.port) if inbound.port else 0

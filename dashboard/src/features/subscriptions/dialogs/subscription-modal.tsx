@@ -13,6 +13,8 @@ import { cn } from '@/lib/utils'
 import { getUserById, type UserGroupQuotaResponse } from '@/service/api'
 import { formatBytes } from '@/utils/formatByte'
 import {
+  buildOpenVPNConnectImportUrl,
+  buildSubscriptionFormatUrl,
   downloadTextFile,
   encodeSubscriptionContentToBase64,
   extractAddressFromConfigUrl,
@@ -214,9 +216,10 @@ const SubscriptionModal: FC<SubscriptionModalProps> = memo(({ open, subscribeUrl
 
   const selectedConfigWireGuardDownload = selectedConfigQR ? getWireGuardDownloadPayload(selectedConfigQR.config) : null
   const selectedConfigQrValue = selectedConfigWireGuardDownload && selectedConfigQrMode === 'config' ? selectedConfigWireGuardDownload.content : selectedConfigQR?.config || ''
+  const openvpnSubscriptionUrl = buildSubscriptionFormatUrl(subscribeUrl, 'openvpn')
   const openvpnDownloadPayload = openvpnProfile ? getOpenVPNDownloadPayload(openvpnProfile, username) : null
-  const openvpnImportUrl = openvpnProfile ? buildOpenVPNConnectImportUrl(openvpnProfile) : ''
-  const mainQrValue = mainQrMode === 'openvpn' && openvpnProfile ? openvpnProfile : subscribeQrLink
+  const openvpnImportUrl = openvpnSubscriptionUrl ? buildOpenVPNConnectImportUrl(openvpnSubscriptionUrl) : ''
+  const mainQrValue = mainQrMode === 'openvpn' && openvpnImportUrl ? openvpnImportUrl : subscribeQrLink
 
   const handleDownloadOpenVPN = useCallback(() => {
     if (!openvpnDownloadPayload) return

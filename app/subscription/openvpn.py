@@ -24,14 +24,15 @@ class OpenVPNConfiguration(BaseSubscription):
         client_cert = str(settings.get("client_cert") or "").strip()
         client_key = str(settings.get("client_key") or "").strip()
         ca_cert = str(inbound.openvpn_ca_cert or "").strip()
-        if not client_cert or not client_key or not ca_cert:
+        host = str(address or "").strip()
+        if not client_cert or not client_key or not ca_cert or not host:
             return
 
         if self._inbound is None:
             self._inbound = inbound
             self._settings = {"client_cert": client_cert, "client_key": client_key}
 
-        remote = (address.strip(), inbound.port)
+        remote = (host, inbound.port)
         if remote not in self._remotes:
             self._remotes.append(remote)
 

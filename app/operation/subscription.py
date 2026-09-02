@@ -308,15 +308,23 @@ class SubscriptionOperation(BaseOperation):
         randomize_order = sub_settings.randomize_order
 
         # Generate subscription content
-        return (
-            await generate_subscription(
-                user=user,
-                config_format=config.get("config_format", ""),
-                as_base64=config.get("as_base64", ""),
-                randomize_order=randomize_order,
-            ),
-            config["media_type"],
+        conf = await generate_subscription(
+            user=user,
+            config_format=config.get("config_format", ""),
+            as_base64=config.get("as_base64", ""),
+            randomize_order=randomize_order,
         )
+        if client_type == ConfigFormat.openvpn:
+            payload = conf if isinstance(conf, bytes) else str(conf).encode()
+            if not payload or b"remote " not in payload:
+                await self.raise_error(
+                    message=(
+                        "OpenVPN profile is unavailable. Renew the client certificate, "
+                        "verify the OpenVPN core CA/certs, and ensure at least one host has an address."
+                    ),
+                    code=404,
+                )
+        return conf, config["media_type"]
 
     @staticmethod
     def is_hwid_enabled(

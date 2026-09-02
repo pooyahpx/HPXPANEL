@@ -69,3 +69,25 @@ def test_openvpn_configuration_merges_multiple_hosts_into_one_profile():
     assert text.count("remote ") == 2
     assert "remote 203.0.113.1 1194" in text
     assert "remote 203.0.113.2 1194" in text
+
+
+def test_openvpn_configuration_skips_entries_without_host_address():
+    inbound = SubscriptionInboundData(
+        remark="Test Host",
+        inbound_tag="ovpn-main",
+        protocol="openvpn",
+        address="203.0.113.1",
+        port=1194,
+        network="udp",
+        tls_config=TLSConfig(),
+        transport_config=TCPTransportConfig(path="", host=[]),
+        openvpn_ca_cert="-----BEGIN CERTIFICATE-----\nCA\n-----END CERTIFICATE-----\n",
+    )
+    settings = {
+        "client_cert": "-----BEGIN CERTIFICATE-----\nCLIENT\n-----END CERTIFICATE-----\n",
+        "client_key": "-----BEGIN PRIVATE KEY-----\nKEY\n-----END PRIVATE KEY-----\n",
+    }
+
+    conf = OpenVPNConfiguration()
+    conf.add("Empty host", "", inbound, settings)
+    assert conf.render() == b""

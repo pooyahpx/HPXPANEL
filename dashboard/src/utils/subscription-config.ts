@@ -192,10 +192,21 @@ export const fetchUserOpenVPNProfile = async (userId: number, timeoutMs = 8000) 
     throw new Error('OpenVPN profile was returned as zip archive')
   }
   const text = new TextDecoder('utf-8').decode(buffer).trim()
-  if (!text.includes('client') || !text.includes('<cert>')) {
+  if (!text.includes('client') || !text.includes('<cert>') || !/^remote\s+\S+/m.test(text)) {
     throw new Error('Invalid OpenVPN profile content')
   }
   return text
+}
+
+/** OpenVPN Connect expects an HTTPS profile URL, not inline profile text (too long and gets truncated). */
+export const buildOpenVPNConnectImportUrl = (profileUrl: string) => {
+  const trimmed = profileUrl.trim()
+  if (!trimmed) return ''
+  if (trimmed.startsWith('openvpn://')) return trimmed
+  if (/^https?:\/\//i.test(trimmed)) {
+    return `openvpn://import-profile/${trimmed}`
+  }
+  return `openvpn://import-profile/${encodeURIComponent(trimmed)}`
 }
 
 export const extractNameFromConfigUrl = (url: string): string | null => {
@@ -390,11 +401,6 @@ export const downloadTextFile = (content: string, fileName: string, mimeType = T
 export const OPENVPN_PROFILE_MIME_TYPE = 'application/x-openvpn-profile'
 
 export const buildOpenVPNFileName = (username: string) => `${sanitizeFileNameSegment(username) || 'openvpn'}.ovpn`
-
-export const buildOpenVPNConnectImportUrl = (profileContent: string) => {
-  const encoded = encodeURIComponent(profileContent)
-  return `openvpn://import-profile/${encoded}`
-}
 
 export const getOpenVPNDownloadPayload = (profileContent: string, username: string) => ({
   content: profileContent,

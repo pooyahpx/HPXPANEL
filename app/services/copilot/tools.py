@@ -134,17 +134,31 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "name": "import_proxy_link",
             "description": (
                 "Parse a client share link (vless://, vmess://, trojan://, ss://) and create a HPXPANEL Host. "
+                "By default also creates a matching Xray inbound in the core when none exists (create_inbound_if_missing). "
                 "Always preview first with confirm=false, then create with confirm=true after the admin agrees. "
-                "Requires inbound_tag from list_core_inbounds. Optional create_user with username + group_ids."
+                "inbound_tag is optional — omit it to auto-match or auto-create from the link. "
+                "Optional create_user with username + group_ids."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "link": {"type": "string", "description": "Full share link URI"},
-                    "inbound_tag": {"type": "string", "description": "Existing core inbound tag"},
+                    "inbound_tag": {
+                        "type": "string",
+                        "description": "Optional existing inbound tag; leave empty to auto-match/create from link",
+                    },
+                    "core_id": {
+                        "type": "integer",
+                        "description": "Optional Xray core id (defaults to first Xray core)",
+                    },
+                    "create_inbound_if_missing": {
+                        "type": "boolean",
+                        "description": "Create a matching inbound in the core when none exists",
+                        "default": True,
+                    },
                     "confirm": {
                         "type": "boolean",
-                        "description": "false = preview only, true = create host (and optional user)",
+                        "description": "false = preview only, true = create inbound (if needed) and host",
                         "default": False,
                     },
                     "remark_override": {"type": "string", "description": "Optional host remark override"},
@@ -160,7 +174,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                         "description": "Group IDs required when create_user=true",
                     },
                 },
-                "required": ["link", "inbound_tag"],
+                "required": ["link"],
             },
         },
     },
@@ -266,8 +280,11 @@ async def execute_tool(
             return {"total": len(inbounds), "inbounds": inbounds}, f"Listed {len(inbounds)} inbound(s)"
 
         if name == "import_proxy_link":
+            create_inbound = bool(arguments.get("create_inbound_if_missing", True))
             if arguments.get("confirm"):
                 enforce_permission(admin, "hosts", "create")
+                if create_inbound:
+                    enforce_permission(admin, "cores", "update")
                 if arguments.get("create_user"):
                     enforce_permission(admin, "users", "create")
             else:
@@ -275,6 +292,8 @@ async def execute_tool(
 
             group_ids_raw = arguments.get("group_ids") or []
             group_ids = [int(item) for item in group_ids_raw] if group_ids_raw else None
+            core_id_raw = arguments.get("core_id")
+            core_id = int(core_id_raw) if core_id_raw not in (None, "") else None
 
             result = await run_proxy_link_import(
                 db,
@@ -286,6 +305,8 @@ async def execute_tool(
                 create_user=bool(arguments.get("create_user")),
                 username=arguments.get("username"),
                 group_ids=group_ids,
+                core_id=core_id,
+                create_inbound_if_missing=create_inbound,
             )
             if arguments.get("confirm") and result.get("host_id"):
                 label = f"Imported host #{result['host_id']}"

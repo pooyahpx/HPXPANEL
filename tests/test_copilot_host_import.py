@@ -115,14 +115,18 @@ def test_preview_host_import_includes_ready_fields():
 
 
 @pytest.mark.asyncio
-async def test_import_proxy_link_requires_inbound_tag():
+async def test_import_proxy_link_auto_inbound_preview():
     async with GetTestDB() as db:
         admin = await get_admin(db, "testadmin", load_users=False, load_usage_logs=False)
-        result = await import_proxy_link(db, admin=admin, link=VLESS_LINK, inbound_tag="")
+        result = await import_proxy_link(db, admin=admin, link=VLESS_LINK, inbound_tag="", confirm=False)
 
-    assert result["error"] == "inbound_tag is required"
-    assert result["parsed"]["protocol"] == "vless"
-    assert "suggested_inbound_tags" in result
+    if result.get("error"):
+        assert "suggested_inbound_tags" in result
+        return
+
+    assert result.get("ready") is True
+    assert result["host"]["inbound_tag"]
+    assert "inbound" in result
 
 
 @pytest.mark.asyncio

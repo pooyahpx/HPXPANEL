@@ -14,6 +14,7 @@ from app.models.user import UserCreate
 from app.operation.host import HostOperation
 from app.operation import OperatorType
 from app.operation.user import UserOperation
+from app.services.copilot.inbound_from_link import resolve_inbound_for_import
 from app.services.copilot.proxy_uri import ParsedProxyLink, ProxyUriParseError, parse_proxy_link
 
 
@@ -141,7 +142,7 @@ def preview_host_import(
         "parsed": parsed.to_public_dict(),
         "host": host.model_dump(mode="json"),
         "notes": [
-            "This creates a Host entry in HPXPANEL — your node core must already have a matching inbound.",
+            "Creates a Host in HPXPANEL. When create_inbound_if_missing=true, a matching Xray inbound is created in the core if needed.",
             "The link UUID/password is not applied unless create_user=true.",
         ],
     }
@@ -152,52 +153,68 @@ async def import_proxy_link(
     *,
     admin: AdminDetails,
     link: str,
-    inbound_tag: str,
+    inbound_tag: str = "",
     confirm: bool = False,
     remark_override: str | None = None,
     create_user: bool = False,
     username: str | None = None,
     group_ids: list[int] | None = None,
+    core_id: int | None = None,
+    create_inbound_if_missing: bool = True,
 ) -> dict:
     try:
         parsed = parse_proxy_link(link)
     except ProxyUriParseError as exc:
         return {"error": str(exc)}
 
-    inbound_tag = inbound_tag.strip()
-    if not inbound_tag:
+    try:
+        resolved_tag, inbound_meta = await resolve_inbound_for_import(
+            db,
+            admin=admin,
+            parsed=parsed,
+            inbound_tag=inbound_tag,
+            core_id=core_id,
+            create_inbound_if_missing=create_inbound_if_missing,
+            confirm=confirm,
+        )
+    except ValueError as exc:
         inbounds = await list_core_inbound_options()
-        suggestions = suggest_inbound_tags(parsed, inbounds)
         return {
-            "error": "inbound_tag is required",
+            "error": str(exc),
             "parsed": parsed.to_public_dict(),
-            "suggested_inbound_tags": suggestions,
+            "suggested_inbound_tags": suggest_inbound_tags(parsed, inbounds),
             "available_inbounds": inbounds[:20],
         }
 
     priority = await next_host_priority(db)
-    preview = preview_host_import(parsed, inbound_tag=inbound_tag, priority=priority, remark_override=remark_override)
+    preview = preview_host_import(parsed, inbound_tag=resolved_tag, priority=priority, remark_override=remark_override)
+    preview["inbound"] = inbound_meta
 
     if not confirm:
         inbounds = await list_core_inbound_options()
         preview["suggested_inbound_tags"] = suggest_inbound_tags(parsed, inbounds)
         preview["ready"] = True
-        preview["message"] = "Preview only. Call again with confirm=true to create the host."
+        preview["message"] = "Preview only. Call again with confirm=true to create inbound (if needed) and host."
         return preview
 
     host_op = HostOperation(operator_type=OperatorType.API)
-    created_host = await host_op.create_host(db, build_create_host_from_link(
-        parsed,
-        inbound_tag=inbound_tag,
-        priority=priority,
-        remark_override=remark_override,
-    ), admin)
+    created_host = await host_op.create_host(
+        db,
+        build_create_host_from_link(
+            parsed,
+            inbound_tag=resolved_tag,
+            priority=priority,
+            remark_override=remark_override,
+        ),
+        admin,
+    )
 
     result = {
         "host_id": created_host.id,
         "host_remark": created_host.remark,
-        "inbound_tag": inbound_tag,
+        "inbound_tag": resolved_tag,
         "parsed": parsed.to_public_dict(),
+        "inbound": inbound_meta,
         "message": f"Host #{created_host.id} created",
     }
 

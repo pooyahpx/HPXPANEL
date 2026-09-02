@@ -1,5 +1,5 @@
 from functools import cached_property
-from typing import Any
+from typing import Any, ClassVar
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -217,10 +217,18 @@ class JobSettings(EnvSettings):
 
 class CopilotSettings(EnvSettings):
     enabled: bool = Field(default=True, validation_alias="COPILOT_ENABLED")
+    provider: str = Field(default="groq", validation_alias="COPILOT_PROVIDER")
     api_key: str = Field(default="", validation_alias="OPENAI_API_KEY")
-    model: str = Field(default="gpt-4o-mini", validation_alias="COPILOT_MODEL")
-    base_url: str = Field(default="https://api.openai.com", validation_alias="COPILOT_BASE_URL")
+    model: str = Field(default="", validation_alias="COPILOT_MODEL")
+    base_url: str = Field(default="", validation_alias="COPILOT_BASE_URL")
     max_tool_rounds: int = Field(default=6, ge=1, le=12, validation_alias="COPILOT_MAX_TOOL_ROUNDS")
+
+    _PROVIDER_PRESETS: ClassVar[dict[str, tuple[str, str]]] = {
+        "groq": ("https://api.groq.com/openai", "llama-3.3-70b-versatile"),
+        "openai": ("https://api.openai.com", "gpt-4o-mini"),
+        "openrouter": ("https://openrouter.ai/api", "google/gemma-2-9b-it:free"),
+        "ollama": ("http://127.0.0.1:11434", "llama3.2"),
+    }
 
     @field_validator("enabled", mode="before")
     @classmethod
@@ -246,9 +254,31 @@ class CopilotSettings(EnvSettings):
             return 6
         return value
 
+    @model_validator(mode="after")
+    def apply_provider_defaults(self) -> "CopilotSettings":
+        provider = (self.provider or "groq").strip().lower()
+        preset = self._PROVIDER_PRESETS.get(provider)
+        if preset:
+            default_url, default_model = preset
+            if not self.base_url.strip():
+                self.base_url = default_url
+            if not self.model.strip():
+                self.model = default_model
+        else:
+            if not self.base_url.strip():
+                self.base_url = "https://api.openai.com"
+            if not self.model.strip():
+                self.model = "gpt-4o-mini"
+        self.provider = provider
+        return self
+
     @cached_property
     def is_configured(self) -> bool:
-        return self.enabled and bool(self.api_key.strip())
+        if not self.enabled:
+            return False
+        if self.provider == "ollama":
+            return bool(self.base_url.strip())
+        return bool(self.api_key.strip())
 
 
 class FeatureSettings(EnvSettings):

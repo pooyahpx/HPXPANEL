@@ -169,7 +169,7 @@
   "copilot": {
     "title": "HPX Copilot",
     "description": "AI assistant with live panel context — Pulse, tunnels, and troubleshooting.",
-    "notConfigured": "Set OPENAI_API_KEY in panel .env to enable Copilot.",
+    "notConfigured": "Set COPILOT_PROVIDER=groq and OPENAI_API_KEY (Groq key from console.groq.com) in panel .env.",
     "context": "Context",
     "emptyHint": "Ask about pulses, tunnels, panel issues, or paste a vless/vmess share link to import a Host.",
     "placeholder": "Ask Copilot…",

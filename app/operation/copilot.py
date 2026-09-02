@@ -12,6 +12,7 @@ class CopilotOperation(BaseOperation):
         return CopilotStatusResponse(
             enabled=copilot_settings.enabled,
             configured=copilot_settings.is_configured,
+            provider=copilot_settings.provider,
             model=copilot_settings.model,
         )
 

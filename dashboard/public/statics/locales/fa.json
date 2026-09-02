@@ -2102,7 +2102,7 @@
   "copilot": {
     "title": "HPX Copilot",
     "description": "دستیار هوشمند با context زنده پنل — Pulse، تونل‌ها و عیب‌یابی.",
-    "notConfigured": "برای فعال‌سازی Copilot مقدار OPENAI_API_KEY را در .env پنل تنظیم کنید.",
+    "notConfigured": "برای Copilot در .env پنل: COPILOT_PROVIDER=groq و OPENAI_API_KEY (کلید رایگان از console.groq.com).",
     "context": "صفحه",
     "emptyHint": "درباره Pulseها، تونل‌ها، مشکلات پنل، یا import لینک vless/vmess بپرس. می‌توانم داده زنده را بخوانم و Host بسازم.",
     "placeholder": "از Copilot بپرس…",

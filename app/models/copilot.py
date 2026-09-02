@@ -25,6 +25,7 @@ class CopilotChatResponse(BaseModel):
 class CopilotStatusResponse(BaseModel):
     enabled: bool
     configured: bool
+    provider: str
     model: str
 
     model_config = ConfigDict(from_attributes=True)

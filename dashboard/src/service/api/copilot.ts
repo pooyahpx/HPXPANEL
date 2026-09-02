@@ -20,6 +20,7 @@ export interface CopilotChatResponse {
 export interface CopilotStatusResponse {
   enabled: boolean
   configured: boolean
+  provider: string
   model: string
 }
 

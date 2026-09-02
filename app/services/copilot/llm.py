@@ -41,7 +41,9 @@ def _system_prompt(*, admin: AdminDetails, snapshot: dict[str, Any]) -> str:
 
 async def _chat_completion(messages: list[dict[str, Any]], *, tools: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     if not copilot_settings.is_configured:
-        raise CopilotNotConfiguredError("Copilot is not configured — set OPENAI_API_KEY in panel .env")
+        raise CopilotNotConfiguredError(
+            "Copilot is not configured — set OPENAI_API_KEY (or COPILOT_PROVIDER=ollama) in panel .env"
+        )
 
     url = f"{copilot_settings.base_url.rstrip('/')}/v1/chat/completions"
     payload: dict[str, Any] = {
@@ -53,10 +55,10 @@ async def _chat_completion(messages: list[dict[str, Any]], *, tools: list[dict[s
         payload["tools"] = tools
         payload["tool_choice"] = "auto"
 
-    headers = {
-        "Authorization": f"Bearer {copilot_settings.api_key}",
-        "Content-Type": "application/json",
-    }
+    headers = {"Content-Type": "application/json"}
+    api_key = copilot_settings.api_key.strip()
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
 
     timeout = aiohttp.ClientTimeout(total=120.0)
     async with (
@@ -65,6 +67,11 @@ async def _chat_completion(messages: list[dict[str, Any]], *, tools: list[dict[s
     ):
         if response.status >= 400:
             detail = (await response.text())[:500]
+            if response.status == 429 or "insufficient_quota" in detail or "credit_balance_exhausted" in detail:
+                raise CopilotProviderError(
+                    "Copilot API quota exhausted. Use free Groq: set COPILOT_PROVIDER=groq and "
+                    "OPENAI_API_KEY=gsk_... from console.groq.com in panel .env, then restart."
+                )
             raise CopilotProviderError(f"LLM request failed ({response.status}): {detail}")
         return await response.json()
 

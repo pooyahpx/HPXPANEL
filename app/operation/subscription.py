@@ -11,7 +11,7 @@ from app.db.crud.hwid import (
     get_user_hwid_count,
     register_user_hwid,
 )
-from app.db.crud.user import attach_user_group_quotas, get_user_usages, load_user_attrs, user_sub_update
+from app.db.crud.user import attach_user_group_quotas, get_user_usages, load_user_attrs, refresh_and_load_user, user_sub_update
 from app.db.models import User
 from app.models.admin import AdminDetails
 from app.models.settings import Application, ConfigFormat, HWIDSettings, SubRule, Subscription as SubSettings
@@ -300,6 +300,35 @@ class SubscriptionOperation(BaseOperation):
 
         # Only include headers that have values
         return {k: v for k, v in headers.items() if v}
+
+    async def _prepare_openvpn_subscription(self, db: AsyncSession, db_user: User) -> UsersResponseWithInbounds:
+        """Ensure client cert exists and push serial/fingerprint to nodes before serving .ovpn."""
+        from app.models.proxy import ProxyTable
+        from app.node.sync import sync_user
+        from app.utils.openvpn import ensure_openvpn_credentials, user_has_openvpn_access
+
+        await load_user_attrs(db_user, load_groups=True)
+        groups = db_user.groups or []
+        if not await user_has_openvpn_access(db, groups):
+            return await self.validated_user(db_user)
+
+        proxy_settings = ProxyTable.model_validate(db_user.proxy_settings)
+        before = proxy_settings.openvpn.model_dump()
+        try:
+            updated = await ensure_openvpn_credentials(db, db_user.id, proxy_settings, groups)
+        except ValueError as exc:
+            await self.raise_error(message=str(exc), code=400, db=db)
+
+        after = updated.openvpn.model_dump()
+        if after != before:
+            db_user.proxy_settings = updated.dict()
+            await db.commit()
+            await refresh_and_load_user(db, db_user)
+
+        if after.get("serial"):
+            await sync_user(db_user)
+
+        return await self.validated_user(db_user)
 
     async def fetch_config(self, user: UsersResponseWithInbounds, client_type: ConfigFormat) -> tuple[str | bytes, str]:
         # Get client configuration
@@ -596,9 +625,10 @@ class SubscriptionOperation(BaseOperation):
             response_headers = self.sanitize_response_headers(response_headers)
         except ValueError as exc:
             await self.raise_error(message=str(exc), code=400)
+        if client_type == ConfigFormat.openvpn:
+            user = await self._prepare_openvpn_subscription(db, db_user)
         conf, media_type = await self.fetch_config(user, client_type)
 
-        # Create response headers
         return Response(content=conf, media_type=media_type, headers=response_headers)
 
     def _build_subscription_body_payload(
@@ -696,6 +726,7 @@ class SubscriptionOperation(BaseOperation):
 
     async def user_subscription_by_user(
         self,
+        db: AsyncSession,
         db_user: User,
         client_type: ConfigFormat,
         request_url: str = "",
@@ -718,6 +749,8 @@ class SubscriptionOperation(BaseOperation):
             response_headers = self.sanitize_response_headers(response_headers)
         except ValueError as exc:
             await self.raise_error(message=str(exc), code=400)
+        if client_type == ConfigFormat.openvpn:
+            user = await self._prepare_openvpn_subscription(db, db_user)
         conf, media_type = await self.fetch_config(user, client_type)
 
         return Response(content=conf, media_type=media_type, headers=response_headers)
@@ -726,7 +759,7 @@ class SubscriptionOperation(BaseOperation):
         self, db: AsyncSession, user_id: int, admin: AdminDetails, client_type: ConfigFormat, request_url: str = ""
     ):
         db_user = await self.get_validated_user_by_id(db, user_id, admin)
-        return await self.user_subscription_by_user(db_user, client_type, request_url)
+        return await self.user_subscription_by_user(db, db_user, client_type, request_url)
 
     async def user_subscription_info(
         self, db: AsyncSession, token: str, ip: str | None = None

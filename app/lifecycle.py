@@ -43,6 +43,12 @@ async def _invoke(func, app):
 
 @asynccontextmanager
 async def lifespan(app):
+    from app.db.migrate import run_pending_migrations
+    from config import runtime_settings
+
+    if runtime_settings.role.runs_panel:
+        await run_pending_migrations()
+
     for func in startup_functions:
         await _invoke(func, app)
     yield

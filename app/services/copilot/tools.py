@@ -35,8 +35,30 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
+            "name": "overview_hpx_tunnel_systems",
+            "description": (
+                "List ALL tunnel products in HPXPANEL in one call. Use this when the user asks about "
+                "'tunnels', 'تونل', HPX Pulse status, or a general tunnel health review. "
+                "Returns hpx_pulse (reverse tunnel advisor, Iran+abroad agents) AND hpx_icmp "
+                "(separate ICMP Docker tunnels). Do NOT treat empty ICMP as 'no tunnels' if Pulse exists."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "limit": {"type": "integer", "description": "Max items per product (1-20)", "default": 10},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "list_hpx_pulses",
-            "description": "List HPX Pulse smart tunnels with agent connection and status.",
+            "description": (
+                "List HPX Pulse tunnels only — the reverse-tunnel advisor (Iran + Abroad agents, "
+                "profiles like stealth/TCP/WSS). NOT the ICMP tunnel product. "
+                "Prefer overview_hpx_tunnel_systems when the user says 'tunnel' generically."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -86,7 +108,11 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "list_hpx_tunnels",
-            "description": "List HPX ICMP tunnels (Iran/foreign Docker tunnels).",
+            "description": (
+                "List HPX ICMP tunnels only — ChaCha ping tunnels in Docker (Iran/foreign roles). "
+                "This is NOT HPX Pulse. If the user asked about Pulse or tunnels in general, "
+                "also call overview_hpx_tunnel_systems or list_hpx_pulses."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -219,6 +245,49 @@ def _tunnel_summary(tunnel) -> dict[str, Any]:
     }
 
 
+async def _overview_hpx_tunnel_systems(
+    db: AsyncSession,
+    *,
+    admin: AdminDetails,
+    limit: int,
+) -> dict[str, Any]:
+    result: dict[str, Any] = {
+        "note": (
+            "HPXPANEL has two tunnel products: HPX Pulse (reverse advisor) and HPX ICMP (ping Docker). "
+            "They are separate — report both when reviewing tunnels."
+        ),
+        "hpx_pulse": {
+            "product": "HPX Pulse — reverse tunnel advisor (Iran + Abroad agents)",
+            "total": 0,
+            "items": [],
+        },
+        "hpx_icmp": {
+            "product": "HPX ICMP — ChaCha ping Docker tunnels",
+            "total": 0,
+            "items": [],
+        },
+    }
+
+    try:
+        enforce_permission(admin, "hpx_pulse", "read")
+        pulse_resp = await _get_pulse_op().list_pulses(db, admin=admin, offset=0, limit=limit)
+        result["hpx_pulse"]["total"] = pulse_resp.total
+        result["hpx_pulse"]["items"] = [_pulse_summary(p) for p in pulse_resp.pulses]
+    except PermissionDenied:
+        result["hpx_pulse"]["permission_denied"] = True
+
+    try:
+        enforce_permission(admin, "hpx_tunnels", "read")
+        icmp_query = HpxTunnelsQuery(offset=0, limit=limit)
+        icmp_resp = await _get_tunnel_op().list_tunnels(db, admin=admin, query=icmp_query)
+        result["hpx_icmp"]["total"] = icmp_resp.total
+        result["hpx_icmp"]["items"] = [_tunnel_summary(t) for t in icmp_resp.tunnels]
+    except PermissionDenied:
+        result["hpx_icmp"]["permission_denied"] = True
+
+    return result
+
+
 async def execute_tool(
     db: AsyncSession,
     *,
@@ -228,6 +297,13 @@ async def execute_tool(
 ) -> tuple[dict[str, Any], str | None]:
     """Run a copilot tool. Returns (result, action_label)."""
     try:
+        if name == "overview_hpx_tunnel_systems":
+            limit = max(1, min(int(arguments.get("limit") or 10), 20))
+            overview = await _overview_hpx_tunnel_systems(db, admin=admin, limit=limit)
+            pulse_n = len(overview["hpx_pulse"].get("items") or [])
+            icmp_n = len(overview["hpx_icmp"].get("items") or [])
+            return overview, f"Overview: {pulse_n} Pulse(s), {icmp_n} ICMP tunnel(s)"
+
         if name == "list_hpx_pulses":
             enforce_permission(admin, "hpx_pulse", "read")
             limit = max(1, min(int(arguments.get("limit") or 10), 20))

@@ -89,16 +89,37 @@ async def build_panel_snapshot(
 
     try:
         enforce_permission(admin, "hpx_pulse", "read")
-        _, pulse_total = await get_hpx_pulses(db, offset=0, limit=1)
+        pulses, pulse_total = await get_hpx_pulses(db, offset=0, limit=5)
         snapshot["hpx_pulses_total"] = pulse_total
+        snapshot["hpx_pulse_preview"] = [
+            {
+                "id": p.id,
+                "name": p.name,
+                "status": p.status,
+                "iran_claimed": p.iran_claimed,
+                "abroad_claimed": p.abroad_claimed,
+            }
+            for p in pulses
+        ]
     except Exception:
         pass
 
     try:
         enforce_permission(admin, "hpx_tunnels", "read")
         _, tunnel_total = await get_hpx_tunnels(db, offset=0, limit=1)
-        snapshot["hpx_tunnels_total"] = tunnel_total
+        snapshot["hpx_icmp_tunnels_total"] = tunnel_total
     except Exception:
         pass
+
+    snapshot["tunnel_products"] = {
+        "hpx_pulse": "Reverse tunnel advisor — Iran + Abroad agents (NOT ICMP)",
+        "hpx_icmp": "ICMP ChaCha Docker tunnels — separate product",
+    }
+
+    page = (page_path or "").lower()
+    if "pulse" in page:
+        snapshot["page_hint"] = "User is on HPX Pulse UI — prioritize Pulse tools and status."
+    elif "icmp" in page or "hpx-tunnel" in page or "hpx_tunnel" in page:
+        snapshot["page_hint"] = "User is on HPX ICMP UI — ICMP tunnels; Pulse is a different product."
 
     return snapshot

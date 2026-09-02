@@ -180,6 +180,7 @@
     "thinking": "Thinking…",
     "sendError": "Could not reach Copilot",
     "starters": {
+      "tunnelOverview": "Review all my tunnels (HPX Pulse + ICMP) and summarize each product's status",
       "pulseStatus": "List my HPX Pulse tunnels and their status",
       "diagnosePulse": "Diagnose unhealthy Pulse tunnels and suggest fixes",
       "syncHelp": "When should I use Sync on a Pulse card?",

@@ -9,7 +9,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useLocation } from 'react-router'
 
-const STARTER_KEYS = ['pulseStatus', 'diagnosePulse', 'syncHelp', 'panelUrl', 'importProxyLink'] as const
+const STARTER_KEYS = ['tunnelOverview', 'pulseStatus', 'diagnosePulse', 'syncHelp', 'panelUrl', 'importProxyLink'] as const
 const GROQ_API_KEYS_URL = 'https://console.groq.com/keys'
 
 type ChatEntry = CopilotMessage & { id: string }

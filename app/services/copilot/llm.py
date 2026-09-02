@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from typing import Any
@@ -21,6 +22,45 @@ class CopilotNotConfiguredError(RuntimeError):
 
 class CopilotProviderError(RuntimeError):
     pass
+
+
+def _is_groq_provider() -> bool:
+    provider = copilot_settings.provider.strip().lower()
+    base = copilot_settings.base_url.strip().lower()
+    return provider == "groq" or "groq.com" in base
+
+
+def _provider_error_message(status: int, detail: str) -> str:
+    lowered = detail.lower()
+    if status == 429 and _is_groq_provider():
+        return (
+            "Groq rate limit reached (too many Copilot requests per minute). "
+            "Wait 30–60 seconds and try again. For higher free limits, set "
+            "COPILOT_MODEL=openai/gpt-oss-20b in panel .env and restart."
+        )
+    if status == 429:
+        if "insufficient_quota" in lowered or "credit_balance_exhausted" in lowered:
+            return (
+                "API quota exhausted. For a free provider use Groq: COPILOT_PROVIDER=groq and "
+                "OPENAI_API_KEY=gsk_... from console.groq.com"
+            )
+        return f"Rate limit exceeded (429). Wait a moment and retry. {detail[:240]}"
+    if "insufficient_quota" in lowered or "credit_balance_exhausted" in lowered:
+        return (
+            "API quota exhausted. For a free provider use Groq: COPILOT_PROVIDER=groq and "
+            "OPENAI_API_KEY=gsk_... from console.groq.com"
+        )
+    return f"LLM request failed ({status}): {detail}"
+
+
+def _rate_limit_wait_seconds(response: aiohttp.ClientResponse, attempt: int) -> float:
+    retry_after = response.headers.get("Retry-After")
+    if retry_after:
+        try:
+            return min(float(retry_after), 30.0)
+        except ValueError:
+            pass
+    return min(2.0**attempt, 15.0)
 
 
 def _system_prompt(*, admin: AdminDetails, snapshot: dict[str, Any]) -> str:
@@ -61,19 +101,18 @@ async def _chat_completion(messages: list[dict[str, Any]], *, tools: list[dict[s
         headers["Authorization"] = f"Bearer {api_key}"
 
     timeout = aiohttp.ClientTimeout(total=120.0)
-    async with (
-        aiohttp.ClientSession(timeout=timeout) as session,
-        session.post(url, headers=headers, json=payload) as response,
-    ):
-        if response.status >= 400:
-            detail = (await response.text())[:500]
-            if response.status == 429 or "insufficient_quota" in detail or "credit_balance_exhausted" in detail:
-                raise CopilotProviderError(
-                    "Copilot API quota exhausted. Use free Groq: set COPILOT_PROVIDER=groq and "
-                    "OPENAI_API_KEY=gsk_... from console.groq.com in panel .env, then restart."
-                )
-            raise CopilotProviderError(f"LLM request failed ({response.status}): {detail}")
-        return await response.json()
+    max_attempts = 3 if _is_groq_provider() else 1
+    async with aiohttp.ClientSession(timeout=timeout) as session:
+        for attempt in range(max_attempts):
+            async with session.post(url, headers=headers, json=payload) as response:
+                if response.status == 429 and attempt < max_attempts - 1:
+                    await asyncio.sleep(_rate_limit_wait_seconds(response, attempt))
+                    continue
+                if response.status >= 400:
+                    detail = (await response.text())[:500]
+                    raise CopilotProviderError(_provider_error_message(response.status, detail))
+                return await response.json()
+    raise CopilotProviderError("LLM request failed after rate-limit retries")
 
 
 async def run_copilot_chat(

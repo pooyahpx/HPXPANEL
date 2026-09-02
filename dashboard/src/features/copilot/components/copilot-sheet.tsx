@@ -2,47 +2,17 @@ import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Textarea } from '@/components/ui/textarea'
-import { sendCopilotChat, type CopilotMessage } from '@/service/api/copilot'
+import { sendCopilotChat, type CopilotMessage, type CopilotStatusResponse } from '@/service/api/copilot'
 import { cn } from '@/lib/utils'
-import { Bot, ExternalLink, Loader2, Send, Sparkles, User } from 'lucide-react'
+import { Bot, Loader2, Send, Sparkles, User } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useLocation } from 'react-router'
+import { CopilotSetupForm } from '@/features/copilot/components/copilot-setup-form'
 
 const STARTER_KEYS = ['panelHealth', 'tunnelOverview', 'pulseStatus', 'diagnosePulse', 'syncHelp', 'panelUrl', 'importProxyLink'] as const
-const GROQ_API_KEYS_URL = 'https://console.groq.com/keys'
 
 type ChatEntry = CopilotMessage & { id: string }
-
-function CopilotSetupHelp() {
-  const { t } = useTranslation()
-
-  return (
-    <div className="bg-muted/60 space-y-2 rounded-lg border p-3 text-sm">
-      <p className="font-medium">{t('copilot.setupTitle')}</p>
-      <p className="text-muted-foreground text-xs leading-relaxed">{t('copilot.setupIntro')}</p>
-      <a
-        href={GROQ_API_KEYS_URL}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="text-primary inline-flex items-center gap-1.5 text-xs font-medium hover:underline"
-      >
-        {t('copilot.getApiKey')}
-        <ExternalLink className="h-3.5 w-3.5 shrink-0" />
-      </a>
-      <pre
-        className="bg-background text-muted-foreground overflow-x-auto rounded-md border p-2 font-mono text-[10px] leading-relaxed"
-        dir="ltr"
-      >
-        {`COPILOT_ENABLED=true
-COPILOT_PROVIDER=groq
-OPENAI_API_KEY=gsk_...
-COPILOT_MODEL=openai/gpt-oss-20b`}
-      </pre>
-      <p className="text-muted-foreground text-[11px]">{t('copilot.setupRestart')}</p>
-    </div>
-  )
-}
 
 function newId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
@@ -52,12 +22,15 @@ export type CopilotSheetProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
   configured: boolean
+  status?: CopilotStatusResponse
+  onConfigured?: () => void
 }
 
-export function CopilotSheet({ open, onOpenChange, configured }: CopilotSheetProps) {
+export function CopilotSheet({ open, onOpenChange, configured, status, onConfigured }: CopilotSheetProps) {
   const { t, i18n } = useTranslation()
   const location = useLocation()
   const pagePath = location.pathname
+  const isConfigured = status?.configured ?? configured
   const [messages, setMessages] = useState<ChatEntry[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -124,9 +97,9 @@ export function CopilotSheet({ open, onOpenChange, configured }: CopilotSheetPro
             {t('copilot.title')}
           </SheetTitle>
           <SheetDescription className="text-start">
-            {configured ? t('copilot.description') : t('copilot.notConfigured')}
+            {isConfigured ? t('copilot.description') : t('copilot.notConfigured')}
           </SheetDescription>
-          {!configured && <CopilotSetupHelp />}
+          <CopilotSetupForm status={status} onConfigured={onConfigured} />
           <p className="text-muted-foreground font-mono text-[10px] tracking-wide uppercase">
             {t('copilot.context')}: {pagePath}
           </p>
@@ -144,7 +117,7 @@ export function CopilotSheet({ open, onOpenChange, configured }: CopilotSheetPro
                     variant="outline"
                     size="sm"
                     className="h-auto whitespace-normal text-start"
-                    disabled={!configured || loading}
+                    disabled={!isConfigured || loading}
                     onClick={() => void send(t(`copilot.starters.${key}`))}
                   >
                     {t(`copilot.starters.${key}`)}
@@ -203,8 +176,8 @@ export function CopilotSheet({ open, onOpenChange, configured }: CopilotSheetPro
             <Textarea
               value={input}
               onChange={e => setInput(e.target.value)}
-              placeholder={configured ? t('copilot.placeholder') : t('copilot.notConfigured')}
-              disabled={!configured || loading}
+              placeholder={isConfigured ? t('copilot.placeholder') : t('copilot.notConfigured')}
+              disabled={!isConfigured || loading}
               rows={2}
               className="min-h-[72px] resize-none"
               onKeyDown={e => {
@@ -214,7 +187,7 @@ export function CopilotSheet({ open, onOpenChange, configured }: CopilotSheetPro
                 }
               }}
             />
-            <Button type="submit" size="icon" disabled={!configured || loading || !input.trim()}>
+            <Button type="submit" size="icon" disabled={!isConfigured || loading || !input.trim()}>
               <Send className="h-4 w-4" />
             </Button>
           </div>

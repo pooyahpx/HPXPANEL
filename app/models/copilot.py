@@ -1,8 +1,9 @@
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 CopilotRole = Literal["user", "assistant", "system"]
+CopilotProvider = Literal["groq", "openai", "openrouter", "ollama"]
 
 
 class CopilotMessage(BaseModel):
@@ -27,5 +28,29 @@ class CopilotStatusResponse(BaseModel):
     configured: bool
     provider: str
     model: str
+    api_key_masked: str = ""
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CopilotSettingsUpdate(BaseModel):
+    enabled: bool | None = None
+    provider: CopilotProvider | None = None
+    api_key: str | None = Field(default=None, max_length=512)
+    model: str | None = Field(default=None, max_length=128)
+    base_url: str | None = Field(default=None, max_length=512)
+
+    @field_validator("api_key", "model", "base_url", mode="before")
+    @classmethod
+    def strip_optional_strings(cls, value: object) -> object:
+        if isinstance(value, str):
+            stripped = value.strip()
+            return stripped or None
+        return value
+
+
+class CopilotSettingsResponse(CopilotStatusResponse):
+    saved: bool = True
+    writable: bool = True
 
     model_config = ConfigDict(from_attributes=True)

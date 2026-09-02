@@ -1,7 +1,7 @@
 import { Button } from '@/components/ui/button'
 import { CopilotSheet } from '@/features/copilot/components/copilot-sheet'
 import { getCopilotStatus, getCopilotStatusQueryKey } from '@/service/api/copilot'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Sparkles } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next'
 export function CopilotLauncher() {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
+  const queryClient = useQueryClient()
   const { data: status } = useQuery({
     queryKey: getCopilotStatusQueryKey(),
     queryFn: getCopilotStatus,
@@ -21,6 +22,10 @@ export function CopilotLauncher() {
   }
 
   const configured = status?.configured ?? false
+
+  const onConfigured = () => {
+    void queryClient.invalidateQueries({ queryKey: getCopilotStatusQueryKey() })
+  }
 
   return (
     <>
@@ -35,7 +40,13 @@ export function CopilotLauncher() {
         <Sparkles className="h-4 w-4" />
         <span className="max-[420px]:sr-only sm:inline">{t('copilot.title')}</span>
       </Button>
-      <CopilotSheet open={open} onOpenChange={setOpen} configured={configured} />
+      <CopilotSheet
+        open={open}
+        onOpenChange={setOpen}
+        configured={configured}
+        status={status}
+        onConfigured={onConfigured}
+      />
     </>
   )
 }

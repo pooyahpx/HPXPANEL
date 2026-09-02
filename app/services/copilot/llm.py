@@ -16,7 +16,7 @@ from app.services.copilot.reply_sanitize import (
     user_confirmed_import,
 )
 from app.services.copilot.tools import TOOL_DEFINITIONS, execute_tool, tool_result_content
-from config import copilot_settings
+import config
 
 logger = logging.getLogger(__name__)
 
@@ -30,8 +30,8 @@ class CopilotProviderError(RuntimeError):
 
 
 def _is_groq_provider() -> bool:
-    provider = copilot_settings.provider.strip().lower()
-    base = copilot_settings.base_url.strip().lower()
+    provider = config.copilot_settings.provider.strip().lower()
+    base = config.copilot_settings.base_url.strip().lower()
     return provider == "groq" or "groq.com" in base
 
 
@@ -98,14 +98,14 @@ def _system_prompt(*, admin: AdminDetails, snapshot: dict[str, Any]) -> str:
 async def _chat_completion(
     messages: list[dict[str, Any]], *, tools: list[dict[str, Any]] | None = None
 ) -> dict[str, Any]:
-    if not copilot_settings.is_configured:
+    if not config.copilot_settings.is_configured:
         raise CopilotNotConfiguredError(
             "Copilot is not configured — set OPENAI_API_KEY (or COPILOT_PROVIDER=ollama) in panel .env"
         )
 
-    url = f"{copilot_settings.base_url.rstrip('/')}/v1/chat/completions"
+    url = f"{config.copilot_settings.base_url.rstrip('/')}/v1/chat/completions"
     payload: dict[str, Any] = {
-        "model": copilot_settings.model,
+        "model": config.copilot_settings.model,
         "messages": messages,
         "temperature": 0.3,
     }
@@ -114,7 +114,7 @@ async def _chat_completion(
         payload["tool_choice"] = "auto"
 
     headers = {"Content-Type": "application/json"}
-    api_key = copilot_settings.api_key.strip()
+    api_key = config.copilot_settings.api_key.strip()
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
 
@@ -147,7 +147,7 @@ async def run_copilot_chat(
 
     actions_taken: list[str] = []
 
-    for _ in range(copilot_settings.max_tool_rounds):
+    for _ in range(config.copilot_settings.max_tool_rounds):
         data = await _chat_completion(llm_messages, tools=TOOL_DEFINITIONS)
         choice = (data.get("choices") or [{}])[0]
         message = choice.get("message") or {}

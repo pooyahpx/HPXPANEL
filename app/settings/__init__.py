@@ -78,11 +78,18 @@ async def refresh_caches() -> None:
     await general_settings.cache.clear()
 
 
-async def handle_settings_message(_: dict):
+async def handle_settings_message(data: dict):
     """Handle settings update message from NATS router."""
-    await refresh_caches()
-    try:
-        from app.telegram import telegram_bot_manager
-    except Exception:
-        return
-    await telegram_bot_manager.sync_from_settings()
+    action = data.get("action", "refresh")
+    if action in ("refresh", None):
+        await refresh_caches()
+        try:
+            from app.telegram import telegram_bot_manager
+        except Exception:
+            telegram_bot_manager = None
+        else:
+            await telegram_bot_manager.sync_from_settings()
+    if action in ("refresh", "copilot_refresh", None):
+        from config import refresh_copilot_settings
+
+        refresh_copilot_settings()

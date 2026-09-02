@@ -329,10 +329,24 @@ logging_settings = LoggingSettings()
 auth_settings = AuthSettings()
 usage_settings = UsageSettings()
 job_settings = JobSettings()
+
+from copilot_env_store import apply_copilot_env_file_to_os_environ
+
+apply_copilot_env_file_to_os_environ()
 copilot_settings = CopilotSettings()
 feature_settings = FeatureSettings()
 observability_settings = ObservabilitySettings()
 backup_settings = BackupSettings()
+
+
+def refresh_copilot_settings() -> CopilotSettings:
+    """Reload Copilot env from disk and replace the module-level settings object."""
+    import config as config_module
+
+    apply_copilot_env_file_to_os_environ()
+    config_module.copilot_settings = CopilotSettings()
+    return config_module.copilot_settings
+
 
 if not database_settings.is_postgresql:
     usage_settings.enable_recording_nodes_stats = False

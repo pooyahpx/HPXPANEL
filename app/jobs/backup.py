@@ -20,9 +20,10 @@ async def scheduled_backup_job():
                 return
             state = get_state()
             last_success = state.get("last_success_at")
-            if isinstance(last_success, datetime):
-                if datetime.now(UTC) - last_success < timedelta(hours=config.schedule_hours):
-                    return
+            if isinstance(last_success, datetime) and datetime.now(UTC) - last_success < timedelta(
+                hours=config.schedule_hours
+            ):
+                return
             await backup_operator.run_backup(db)
             logger.info("Scheduled HPXPANEL backup completed")
     except Exception:

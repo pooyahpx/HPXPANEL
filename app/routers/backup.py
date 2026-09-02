@@ -1,3 +1,5 @@
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, File, UploadFile
 from fastapi.responses import FileResponse
 
@@ -58,7 +60,7 @@ async def download_panel_backup(
 
 @router.post("/import", response_model=BackupRunResponse)
 async def import_panel_backup(
-    file: UploadFile = File(...),
+    file: Annotated[UploadFile, File()],
     db: AsyncSession = Depends(get_db),
     admin: AdminDetails = Depends(_require_owner),
 ):

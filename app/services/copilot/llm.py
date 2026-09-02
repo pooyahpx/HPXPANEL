@@ -80,7 +80,9 @@ def _system_prompt(*, admin: AdminDetails, snapshot: dict[str, Any]) -> str:
     )
 
 
-async def _chat_completion(messages: list[dict[str, Any]], *, tools: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+async def _chat_completion(
+    messages: list[dict[str, Any]], *, tools: list[dict[str, Any]] | None = None
+) -> dict[str, Any]:
     if not copilot_settings.is_configured:
         raise CopilotNotConfiguredError(
             "Copilot is not configured — set OPENAI_API_KEY (or COPILOT_PROVIDER=ollama) in panel .env"

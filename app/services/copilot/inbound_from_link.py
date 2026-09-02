@@ -125,9 +125,7 @@ def build_xray_inbound_from_link(parsed: ParsedProxyLink, *, tag: str) -> dict[s
         inbound["settings"] = {"clients": [], "decryption": "none"}
         if parsed.flow:
             inbound["settings"]["flow"] = parsed.flow
-    elif parsed.protocol == "vmess":
-        inbound["settings"] = {"clients": []}
-    elif parsed.protocol == "trojan":
+    elif parsed.protocol == "vmess" or parsed.protocol == "trojan":
         inbound["settings"] = {"clients": []}
     elif parsed.protocol == "shadowsocks":
         method = str(parsed.extra.get("method") or "aes-256-gcm")
@@ -139,7 +137,20 @@ def build_xray_inbound_from_link(parsed: ParsedProxyLink, *, tag: str) -> dict[s
     return inbound
 
 
-async def pick_xray_core(db: AsyncSession, core_id: int | None) -> Any:
+def _core_has_inbound_tag(core: Any, tag: str) -> bool:
+    config = core.config or {}
+    for inbound in config.get("inbounds") or []:
+        if isinstance(inbound, dict) and str(inbound.get("tag") or "") == tag:
+            return True
+    return False
+
+
+async def pick_xray_core(db: AsyncSession, core_id: int | None, *, inbound_tag: str = "") -> Any:
+    cores, _ = await get_core_configs(db, CoreListQuery(limit=100))
+    xray_cores = [core for core in cores if core.type in (CoreType.xray, None)]
+    if not xray_cores:
+        raise ValueError("No Xray core found — create an Xray core first")
+
     if core_id is not None:
         core = await get_core_config_by_id(db, core_id)
         if core is None:
@@ -148,10 +159,12 @@ async def pick_xray_core(db: AsyncSession, core_id: int | None) -> Any:
             raise ValueError(f"Core #{core_id} is not an Xray core")
         return core
 
-    cores, _ = await get_core_configs(db, CoreListQuery(limit=50))
-    xray_cores = [core for core in cores if core.type in (CoreType.xray, None)]
-    if not xray_cores:
-        raise ValueError("No Xray core found — create an Xray core first")
+    requested = inbound_tag.strip()
+    if requested:
+        for core in xray_cores:
+            if _core_has_inbound_tag(core, requested):
+                return core
+
     return xray_cores[0]
 
 
@@ -207,7 +220,7 @@ async def resolve_inbound_for_import(
     confirm: bool = False,
 ) -> tuple[str, dict[str, Any]]:
     """Resolve an inbound tag — reuse a match or create one from the share link."""
-    core = await pick_xray_core(db, core_id)
+    core = await pick_xray_core(db, core_id, inbound_tag=inbound_tag)
     config = core.config or {}
     inbounds = [item for item in (config.get("inbounds") or []) if isinstance(item, dict)]
     existing_tags = {str(item.get("tag")) for item in inbounds if item.get("tag")}
@@ -223,10 +236,7 @@ async def resolve_inbound_for_import(
         return matched, {"core_id": core.id, "core_name": core.name, "inbound_created": False, "matched": True}
 
     if not create_inbound_if_missing:
-        suggestions = [str(item.get("tag")) for item in inbounds if item.get("tag")]
-        raise ValueError(
-            "No matching inbound for this link. Pass inbound_tag or enable create_inbound_if_missing."
-        )
+        raise ValueError("No matching inbound for this link. Pass inbound_tag or enable create_inbound_if_missing.")
 
     proposed_tag = unique_inbound_tag(existing_tags, default_inbound_tag(parsed))
     proposed_inbound = build_xray_inbound_from_link(parsed, tag=proposed_tag)

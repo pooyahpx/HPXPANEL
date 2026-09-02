@@ -15,7 +15,6 @@ from app.services.copilot.proxy_uri import ProxyUriParseError, parse_proxy_link
 from app.services.copilot.tools import execute_tool
 from tests.api import GetTestDB
 
-
 VLESS_LINK = (
     "vless://0373083d-5359-449f-815d-79f0e881c2bf@example.com:443"
     "?encryption=none&security=tls&sni=sni.example&type=ws&path=/ws#France"
@@ -58,10 +57,7 @@ def test_parse_vmess_link():
 
 
 def test_parse_trojan_link():
-    link = (
-        "trojan://secret-pass@example.com:8443"
-        "?security=tls&sni=sni.example&type=ws&path=/trojan#TrojanTest"
-    )
+    link = "trojan://secret-pass@example.com:8443?security=tls&sni=sni.example&type=ws&path=/trojan#TrojanTest"
     parsed = parse_proxy_link(link)
 
     assert parsed.protocol == "trojan"
@@ -144,13 +140,13 @@ async def test_execute_tool_import_proxy_link_permission_denied():
             db,
             admin=read_only,
             name="import_proxy_link",
-            arguments={"link": VLESS_LINK, "inbound_tag": "VLESS-WS", "confirm": False},
+            arguments={"link": VLESS_LINK, "confirm": False},
         )
         denied, _ = await execute_tool(
             db,
             admin=read_only,
             name="import_proxy_link",
-            arguments={"link": VLESS_LINK, "inbound_tag": "VLESS-WS", "confirm": True},
+            arguments={"link": VLESS_LINK, "confirm": True},
         )
 
     assert preview.get("ready") is True

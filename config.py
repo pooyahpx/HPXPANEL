@@ -255,7 +255,7 @@ class CopilotSettings(EnvSettings):
         return value
 
     @model_validator(mode="after")
-    def apply_provider_defaults(self) -> "CopilotSettings":
+    def apply_provider_defaults(self) -> CopilotSettings:
         provider = (self.provider or "groq").strip().lower()
         preset = self._PROVIDER_PRESETS.get(provider)
         if preset:

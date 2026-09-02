@@ -11,8 +11,8 @@ from app.models.admin import AdminDetails
 from app.models.host import CreateHost, GRPCSettings, TransportSettings, WebSocketSettings
 from app.models.proxy import ProxyTable, TrojanSettings, VlessSettings, VMessSettings
 from app.models.user import UserCreate
-from app.operation.host import HostOperation
 from app.operation import OperatorType
+from app.operation.host import HostOperation
 from app.operation.user import UserOperation
 from app.services.copilot.inbound_from_link import resolve_inbound_for_import
 from app.services.copilot.proxy_uri import ParsedProxyLink, ProxyUriParseError, parse_proxy_link

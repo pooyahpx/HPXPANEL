@@ -11,7 +11,13 @@ from app.db.crud.hwid import (
     get_user_hwid_count,
     register_user_hwid,
 )
-from app.db.crud.user import attach_user_group_quotas, get_user_usages, load_user_attrs, refresh_and_load_user, user_sub_update
+from app.db.crud.user import (
+    attach_user_group_quotas,
+    get_user_usages,
+    load_user_attrs,
+    refresh_and_load_user,
+    user_sub_update,
+)
 from app.db.models import User
 from app.models.admin import AdminDetails
 from app.models.settings import Application, ConfigFormat, HWIDSettings, SubRule, Subscription as SubSettings

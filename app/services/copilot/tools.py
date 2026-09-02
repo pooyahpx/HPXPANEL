@@ -11,8 +11,7 @@ from app.operation.hpx_pulse import HpxPulseOperation
 from app.operation.hpx_tunnel import HpxTunnelOperation
 from app.operation.permissions import PermissionDenied, enforce_permission
 from app.services.copilot.context import diagnose_pulse
-from app.services.copilot.host_import import import_proxy_link as run_proxy_link_import
-from app.services.copilot.host_import import list_core_inbound_options
+from app.services.copilot.host_import import import_proxy_link as run_proxy_link_import, list_core_inbound_options
 
 _pulse_op_instance: HpxPulseOperation | None = None
 _tunnel_op_instance: HpxTunnelOperation | None = None
@@ -30,6 +29,7 @@ def _get_tunnel_op() -> HpxTunnelOperation:
     if _tunnel_op_instance is None:
         _tunnel_op_instance = HpxTunnelOperation(operator_type=OperatorType.API)
     return _tunnel_op_instance
+
 
 TOOL_DEFINITIONS: list[dict[str, Any]] = [
     {
@@ -231,10 +231,11 @@ async def execute_tool(
         if name == "list_hpx_pulses":
             enforce_permission(admin, "hpx_pulse", "read")
             limit = max(1, min(int(arguments.get("limit") or 10), 20))
-            resp = await _get_pulse_op().list_pulses(
-                db, admin=admin, offset=0, limit=limit, name=arguments.get("name")
-            )
-            return {"total": resp.total, "pulses": [_pulse_summary(p) for p in resp.pulses]}, f"Listed {len(resp.pulses)} pulse(s)"
+            resp = await _get_pulse_op().list_pulses(db, admin=admin, offset=0, limit=limit, name=arguments.get("name"))
+            return {
+                "total": resp.total,
+                "pulses": [_pulse_summary(p) for p in resp.pulses],
+            }, f"Listed {len(resp.pulses)} pulse(s)"
 
         if name == "get_hpx_pulse":
             enforce_permission(admin, "hpx_pulse", "read")
@@ -260,7 +261,10 @@ async def execute_tool(
             limit = max(1, min(int(arguments.get("limit") or 10), 20))
             query = HpxTunnelsQuery(offset=0, limit=limit, name=arguments.get("name"))
             resp = await _get_tunnel_op().list_tunnels(db, admin=admin, query=query)
-            return {"total": resp.total, "tunnels": [_tunnel_summary(t) for t in resp.tunnels]}, f"Listed {len(resp.tunnels)} tunnel(s)"
+            return {
+                "total": resp.total,
+                "tunnels": [_tunnel_summary(t) for t in resp.tunnels],
+            }, f"Listed {len(resp.tunnels)} tunnel(s)"
 
         if name == "get_hpx_tunnel":
             enforce_permission(admin, "hpx_tunnels", "read")
@@ -269,7 +273,9 @@ async def execute_tool(
 
         if name == "restart_hpx_tunnel":
             enforce_permission(admin, "hpx_tunnels", "restart")
-            result = await _get_tunnel_op().restart_tunnel_action(db, admin=admin, tunnel_id=int(arguments["tunnel_id"]))
+            result = await _get_tunnel_op().restart_tunnel_action(
+                db, admin=admin, tunnel_id=int(arguments["tunnel_id"])
+            )
             return {"tunnel_id": result.tunnel.id, "status": result.tunnel.status, "message": result.message}, (
                 f"Restarted tunnel #{result.tunnel.id}"
             )
@@ -320,7 +326,7 @@ async def execute_tool(
         return {"error": str(exc)}, None
     except KeyError as exc:
         return {"error": f"Missing argument: {exc}"}, None
-    except Exception as exc:  # noqa: BLE001 — surface tool errors to the model
+    except Exception as exc:
         return {"error": str(exc)}, None
 
 

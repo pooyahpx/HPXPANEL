@@ -1,6 +1,3 @@
-import io
-import zipfile
-
 from app.models.subscription import SubscriptionInboundData
 
 from .base import BaseSubscription
@@ -16,8 +13,12 @@ def _pem_block(tag: str, content: str) -> str:
 
 
 class OpenVPNConfiguration(BaseSubscription):
+    """Build a single inline .ovpn profile (OpenVPN Connect rejects zip/binary)."""
+
     def __init__(self):
-        self.configs: list[tuple[str, str]] = []
+        self._remotes: list[tuple[str, int]] = []
+        self._inbound: SubscriptionInboundData | None = None
+        self._settings: dict | None = None
 
     def add(self, remark: str, address: str, inbound: SubscriptionInboundData, settings: dict):
         client_cert = str(settings.get("client_cert") or "").strip()
@@ -26,20 +27,42 @@ class OpenVPNConfiguration(BaseSubscription):
         if not client_cert or not client_key or not ca_cert:
             return
 
+        if self._inbound is None:
+            self._inbound = inbound
+            self._settings = {"client_cert": client_cert, "client_key": client_key}
+
+        remote = (address.strip(), inbound.port)
+        if remote not in self._remotes:
+            self._remotes.append(remote)
+
+    def render(self) -> bytes:
+        if not self._inbound or not self._settings or not self._remotes:
+            return b""
+
+        inbound = self._inbound
+        client_cert = self._settings["client_cert"]
+        client_key = self._settings["client_key"]
+        ca_cert = str(inbound.openvpn_ca_cert or "").strip()
+
         lines = [
             "client",
             f"dev {inbound.openvpn_device or 'tun'}",
             f"proto {inbound.openvpn_proto or 'udp'}",
-            f"remote {address} {inbound.port}",
-            "resolv-retry infinite",
-            "nobind",
-            "persist-key",
-            "persist-tun",
-            "remote-cert-tls server",
-            f"cipher {inbound.openvpn_cipher or 'AES-256-GCM'}",
-            f"auth {inbound.openvpn_auth or 'SHA256'}",
-            "verb 3",
         ]
+        for address, port in self._remotes:
+            lines.append(f"remote {address} {port}")
+        lines.extend(
+            [
+                "resolv-retry infinite",
+                "nobind",
+                "persist-key",
+                "persist-tun",
+                "remote-cert-tls server",
+                f"cipher {inbound.openvpn_cipher or 'AES-256-GCM'}",
+                f"auth {inbound.openvpn_auth or 'SHA256'}",
+                "verb 3",
+            ]
+        )
         if inbound.openvpn_dns:
             lines.append(f"dhcp-option DNS {inbound.openvpn_dns[0]}")
 
@@ -54,15 +77,4 @@ class OpenVPNConfiguration(BaseSubscription):
             blocks.append(_pem_block("tls-crypt", tls_crypt))
 
         content = "\n".join(block for block in blocks if block).strip() + "\n"
-        safe_name = remark.replace(" ", "_").replace("/", "_") or inbound.inbound_tag
-        self.configs.append((safe_name, content))
-
-    def render(self) -> bytes:
-        if len(self.configs) == 1:
-            return self.configs[0][1].encode()
-        zip_buffer = io.BytesIO()
-        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
-            for remark, config_content in self.configs:
-                zip_file.writestr(f"{remark}.ovpn", config_content)
-        zip_buffer.seek(0)
-        return zip_buffer.getvalue()
+        return content.encode()

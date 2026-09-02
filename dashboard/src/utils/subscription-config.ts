@@ -180,6 +180,24 @@ export const fetchUserSubscriptionContent = (userId: number, format: Subscriptio
     timeout: timeoutMs,
   })
 
+const isZipArchive = (bytes: Uint8Array) => bytes.length >= 2 && bytes[0] === 0x50 && bytes[1] === 0x4b
+
+export const fetchUserOpenVPNProfile = async (userId: number, timeoutMs = 8000) => {
+  const buffer = await $fetch<ArrayBuffer>(`/api/user/${userId}/subscription/openvpn`, {
+    responseType: 'arrayBuffer',
+    timeout: timeoutMs,
+  })
+  const bytes = new Uint8Array(buffer)
+  if (isZipArchive(bytes)) {
+    throw new Error('OpenVPN profile was returned as zip archive')
+  }
+  const text = new TextDecoder('utf-8').decode(buffer).trim()
+  if (!text.includes('client') || !text.includes('<cert>')) {
+    throw new Error('Invalid OpenVPN profile content')
+  }
+  return text
+}
+
 export const extractNameFromConfigUrl = (url: string): string | null => {
   const trimmedUrl = url.trim()
   const namePattern = /#([^#]*)/

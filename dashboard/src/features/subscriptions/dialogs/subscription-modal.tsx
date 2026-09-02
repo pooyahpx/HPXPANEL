@@ -17,6 +17,7 @@ import {
   encodeSubscriptionContentToBase64,
   extractAddressFromConfigUrl,
   extractNameFromConfigUrl,
+  fetchUserOpenVPNProfile,
   fetchUserSubscriptionContent,
   getOpenVPNDownloadPayload,
   getWireGuardDownloadPayload,
@@ -84,7 +85,7 @@ const SubscriptionModal: FC<SubscriptionModalProps> = memo(({ open, subscribeUrl
     try {
       const [text, openvpnText] = await Promise.all([
         fetchUserSubscriptionContent(userId, 'links', LINKS_FETCH_TIMEOUT_MS),
-        fetchUserSubscriptionContent(userId, 'openvpn', LINKS_FETCH_TIMEOUT_MS).catch(() => ''),
+        fetchUserOpenVPNProfile(userId, LINKS_FETCH_TIMEOUT_MS).catch(() => ''),
       ])
       const configLines = text.split('\n').filter(line => line.trim() !== '')
 

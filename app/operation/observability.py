@@ -79,10 +79,10 @@ async def _measure_worker_health(request_coro) -> WorkerHealth:
 
 
 class ObservabilityOperation(BaseOperation):
-    def __init__(self) -> None:
-        super().__init__(OperatorType.API)
-        self._node_operation = NodeOperation(operator_type=OperatorType.API)
-        self._system_operation = SystemOperation()
+    def __init__(self, operator_type: OperatorType = OperatorType.API) -> None:
+        super().__init__(operator_type)
+        self._node_operation = NodeOperation(operator_type=operator_type)
+        self._system_operation = SystemOperation(operator_type=operator_type)
 
     async def get_summary(self, db: AsyncSession, admin) -> ObservabilitySummaryResponse:
         nodes, _ = await get_nodes(db, NodeListQuery(limit=500))

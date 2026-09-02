@@ -2,9 +2,10 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock, patch
 
 from app.models.observability import ObservabilitySummaryResponse
+from tests.api import client
 
 
-def test_observability_summary_endpoint(client, access_token):
+def test_observability_summary_endpoint(access_token):
     fake_summary = ObservabilitySummaryResponse(
         generated_at=datetime.now(UTC),
         nodes=[],

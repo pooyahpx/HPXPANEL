@@ -1381,6 +1381,7 @@ install_hpxpanel_script() {
     else
         colorized_echo yellow "Warning: could not bundle HPX node installer (install-node will try GitHub)"
     fi
+    refresh_hpxnode_cli
     colorized_echo green "HPXPANEL CLI installed successfully"
 }
 
@@ -2490,6 +2491,8 @@ update_hpxpanel_script() {
     fi
 
     cleanup_backup "$backup_dir"
+    bundle_hpx_node_installer || true
+    refresh_hpxnode_cli
     colorized_echo green "HPXPANEL CLI updated successfully"
 }
 
@@ -2537,6 +2540,95 @@ show_hpxnode_credentials_if_available() {
     fi
 }
 
+ensure_hpxnode_cli() {
+    mkdir -p /usr/local/bin 2>/dev/null || true
+    cat > /usr/local/bin/hpxnode <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+NAME_ARGS=()
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --name)
+            NAME_ARGS=(--name "$2")
+            shift 2
+            ;;
+        -h | --help)
+            echo "Usage: hpxnode [--name <instance>]"
+            echo "Show HPX node Address / ports / API key / Server CA for HPXPANEL -> Nodes."
+            exit 0
+            ;;
+        *)
+            shift
+            ;;
+    esac
+done
+
+try_info() {
+    local script="$1"
+    [ -f "$script" ] || return 1
+    bash "$script" info "${NAME_ARGS[@]}" 2>/dev/null && return 0
+    return 1
+}
+
+for script in \
+    /usr/local/lib/hpxpanel-scripts/hpx-node.sh \
+    /opt/hpx-node/hpx-node.sh \
+    /opt/hpx-node-*/hpx-node.sh; do
+    try_info "$script" && exit 0
+done
+
+data_dir="/var/lib/hpx-node"
+if [ ${#NAME_ARGS[@]} -ge 2 ]; then
+    data_dir="/var/lib/hpx-node-${NAME_ARGS[1]}"
+    [ -d "$data_dir" ] || data_dir="/var/lib/hpx-node-${NAME_ARGS[1]}"
+fi
+if [ -f "${data_dir}/register-in-panel.txt" ]; then
+    cat "${data_dir}/register-in-panel.txt"
+    exit 0
+fi
+cert="${data_dir}/certs/ssl_cert.pem"
+if [ -s "$cert" ]; then
+    echo "Server CA:"
+    cat "$cert"
+    exit 0
+fi
+
+echo "hpxnode: HPX node not found. Install with: hpxpanel install-node" >&2
+exit 1
+EOF
+    chmod 755 /usr/local/bin/hpxnode 2>/dev/null || true
+}
+
+refresh_hpxnode_cli() {
+    local bundled="${HPXPANEL_SCRIPTS_DIR}/hpx-node.sh"
+    local dir name script
+
+    bundle_hpx_node_installer || true
+
+    for dir in /opt/hpx-node /opt/hpx-node-*; do
+        [ -d "$dir" ] || continue
+        [ -f "$dir/docker-compose.yml" ] || continue
+        script="$dir/hpx-node.sh"
+        if [ -f "$bundled" ]; then
+            install -m 755 "$bundled" "$script" 2>/dev/null || cp -f "$bundled" "$script"
+        fi
+        [ -f "$script" ] || continue
+        name=""
+        case "$(basename "$dir")" in
+            hpx-node) name="" ;;
+            hpx-node-*) name="${dir##*/hpx-node-}" ;;
+        esac
+        if [ -n "$name" ]; then
+            bash "$script" install-cli -y --name "$name" >/dev/null 2>&1 || true
+        else
+            bash "$script" install-cli -y >/dev/null 2>&1 || true
+        fi
+    done
+
+    ensure_hpxnode_cli
+}
+
 install_node_command() {
     local installer=""
     local tmp_installer=""
@@ -2573,6 +2665,7 @@ install_node_command() {
     fi
 
     if [ "$rc" -eq 0 ]; then
+        refresh_hpxnode_cli
         colorized_echo green "Node installation completed successfully!"
         colorized_echo cyan "Run 'hpxnode' anytime to show Address / ports / API key / Server CA."
         return 0

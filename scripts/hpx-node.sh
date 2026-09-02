@@ -384,6 +384,7 @@ Commands:
   (none) / menu     Interactive menu
   install           Install / reinstall (use -y for no prompts)
   list              List all node instances on this server
+  install-cli       Install / refresh hpx-node and hpxnode CLI wrappers
   update | restart | status | logs | info
   uninstall
 
@@ -690,6 +691,17 @@ EOF
   fi
 }
 
+install_cli_command() {
+  require_root
+  parse_install_args "$@"
+  apply_instance
+  if [ -f "$COMPOSE_FILE" ]; then
+    load_config_from_compose
+  fi
+  install_cli_wrapper
+  log "CLI ready: hpx-node, hpxnode"
+}
+
 run_install() {
   require_root
   apply_instance
@@ -824,7 +836,7 @@ main() {
   local cmd="menu"
   case "${1:-}" in
     menu) cmd="menu"; shift ;;
-    install|update|uninstall|restart|status|logs|info|list) cmd="$1"; shift ;;
+    install|install-cli|update|uninstall|restart|status|logs|info|list) cmd="$1"; shift ;;
     -h|--help) usage; exit 0 ;;
     "") cmd="install" ;;
     -*) cmd="install" ;;
@@ -834,6 +846,7 @@ main() {
   case "$cmd" in
     menu)      menu_command ;;
     install)   install_command "$@" ;;
+    install-cli) install_cli_command "$@" ;;
     list)      list_command ;;
     update)    parse_install_args "$@"; update_command ;;
     uninstall) parse_install_args "$@"; uninstall_command ;;

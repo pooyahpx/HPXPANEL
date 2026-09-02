@@ -508,6 +508,43 @@
         }
       }
     },
+    "backup": {
+      "title": "بکاپ",
+      "intro": "بکاپ قابل‌حمل دیتابیس بگیرید، روی سرور SFTP دیگر ذخیره کنید و روی نصب تازه HPXPANEL در چند دقیقه restore کنید.",
+      "ownerOnly": "فقط مالک می‌تواند تنظیمات بکاپ را تغییر دهد یا restore انجام دهد.",
+      "configTitle": "سیاست بکاپ",
+      "configDescription": "بکاپ خودکار روی نقش scheduler اجرا می‌شود. رمزها در .env می‌مانند.",
+      "autoEnabled": "بکاپ خودکار",
+      "scheduleHours": "فاصله بکاپ (ساعت)",
+      "localRetention": "تعداد نگهداری محلی",
+      "uploadToRemote": "آپلود به سرور راه‌دور پس از بکاپ",
+      "sftpTitle": "سرور SFTP راه‌دور",
+      "sftpEnabled": "فعال‌سازی SFTP",
+      "sftpSecretHint": "در .env روی سرور پنل: BACKUP_SFTP_PASSWORD یا BACKUP_SFTP_PRIVATE_KEY_PATH",
+      "actionsTitle": "عملیات",
+      "actionsDescription": "بکاپ فوری یا import آرشیو از سرور دیگر.",
+      "runNow": "بکاپ الان",
+      "importArchive": "Import فایل .zip",
+      "restoreHint": "برای مهاجرت: HPXPANEL را روی سرور جدید نصب کنید، فایل .zip را import کنید و restore بزنید. برای restore از پنل: BACKUP_ALLOW_PANEL_RESTORE=true",
+      "historyTitle": "تاریخچه بکاپ",
+      "empty": "هنوز بکاپی نیست.",
+      "saveSuccess": "تنظیمات بکاپ ذخیره شد",
+      "saveFailed": "ذخیره تنظیمات بکاپ ناموفق بود",
+      "runSuccess": "بکاپ انجام شد",
+      "runFailed": "بکاپ ناموفق بود",
+      "restoreFailed": "Restore ناموفق بود",
+      "importFailed": "Import ناموفق بود",
+      "restoreTitle": "بازیابی دیتابیس",
+      "restorePrompt": "دیتابیس فعلی با این بکاپ جایگزین می‌شود. ادامه می‌دهید؟",
+      "restoreConfirm": "Restore الان",
+      "columns": {
+        "date": "تاریخ",
+        "engine": "دیتابیس",
+        "version": "پنل",
+        "size": "حجم",
+        "remote": "راه‌دور"
+      }
+    },
     "theme": {
       "title": "تم"
     },

@@ -32,6 +32,7 @@ const HpxTunnelPage = lazyWithChunkRecovery(() => import('../pages/_dashboard.hp
 const HpxPulsePage = lazyWithChunkRecovery(() => import('../pages/_dashboard.hpx-pulse'))
 const Settings = lazyWithChunkRecovery(() => import('../pages/_dashboard.settings'))
 const CleanupSettings = lazyWithChunkRecovery(() => import('../pages/_dashboard.settings.cleanup'))
+const BackupSettings = lazyWithChunkRecovery(() => import('../pages/_dashboard.settings.backup'))
 const GeneralSettings = lazyWithChunkRecovery(() => import('../pages/_dashboard.settings.general'))
 const HwidSettings = lazyWithChunkRecovery(() => import('../pages/_dashboard.settings.hwid'))
 const NotificationSettings = lazyWithChunkRecovery(() => import('../pages/_dashboard.settings.notifications'))
@@ -332,6 +333,14 @@ export const router = createHashRouter([
             element: (
               <Suspense fallback={<LoadingSpinner />}>
                 <CleanupSettings />
+              </Suspense>
+            ),
+          },
+          {
+            path: '/settings/backup',
+            element: (
+              <Suspense fallback={<LoadingSpinner />}>
+                <BackupSettings />
               </Suspense>
             ),
           },

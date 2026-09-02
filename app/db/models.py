@@ -957,6 +957,7 @@ class Settings(Base, IdMixin):
     subscription: Mapped[dict] = mapped_column(JSON())
     hwid: Mapped[dict] = mapped_column(JSON())
     general: Mapped[dict] = mapped_column(JSON())
+    backup: Mapped[dict] = mapped_column(JSON())
 
 
 class AdminRole(Base, CreatedAtUTCMixin):

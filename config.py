@@ -277,6 +277,14 @@ class ObservabilitySettings(EnvSettings):
     metrics_token: str = Field(default="", validation_alias="OBSERVABILITY_METRICS_TOKEN")
 
 
+class BackupSettings(EnvSettings):
+    directory: str = Field(default="/var/lib/hpxpanel/backups", validation_alias="BACKUP_DIRECTORY")
+    allow_panel_restore: bool = Field(default=False, validation_alias="BACKUP_ALLOW_PANEL_RESTORE")
+    sftp_password: str = Field(default="", validation_alias="BACKUP_SFTP_PASSWORD")
+    sftp_private_key_path: str = Field(default="", validation_alias="BACKUP_SFTP_PRIVATE_KEY_PATH")
+    job_interval: int = Field(default=3600, ge=300, validation_alias="JOB_BACKUP_INTERVAL")
+
+
 database_settings = DatabaseSettings()
 server_settings = ServerSettings()
 dashboard_settings = DashboardSettings()
@@ -294,6 +302,7 @@ job_settings = JobSettings()
 copilot_settings = CopilotSettings()
 feature_settings = FeatureSettings()
 observability_settings = ObservabilitySettings()
+backup_settings = BackupSettings()
 
 if not database_settings.is_postgresql:
     usage_settings.enable_recording_nodes_stats = False

@@ -841,6 +841,43 @@
         }
       }
     },
+    "backup": {
+      "title": "Backup",
+      "intro": "Create portable database backups, push them to a remote SFTP server, and restore on a fresh HPXPANEL install in minutes.",
+      "ownerOnly": "Only the owner can change backup settings or run restore.",
+      "configTitle": "Backup policy",
+      "configDescription": "Automatic backups run on the scheduler role. Secrets stay in .env.",
+      "autoEnabled": "Enable automatic backups",
+      "scheduleHours": "Backup interval (hours)",
+      "localRetention": "Keep local copies",
+      "uploadToRemote": "Upload to remote server after backup",
+      "sftpTitle": "Remote SFTP server",
+      "sftpEnabled": "Enable SFTP upload",
+      "sftpSecretHint": "Set BACKUP_SFTP_PASSWORD or BACKUP_SFTP_PRIVATE_KEY_PATH in .env on the panel host.",
+      "actionsTitle": "Actions",
+      "actionsDescription": "Run an on-demand backup or import an archive from another server.",
+      "runNow": "Backup now",
+      "importArchive": "Import .zip archive",
+      "restoreHint": "To migrate: install HPXPANEL on the new server, import or copy the .zip into backups, then restore. Set BACKUP_ALLOW_PANEL_RESTORE=true for one-click restore.",
+      "historyTitle": "Backup history",
+      "empty": "No backups yet.",
+      "saveSuccess": "Backup settings saved",
+      "saveFailed": "Failed to save backup settings",
+      "runSuccess": "Backup completed",
+      "runFailed": "Backup failed",
+      "restoreFailed": "Restore failed",
+      "importFailed": "Import failed",
+      "restoreTitle": "Restore database",
+      "restorePrompt": "This replaces the current database with the selected backup. Continue?",
+      "restoreConfirm": "Restore now",
+      "columns": {
+        "date": "Date",
+        "engine": "Database",
+        "version": "Panel",
+        "size": "Size",
+        "remote": "Remote"
+      }
+    },
     "theme": {
       "title": "Theme",
       "description": "Customize your application theme",

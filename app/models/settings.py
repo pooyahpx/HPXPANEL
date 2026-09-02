@@ -4,6 +4,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from app.models.backup import BackupConfig
 from app.models.proxy import ShadowsocksMethods
 
 from .notification_enable import NotificationEnable
@@ -384,5 +385,6 @@ class SettingsSchema(BaseModel):
     subscription: Subscription | None = Field(default=None)
     hwid: HWIDSettings | None = Field(default=None)
     general: General | None = Field(default=None)
+    backup: BackupConfig | None = Field(default=None)
 
     model_config = ConfigDict(from_attributes=True)

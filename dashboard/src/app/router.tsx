@@ -40,6 +40,7 @@ const SubscriptionSettings = lazyWithChunkRecovery(() => import('../pages/_dashb
 const TelegramSettings = lazyWithChunkRecovery(() => import('../pages/_dashboard.settings.telegram'))
 const WebhookSettings = lazyWithChunkRecovery(() => import('../pages/_dashboard.settings.webhook'))
 const Statistics = lazyWithChunkRecovery(() => import('../pages/_dashboard.statistics'))
+const ObservabilityPage = lazyWithChunkRecovery(() => import('../pages/_dashboard.observability'))
 const TemplatesLayout = lazyWithChunkRecovery(() => import('../pages/_dashboard.templates'))
 const UserTemplates = lazyWithChunkRecovery(() => import('../pages/_dashboard.templates.user'))
 const ClientTemplates = lazyWithChunkRecovery(() => import('../pages/_dashboard.templates.client'))
@@ -110,6 +111,14 @@ export const router = createHashRouter([
         element: (
           <Suspense fallback={<LoadingSpinner />}>
             <Statistics />
+          </Suspense>
+        ),
+      },
+      {
+        path: '/observability',
+        element: (
+          <Suspense fallback={<LoadingSpinner />}>
+            <ObservabilityPage />
           </Suspense>
         ),
       },

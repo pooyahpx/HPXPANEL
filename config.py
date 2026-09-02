@@ -224,7 +224,7 @@ class CopilotSettings(EnvSettings):
     max_tool_rounds: int = Field(default=6, ge=1, le=12, validation_alias="COPILOT_MAX_TOOL_ROUNDS")
 
     _PROVIDER_PRESETS: ClassVar[dict[str, tuple[str, str]]] = {
-        "groq": ("https://api.groq.com/openai", "llama-3.3-70b-versatile"),
+        "groq": ("https://api.groq.com/openai", "openai/gpt-oss-120b"),
         "openai": ("https://api.openai.com", "gpt-4o-mini"),
         "openrouter": ("https://openrouter.ai/api", "google/gemma-2-9b-it:free"),
         "ollama": ("http://127.0.0.1:11434", "llama3.2"),

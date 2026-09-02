@@ -51,6 +51,42 @@ warn_package_metadata_refresh_failed() {
     colorized_echo yellow "Could not refresh package metadata; continuing with configured repositories."
 }
 
+is_debian_family_os() {
+    [[ "${OS:-}" == "Ubuntu"* ]] || [[ "${OS:-}" == "Debian"* ]]
+}
+
+debian_apt_options() {
+    echo "-o" "DPkg::Lock::Timeout=120"
+}
+
+debian_repair_apt() {
+    local apt_opts
+    apt_opts="$(debian_apt_options)"
+    # shellcheck disable=SC2086
+    DEBIAN_FRONTEND=noninteractive apt-get $apt_opts update -y >/dev/null 2>&1 || true
+    # shellcheck disable=SC2086
+    DEBIAN_FRONTEND=noninteractive dpkg --configure -a >/dev/null 2>&1 || true
+    # shellcheck disable=SC2086
+    DEBIAN_FRONTEND=noninteractive apt-get $apt_opts -y --fix-broken install >/dev/null 2>&1 || true
+}
+
+show_package_install_log() {
+    local log="$1"
+    [ -n "$log" ] && [ -f "$log" ] || return 0
+    colorized_echo yellow "Package manager output:"
+    tail -n 25 "$log"
+    rm -f "$log"
+}
+
+run_debian_package_install() {
+    local package="$1"
+    local log="$2"
+    local apt_opts
+    apt_opts="$(debian_apt_options)"
+    # shellcheck disable=SC2086
+    DEBIAN_FRONTEND=noninteractive apt-get $apt_opts -y install "$package" >"$log" 2>&1
+}
+
 detect_and_update_package_manager() {
     if [ -z "${OS:-}" ]; then
         detect_os
@@ -58,9 +94,12 @@ detect_and_update_package_manager() {
 
     colorized_echo blue "Updating package manager"
 
-    if [[ "$OS" == "Ubuntu"* ]] || [[ "$OS" == "Debian"* ]]; then
+    if is_debian_family_os; then
         PKG_MANAGER="apt-get"
-        $PKG_MANAGER update -qq >/dev/null 2>&1 || warn_package_metadata_refresh_failed
+        local apt_opts
+        apt_opts="$(debian_apt_options)"
+        # shellcheck disable=SC2086
+        DEBIAN_FRONTEND=noninteractive $PKG_MANAGER $apt_opts update -y >/dev/null 2>&1 || warn_package_metadata_refresh_failed
     elif is_redhat_family_os; then
         select_redhat_package_manager
         $PKG_MANAGER -y -q makecache >/dev/null 2>&1 || warn_package_metadata_refresh_failed
@@ -85,6 +124,7 @@ detect_and_update_package_manager() {
 # install_package, which aborts on failure.
 try_install_package() {
     local package="$1"
+    local install_log=""
 
     if [ -z "${OS:-}" ]; then
         detect_os
@@ -95,23 +135,56 @@ try_install_package() {
     fi
 
     colorized_echo blue "Installing $package"
-    if [[ "$OS" == "Ubuntu"* ]] || [[ "$OS" == "Debian"* ]]; then
-        $PKG_MANAGER -y -qq install "$package" >/dev/null 2>&1
+    install_log="$(mktemp /tmp/hpxpanel-pkg.XXXXXX 2>/dev/null || mktemp)"
+
+    local status=1
+    if is_debian_family_os; then
+        if run_debian_package_install "$package" "$install_log"; then
+            rm -f "$install_log"
+            return 0
+        fi
+        colorized_echo yellow "Retrying $package after apt repair..."
+        debian_repair_apt
+        if run_debian_package_install "$package" "$install_log"; then
+            rm -f "$install_log"
+            return 0
+        fi
+        show_package_install_log "$install_log"
+        return 1
     elif is_redhat_family_os; then
-        $PKG_MANAGER install -y -q "$package" >/dev/null 2>&1
+        $PKG_MANAGER install -y -q "$package" >"$install_log" 2>&1
+        status=$?
     elif [[ "$OS" == "Fedora"* ]]; then
-        $PKG_MANAGER install -y -q "$package" >/dev/null 2>&1
+        $PKG_MANAGER install -y -q "$package" >"$install_log" 2>&1
+        status=$?
     elif [[ "$OS" == "Arch Linux" ]] || [[ "$OS" == "Arch"* ]]; then
-        $PKG_MANAGER -S --noconfirm --quiet "$package" >/dev/null 2>&1
+        $PKG_MANAGER -S --noconfirm --quiet "$package" >"$install_log" 2>&1
+        status=$?
     elif [[ "$OS" == "openSUSE"* ]]; then
-        $PKG_MANAGER --quiet install -y "$package" >/dev/null 2>&1
+        $PKG_MANAGER --quiet install -y "$package" >"$install_log" 2>&1
+        status=$?
     else
+        rm -f "$install_log"
         die "Unsupported operating system"
     fi
+
+    if [ "$status" -eq 0 ]; then
+        rm -f "$install_log"
+        return 0
+    fi
+
+    show_package_install_log "$install_log"
+    return 1
 }
 
 install_package() {
-    try_install_package "$1" || die "Failed to install $1 with ${PKG_MANAGER:-the package manager}. Check your package repositories and try again."
+    local package="$1"
+    try_install_package "$package" || {
+        if is_debian_family_os; then
+            die "Failed to install $package with apt-get. Try: apt-get update && apt-get install -y $package"
+        fi
+        die "Failed to install $package with ${PKG_MANAGER:-the package manager}. Check your package repositories and try again."
+    }
 }
 
 install_dns_utils_package() {

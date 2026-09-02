@@ -16,7 +16,7 @@
 </p>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/release-v3.8.8-8b5cf6?style=for-the-badge">
+  <img alt="version" src="https://img.shields.io/badge/release-v3.11.17-8b5cf6?style=for-the-badge">
   <img alt="build" src="https://img.shields.io/github/actions/workflow/status/pooyahpx/HPXPANEL/build.yml?style=for-the-badge&label=CI">
   <img alt="license" src="https://img.shields.io/github/license/pooyahpx/HPXPANEL?style=for-the-badge">
 </p>
@@ -48,7 +48,11 @@ sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXPANEL/raw/main/scripts
 بعد از نصب:
 ```bash
 hpxpanel cli forge-seal   # ساخت اولین ادمین
+hpxpanel install-node     # اختیاری: نود روی همین سرور (تست / homelab)
+hpxnode                   # نمایش Address / API key / Server CA
 ```
+
+بعد برو **HPXPANEL → Nodes** و مقادیر `hpxnode` را paste کن. راهنمای کامل: [بعد از نصب](#بعد-از-نصب-و-دستورات-مهم).
 
 **داشبورد:** `https://YOUR_DOMAIN:8000/dashboard/`
 
@@ -200,17 +204,17 @@ sudo hpx-pulse-agent status
 **پنل باید از ایران برای heartbeat/sync در دسترس باشد** (نه فقط موقع join). پورت `:8000` اغلب فیلتر است — پنل را روی **443** (nginx → panel) بگذارید و در `.env` پنل:
 
 ```bash
-PANEL_PUBLIC_URL=https://ss.hiby.online
+PANEL_PUBLIC_URL=https://panel.example.com
 ```
 
 دوباره **Tokens** بگیرید. روی سرور ایران اگر قبلاً join شده:
 
 ```bash
-sudo hpx-pulse-agent set-panel-url https://ss.hiby.online
+sudo hpx-pulse-agent set-panel-url https://panel.example.com
 sudo hpx-pulse-agent sync
 ```
 
-تست از ایران: `curl -I --connect-timeout 10 https://ss.hiby.online/api/hpx_pulse/agent/hpx-pulse-agent.sh`
+تست از ایران: `curl -I --connect-timeout 10 https://panel.example.com/api/hpx_pulse/agent/hpx-pulse-agent.sh`
 
 **چند Pulse روی یک سرور ایران:** از v3.8.21 هر pulse سرویس جدا `hpx-pulse-tunnel-<id>` دارد. پورت listen ایران (مثلاً `443`) را بین دو pulse مشترک نکنید — بهتر است **یک pulse با چند port forward** (`443`، `2053`، …) بسازید.
 
@@ -312,10 +316,132 @@ curl -fsSL https://raw.githubusercontent.com/pooyahpx/HPXPANEL/main/scripts/hpx-
 
 ---
 
+---
+
+## بعد از نصب و دستورات مهم
+
+### چک‌لیست اولین بار
+
+| مرحله | دستور / کار |
+| --- | --- |
+| ۱. ساخت ادمین | `hpxpanel cli forge-seal` |
+| ۲. (اختیاری) SSL | `hpxpanel ssl` |
+| ۳. نصب نود | `hpxpanel install-node` — یا روی **سرور جدا** (پیشنهاد production) |
+| ۴. دیدن اطلاعات نود | `hpxnode` |
+| ۵. ثبت در پنل | **Nodes → Create** — Address، Node port، API port، API key، Server CA |
+| ۶. Core و Host | از UI — Xray / WireGuard / VPN core، بعد Host و کاربر |
+
+| مورد | مسیر |
+| --- | --- |
+| پنل | `/opt/hpxpanel` |
+| تنظیمات | `/opt/hpxpanel/.env` |
+| داده | `/var/lib/hpxpanel` |
+| داشبورد | `https://YOUR_DOMAIN:8000/dashboard/` |
+
+> پنل + نود روی **یک** سرور برای تست خوبه؛ برای فروش تجاری بهتره جدا باشن.
+
+### دستورات `hpxpanel`
+
+```bash
+hpxpanel help
+```
+
+| دستور | کار |
+| --- | --- |
+| `up` / `down` / `restart` | روشن / خاموش / ری‌استارت کانتینر پنل |
+| `status` | وضعیت کانتینر |
+| `logs` | لاگ زنده (`logs --no-follow` بدون follow) |
+| `update` | آپدیت به آخرین نسخه + نصب `hpxnode` روی نودهای قبلی |
+| `install-node` | نصب نود HPX روی همین سرور |
+| `ssl` | صدور / تمدید Let's Encrypt |
+| `cli` / `tui` | CLI / TUI پنل |
+| `edit-env` | ویرایش `.env` |
+| `edit` | ویرایش `docker-compose.yml` |
+| `backup` / `restore` | بکاپ و ریستور دیتابیس |
+| `backup-service` | بکاپ زمان‌بندی‌شده (مثلاً تلگرام) |
+| `core-update` | آپدیت core روی همه نودها |
+| `purge` | پاک‌سازی کامل (داده + DB) — **برگشت‌ناپذیر** |
+| `uninstall` | حذف پنل (داده می‌ماند مگر purge) |
+
+بعد از ویرایش `.env`: `hpxpanel restart`
+
+**نصب با گزینه‌ها:**
+```bash
+# نسخه مشخص
+sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXPANEL/raw/main/scripts/hpxpanel.sh)" @ install --database timescaledb --version v3.11.17
+
+# SSL هنگام نصب
+sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXPANEL/raw/main/scripts/hpxpanel.sh)" @ install --database timescaledb --ssl-domain panel.example.com
+```
+
+### نود HPX (سرور edge)
+
+**Xray · WireGuard · OpenVPN · IKEv2** — خروجی برای **HPXPANEL → Nodes**.
+
+```bash
+hpxpanel install-node
+
+# مستقل روی هر سرور Linux:
+sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXPANEL/raw/main/scripts/hpx-node.sh)" @ install -y
+```
+
+**هر وقت اطلاعات نود را ببین:**
+```bash
+hpxnode
+hpx-node info
+hpx-node status
+hpx-node logs
+hpxnode --name shop1    # چند نود روی یک سرور
+```
+
+| فایل | محتوا |
+| --- | --- |
+| `/var/lib/hpx-node/register-in-panel.txt` | کپی فیلدهای ثبت نود |
+| `/var/lib/hpx-node/certs/ssl_cert.pem` | Server CA برای paste در پنل |
+
+**چند نود روی یک ماشین:**
+```bash
+sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXPANEL/raw/main/scripts/hpx-node.sh)" @ install -y --name shop1 --service-port 62051
+hpx-node list
+```
+
+### HPX Copilot (دستیار AI)
+
+دکمه ✨ در داشبورد. پیش‌فرض: **Groq** (رایگان).
+
+1. کلید API رایگان: https://console.groq.com/keys  
+2. `hpxpanel edit-env`:
+
+```env
+COPILOT_ENABLED=true
+COPILOT_PROVIDER=groq
+OPENAI_API_KEY=gsk_YOUR_KEY_HERE
+COPILOT_MODEL=openai/gpt-oss-20b
+COPILOT_BASE_URL=https://api.groq.com/openai
+```
+
+3. `hpxpanel restart`
+
+Copilot context زنده پنل را می‌خواند و می‌تواند لینک `vless` / `vmess` را import کند (inbound لازم را خودش می‌سازد).
+
+### عیب‌یابی
+
+| مشکل | راه‌حل |
+| --- | --- |
+| خطای `socat` / `apt` در نصب | `apt-get update && apt-get install -y socat` و دوباره نصب |
+| `hpxnode: command not found` | `hpxpanel update` |
+| OpenVPN `Authentication Failed` | پروفایل را دوباره دانلود کن؛ احراز هویت با **certificate** است نه یوزر/پسورد |
+| Pulse از ایران به پنل نمی‌رسد | `PANEL_PUBLIC_URL=https://دامنه` در `.env`، پنل روی **443** |
+| پورت ۸۰۰۰ اشغال | پورت دیگر در installer یا `UVICORN_PORT` در `.env` |
+| rate limit Groq | مدل `openai/gpt-oss-20b` یا صبر کن |
+
+---
+
 ## تغییرات مهم
 
 | نسخه | |
 | --- | --- |
+| **v3.11.x** | **HPX Copilot** (Groq) · دستور `hpxnode` · ساخت inbound از share link · بهبود installer |
 | **v3.3.0** | **ویزارد تونل ICMP** · auto-heal · diagnose/repair · preflight |
 | **v3.1.0** | **تونل HPX ICMP** — مدیریت از پنل، health، failover، RBAC |
 | v2.5.x | رجیستری ساب فروخته · تحویل خودکار · fingerprint |

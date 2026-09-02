@@ -105,6 +105,65 @@ hpxpanel cli forge-seal
 | Данные | `/var/lib/hpxpanel` |
 | Дашборд | `https://YOUR_DOMAIN:8000/dashboard/` |
 
+### Быстрый старт
+
+```bash
+hpxpanel cli forge-seal    # первый админ
+hpxpanel install-node      # опционально: нода на этом же сервере
+hpxnode                    # Address / API key / Server CA
+```
+
+Затем **HPXPANEL → Nodes → Create** — вставьте значения из `hpxnode`.
+
+### Команды `hpxpanel`
+
+```bash
+hpxpanel help
+```
+
+| Команда | Действие |
+| --- | --- |
+| `up` / `down` / `restart` | Запуск / остановка / перезапуск |
+| `status` / `logs` | Статус и логи |
+| `update` | Обновление (также ставит `hpxnode`) |
+| `install-node` | Установка edge-ноды |
+| `ssl` | Let's Encrypt |
+| `cli` / `tui` | CLI / TUI панели |
+| `edit-env` | Редактировать `.env` |
+| `backup` / `restore` | Бэкап БД |
+| `core-update` | Обновить core на нодах |
+| `purge` | Полное удаление (данные + БД) |
+
+После правки `.env`: `hpxpanel restart`
+
+### HPX Node
+
+```bash
+hpxpanel install-node
+hpxnode                    # показать credentials
+hpx-node info              # то же самое
+cat /var/lib/hpx-node/register-in-panel.txt
+```
+
+Установка отдельно:
+```bash
+sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXPANEL/raw/main/scripts/hpx-node.sh)" @ install -y
+```
+
+### HPX Copilot
+
+1. Ключ: https://console.groq.com/keys  
+2. `hpxpanel edit-env` → `COPILOT_PROVIDER=groq`, `OPENAI_API_KEY=gsk_...`  
+3. `hpxpanel restart`
+
+### Устранение неполадок
+
+| Проблема | Решение |
+| --- | --- |
+| Ошибка `socat` при установке | `apt-get update && apt-get install -y socat` |
+| `hpxnode: command not found` | `hpxpanel update` |
+| OpenVPN Authentication Failed | Скачайте `.ovpn` заново; auth по сертификату |
+
 Для продакшена нужен SSL. Быстрый тест без домена:
 
 ```bash

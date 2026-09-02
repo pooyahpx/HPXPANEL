@@ -16,7 +16,7 @@
 </p>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/release-v3.8.8-8b5cf6?style=for-the-badge">
+  <img alt="version" src="https://img.shields.io/badge/release-v3.11.17-8b5cf6?style=for-the-badge">
   <img alt="build" src="https://img.shields.io/github/actions/workflow/status/pooyahpx/HPXPANEL/build.yml?style=for-the-badge&label=CI">
   <img alt="license" src="https://img.shields.io/github/license/pooyahpx/HPXPANEL?style=for-the-badge">
 </p>
@@ -48,7 +48,11 @@ sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXPANEL/raw/main/scripts
 After install:
 ```bash
 hpxpanel cli forge-seal   # create first admin
+hpxpanel install-node     # optional: edge node on this server (homelab)
+hpxnode                   # show node Address / API key / Server CA
 ```
+
+Then open **HPXPANEL → Nodes** and paste the values from `hpxnode`. See [Post-install & operations](#post-install--operations) for the full CLI reference.
 
 **Dashboard:** `https://YOUR_DOMAIN:8000/dashboard/`
 
@@ -203,17 +207,17 @@ sudo hpx-pulse-agent status
 **Panel must be reachable from Iran for heartbeat/sync** (not just during join). Port `:8000` is often filtered — expose the panel on **443** (nginx → panel) and set in panel `.env`:
 
 ```bash
-PANEL_PUBLIC_URL=https://ss.hiby.online
+PANEL_PUBLIC_URL=https://panel.example.com
 ```
 
 Regenerate **Tokens** so join commands use the public URL. On the Iran VPS, if already joined:
 
 ```bash
-sudo hpx-pulse-agent set-panel-url https://ss.hiby.online
+sudo hpx-pulse-agent set-panel-url https://panel.example.com
 sudo hpx-pulse-agent sync
 ```
 
-Test from Iran: `curl -I --connect-timeout 10 https://ss.hiby.online/api/hpx_pulse/agent/hpx-pulse-agent.sh`
+Test from Iran: `curl -I --connect-timeout 10 https://panel.example.com/api/hpx_pulse/agent/hpx-pulse-agent.sh`
 
 **Multiple pulses on one Iran server:** each pulse gets its own `hpx-pulse-tunnel-<id>` service (v3.8.21+). Do **not** reuse the same Iran listen port (e.g. two pulses both forwarding `443`). Prefer **one pulse with multiple port forwards** (`443`, `2053`, …) when they share the same Iran VPS.
 
@@ -369,22 +373,126 @@ One shared IPsec identity workflow. Core editors for crypto, PSK, and network.
 
 ---
 
-## Post-install & HPX Node
+## Post-install & operations
 
-| | |
+### First-time checklist
+
+| Step | Command / action |
 | --- | --- |
-| Files | `/opt/hpxpanel` |
+| 1. Create admin | `hpxpanel cli forge-seal` |
+| 2. (Optional) SSL | `hpxpanel ssl` |
+| 3. Install edge node | `hpxpanel install-node` — or on a **separate** VPS (recommended for production) |
+| 4. Show node credentials | `hpxnode` |
+| 5. Register node | **HPXPANEL → Nodes → Create** — paste Address, Node port, API port, API key, Server CA |
+| 6. Cores + hosts | Panel UI — create Xray / WireGuard / VPN core, then Hosts and users |
+
+| What | Where |
+| --- | --- |
+| App | `/opt/hpxpanel` |
 | Config | `/opt/hpxpanel/.env` |
 | Data | `/var/lib/hpxpanel` |
 | Dashboard | `https://YOUR_DOMAIN:8000/dashboard/` |
 
-### HPX Node (edge servers)
+> Panel + node on **one** server works for testing. For commercial setups, run the panel and nodes on **different** machines.
+
+### `hpxpanel` CLI
 
 ```bash
-sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXNODE/raw/main/scripts/install.sh)" @ install
+hpxpanel help
 ```
 
+| Command | What it does |
+| --- | --- |
+| `up` / `down` / `restart` | Start / stop / restart panel containers |
+| `status` | Container status |
+| `logs` | Follow panel logs (`logs --no-follow` for a snapshot) |
+| `update` | Pull latest release + refresh CLI (also installs `hpxnode` on existing nodes) |
+| `install-node` | Install HPX edge node on this server |
+| `ssl` | Issue or renew Let's Encrypt certificate |
+| `cli` / `tui` | Panel CLI / TUI (`forge-seal`, user ops, …) |
+| `edit-env` | Edit `/opt/hpxpanel/.env` |
+| `edit` | Edit `docker-compose.yml` |
+| `backup` / `restore` | Database backup & restore |
+| `backup-service` | Scheduled backups (e.g. Telegram) + crontab job |
+| `core-update` | Update proxy core on all nodes |
+| `purge` | Full wipe (app + data + DB) — **destructive** |
+| `uninstall` | Remove panel (data kept unless you purged) |
+
+After editing `.env`: `hpxpanel restart`
+
+**Install variants:**
+```bash
+# Pin a release
+sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXPANEL/raw/main/scripts/hpxpanel.sh)" @ install --database timescaledb --version v3.11.17
+
+# SSL during install
+sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXPANEL/raw/main/scripts/hpxpanel.sh)" @ install --database timescaledb --ssl-domain panel.example.com
+```
+
+### HPX Node (edge servers)
+
 Deploys Docker node with **Xray · WireGuard · OpenVPN · IKEv2** — prints values for **HPXPANEL → Nodes**.
+
+**Install:**
+```bash
+hpxpanel install-node
+
+# standalone (any Linux root host):
+sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXPANEL/raw/main/scripts/hpx-node.sh)" @ install -y
+```
+
+**Show credentials anytime** (Address, ports, API key, Server CA):
+```bash
+hpxnode
+hpx-node info              # same output
+hpx-node status            # container status
+hpx-node logs              # node logs
+hpxnode --name shop1       # multi-instance on one host
+```
+
+| File | Purpose |
+| --- | --- |
+| `/var/lib/hpx-node/register-in-panel.txt` | Saved copy of node registration fields |
+| `/var/lib/hpx-node/certs/ssl_cert.pem` | Server CA to paste into the panel |
+
+**Multiple nodes on one machine:**
+```bash
+sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXPANEL/raw/main/scripts/hpx-node.sh)" @ install -y --name shop1 --service-port 62051
+sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXPANEL/raw/main/scripts/hpx-node.sh)" @ install -y --name shop2 --service-port 62052
+hpx-node list
+```
+
+### HPX Copilot (AI assistant)
+
+Sparkles button in the dashboard. Default provider: **Groq** (free tier).
+
+1. Get a free API key: https://console.groq.com/keys  
+2. `hpxpanel edit-env` and add:
+
+```env
+COPILOT_ENABLED=true
+COPILOT_PROVIDER=groq
+OPENAI_API_KEY=gsk_YOUR_KEY_HERE
+COPILOT_MODEL=openai/gpt-oss-20b
+COPILOT_BASE_URL=https://api.groq.com/openai
+```
+
+3. `hpxpanel restart`
+
+Copilot reads live panel context (Pulse, nodes, troubleshooting) and can import `vless` / `vmess` / `trojan` share links into Hosts (auto-creates matching Xray inbound when needed).
+
+Other providers: `openai`, `openrouter`, `ollama` — see comments in `.env.example`.
+
+### Troubleshooting
+
+| Problem | What to try |
+| --- | --- |
+| `socat` / `apt-get` failed during install | `apt-get update && apt-get install -y socat` then re-run install |
+| `hpxnode: command not found` | `hpxpanel update` |
+| OpenVPN `Authentication Failed` | Re-download `.ovpn` from the panel; node uses **client certificates**, not username/password. Run `hpxpanel update` on panel + node |
+| Pulse agent unreachable from Iran | Set `PANEL_PUBLIC_URL=https://your-domain` in `.env`, expose panel on **443**, `sudo hpx-pulse-agent set-panel-url …` |
+| Port `8000` in use | Installer prompts for another port, or set `UVICORN_PORT` in `.env` |
+| Groq rate limit in Copilot | Switch to `openai/gpt-oss-20b` or wait; free tier has limits |
 
 ---
 
@@ -409,6 +517,7 @@ Dashboard dev: `http://127.0.0.1:5173/dashboard/`
 
 | Version | Headline |
 | --- | --- |
+| **v3.11.x** | **HPX Copilot** (Groq) · `hpxnode` CLI · auto inbound from share links · installer apt retry |
 | **v3.1.0** | **HPX ICMP Tunnel** — panel-managed ChaCha20 ping tunnels, health, failover, RBAC |
 | v2.5.x | Sold-sub registry with live URLs · auto sub delivery · Telegram fingerprint tracking |
 | v2.4.x | Admin permission bot · support ticket locking · owner audit log |

@@ -10,6 +10,11 @@ import aiohttp
 from app.models.admin import AdminDetails
 from app.models.copilot import CopilotMessage
 from app.services.copilot.context import build_panel_snapshot
+from app.services.copilot.reply_sanitize import (
+    extract_share_link_from_messages,
+    sanitize_copilot_reply,
+    user_confirmed_import,
+)
 from app.services.copilot.tools import TOOL_DEFINITIONS, execute_tool, tool_result_content
 from config import copilot_settings
 
@@ -77,9 +82,12 @@ def _system_prompt(*, admin: AdminDetails, snapshot: dict[str, Any]) -> str:
         "Reply in the same language the user writes (Persian/Farsi or English).\n"
         "Be concise, practical, and step-oriented. Use tools when you need live panel data.\n"
         "Never invent pulse/tunnel IDs — always list or look up first.\n"
-        "For proxy share links (vless://, vmess://, trojan://, ss://): use import_proxy_link with confirm=false first. "
-        "Do NOT ask the admin for inbound_tag — leave it empty so the tool auto-creates a matching Xray inbound when needed. "
-        "Explain the planned inbound + Host, then call import_proxy_link(confirm=true) after admin approval.\n"
+        "For proxy share links (vless://, vmess://, trojan://, ss://):\n"
+        "  1. Call the import_proxy_link TOOL yourself (confirm=false preview, then confirm=true after user says yes).\n"
+        "  2. NEVER tell the admin to run import_proxy_link on a server — it is NOT a bash/SSH command.\n"
+        "  3. NEVER put import_proxy_link inside ```bash``` code blocks. Host creation happens inside HPXPANEL only.\n"
+        "  4. After preview, ask the user to reply 'بله' or 'yes' in this chat; then YOU call import_proxy_link(confirm=true).\n"
+        "  5. Do NOT ask for inbound_tag — leave empty so the tool auto-creates a matching Xray inbound.\n"
         "For Iran connectivity issues, remind that PANEL_URL must include the working port (often :8000).\n"
         "For Pulse agents, mention join commands, Sync button, and `sudo hpx-pulse-agent install-engine --force` when relevant.\n"
         f"Current admin: {admin.username}\n"
@@ -149,7 +157,12 @@ async def run_copilot_chat(
             content = (message.get("content") or "").strip()
             if not content:
                 raise CopilotProviderError("Empty response from LLM")
-            return content, actions_taken
+
+            content, extra_actions = await _auto_import_if_user_confirmed(
+                db, admin=admin, messages=messages, content=content
+            )
+            actions_taken.extend(extra_actions)
+            return sanitize_copilot_reply(content), actions_taken
 
         llm_messages.append(message)
 
@@ -175,3 +188,45 @@ async def run_copilot_chat(
             )
 
     raise CopilotProviderError("Copilot exceeded maximum tool rounds — try a simpler question")
+
+
+async def _auto_import_if_user_confirmed(
+    db,
+    *,
+    admin,
+    messages: list[CopilotMessage],
+    content: str,
+) -> tuple[str, list[str]]:
+    """If user replied yes/تایید after a link preview, run import even when the LLM only printed pseudo-code."""
+    if not user_confirmed_import(messages):
+        return content, []
+
+    link = extract_share_link_from_messages(messages)
+    if not link:
+        return content, []
+
+    result, action = await execute_tool(
+        db,
+        admin=admin,
+        name="import_proxy_link",
+        arguments={"link": link, "confirm": True, "create_inbound_if_missing": True},
+    )
+    actions: list[str] = [action] if action else []
+
+    if result.get("error"):
+        return f"{content}\n\n❌ Import failed: {result['error']}", actions
+
+    if result.get("host_id"):
+        host_id = result["host_id"]
+        inbound = result.get("inbound_tag") or result.get("inbound_created")
+        extra = f"\n\n✅ Host #{host_id} created in HPXPANEL → Hosts."
+        if inbound:
+            extra += f" Inbound: `{inbound}`."
+        if result.get("username"):
+            extra += f" User: `{result['username']}`."
+        return sanitize_copilot_reply(content) + extra, actions
+
+    if result.get("preview"):
+        return content, actions
+
+    return content, actions

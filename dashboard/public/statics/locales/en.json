@@ -186,7 +186,7 @@
       "diagnosePulse": "Diagnose unhealthy Pulse tunnels and suggest fixes",
       "syncHelp": "When should I use Sync on a Pulse card?",
       "panelUrl": "Iran agent cannot reach panel — what should I check?",
-      "importProxyLink": "Import this vless link into a Host (preview first, then confirm): vless://..."
+      "importProxyLink": "Paste this link; preview first, then I reply yes and you create the Host in the panel (no server command): vless://..."
     }
   },
   "hpxTunnel": {

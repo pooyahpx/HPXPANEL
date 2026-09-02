@@ -267,11 +267,11 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
         "function": {
             "name": "import_proxy_link",
             "description": (
+                "INTERNAL PANEL TOOL ONLY — never tell the admin to run this in bash/SSH. "
                 "Parse a client share link (vless://, vmess://, trojan://, ss://) and create a HPXPANEL Host. "
-                "By default also creates a matching Xray inbound in the core when none exists (create_inbound_if_missing). "
-                "Always preview first with confirm=false, then create with confirm=true after the admin agrees. "
-                "inbound_tag is optional — omit it to auto-match or auto-create from the link. "
-                "Optional create_user with username + group_ids."
+                "Call this tool yourself from Copilot chat. "
+                "Preview with confirm=false, then confirm=true after the user replies yes/بله in chat. "
+                "By default creates a matching Xray inbound when none exists."
             ),
             "parameters": {
                 "type": "object",

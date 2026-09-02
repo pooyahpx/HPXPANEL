@@ -2119,7 +2119,7 @@
       "diagnosePulse": "Pulseهای ناسالم را تشخیص بده و راه‌حل پیشنهاد کن",
       "syncHelp": "کی باید از دکمه Sync روی کارت Pulse استفاده کنم؟",
       "panelUrl": "Agent ایران به پنل وصل نمی‌شود — چه چیزهایی را چک کنم؟",
-      "importProxyLink": "این لینک vless را بگیر و Host مناسب توی پنل بساز (اول preview بده): vless://..."
+      "importProxyLink": "این لینک را paste کن؛ اول preview بده، بعد من می‌نویسم «بله» تا خودت Host بسازی (بدون دستور سرور): vless://..."
     }
   },
   "hpxTunnel": {

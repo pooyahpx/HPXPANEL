@@ -23,7 +23,6 @@ import {
   fetchUserSubscriptionContent,
   getOpenVPNDownloadPayload,
   getWireGuardDownloadPayload,
-  buildOpenVPNConnectImportUrl,
   prepareSubscriptionContentForCopy,
   resolveSubscriptionQrUrl,
 } from '@/utils/subscription-config'

@@ -448,6 +448,19 @@ def mock_settings(monkeypatch: pytest.MonkeyPatch):
             "max_limit": 0,
         },
         "general": {"default_method": "chacha20-ietf-poly1305"},
+        "backup": {
+            "auto_enabled": False,
+            "schedule_hours": 24,
+            "local_retention": 14,
+            "upload_to_remote": True,
+            "remote": {
+                "enabled": False,
+                "host": "",
+                "port": 22,
+                "username": "",
+                "remote_path": "/var/backups/hpxpanel",
+            },
+        },
     }
     db_settings = Settings(**settings)
 

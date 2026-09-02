@@ -924,6 +924,30 @@ class NodeStat(Base, CreatedAtUTCMixin):
     outgoing_bandwidth_speed: Mapped[int] = mapped_column(BigInteger, unique=False, nullable=False)
 
 
+class SystemStat(Base, CreatedAtUTCMixin):
+    """Control-plane resource snapshots for historical charts."""
+
+    __tablename__ = "system_stats"
+    mem_total: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    mem_used: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    cpu_cores: Mapped[int] = mapped_column(nullable=False)
+    cpu_usage: Mapped[float] = mapped_column(nullable=False)
+    incoming_bandwidth_speed: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    outgoing_bandwidth_speed: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    disk_total: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    disk_used: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+
+
+class ObservabilityAlertEvent(Base, CreatedAtUTCMixin):
+    __tablename__ = "observability_alert_events"
+    scope: Mapped[str] = mapped_column(String(32), nullable=False)
+    node_id: Mapped[int | None] = fk_id_column("nodes.id", ondelete="SET NULL", nullable=True)
+    metric: Mapped[str] = mapped_column(String(64), nullable=False)
+    value: Mapped[float] = mapped_column(Float, nullable=False)
+    threshold: Mapped[float] = mapped_column(Float, nullable=False)
+    message: Mapped[str] = mapped_column(String(512), nullable=False)
+
+
 class Settings(Base, IdMixin):
     __tablename__ = "settings"
     telegram: Mapped[dict] = mapped_column(JSON())

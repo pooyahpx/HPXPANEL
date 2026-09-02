@@ -35,6 +35,7 @@ import {
   Layers,
   LayoutDashboardIcon,
   LayoutTemplate,
+  Activity,
   LifeBuoy,
   ListTodo,
   Lock,
@@ -220,6 +221,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               title: 'statistics',
               url: '/statistics',
               icon: PieChart,
+            },
+            {
+              title: 'observability.title',
+              url: '/observability',
+              icon: Activity,
             },
           ]
         : []),

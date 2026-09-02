@@ -156,3 +156,15 @@ export function validateOpenVPNConfig(config: OpenVPNCoreConfig): Array<{ path: 
 
   return issues
 }
+
+export function validateOpenVPNConfigWarnings(
+  config: OpenVPNCoreConfig,
+): Array<{ path: string; messageKey: string }> {
+  if (!String(config.ca_cert ?? '').trim()) {
+    return []
+  }
+  if (!String(config.ca_key ?? '').trim()) {
+    return [{ path: 'ca_key', messageKey: 'coreEditor.openvpn.caKeyMissingWarning' }]
+  }
+  return []
+}

@@ -15,7 +15,7 @@ import {
 } from '@/features/core-editor/kit/openvpn-config'
 import { useCoreEditorStore } from '@/features/core-editor/state/core-editor-store'
 import { generateOpenVPNPki, type OpenVPNPkiBundle } from '@/service/api/openvpn'
-import { Loader2, Sparkles } from 'lucide-react'
+import { Loader2, Sparkles, TriangleAlert } from 'lucide-react'
 import { useCallback, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -142,6 +142,13 @@ export function OpenVPNCoreEditor() {
 
   return (
     <div className="space-y-6">
+      {draft.ca_cert?.trim() && !draft.ca_key?.trim() && (
+        <Alert variant="destructive">
+          <TriangleAlert className="h-4 w-4" />
+          <AlertTitle>{t('coreEditor.openvpn.caKeyMissingTitle')}</AlertTitle>
+          <AlertDescription>{t('coreEditor.openvpn.caKeyMissingWarning')}</AlertDescription>
+        </Alert>
+      )}
       <Alert>
         <AlertTitle>{t('coreEditor.openvpn.title')}</AlertTitle>
         <AlertDescription>

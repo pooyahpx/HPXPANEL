@@ -76,6 +76,11 @@ async def ensure_openvpn_credentials(
     return proxy_settings
 
 
+def clear_openvpn_credentials(proxy_settings: ProxyTable) -> ProxyTable:
+    proxy_settings.openvpn = OpenVPNSettings()
+    return proxy_settings
+
+
 def openvpn_settings_dict(settings: OpenVPNSettings | dict | None) -> dict:
     if settings is None:
         return {}

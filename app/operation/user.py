@@ -1220,6 +1220,42 @@ class UserOperation(BaseOperation):
         )
         return await self._revoke_user_sub(db, db_user, admin)
 
+    async def renew_openvpn_cert_by_id(self, db: AsyncSession, user_id: int, admin: AdminDetails) -> UserResponse:
+        from app.utils.openvpn import user_has_openvpn_access
+
+        db_user = await self.get_validated_user_by_id(
+            db, user_id, admin, load_usage_logs=False, scope_action="update"
+        )
+        groups = await db_user.awaitable_attrs.groups
+        if not await user_has_openvpn_access(db, groups):
+            await self.raise_error("User is not assigned to an OpenVPN group", 400, db=db)
+
+        await self._finalize_openvpn_proxy_settings(db, db_user, groups, force=True)
+        await sync_user(db_user)
+        user = await self.update_user(db_user)
+        logger.info(f'OpenVPN certificate renewed for user "{db_user.username}" by admin "{admin.username}"')
+        return user
+
+    async def revoke_openvpn_cert_by_id(self, db: AsyncSession, user_id: int, admin: AdminDetails) -> UserResponse:
+        from app.models.proxy import ProxyTable
+        from app.utils.openvpn import clear_openvpn_credentials, user_has_openvpn_access
+
+        db_user = await self.get_validated_user_by_id(
+            db, user_id, admin, load_usage_logs=False, scope_action="update"
+        )
+        groups = await db_user.awaitable_attrs.groups
+        if not await user_has_openvpn_access(db, groups):
+            await self.raise_error("User is not assigned to an OpenVPN group", 400, db=db)
+
+        proxy_settings = ProxyTable.model_validate(db_user.proxy_settings)
+        db_user.proxy_settings = clear_openvpn_credentials(proxy_settings).dict()
+        await db.commit()
+        await refresh_and_load_user(db, db_user)
+        await sync_user(db_user)
+        user = await self.update_user(db_user)
+        logger.info(f'OpenVPN certificate revoked for user "{db_user.username}" by admin "{admin.username}"')
+        return user
+
     async def bulk_revoke_user_sub(
         self, db: AsyncSession, bulk_users: BulkUsersSelection, admin: AdminDetails
     ) -> BulkUsersActionResponse:

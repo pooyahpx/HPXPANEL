@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router'
 import type { LucideIcon } from 'lucide-react'
-import { Group, LayoutDashboardIcon, LayoutTemplate, ListTodo, Palette, PieChart, Radar, Settings2, Share2Icon, UserCog, UsersIcon, Key, Layers, Bell, Database, Cpu, Search } from 'lucide-react'
+import { Activity, Group, LayoutDashboardIcon, LayoutTemplate, ListTodo, Palette, PieChart, Radar, Settings2, Share2Icon, UserCog, UsersIcon, Key, Layers, Bell, Database, Cpu, Search } from 'lucide-react'
 import { useAdmin } from '@/hooks/use-admin'
 import { cn } from '@/lib/utils'
 import { canReadResourcePage, hasPermission, isOwner } from '@/utils/rbac'
@@ -29,6 +29,7 @@ function useQuestItems(): QuestItem[] {
     }
     if (hasPermission(admin, 'nodes', 'stats')) {
       items.push({ id: 'statistics', title: 'statistics', url: '/statistics', icon: PieChart, keywords: 'charts traffic' })
+      items.push({ id: 'observability', title: 'observability.title', url: '/observability', icon: Activity, keywords: 'noc health alerts prometheus' })
     }
     if (canReadResourcePage(admin, 'hosts')) {
       items.push({ id: 'hosts', title: 'hosts', url: '/hosts', icon: ListTodo })

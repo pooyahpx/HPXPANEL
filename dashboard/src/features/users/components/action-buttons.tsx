@@ -5,7 +5,7 @@ import useDirDetection from '@/hooks/use-dir-detection'
 import { type UseEditFormValues } from '@/features/users/forms/user-form'
 import { getUserById, useActiveNextPlanById, useGetCurrentAdmin, useRemoveUserById, useResetUserDataUsageById, useRevokeUserSubscriptionById, UserResponse, UsersResponse } from '@/service/api'
 import { useQueryClient } from '@tanstack/react-query'
-import { Cat, Check, Copy, EllipsisVertical, Fingerprint, GlobeLock, Hash, Link2Off, ListStart, ListTree, Network, Pencil, PieChart, QrCode, RefreshCcw, Trash2, UserCog, Users } from 'lucide-react'
+import { Cat, Check, Copy, Download, EllipsisVertical, Fingerprint, GlobeLock, Hash, KeyRound, Link2Off, ListStart, ListTree, Network, Pencil, PieChart, QrCode, RefreshCcw, ShieldOff, Trash2, UserCog, Users } from 'lucide-react'
 import { WireguardIcon, XrayIcon, SingboxIcon, MihomoIcon } from '@/components/icons/format-icons'
 import { Code } from 'lucide-react'
 import { FC, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
@@ -25,6 +25,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { invalidateUserMetricsQueries, removeUserFromUsersCache, upsertUserInUsersCache } from '@/utils/usersCache'
 import { buildSubscriptionFormatUrl, fetchSubscriptionBlobFromUrl, fetchUserSubscriptionContent, resolveSubscriptionPublicUrl, type SubscriptionContentFormat } from '@/utils/subscription-config'
+import { useRenewOpenVPNCertificate, useRevokeOpenVPNCertificate, userHasOpenVPNProfile } from '@/service/api/openvpn-user'
 import { hasPermission, hasScopeAll } from '@/utils/rbac'
 
 type ActionButtonsProps = {
@@ -204,6 +205,8 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user, isModalHost = true, rende
   const dir = useDirDetection()
   const configContentCacheRef = useRef<Record<string, string>>({})
   const pendingContentFetchRef = useRef<Record<string, Promise<string>>>({})
+  const [isRenewOpenVPNDialogOpen, setIsRenewOpenVPNDialogOpen] = useState(false)
+  const [isRevokeOpenVPNDialogOpen, setIsRevokeOpenVPNDialogOpen] = useState(false)
   const getModalStateSnapshot = useCallback(() => ensureModalState(user), [user])
 
   const modalState = useSyncExternalStore(
@@ -291,6 +294,9 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user, isModalHost = true, rende
       },
     },
   })
+  const renewOpenVPNMutation = useRenewOpenVPNCertificate()
+  const revokeOpenVPNMutation = useRevokeOpenVPNCertificate()
+  const hasOpenVPNProfile = userHasOpenVPNProfile(user)
   const { data: currentAdmin } = useGetCurrentAdmin({
     query: {
       staleTime: 5 * 60 * 1000,
@@ -623,6 +629,32 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user, isModalHost = true, rende
     }
   }
 
+  const handleOpenVPNDownload = () => {
+    void handleConfigDownload('openvpn', 'openvpn')
+  }
+
+  const confirmRenewOpenVPN = async () => {
+    try {
+      const updatedUser = await renewOpenVPNMutation.mutateAsync(user.id)
+      updateUserInCache(updatedUser)
+      toast.success(t('openvpn.renewSuccess', { name: user.username }))
+      setIsRenewOpenVPNDialogOpen(false)
+    } catch (error: any) {
+      toast.error(error?.data?.detail || error?.message || t('openvpn.renewFailed'))
+    }
+  }
+
+  const confirmRevokeOpenVPN = async () => {
+    try {
+      const updatedUser = await revokeOpenVPNMutation.mutateAsync(user.id)
+      updateUserInCache(updatedUser)
+      toast.success(t('openvpn.revokeSuccess', { name: user.username }))
+      setIsRevokeOpenVPNDialogOpen(false)
+    } catch (error: any) {
+      toast.error(error?.data?.detail || error?.message || t('openvpn.revokeFailed'))
+    }
+  }
+
   return (
     <>
       {renderActions && (
@@ -665,6 +697,16 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user, isModalHost = true, rende
               </DropdownMenu>
               <TooltipContent>{copied ? t('usersTable.copied') : t('usersTable.copyConfigs')}</TooltipContent>
             </Tooltip>
+            {user.subscription_url && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button type="button" size="icon" variant="ghost" aria-label={t('openvpn.downloadProfile')} onClick={handleOpenVPNDownload}>
+                    <Download className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{t('openvpn.downloadProfile')}</TooltipContent>
+              </Tooltip>
+            )}
             <Tooltip>
               <TooltipTrigger asChild>
                 <div>
@@ -717,6 +759,19 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user, isModalHost = true, rende
                   <Link2Off className="mr-2 h-4 w-4" />
                   <span>{t('userDialog.revokeSubscription')}</span>
                 </DropdownMenuItem>
+              )}
+
+              {canUpdateUsers && user.subscription_url && (
+                <>
+                  <DropdownMenuItem onSelect={() => setIsRenewOpenVPNDialogOpen(true)}>
+                    <KeyRound className="mr-2 h-4 w-4" />
+                    <span>{t('openvpn.renewCertificate')}</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => setIsRevokeOpenVPNDialogOpen(true)} disabled={!hasOpenVPNProfile}>
+                    <ShieldOff className="mr-2 h-4 w-4" />
+                    <span>{t('openvpn.revokeCertificate')}</span>
+                  </DropdownMenuItem>
+                </>
               )}
 
               {canUpdateUsers && (
@@ -845,6 +900,36 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user, isModalHost = true, rende
                 <AlertDialogCancel onClick={() => setRevokeSubDialogOpen(false)}>{t('usersTable.cancel')}</AlertDialogCancel>
                 <AlertDialogAction onClick={confirmRevokeSubscription} disabled={revokeUserSubscriptionMutation.isPending}>
                   {t('revokeUserSub.title')}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+
+          <AlertDialog open={isRenewOpenVPNDialogOpen} onOpenChange={setIsRenewOpenVPNDialogOpen}>
+            <AlertDialogContent dir={dir}>
+              <AlertDialogHeader>
+                <AlertDialogTitle>{t('openvpn.renewCertificate')}</AlertDialogTitle>
+                <AlertDialogDescription>{t('openvpn.renewPrompt', { name: user.username })}</AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel onClick={() => setIsRenewOpenVPNDialogOpen(false)}>{t('usersTable.cancel')}</AlertDialogCancel>
+                <AlertDialogAction onClick={confirmRenewOpenVPN} disabled={renewOpenVPNMutation.isPending}>
+                  {t('openvpn.renewCertificate')}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+
+          <AlertDialog open={isRevokeOpenVPNDialogOpen} onOpenChange={setIsRevokeOpenVPNDialogOpen}>
+            <AlertDialogContent dir={dir}>
+              <AlertDialogHeader>
+                <AlertDialogTitle>{t('openvpn.revokeCertificate')}</AlertDialogTitle>
+                <AlertDialogDescription>{t('openvpn.revokePrompt', { name: user.username })}</AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel onClick={() => setIsRevokeOpenVPNDialogOpen(false)}>{t('usersTable.cancel')}</AlertDialogCancel>
+                <AlertDialogAction variant="destructive" onClick={confirmRevokeOpenVPN} disabled={revokeOpenVPNMutation.isPending}>
+                  {t('openvpn.revokeCertificate')}
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>

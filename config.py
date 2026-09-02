@@ -255,6 +255,28 @@ class FeatureSettings(EnvSettings):
     stop_nodes_on_shutdown: bool = Field(default=True, validation_alias="STOP_NODES_ON_SHUTDOWN")
 
 
+class ObservabilitySettings(EnvSettings):
+    prometheus_enabled: bool = Field(default=True, validation_alias="OBSERVABILITY_PROMETHEUS_ENABLED")
+    probe_outbound_latency: bool = Field(default=True, validation_alias="OBSERVABILITY_PROBE_OUTBOUND_LATENCY")
+    latency_probe_timeout_seconds: int = Field(default=3, ge=1, le=30, validation_alias="OBSERVABILITY_LATENCY_TIMEOUT")
+    max_latency_probes: int = Field(default=12, ge=1, le=50, validation_alias="OBSERVABILITY_MAX_LATENCY_PROBES")
+    system_stats_interval: int = Field(default=30, ge=10, validation_alias="JOB_GATHER_SYSTEM_STATS_INTERVAL")
+    retention_days: int = Field(default=30, ge=1, validation_alias="OBSERVABILITY_RETENTION_DAYS")
+    retention_interval: int = Field(default=3600, ge=300, validation_alias="JOB_OBSERVABILITY_RETENTION_INTERVAL")
+    alerts_enabled: bool = Field(default=True, validation_alias="OBSERVABILITY_ALERTS_ENABLED")
+    alerts_interval: int = Field(default=60, ge=15, validation_alias="JOB_OBSERVABILITY_ALERTS_INTERVAL")
+    alert_cpu_threshold: float = Field(default=90.0, ge=50, le=100, validation_alias="OBSERVABILITY_ALERT_CPU_THRESHOLD")
+    alert_mem_threshold: float = Field(default=90.0, ge=50, le=100, validation_alias="OBSERVABILITY_ALERT_MEM_THRESHOLD")
+    alert_packet_loss_threshold: float = Field(
+        default=5.0, ge=0, le=100, validation_alias="OBSERVABILITY_ALERT_PACKET_LOSS_THRESHOLD"
+    )
+    alert_cooldown_minutes: int = Field(default=15, ge=1, validation_alias="OBSERVABILITY_ALERT_COOLDOWN_MINUTES")
+    auto_enable_node_stats_on_pg: bool = Field(
+        default=True, validation_alias="OBSERVABILITY_AUTO_ENABLE_NODE_STATS_ON_PG"
+    )
+    metrics_token: str = Field(default="", validation_alias="OBSERVABILITY_METRICS_TOKEN")
+
+
 database_settings = DatabaseSettings()
 server_settings = ServerSettings()
 dashboard_settings = DashboardSettings()
@@ -271,9 +293,12 @@ usage_settings = UsageSettings()
 job_settings = JobSettings()
 copilot_settings = CopilotSettings()
 feature_settings = FeatureSettings()
+observability_settings = ObservabilitySettings()
 
 if not database_settings.is_postgresql:
     usage_settings.enable_recording_nodes_stats = False
+elif observability_settings.auto_enable_node_stats_on_pg:
+    usage_settings.enable_recording_nodes_stats = True
 
 if runtime_settings.debug and dashboard_settings.vite_base_api == "/":
     scheme = "https" if server_settings.has_ssl else "http"

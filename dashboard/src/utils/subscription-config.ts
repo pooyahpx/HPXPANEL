@@ -368,3 +368,18 @@ export const downloadTextFile = (content: string, fileName: string, mimeType = T
   document.body.removeChild(anchor)
   window.URL.revokeObjectURL(downloadUrl)
 }
+
+export const OPENVPN_PROFILE_MIME_TYPE = 'application/x-openvpn-profile'
+
+export const buildOpenVPNFileName = (username: string) => `${sanitizeFileNameSegment(username) || 'openvpn'}.ovpn`
+
+export const buildOpenVPNConnectImportUrl = (profileContent: string) => {
+  const encoded = encodeURIComponent(profileContent)
+  return `openvpn://import-profile/${encoded}`
+}
+
+export const getOpenVPNDownloadPayload = (profileContent: string, username: string) => ({
+  content: profileContent,
+  fileName: buildOpenVPNFileName(username),
+  mimeType: OPENVPN_PROFILE_MIME_TYPE,
+})

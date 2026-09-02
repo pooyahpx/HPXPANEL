@@ -14,7 +14,7 @@ from app.settings import handle_settings_message
 from app.subscription.client_templates import handle_client_template_message
 from app.utils.logger import get_logger
 from app.version import __version__
-from config import runtime_settings, subscription_env_settings
+from config import observability_settings, runtime_settings, subscription_env_settings
 
 logger = get_logger("app-factory")
 
@@ -127,6 +127,10 @@ def create_app() -> FastAPI:
 
         dashboard.setup_dashboard(app)
         app.include_router(api_router)
+        if observability_settings.prometheus_enabled:
+            from app.routers.metrics import router as metrics_router
+
+            app.include_router(metrics_router)
 
     if runtime_settings.role.runs_node:
         from app.node import worker as node_worker  # noqa: F401

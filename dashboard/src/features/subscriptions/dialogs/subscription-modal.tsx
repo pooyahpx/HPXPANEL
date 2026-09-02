@@ -18,7 +18,9 @@ import {
   extractAddressFromConfigUrl,
   extractNameFromConfigUrl,
   fetchUserSubscriptionContent,
+  getOpenVPNDownloadPayload,
   getWireGuardDownloadPayload,
+  buildOpenVPNConnectImportUrl,
   prepareSubscriptionContentForCopy,
   resolveSubscriptionQrUrl,
 } from '@/utils/subscription-config'
@@ -40,6 +42,7 @@ interface ConfigItem {
 
 type ConfigCopyMode = 'config' | 'base64'
 type ConfigQrMode = 'config' | 'uri'
+type MainQrMode = 'subscription' | 'openvpn'
 
 interface CopiedConfigState {
   config: string
@@ -65,6 +68,9 @@ const SubscriptionModal: FC<SubscriptionModalProps> = memo(({ open, subscribeUrl
   const [selectedConfigQrMode, setSelectedConfigQrMode] = useState<ConfigQrMode>('config')
   const [copiedConfig, setCopiedConfig] = useState<CopiedConfigState | null>(null)
   const [allConfigsCopied, setAllConfigsCopied] = useState(false)
+  const [openvpnProfile, setOpenvpnProfile] = useState<string | null>(null)
+  const [mainQrMode, setMainQrMode] = useState<MainQrMode>('subscription')
+  const [openvpnImportCopied, setOpenvpnImportCopied] = useState(false)
   const clearSelectedConfigQrTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const subscribeQrLink = resolveSubscriptionQrUrl(subscribeUrl)
@@ -76,7 +82,10 @@ const SubscriptionModal: FC<SubscriptionModalProps> = memo(({ open, subscribeUrl
     setError(null)
 
     try {
-      const text = await fetchUserSubscriptionContent(userId, 'links', LINKS_FETCH_TIMEOUT_MS)
+      const [text, openvpnText] = await Promise.all([
+        fetchUserSubscriptionContent(userId, 'links', LINKS_FETCH_TIMEOUT_MS),
+        fetchUserSubscriptionContent(userId, 'openvpn', LINKS_FETCH_TIMEOUT_MS).catch(() => ''),
+      ])
       const configLines = text.split('\n').filter(line => line.trim() !== '')
 
       setConfigs(
@@ -86,6 +95,9 @@ const SubscriptionModal: FC<SubscriptionModalProps> = memo(({ open, subscribeUrl
           address: extractAddressFromConfigUrl(config),
         })),
       )
+      const trimmedOpenvpn = openvpnText.trim()
+      setOpenvpnProfile(trimmedOpenvpn || null)
+      setMainQrMode(trimmedOpenvpn ? 'openvpn' : 'subscription')
       setCurrentPage(0)
     } catch (err) {
       console.error('Failed to fetch configs:', err)
@@ -201,6 +213,31 @@ const SubscriptionModal: FC<SubscriptionModalProps> = memo(({ open, subscribeUrl
 
   const selectedConfigWireGuardDownload = selectedConfigQR ? getWireGuardDownloadPayload(selectedConfigQR.config) : null
   const selectedConfigQrValue = selectedConfigWireGuardDownload && selectedConfigQrMode === 'config' ? selectedConfigWireGuardDownload.content : selectedConfigQR?.config || ''
+  const openvpnDownloadPayload = openvpnProfile ? getOpenVPNDownloadPayload(openvpnProfile, username) : null
+  const openvpnImportUrl = openvpnProfile ? buildOpenVPNConnectImportUrl(openvpnProfile) : ''
+  const mainQrValue = mainQrMode === 'openvpn' && openvpnProfile ? openvpnProfile : subscribeQrLink
+
+  const handleDownloadOpenVPN = useCallback(() => {
+    if (!openvpnDownloadPayload) return
+    try {
+      downloadTextFile(openvpnDownloadPayload.content, openvpnDownloadPayload.fileName, openvpnDownloadPayload.mimeType)
+      toast.success(t('usersTable.downloadStarted', { defaultValue: 'Download started' }))
+    } catch {
+      toast.error(t('downloadFailed', { defaultValue: 'Failed to download config' }))
+    }
+  }, [openvpnDownloadPayload, t])
+
+  const handleCopyOpenVPNImportUrl = useCallback(async () => {
+    if (!openvpnImportUrl) return
+    try {
+      await navigator.clipboard.writeText(openvpnImportUrl)
+      setOpenvpnImportCopied(true)
+      toast.success(t('usersTable.copied', { defaultValue: 'Copied' }))
+      setTimeout(() => setOpenvpnImportCopied(false), 1500)
+    } catch {
+      toast.error(t('copyFailed', { defaultValue: 'Failed to copy' }))
+    }
+  }, [openvpnImportUrl, t])
 
   return (
     <>
@@ -231,9 +268,43 @@ const SubscriptionModal: FC<SubscriptionModalProps> = memo(({ open, subscribeUrl
 
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-2 lg:items-center">
             <div className="flex flex-col items-center gap-3">
+              {openvpnProfile && (
+                <ToggleGroup
+                  type="single"
+                  value={mainQrMode}
+                  onValueChange={value => {
+                    if (value === 'subscription' || value === 'openvpn') {
+                      setMainQrMode(value)
+                    }
+                  }}
+                  variant="outline"
+                  size="sm"
+                  className="border-border bg-muted/30 rounded-md border p-1"
+                  aria-label={t('subscriptionModal.qrFormat', { defaultValue: 'QR code format' })}
+                >
+                  <ToggleGroupItem value="subscription" className="h-7 px-2.5 text-[11px]">
+                    {t('subscriptionModal.qrSubscription', { defaultValue: 'Subscription' })}
+                  </ToggleGroupItem>
+                  <ToggleGroupItem value="openvpn" className="h-7 px-2.5 text-[11px]">
+                    OpenVPN
+                  </ToggleGroupItem>
+                </ToggleGroup>
+              )}
               <div dir="ltr" className="flex max-w-[280px] items-center justify-center overflow-hidden">
-                <QRCodeCanvas value={subscribeQrLink} size={260} className="rounded-sm bg-white p-1.5" />
+                <QRCodeCanvas value={mainQrValue} size={260} className="rounded-sm bg-white p-1.5" />
               </div>
+              {openvpnProfile && mainQrMode === 'openvpn' && (
+                <div className="grid w-full max-w-[280px] grid-cols-1 gap-2">
+                  <Button variant="outline" size="sm" onClick={handleDownloadOpenVPN}>
+                    <Download className={cn('h-4 w-4', isRTL ? 'ml-2' : 'mr-2')} />
+                    {t('openvpn.downloadProfile', { defaultValue: 'Download .ovpn' })}
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={handleCopyOpenVPNImportUrl}>
+                    {openvpnImportCopied ? <Check className={cn('h-4 w-4', isRTL ? 'ml-2' : 'mr-2')} /> : <Copy className={cn('h-4 w-4', isRTL ? 'ml-2' : 'mr-2')} />}
+                    {t('openvpn.copyImportLink', { defaultValue: 'Copy OpenVPN Connect link' })}
+                  </Button>
+                </div>
+              )}
             </div>
 
             <div className="flex h-full flex-col gap-3">

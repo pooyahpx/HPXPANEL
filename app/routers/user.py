@@ -298,6 +298,34 @@ async def revoke_user_subscription_by_id(
     return await user_operator.revoke_user_sub_by_id(db, user_id=user_id, admin=admin)
 
 
+@router.post(
+    "/by-id/{user_id}/openvpn/renew",
+    response_model=UserResponse,
+    responses={403: responses._403, 404: responses._404},
+)
+async def renew_user_openvpn_certificate(
+    user_id: int,
+    db: AsyncSession = Depends(get_db),
+    admin: AdminDetails = Depends(require_permission("users", "update")),
+):
+    """Issue a new OpenVPN client certificate for the user and sync nodes."""
+    return await user_operator.renew_openvpn_cert_by_id(db, user_id=user_id, admin=admin)
+
+
+@router.post(
+    "/by-id/{user_id}/openvpn/revoke-cert",
+    response_model=UserResponse,
+    responses={403: responses._403, 404: responses._404},
+)
+async def revoke_user_openvpn_certificate(
+    user_id: int,
+    db: AsyncSession = Depends(get_db),
+    admin: AdminDetails = Depends(require_permission("users", "update")),
+):
+    """Revoke the user's OpenVPN client certificate without revoking the subscription link."""
+    return await user_operator.revoke_openvpn_cert_by_id(db, user_id=user_id, admin=admin)
+
+
 @router.post("s/reset", responses={403: responses._403, 404: responses._404})
 async def reset_users_data_usage(
     db: AsyncSession = Depends(get_db), admin: AdminDetails = Depends(require_scope_all("users", "reset_usage"))

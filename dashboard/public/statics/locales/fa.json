@@ -2113,6 +2113,7 @@
     "thinking": "در حال فکر کردن…",
     "sendError": "ارتباط با Copilot برقرار نشد",
     "starters": {
+      "panelHealth": "سلامت پنل را بررسی کن: نسخه، منابع، workerها، نودها و خطاهای اخیر",
       "tunnelOverview": "تونل‌های HPX Pulse و ICMP را بررسی کن و وضعیت هر محصول را خلاصه بگو",
       "pulseStatus": "لیست Pulseهای من و وضعیت هر کدام",
       "diagnosePulse": "Pulseهای ناسالم را تشخیص بده و راه‌حل پیشنهاد کن",

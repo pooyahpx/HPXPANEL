@@ -97,6 +97,7 @@ def test_openvpn_core_create(access_token):
             "proto": "udp",
             "server_subnet": "10.29.0.0/16",
             "ca_cert": "-----BEGIN CERTIFICATE-----\nCA\n-----END CERTIFICATE-----",
+            "ca_key": "-----BEGIN PRIVATE KEY-----\nCAKEY\n-----END PRIVATE KEY-----",
             "server_cert": "-----BEGIN CERTIFICATE-----\nSERVER\n-----END CERTIFICATE-----",
             "server_key": "-----BEGIN PRIVATE KEY-----\nKEY\n-----END PRIVATE KEY-----",
         },

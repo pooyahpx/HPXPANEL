@@ -17,7 +17,7 @@ import { XrayCoreEditor } from '@/features/core-editor/components/xray/xray-core
 import { profileToPersistedConfig } from '@/features/core-editor/kit/xray-adapter'
 import { getWireGuardPersistConfig } from '@/features/core-editor/kit/wireguard-adapter'
 import { OpenVPNCoreEditor } from '@/features/core-editor/components/openvpn/openvpn-core-editor'
-import { validateOpenVPNConfig } from '@/features/core-editor/kit/openvpn-config'
+import { validateOpenVPNConfig, validateOpenVPNConfigWarnings } from '@/features/core-editor/kit/openvpn-config'
 import type { DashboardCoreKind } from '@/features/core-editor/kit/core-kind'
 import { selectCoreEditorHasActualChanges } from '@/features/core-editor/kit/core-editor-change-state'
 import { useCoreEditorStore } from '@/features/core-editor/state/core-editor-store'
@@ -289,7 +289,10 @@ export default function CoreEditorPage() {
       return mapNativeConfigIssues('ipsec', validateIpsecConfig(kind, ipsecDraft))
     }
     if (kind === 'openvpn' && openvpnDraft) {
-      return mapNativeConfigIssues('openvpn', validateOpenVPNConfig(openvpnDraft))
+      return [
+        ...mapNativeConfigIssues('openvpn', validateOpenVPNConfig(openvpnDraft)),
+        ...mapNativeConfigIssues('openvpn', validateOpenVPNConfigWarnings(openvpnDraft)),
+      ]
     }
     return []
   }, [hydrated, kind, wgDraft, xrayProfile, ipsecDraft, openvpnDraft, xrayPersistValidationItems, mapNativeConfigIssues])

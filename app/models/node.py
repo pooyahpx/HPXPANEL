@@ -355,6 +355,7 @@ class UserIPList(BaseModel):
     """User IP list - mapping of IP addresses to connection counts"""
 
     ips: dict[str, int]  # {ip_address: connection_count}
+    ip_protocol: dict[str, str] = Field(default_factory=dict)  # {ip_address: protocol}
 
 
 class UserIPListAll(BaseModel):

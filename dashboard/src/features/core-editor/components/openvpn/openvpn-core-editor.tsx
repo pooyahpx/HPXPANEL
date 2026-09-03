@@ -243,6 +243,21 @@ export function OpenVPNCoreEditor() {
           onGenerate={() => void fillField('ca_cert')}
           generating={generatingField === 'ca_cert' || generatingField === 'all'}
         />
+        <div className="space-y-2">
+          <Label htmlFor="openvpn-ca-key-status">{t('coreEditor.openvpn.fields.ca_key')}</Label>
+          <Input
+            id="openvpn-ca-key-status"
+            readOnly
+            dir="ltr"
+            className={draft.ca_key?.trim() ? 'bg-muted font-mono text-xs' : 'border-destructive bg-destructive/5 font-mono text-xs'}
+            value={
+              draft.ca_key?.trim()
+                ? t('coreEditor.openvpn.caKeyStored')
+                : t('coreEditor.openvpn.caKeyNotStored')
+            }
+          />
+          <p className="text-muted-foreground text-xs">{t('coreEditor.openvpn.caKeyHint')}</p>
+        </div>
         <SecretTextarea
           id="openvpn-server-cert"
           label={t('coreEditor.openvpn.fields.server_cert')}

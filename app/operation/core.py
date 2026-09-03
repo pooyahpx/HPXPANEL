@@ -37,6 +37,7 @@ from app.models.reality_scan import RealityScanRequest, RealityScanResult
 from app.node.sync import sync_users
 from app.operation import BaseOperation
 from app.utils.logger import get_logger
+from app.utils.openvpn_core import openvpn_ca_key_missing
 from app.utils.reality_scan import RealityScanError, scan_reality_target
 
 logger = get_logger("core-operation")
@@ -70,6 +71,19 @@ class CoreOperation(BaseOperation):
                             db=db,
                         )
 
+    async def _validate_openvpn_pki(self, db: AsyncSession, config: dict, core_type: CoreType | None) -> None:
+        if core_type != CoreType.openvpn:
+            return
+        if openvpn_ca_key_missing(config):
+            await self.raise_error(
+                message=(
+                    "OpenVPN CA private key (ca_key) is missing. "
+                    "Open the core editor, click Generate PKI, and save the core again."
+                ),
+                code=400,
+                db=db,
+            )
+
     async def _reconcile_wireguard(self, db: AsyncSession) -> None:
         """Fix pool rows and user peer IPs after a WG core change, then resync changed users."""
         changed_ids = await reconcile_wireguard_subnets(db)
@@ -91,6 +105,7 @@ class CoreOperation(BaseOperation):
     async def create_core(self, db: AsyncSession, new_core: CoreCreate, admin: AdminDetails) -> CoreResponse:
         if new_core.type == CoreType.wg:
             await self._validate_wireguard_subnet(db, new_core.config, exclude_core_id=None)
+        await self._validate_openvpn_pki(db, new_core.config, new_core.type)
         try:
             validated_core = core_manager.validate_core(
                 new_core.config,
@@ -133,6 +148,7 @@ class CoreOperation(BaseOperation):
         was_wg = db_core.type == CoreType.wg
         if modified_core.type == CoreType.wg:
             await self._validate_wireguard_subnet(db, modified_core.config, exclude_core_id=db_core.id)
+        await self._validate_openvpn_pki(db, modified_core.config, modified_core.type)
         try:
             validated_core = core_manager.validate_core(
                 modified_core.config,

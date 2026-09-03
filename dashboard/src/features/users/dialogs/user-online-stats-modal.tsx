@@ -31,10 +31,20 @@ interface UserStatsCardProps {
 }
 
 // Memoized UserStatsCard component to prevent unnecessary re-renders
+const PROTOCOL_LABELS: Record<string, string> = {
+  openvpn: 'OpenVPN',
+  wireguard: 'WireGuard',
+  wg: 'WireGuard',
+  vmess: 'VMess',
+  vless: 'VLESS',
+  trojan: 'Trojan',
+  shadowsocks: 'Shadowsocks',
+  connections: 'Connections',
+}
+
 const UserStatsCard = React.memo(({ userId, username, stats, onViewIPs }: UserStatsCardProps) => {
   const { t } = useTranslation()
 
-  // Memoize calculations to avoid recalculating on every render
   const activeProtocols = useMemo(() => {
     return Object.keys(stats).filter(proto => stats[proto] > 0)
   }, [stats])
@@ -60,7 +70,9 @@ const UserStatsCard = React.memo(({ userId, username, stats, onViewIPs }: UserSt
           <div className="flex flex-wrap gap-1">
             {activeProtocols.map(protocol => (
               <Badge key={protocol} variant="outline" className="text-xs">
-                <span dir="ltr">{stats[protocol]}</span>
+                <span dir="ltr">
+                  {PROTOCOL_LABELS[protocol] || protocol}: {stats[protocol]}
+                </span>
               </Badge>
             ))}
           </div>

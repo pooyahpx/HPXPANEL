@@ -3,12 +3,13 @@ import { useTranslation } from 'react-i18next'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
-import { Activity, CircleFadingArrowUp, Loader2, Map as MapIcon, MoreVertical, Package, Pencil, Power, PowerOff, RefreshCcw, RotateCcw, Trash2, WifiSync } from 'lucide-react'
+import { Activity, CircleFadingArrowUp, Loader2, Map as MapIcon, MoreVertical, Package, Pencil, Power, PowerOff, RefreshCcw, RotateCcw, Shield, Trash2, WifiSync } from 'lucide-react'
 import { toast } from 'sonner'
 import { queryClient } from '@/utils/query-client'
 import { CoresSimpleResponse, NodeResponse, useReconnectNode, useRemoveNode, useResetNodeUsage, useSyncNode, useUpdateNode } from '@/service/api'
 import useDirDetection from '@/hooks/use-dir-detection'
 import UserOnlineStatsDialog from '@/features/users/dialogs/user-online-stats-modal'
+import { OpenVPNMonitoringModal } from '@/features/openvpn/components/openvpn-monitoring-modal'
 import UpdateCoreDialog from '@/features/nodes/dialogs/update-core-modal'
 import UpdateGeofilesDialog from '@/features/nodes/dialogs/update-geofiles-modal'
 
@@ -31,6 +32,7 @@ type NodeActionsMenuState = {
   isDeleteDialogOpen: boolean
   isResetUsageDialogOpen: boolean
   showOnlineStats: boolean
+  showOpenVPNMonitoring: boolean
   showUpdateCoreDialog: boolean
   showUpdateGeofilesDialog: boolean
 }
@@ -48,6 +50,7 @@ const createDefaultNodeActionsMenuState = (): NodeActionsMenuState => ({
   isDeleteDialogOpen: false,
   isResetUsageDialogOpen: false,
   showOnlineStats: false,
+  showOpenVPNMonitoring: false,
   showUpdateCoreDialog: false,
   showUpdateGeofilesDialog: false,
 })
@@ -65,7 +68,7 @@ const ensureNodeActionsMenuState = (node: NodeResponse): NodeActionsMenuState =>
 }
 
 const hasOpenNodeDialog = (state: NodeActionsMenuState) =>
-  state.isDeleteDialogOpen || state.isResetUsageDialogOpen || state.showOnlineStats || state.showUpdateCoreDialog || state.showUpdateGeofilesDialog
+  state.isDeleteDialogOpen || state.isResetUsageDialogOpen || state.showOnlineStats || state.showOpenVPNMonitoring || state.showUpdateCoreDialog || state.showUpdateGeofilesDialog
 
 const notifyNodeActionsGlobalListeners = () => {
   nodeActionsGlobalStateVersion += 1
@@ -247,11 +250,12 @@ export default function NodeActionsMenu({
     [node, node.id],
   )
 
-  const { isDeleteDialogOpen, isResetUsageDialogOpen, showOnlineStats, showUpdateCoreDialog, showUpdateGeofilesDialog } = menuState
+  const { isDeleteDialogOpen, isResetUsageDialogOpen, showOnlineStats, showOpenVPNMonitoring, showUpdateCoreDialog, showUpdateGeofilesDialog } = menuState
 
   const setDeleteDialogOpen = useCallback((value: boolean) => setMenuState({ isDeleteDialogOpen: value }), [setMenuState])
   const setResetUsageDialogOpen = useCallback((value: boolean) => setMenuState({ isResetUsageDialogOpen: value }), [setMenuState])
   const setShowOnlineStats = useCallback((value: boolean) => setMenuState({ showOnlineStats: value }), [setMenuState])
+  const setShowOpenVPNMonitoring = useCallback((value: boolean) => setMenuState({ showOpenVPNMonitoring: value }), [setMenuState])
   const setShowUpdateCoreDialog = useCallback((value: boolean) => setMenuState({ showUpdateCoreDialog: value }), [setMenuState])
   const setShowUpdateGeofilesDialog = useCallback((value: boolean) => setMenuState({ showUpdateGeofilesDialog: value }), [setMenuState])
 
@@ -261,9 +265,10 @@ export default function NodeActionsMenu({
   }, [node])
 
   const isWireGuard = coresData?.cores?.find(core => core.id === node.core_config_id)?.type === 'wg'
+  const isOpenVPN = coresData?.cores?.find(core => core.id === node.core_config_id)?.type === 'openvpn'
   const hasRowActions = canUpdate || canDelete || canReconnect || canUpdateCore || canReadStats
   const primaryActionCount = canUpdate ? 2 : 0
-  const secondaryActionCount = (canReadStats ? 1 : 0) + (canUpdate ? 2 : 0) + (canReconnect ? 1 : 0)
+  const secondaryActionCount = (canReadStats ? (isOpenVPN ? 2 : 1) : 0) + (canUpdate ? 2 : 0) + (canReconnect ? 1 : 0)
   const coreActionCount = (canUpdateCore && !isWireGuard ? 2 : 0) + (canUpdateCore ? 1 : 0)
   const destructiveActionCount = canDelete ? 1 : 0
 
@@ -444,6 +449,18 @@ export default function NodeActionsMenu({
                   <span className="min-w-0 truncate">{t('nodeModal.onlineStats.button', { defaultValue: 'Stats' })}</span>
                 </DropdownMenuItem>
               )}
+              {canReadStats && isOpenVPN && (
+                <DropdownMenuItem
+                  onSelect={e => {
+                    e.stopPropagation()
+                    setShowOpenVPNMonitoring(true)
+                  }}
+                  disabled={syncing || reconnecting || resettingUsage || updatingNode}
+                >
+                  <Shield className="mr-2 h-4 w-4 shrink-0" />
+                  <span className="min-w-0 truncate">{t('openvpn.monitoring.menu')}</span>
+                </DropdownMenuItem>
+              )}
               {canUpdate && (
                 <>
                   <DropdownMenuItem
@@ -536,6 +553,9 @@ export default function NodeActionsMenu({
           {canDelete && <DeleteAlertDialog node={node} isOpen={isDeleteDialogOpen} onClose={() => setDeleteDialogOpen(false)} onConfirm={handleConfirmDelete} />}
           {canUpdate && <ResetUsageAlertDialog node={node} isOpen={isResetUsageDialogOpen} onClose={() => setResetUsageDialogOpen(false)} onConfirm={confirmResetUsage} isLoading={resettingUsage} />}
           {canReadStats && <UserOnlineStatsDialog isOpen={showOnlineStats} onOpenChange={setShowOnlineStats} nodeId={node.id} nodeName={node.name} />}
+          {canReadStats && isOpenVPN && (
+            <OpenVPNMonitoringModal open={showOpenVPNMonitoring} onOpenChange={setShowOpenVPNMonitoring} nodeId={node.id} nodeName={node.name} />
+          )}
           {canUpdateCore && <UpdateCoreDialog node={node} isOpen={showUpdateCoreDialog} onOpenChange={setShowUpdateCoreDialog} />}
           {canUpdateCore && <UpdateGeofilesDialog node={node} isOpen={showUpdateGeofilesDialog} onOpenChange={setShowUpdateGeofilesDialog} />}
         </div>

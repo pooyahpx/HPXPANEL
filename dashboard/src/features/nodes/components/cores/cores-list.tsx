@@ -10,7 +10,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { RefreshCw, Search, X } from 'lucide-react'
+import { RefreshCw, Search, Sparkles, X } from 'lucide-react'
+import { OpenVPNSetupWizard } from '@/features/openvpn/components/openvpn-setup-wizard'
 import { cn } from '@/lib/utils'
 import ViewToggle from '@/components/common/view-toggle'
 import { ListGenerator } from '@/components/common/list-generator'
@@ -43,6 +44,7 @@ export default function Cores({ cores, onDuplicateCore, onDeleteCore, canCreate 
   const [selectedCoreIds, setSelectedCoreIds] = useState<number[]>([])
   const [bulkAction, setBulkAction] = useState<'delete' | null>(null)
   const [isCoreConfigModalOpen, setIsCoreConfigModalOpen] = useState(false)
+  const [openVpnWizardOpen, setOpenVpnWizardOpen] = useState(false)
   const [isEditingCoreInModal, setIsEditingCoreInModal] = useState(false)
   const [editingCoreIdInModal, setEditingCoreIdInModal] = useState<number | undefined>(undefined)
   const coreConfigForm = useForm<CoreConfigFormValues>({
@@ -224,6 +226,12 @@ export default function Cores({ cores, onDuplicateCore, onDeleteCore, canCreate 
           )}
         </div>
         <div className="flex flex-shrink-0 items-center gap-2">
+          {canCreate && (
+            <Button type="button" size="sm" variant="secondary" className="gap-1.5" onClick={() => setOpenVpnWizardOpen(true)}>
+              <Sparkles className="h-4 w-4" />
+              <span className="max-sm:sr-only">{t('openvpn.wizard.button')}</span>
+            </Button>
+          )}
           <Button
             type="button"
             size="icon-md"
@@ -307,6 +315,8 @@ export default function Cores({ cores, onDuplicateCore, onDeleteCore, canCreate 
           destructive
         />
       )}
+
+      {canCreate && <OpenVPNSetupWizard open={openVpnWizardOpen} onOpenChange={setOpenVpnWizardOpen} />}
 
       {isCoreConfigModalOpen && (canCreate || canUpdate) && (
         <Suspense fallback={null}>

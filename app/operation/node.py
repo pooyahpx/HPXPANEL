@@ -64,6 +64,7 @@ from app.nats.node_rpc import node_nats_client
 from app.node import core_users, node_manager
 from app.operation import BaseOperation, OperatorType
 from app.utils.logger import get_logger
+from app.services.openvpn.monitoring import _normalize_online_stats
 from config import runtime_settings
 
 MAX_MESSAGE_LENGTH = 128
@@ -531,7 +532,7 @@ class NodeOperation(BaseOperation):
             logger.error(f"Error getting system stats for node {node_id}: {e}")
             return None
 
-    async def get_user_online_stats_by_node(self, db: AsyncSession, node_id: int, user_id: int) -> dict[int, int]:
+    async def get_user_online_stats_by_node(self, db: AsyncSession, node_id: int, user_id: int) -> dict[str, int]:
         return await self._get_user_online_stats_impl(db, node_id, user_id)
 
     async def get_user_ip_list_by_node(self, db: AsyncSession, node_id: int, user_id: int) -> UserIPList:
@@ -540,7 +541,7 @@ class NodeOperation(BaseOperation):
     async def get_user_ip_list_all_nodes(self, db: AsyncSession, user_id: int) -> UserIPListAll:
         return await self._get_user_ip_list_all_impl(db, user_id)
 
-    async def _get_node_user_ip_list_safe(self, node_id: int, email: str) -> dict[str, int] | None:
+    async def _get_node_user_ip_list_safe(self, node_id: int, email: str) -> tuple[dict[str, int], dict[str, str]] | None:
         """Wrapper method that returns None instead of raising exceptions"""
         try:
             node = await node_manager.get_node(node_id)
@@ -551,7 +552,8 @@ class NodeOperation(BaseOperation):
             if stats is None:
                 return None
 
-            return stats.ips
+            ip_protocol = dict(stats.ip_protocol) if hasattr(stats, "ip_protocol") else {}
+            return dict(stats.ips), ip_protocol
         except NodeAPIError as e:
             if e.code != 404:
                 logger.error(f"Error getting IP list for user {email} on node {node_id}: {e}")
@@ -860,7 +862,7 @@ class NodeOperation(BaseOperation):
         except RuntimeError as exc:
             await self.handle_rpc_error(exc)
 
-    async def _get_user_online_stats_local(self, db: AsyncSession, node_id: int, user_id: int) -> dict[int, int]:
+    async def _get_user_online_stats_local(self, db: AsyncSession, node_id: int, user_id: int) -> dict[str, int]:
         db_user = await get_user_by_id(db, user_id)
         if db_user is None:
             await self.raise_error(message="User not found", code=404)
@@ -878,9 +880,16 @@ class NodeOperation(BaseOperation):
         if stats is None:
             await self.raise_error(message="Stats not found", code=404)
 
-        return {node_id: stats.value}
+        protocols = _normalize_online_stats(stats)
+        if protocols:
+            return protocols
 
-    async def _get_user_online_stats_remote(self, db: AsyncSession, node_id: int, user_id: int) -> dict[int, int]:
+        ip_data = await self._get_node_user_ip_list_safe(node_id, str(db_user.id))
+        if ip_data and ip_data[0]:
+            return {"openvpn": len(ip_data[0])}
+        return {}
+
+    async def _get_user_online_stats_remote(self, db: AsyncSession, node_id: int, user_id: int) -> dict[str, int]:
         try:
             return await node_nats_client.request("get_user_online_stats", {"node_id": node_id, "user_id": user_id})
         except RuntimeError as exc:
@@ -892,12 +901,13 @@ class NodeOperation(BaseOperation):
             await self.raise_error(message="User not found", code=404)
 
         email = f"{db_user.id}"
-        ips = await self._get_node_user_ip_list_safe(node_id, email)
+        ip_data = await self._get_node_user_ip_list_safe(node_id, email)
 
-        if ips is None:
+        if ip_data is None:
             await self.raise_error(message="Node unavailable or user not found", code=404)
 
-        return UserIPList(ips=ips)
+        ips, ip_protocol = ip_data
+        return UserIPList(ips=ips, ip_protocol=ip_protocol)
 
     async def _get_user_ip_list_remote(self, db: AsyncSession, node_id: int, user_id: int) -> UserIPList:
         try:
@@ -922,8 +932,8 @@ class NodeOperation(BaseOperation):
         for node_id, task in ip_list_tasks.items():
             if task.exception() or task.result() is None:
                 continue
-            else:
-                results[node_id] = UserIPList(ips=task.result())
+            ips, ip_protocol = task.result()
+            results[node_id] = UserIPList(ips=ips, ip_protocol=ip_protocol)
 
         return UserIPListAll(nodes=results)
 

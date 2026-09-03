@@ -4,7 +4,8 @@ import { ListColumn } from '@/components/common/list-generator'
 import { CoreResponse } from '@/service/api'
 import CoreActionsMenu from '@/features/nodes/components/cores/core-actions-menu'
 import { Badge } from '@/components/ui/badge'
-import { Network, ShieldCheck } from 'lucide-react'
+import { Network, ShieldCheck, TriangleAlert } from 'lucide-react'
+import { isOpenVPNCaKeyMissing } from '@/service/api/openvpn-ops'
 
 interface UseCoresListColumnsProps {
   onEdit: (core: CoreResponse) => void
@@ -39,11 +40,20 @@ export const useCoresListColumns = ({ onEdit, onDuplicate, onDelete, canUpdate =
         cell: core => {
           const type = String(core.type ?? 'xray')
           const Icon = type === 'ikev2' ? ShieldCheck : type === 'l2tp' ? Network : null
+          const caKeyMissing = type === 'openvpn' && isOpenVPNCaKeyMissing(core.config as Record<string, unknown>)
           return (
-            <Badge variant="outline" className="w-fit gap-1.5">
-              {Icon && <Icon className="h-3.5 w-3.5" />}
-              {t(`coreTypes.${type}`, { defaultValue: type === 'wg' ? 'WireGuard' : type === 'xray' ? 'Xray' : type.toUpperCase() })}
-            </Badge>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Badge variant="outline" className="w-fit gap-1.5">
+                {Icon && <Icon className="h-3.5 w-3.5" />}
+                {t(`coreTypes.${type}`, { defaultValue: type === 'wg' ? 'WireGuard' : type === 'xray' ? 'Xray' : type.toUpperCase() })}
+              </Badge>
+              {caKeyMissing && (
+                <Badge variant="destructive" className="gap-1">
+                  <TriangleAlert className="h-3 w-3" />
+                  {t('openvpn.caKeyMissingBadge')}
+                </Badge>
+              )}
+            </div>
           )
         },
       },

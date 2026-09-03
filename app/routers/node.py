@@ -365,7 +365,7 @@ async def user_online_ip_list_all_nodes(
     return await node_operator.get_user_ip_list_all_nodes(db=db, user_id=user_id)
 
 
-@router.get("/{node_id}/online_stats/{user_id}", response_model=dict[int, int])
+@router.get("/{node_id}/online_stats/{user_id}", response_model=dict[str, int])
 async def user_online_stats(
     node_id: int,
     user_id: int,

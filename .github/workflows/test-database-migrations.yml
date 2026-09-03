@@ -1,5 +1,12 @@
 name: Test Database Migrations
 
+# Checkout by commit SHA so a release tag moved/re-pushed after trigger cannot break jobs.
+x-checkout: &checkout
+    uses: actions/checkout@v7
+    with:
+        ref: ${{ github.event.pull_request.head.sha || github.sha }}
+        fetch-tags: false
+
 on:
     push:
         paths:
@@ -17,7 +24,7 @@ jobs:
     test-sqlite:
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@v7
+            - *checkout
             - uses: actions/setup-python@v7
               with:
                   python-version: "3.14"
@@ -56,7 +63,7 @@ jobs:
                     --health-timeout=5s
                     --health-retries=5
         steps:
-            - uses: actions/checkout@v7
+            - *checkout
             - uses: actions/setup-python@v7
               with:
                   python-version: "3.14"
@@ -97,7 +104,7 @@ jobs:
                     --health-timeout=5s
                     --health-retries=5
         steps:
-            - uses: actions/checkout@v7
+            - *checkout
             - uses: actions/setup-python@v7
               with:
                   python-version: "3.14"
@@ -176,7 +183,7 @@ jobs:
                     --health-timeout=5s
                     --health-retries=5
         steps:
-            - uses: actions/checkout@v7
+            - *checkout
             - uses: actions/setup-python@v7
               with:
                   python-version: "3.14"
@@ -218,7 +225,7 @@ jobs:
                     --health-timeout=5s
                     --health-retries=5
         steps:
-            - uses: actions/checkout@v7
+            - *checkout
             - uses: actions/setup-python@v7
               with:
                   python-version: "3.14"

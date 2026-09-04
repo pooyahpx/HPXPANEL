@@ -124,6 +124,17 @@ async def get_test_db():
         yield db
 
 
+# Audit persistence intentionally uses an independent session instead of the
+# request dependency. Point that session (and snapshot lookups) at the test
+# database too; otherwise database-matrix tests create a second production-sized
+# pool and can exhaust PostgreSQL's connection limit.
+from app.middlewares import audit as audit_middleware
+from app.services import audit as audit_service
+
+audit_middleware.GetDB = GetTestDB
+audit_service.GetDB = GetTestDB
+
+
 from app import create_app  # noqa
 
 

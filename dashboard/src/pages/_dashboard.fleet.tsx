@@ -1,6 +1,7 @@
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { EmptyState } from '@/components/common/empty-state'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import PageTransition from '@/components/layout/page-transition'
@@ -240,11 +241,30 @@ export default function FleetPage() {
           )}
 
           {!isLoading && !isError && rows.length === 0 && (
-            <Card className="rounded-none">
-              <CardContent className="text-muted-foreground p-6 text-sm">
-                {t('fleet.empty', { defaultValue: 'No nodes, tunnels, or pulses yet' })}
-              </CardContent>
-            </Card>
+            <EmptyState
+              className="mb-0 rounded-none"
+              icon={Network}
+              title={t('fleet.empty', { defaultValue: 'No nodes, tunnels, or pulses yet' })}
+              description={t('emptyState.noFleet.description', {
+                defaultValue: 'Add a node or create a Pulse tunnel to populate the fleet view.',
+              })}
+              action={
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  <Button asChild variant="outline" size="sm" className="h-8 rounded-none">
+                    <Link to="/nodes">
+                      <Server className="size-3.5" />
+                      {t('fleet.openNodes', { defaultValue: 'Nodes' })}
+                    </Link>
+                  </Button>
+                  <Button asChild variant="outline" size="sm" className="h-8 rounded-none">
+                    <Link to="/hpx-pulse">
+                      <Zap className="size-3.5" />
+                      {t('fleet.openPulse', { defaultValue: 'Pulse' })}
+                    </Link>
+                  </Button>
+                </div>
+              }
+            />
           )}
 
           {!isLoading && !isError && rows.length > 0 && (

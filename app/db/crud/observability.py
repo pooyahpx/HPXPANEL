@@ -4,7 +4,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import NodeUserUsage, ObservabilityAlertEvent, SystemStat, User
-from app.models.observability import ObservabilityAlertEventResponse, SystemStatsHistoryPoint
+from app.models.observability import AlertEventStatus, ObservabilityAlertEventResponse, SystemStatsHistoryPoint
 from app.models.stats import Period
 
 
@@ -105,7 +105,32 @@ async def get_system_stats_history(
     return points
 
 
-async def get_recent_alert_events(db: AsyncSession, *, limit: int = 20) -> list[ObservabilityAlertEventResponse]:
+def _alert_event_to_response(event: ObservabilityAlertEvent, node_name: str | None = None) -> ObservabilityAlertEventResponse:
+    return ObservabilityAlertEventResponse(
+        id=event.id,
+        scope=event.scope,
+        node_id=event.node_id,
+        node_name=node_name,
+        metric=event.metric,
+        value=event.value,
+        threshold=event.threshold,
+        message=event.message,
+        status=AlertEventStatus(event.status),
+        acked_at=event.acked_at,
+        acked_by=event.acked_by,
+        resolved_at=event.resolved_at,
+        resolved_by=event.resolved_by,
+        note=event.note,
+        created_at=event.created_at,
+    )
+
+
+async def list_alert_events(
+    db: AsyncSession,
+    *,
+    status: str | AlertEventStatus | None = None,
+    limit: int = 50,
+) -> list[ObservabilityAlertEventResponse]:
     from app.db.models import Node
 
     stmt = (
@@ -114,21 +139,57 @@ async def get_recent_alert_events(db: AsyncSession, *, limit: int = 20) -> list[
         .order_by(ObservabilityAlertEvent.created_at.desc())
         .limit(limit)
     )
+    if status is not None:
+        status_value = status.value if isinstance(status, AlertEventStatus) else status
+        stmt = stmt.where(ObservabilityAlertEvent.status == status_value)
     rows = await db.execute(stmt)
-    return [
-        ObservabilityAlertEventResponse(
-            id=event.id,
-            scope=event.scope,
-            node_id=event.node_id,
-            node_name=node_name,
-            metric=event.metric,
-            value=event.value,
-            threshold=event.threshold,
-            message=event.message,
-            created_at=event.created_at,
-        )
-        for event, node_name in rows.all()
-    ]
+    return [_alert_event_to_response(event, node_name) for event, node_name in rows.all()]
+
+
+async def get_recent_alert_events(db: AsyncSession, *, limit: int = 20) -> list[ObservabilityAlertEventResponse]:
+    return await list_alert_events(db, limit=limit)
+
+
+async def get_alert_event(db: AsyncSession, alert_id: int) -> ObservabilityAlertEvent | None:
+    return await db.get(ObservabilityAlertEvent, alert_id)
+
+
+async def update_alert_event_status(
+    db: AsyncSession,
+    alert_id: int,
+    *,
+    status: str | AlertEventStatus,
+    note: str | None,
+    actor_username: str,
+) -> ObservabilityAlertEvent | None:
+    event = await get_alert_event(db, alert_id)
+    if event is None:
+        return None
+
+    status_value = status.value if isinstance(status, AlertEventStatus) else status
+    now = datetime.now(UTC)
+    event.status = status_value
+    if note is not None:
+        event.note = note
+
+    if status_value == AlertEventStatus.acked.value:
+        event.acked_at = now
+        event.acked_by = actor_username
+    elif status_value == AlertEventStatus.resolved.value:
+        event.resolved_at = now
+        event.resolved_by = actor_username
+        if event.acked_at is None:
+            event.acked_at = now
+            event.acked_by = actor_username
+    elif status_value == AlertEventStatus.open.value:
+        event.acked_at = None
+        event.acked_by = None
+        event.resolved_at = None
+        event.resolved_by = None
+
+    await db.commit()
+    await db.refresh(event)
+    return event
 
 
 async def has_recent_alert(
@@ -169,7 +230,16 @@ async def record_alert_event(
         value=value,
         threshold=threshold,
         message=message,
+        status=AlertEventStatus.open.value,
     )
+    # Original alert_events migration used BIGINT PK; SQLite only autoincrements
+    # INTEGER PRIMARY KEY, so assign the next id explicitly on sqlite.
+    bind = await db.connection()
+    if bind.dialect.name == "sqlite":
+        next_id = (
+            await db.execute(select(func.coalesce(func.max(ObservabilityAlertEvent.id), 0) + 1))
+        ).scalar_one()
+        event.id = int(next_id)
     db.add(event)
     await db.commit()
     await db.refresh(event)

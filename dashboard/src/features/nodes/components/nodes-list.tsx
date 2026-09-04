@@ -1,6 +1,6 @@
 ﻿import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import { CircleFadingArrowUp, Power, PowerOff, RefreshCcw, Trash2, WifiSync } from 'lucide-react'
+import { CircleFadingArrowUp, Plus, Power, PowerOff, RefreshCcw, Server, Trash2, WifiSync } from 'lucide-react'
 import Node from '@/features/nodes/components/node'
 import {
   useBulkDeleteNodes,
@@ -22,7 +22,9 @@ import NodeModal from '@/features/nodes/dialogs/node-modal'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { nodeFormDefaultValues, nodeFormSchema, type NodeFormValues } from '@/features/nodes/forms/node-form'
-import { Card, CardContent } from '@/components/ui/card'
+import { Card } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { EmptyState } from '@/components/common/empty-state'
 import { Skeleton } from '@/components/ui/skeleton'
 import { NodeFilters, NodePaginationControls } from '@/features/nodes/components/node-filters'
 import NodeAdvanceSearchModal from '@/features/nodes/dialogs/node-advance-search-modal'
@@ -764,31 +766,37 @@ export default function NodesList() {
             ))}
 
           {!showLoadingSpinner && !showPageLoadingSkeletons && !isFetching && nodesData.length === 0 && !hasActiveFilters && totalNodes === 0 && (
-            <Card className="mb-12">
-              <CardContent className="p-8 text-center">
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold">{t('nodes.noNodes')}</h3>
-                  <p className="text-muted-foreground mx-auto max-w-2xl">
-                    {t('nodes.noNodesDescription')}{' '}
-                    <a href="https://github.com/pooyahpx" target="_blank" rel="noopener noreferrer" className="text-primary font-medium underline-offset-4 hover:underline">
-                      HPXPANEL/node
-                    </a>{' '}
-                    {t('nodes.noNodesDescription2', { defaultValue: 'and connect it to the panel.' })}
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
+            <EmptyState
+              icon={Server}
+              title={t('nodes.noNodes')}
+              description={
+                <>
+                  {t('nodes.noNodesDescription')}{' '}
+                  <a href="https://github.com/pooyahpx" target="_blank" rel="noopener noreferrer" className="text-primary font-medium underline-offset-4 hover:underline">
+                    HPXPANEL/node
+                  </a>{' '}
+                  {t('nodes.noNodesDescription2', { defaultValue: 'and connect it to the panel.' })}
+                </>
+              }
+              action={
+                canCreateNodes ? (
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      form.reset(nodeFormDefaultValues)
+                      setIsDialogOpen(true)
+                    }}
+                  >
+                    <Plus className="h-4 w-4" />
+                    {t('emptyState.noNodes.createFirst', { defaultValue: 'Create your first node' })}
+                  </Button>
+                ) : undefined
+              }
+            />
           )}
 
           {!showLoadingSpinner && !showPageLoadingSkeletons && !isFetching && nodesData.length === 0 && hasActiveFilters && (
-            <Card className="mb-12">
-              <CardContent className="p-8 text-center">
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold">{t('nodes.noFilteredResults')}</h3>
-                  <p className="text-muted-foreground mx-auto max-w-2xl">{t('nodes.noSearchResults')}</p>
-                </div>
-              </CardContent>
-            </Card>
+            <EmptyState title={t('nodes.noFilteredResults')} description={t('nodes.noSearchResults')} />
           )}
         </div>
         {totalPages > 1 && <NodePaginationControls currentPage={currentPage} totalPages={totalPages} isLoading={isPageLoading} onPageChange={handlePageChange} />}

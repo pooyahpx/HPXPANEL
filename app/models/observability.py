@@ -43,6 +43,12 @@ class MasterObservabilityCard(BaseModel):
     protocols: list[ProtocolHealth] = Field(default_factory=list)
 
 
+class AlertEventStatus(str, Enum):
+    open = "open"
+    acked = "acked"
+    resolved = "resolved"
+
+
 class ObservabilityAlertEventResponse(BaseModel):
     id: int
     scope: str
@@ -52,7 +58,18 @@ class ObservabilityAlertEventResponse(BaseModel):
     value: float
     threshold: float
     message: str
+    status: AlertEventStatus = AlertEventStatus.open
+    acked_at: dt | None = None
+    acked_by: str | None = None
+    resolved_at: dt | None = None
+    resolved_by: str | None = None
+    note: str | None = None
     created_at: dt
+
+
+class ObservabilityAlertEventUpdate(BaseModel):
+    status: AlertEventStatus
+    note: str | None = Field(default=None, max_length=500)
 
 
 class ObservabilitySummaryResponse(BaseModel):

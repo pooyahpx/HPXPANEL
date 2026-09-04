@@ -1,4 +1,6 @@
-import { Card, CardContent } from '@/components/ui/card'
+import { Card } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { EmptyState } from '@/components/common/empty-state'
 import { type HostAdvanceSearchFormValues, hostAdvanceSearchFormSchema } from '@/features/hosts/forms/host-advance-search-form'
 import { HostFormSchema, hostFormDefaultValues, type HostFormValues } from '@/features/hosts/forms/host-form'
 import HostAdvanceSearchModal from '@/features/hosts/dialogs/host-advance-search-modal'
@@ -16,7 +18,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Resolver, useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { Power, PowerOff, Trash2 } from 'lucide-react'
+import { Power, PowerOff, Plus, Server, Trash2 } from 'lucide-react'
 import HostModal from '../dialogs/host-modal'
 import SortableHost from './sortable-host'
 import { BulkActionItem, BulkActionsBar } from '@/features/users/components/bulk-actions-bar'
@@ -996,24 +998,29 @@ export default function HostsList({
         </DndContext>
       )}
       {isEmpty && !isCurrentlyLoading && (
-        <Card className="mb-12">
-          <CardContent className="p-8 text-center">
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold">{t('host.noHosts')}</h3>
-              <p className="text-muted-foreground mx-auto max-w-2xl">{t('host.noHostsDescription')}</p>
-            </div>
-          </CardContent>
-        </Card>
+        <EmptyState
+          icon={Server}
+          title={t('host.noHosts')}
+          description={t('host.noHostsDescription')}
+          action={
+            canCreate ? (
+              <Button
+                size="sm"
+                onClick={() => {
+                  setEditingHost(null)
+                  form.reset(hostFormDefaultValues)
+                  onAddHost(true)
+                }}
+              >
+                <Plus className="h-4 w-4" />
+                {t('emptyState.noHosts.createFirst', { defaultValue: 'Create your first host' })}
+              </Button>
+            ) : undefined
+          }
+        />
       )}
       {isSearchEmpty && !isCurrentlyLoading && (
-        <Card className="mb-12">
-          <CardContent className="p-8 text-center">
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold">{t('noResults')}</h3>
-              <p className="text-muted-foreground mx-auto max-w-2xl">{t('host.noSearchResults')}</p>
-            </div>
-          </CardContent>
-        </Card>
+        <EmptyState title={t('noResults')} description={t('host.noSearchResults')} />
       )}
 
       <HostAdvanceSearchModal

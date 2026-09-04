@@ -52,7 +52,7 @@ const Users = () => {
             </div>
           </div>
           <div className="p-3 sm:p-4">
-            <UsersTable />
+            <UsersTable onCreateUser={canCreateUsers ? handleCreateUser : undefined} />
           </div>
         </div>
       </div>

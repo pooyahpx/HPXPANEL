@@ -1,11 +1,18 @@
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart'
 import useDirDetection from '@/hooks/use-dir-detection'
 import { useAdmin } from '@/hooks/use-admin'
 import { cn } from '@/lib/utils'
-import { ProtocolHealthStatus, useObservabilityHistory, useObservabilitySummary } from '@/service/api/observability'
+import {
+  AlertEventStatus,
+  ProtocolHealthStatus,
+  useObservabilityHistory,
+  useObservabilitySummary,
+  usePatchObservabilityAlert,
+} from '@/service/api/observability'
 import { hasPermission } from '@/utils/rbac'
 import { Activity, AlertTriangle, Cpu, HardDrive, Network, Server, Users } from 'lucide-react'
 import { useMemo, useState } from 'react'
@@ -17,6 +24,12 @@ const statusColor: Record<ProtocolHealthStatus, string> = {
   degraded: 'bg-amber-500',
   down: 'bg-destructive',
   unknown: 'bg-muted-foreground',
+}
+
+const alertStatusVariant: Record<AlertEventStatus, 'destructive' | 'secondary' | 'outline'> = {
+  open: 'destructive',
+  acked: 'secondary',
+  resolved: 'outline',
 }
 
 const nodeStatusDot = (status: string) => {
@@ -46,7 +59,9 @@ const ObservabilityPage = () => {
   const dir = useDirDetection()
   const { admin } = useAdmin()
   const canView = hasPermission(admin, 'nodes', 'stats')
+  const canUpdate = hasPermission(admin, 'nodes', 'update')
   const [historyScope, setHistoryScope] = useState<'master' | number>('master')
+  const patchAlert = usePatchObservabilityAlert()
 
   const { data, isLoading, isError } = useObservabilitySummary({
     enabled: canView,
@@ -73,6 +88,10 @@ const ObservabilityPage = () => {
       })),
     [history?.stats],
   )
+
+  const handleAlertStatus = (alertId: number, status: AlertEventStatus) => {
+    patchAlert.mutate({ alertId, body: { status } })
+  }
 
   if (!canView) {
     return (
@@ -265,18 +284,52 @@ const ObservabilityPage = () => {
               {t('observability.recentAlerts')}
             </h2>
             <div className="command-surface divide-y">
-              {data.recent_alerts.map(alert => (
-                <div key={alert.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-xs">
-                  <div>
-                    <p className="font-medium">{alert.message}</p>
-                    <p className="text-muted-foreground font-mono text-[10px]">
-                      {alert.scope}
-                      {alert.node_name ? ` · ${alert.node_name}` : ''} · {alert.metric} = {alert.value.toFixed(1)}
-                    </p>
+              {data.recent_alerts.map(alert => {
+                const status = (alert.status ?? 'open') as AlertEventStatus
+                return (
+                  <div key={alert.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-xs">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-medium">{alert.message}</p>
+                        <Badge variant={alertStatusVariant[status]} className="font-mono text-[10px] uppercase">
+                          {t(`observability.status.${status}`)}
+                        </Badge>
+                      </div>
+                      <p className="text-muted-foreground font-mono text-[10px]">
+                        {alert.scope}
+                        {alert.node_name ? ` · ${alert.node_name}` : ''} · {alert.metric} = {alert.value.toFixed(1)}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {canUpdate && status === 'open' && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 px-2 font-mono text-[10px] uppercase"
+                          disabled={patchAlert.isPending}
+                          onClick={() => handleAlertStatus(alert.id, 'acked')}
+                        >
+                          {t('observability.ack')}
+                        </Button>
+                      )}
+                      {canUpdate && (status === 'open' || status === 'acked') && (
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          className="h-7 px-2 font-mono text-[10px] uppercase"
+                          disabled={patchAlert.isPending}
+                          onClick={() => handleAlertStatus(alert.id, 'resolved')}
+                        >
+                          {t('observability.resolve')}
+                        </Button>
+                      )}
+                      <time className="text-muted-foreground font-mono text-[10px]">
+                        {new Date(alert.created_at).toLocaleString()}
+                      </time>
+                    </div>
                   </div>
-                  <time className="text-muted-foreground font-mono text-[10px]">{new Date(alert.created_at).toLocaleString()}</time>
-                </div>
-              ))}
+                )
+              })}
             </div>
           </section>
         )}

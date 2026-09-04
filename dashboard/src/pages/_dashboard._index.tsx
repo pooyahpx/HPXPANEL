@@ -1,5 +1,6 @@
 import AdminStatisticsCard from '@/features/dashboard/components/admin-statistics-card'
 import DashboardStatistics from '@/features/dashboard/components/dashboard-statistics'
+import SetupChecklistCard from '@/features/dashboard/components/setup-checklist-card'
 import WorkersHealthCard from '@/features/dashboard/components/workers-health-card'
 import AdminFilterCombobox from '@/components/common/admin-filter-combobox'
 import AdminModal from '@/features/admins/dialogs/admin-modal'
@@ -235,6 +236,18 @@ const Dashboard = () => {
 
       <div className="w-full px-3 pt-2 sm:px-4">
         <div className="flex flex-col gap-4 sm:gap-6">
+          <div className="animate-slide-up transform-gpu" style={{ animationDuration: '500ms', animationDelay: '60ms', animationFillMode: 'both' }}>
+            <SetupChecklistCard
+              onCreateNode={handleCreateNode}
+              onCreateCore={handleCreateCore}
+              onCreateHost={handleCreateHost}
+              onCreateUser={handleCreateUser}
+              canCreateNode={canCreateNodes}
+              canCreateCore={canCreateCores}
+              canCreateHost={canCreateHosts}
+              canCreateUser={canCreateUsers}
+            />
+          </div>
           <div className="animate-slide-up transform-gpu" style={{ animationDuration: '500ms', animationDelay: '100ms', animationFillMode: 'both' }}>
             <DashboardStatistics resourceData={systemResourceStatsData} usersData={systemUsersStatsData} />
           </div>

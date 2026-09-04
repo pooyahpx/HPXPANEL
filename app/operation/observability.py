@@ -9,12 +9,23 @@ from sqlalchemy import select
 from app.core.manager import core_manager
 from app.db import AsyncSession
 from app.db.crud.node import get_nodes
-from app.db.crud.observability import count_total_users, get_online_users_by_node, get_recent_alert_events
+from app.db.crud.observability import (
+    _alert_event_to_response,
+    count_total_users,
+    get_online_users_by_node,
+    get_recent_alert_events,
+    list_alert_events,
+    update_alert_event_status,
+)
 from app.db.models import HpxPulse, HpxPulseStatus, Node, NodeStatus
+from app.models.admin import AdminDetails
 from app.models.node import NodeListQuery
 from app.models.observability import (
+    AlertEventStatus,
     MasterObservabilityCard,
     NodeObservabilityCard,
+    ObservabilityAlertEventResponse,
+    ObservabilityAlertEventUpdate,
     ObservabilitySummaryResponse,
     ProtocolHealth,
     ProtocolHealthStatus,
@@ -196,6 +207,41 @@ class ObservabilityOperation(BaseOperation):
             "node_id": node_id,
             "stats": stats,
         }
+
+    async def list_alerts(
+        self,
+        db: AsyncSession,
+        *,
+        status: AlertEventStatus | None = None,
+        limit: int = 50,
+    ) -> list[ObservabilityAlertEventResponse]:
+        return await list_alert_events(db, status=status, limit=limit)
+
+    async def update_alert(
+        self,
+        db: AsyncSession,
+        admin: AdminDetails,
+        alert_id: int,
+        payload: ObservabilityAlertEventUpdate,
+    ) -> ObservabilityAlertEventResponse:
+        from app.db.models import Node
+
+        event = await update_alert_event_status(
+            db,
+            alert_id,
+            status=payload.status,
+            note=payload.note,
+            actor_username=admin.username,
+        )
+        if event is None:
+            await self.raise_error(message="Alert not found", code=404)
+
+        assert event is not None
+        node_name = None
+        if event.node_id is not None:
+            node = await db.get(Node, event.node_id)
+            node_name = node.name if node else None
+        return _alert_event_to_response(event, node_name)
 
     async def _safe_outbound_latency(self, node_id: int) -> dict[str, int]:
         try:

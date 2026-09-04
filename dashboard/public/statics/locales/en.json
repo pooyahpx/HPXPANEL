@@ -30,7 +30,14 @@
     "nodeCommandCenter": "Node command center",
     "uptime": "Uptime",
     "history24h": "24h history",
-    "recentAlerts": "Recent alerts"
+    "recentAlerts": "Recent alerts",
+    "ack": "Acknowledge",
+    "resolve": "Resolve",
+    "status": {
+      "open": "Open",
+      "acked": "Acknowledged",
+      "resolved": "Resolved"
+    }
   },
   "fleet": {
     "title": "Fleet",
@@ -1685,6 +1692,52 @@
       "title": "No users yet",
       "description": "Get started by creating your first user account",
       "createFirstUser": "Create your first user"
+    },
+    "noNodes": {
+      "createFirst": "Create your first node"
+    },
+    "noHosts": {
+      "createFirst": "Create your first host"
+    },
+    "noGroups": {
+      "createFirst": "Create your first group"
+    },
+    "noFleet": {
+      "description": "Add a node or create a Pulse tunnel to populate the fleet view."
+    }
+  },
+  "setupChecklist": {
+    "title": "First-run setup",
+    "subtitle": "Connect a node, add a core and host, then create a user",
+    "progress": "{{done}} of {{total}} complete",
+    "dismiss": "Dismiss",
+    "steps": {
+      "node": {
+        "title": "Add a node",
+        "description": "Connect at least one edge node to the panel",
+        "action": "Create node"
+      },
+      "core": {
+        "title": "Add a core",
+        "description": "Configure an Xray/Sing-box core for your nodes",
+        "action": "Create core"
+      },
+      "host": {
+        "title": "Add a host",
+        "description": "Define inbound host settings for client connections",
+        "action": "Create host"
+      },
+      "user": {
+        "title": "Create a user",
+        "description": "Provision your first subscriber account",
+        "action": "Create user"
+      },
+      "test": {
+        "title": "Test subscription",
+        "description": "Create a user first, then verify their subscription URL",
+        "tip": "Open the user and copy their subscription URL to test in a client",
+        "action": "Open users"
+      }
     }
   },
   "arrayInput": {

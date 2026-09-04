@@ -1,7 +1,8 @@
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { fetcher } from '@/service/http'
 
 export type ProtocolHealthStatus = 'healthy' | 'degraded' | 'down' | 'unknown'
+export type AlertEventStatus = 'open' | 'acked' | 'resolved'
 
 export interface ProtocolHealth {
   protocol: string
@@ -61,7 +62,18 @@ export interface ObservabilityAlertEvent {
   value: number
   threshold: number
   message: string
+  status: AlertEventStatus
+  acked_at?: string | null
+  acked_by?: string | null
+  resolved_at?: string | null
+  resolved_by?: string | null
+  note?: string | null
   created_at: string
+}
+
+export interface ObservabilityAlertEventUpdate {
+  status: AlertEventStatus
+  note?: string | null
 }
 
 export interface ObservabilitySummary {
@@ -95,6 +107,12 @@ export const getObservabilitySummary = () => fetcher<ObservabilitySummary>('/api
 export const getObservabilityHistory = (params?: { node_id?: number; hours?: number }) =>
   fetcher<SystemStatsHistory>('/api/observability/history', { params })
 
+export const getObservabilityAlerts = (params?: { status?: AlertEventStatus; limit?: number }) =>
+  fetcher<ObservabilityAlertEvent[]>('/api/observability/alerts', { params })
+
+export const patchObservabilityAlert = (alertId: number, body: ObservabilityAlertEventUpdate) =>
+  fetcher<ObservabilityAlertEvent>(`/api/observability/alerts/${alertId}`, { method: 'PATCH', body })
+
 export const useObservabilitySummary = (options?: { enabled?: boolean; refetchInterval?: number | false }) =>
   useQuery({
     queryKey: ['observability', 'summary'],
@@ -114,3 +132,26 @@ export const useObservabilityHistory = (
     enabled: options?.enabled ?? true,
     staleTime: 30_000,
   })
+
+export const useObservabilityAlerts = (
+  params?: { status?: AlertEventStatus; limit?: number },
+  options?: { enabled?: boolean },
+) =>
+  useQuery({
+    queryKey: ['observability', 'alerts', params?.status ?? 'all', params?.limit ?? 50],
+    queryFn: () => getObservabilityAlerts(params),
+    enabled: options?.enabled ?? true,
+    staleTime: 5_000,
+  })
+
+export const usePatchObservabilityAlert = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ alertId, body }: { alertId: number; body: ObservabilityAlertEventUpdate }) =>
+      patchObservabilityAlert(alertId, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['observability', 'summary'] })
+      qc.invalidateQueries({ queryKey: ['observability', 'alerts'] })
+    },
+  })
+}

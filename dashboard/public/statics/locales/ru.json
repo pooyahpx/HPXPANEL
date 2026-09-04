@@ -3980,7 +3980,14 @@
     "nodeCommandCenter": "Node command center",
     "uptime": "Uptime",
     "history24h": "24h history",
-    "recentAlerts": "Recent alerts"
+    "recentAlerts": "Recent alerts",
+    "ack": "Acknowledge",
+    "resolve": "Resolve",
+    "status": {
+      "open": "Open",
+      "acked": "Acknowledged",
+      "resolved": "Resolved"
+    }
   },
   "audit": {
     "title": "Audit Log",

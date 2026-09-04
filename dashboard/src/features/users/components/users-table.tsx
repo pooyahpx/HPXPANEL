@@ -37,16 +37,21 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { Layers, Link2Off, Power, PowerOff, RefreshCcw, Trash2, UserCog } from 'lucide-react'
+import { Layers, Link2Off, Plus, Power, PowerOff, RefreshCcw, Trash2, UserCog, Users } from 'lucide-react'
+import { EmptyState } from '@/components/common/empty-state'
+import { Button } from '@/components/ui/button'
 import UserModal from '../dialogs/user-modal'
 import { PaginationControls } from './filters'
 import AdvanceSearchModal from '@/features/users/dialogs/advance-search-modal'
 import type { AdvanceSearchFormValue } from '@/features/users/forms/advance-search-form'
 import { BulkActionItem, BulkActionsBar } from '@/features/users/components/bulk-actions-bar'
 import { BulkActionAlertDialog } from '@/features/users/components/bulk-action-alert-dialog'
-import { Card, CardContent } from '@/components/ui/card'
 import { removeUsersFromUsersCache, upsertUserInUsersCache } from '@/utils/usersCache'
 import { hasPermission, hasScopeAll } from '@/utils/rbac'
+
+type UsersTableProps = {
+  onCreateUser?: () => void
+}
 
 // Helper function to get URL search params from hash
 const getSearchParams = (): URLSearchParams => {
@@ -154,7 +159,7 @@ const parseURLParams = (searchParams: URLSearchParams, defaultItemsPerPage: numb
   }
 }
 
-const UsersTable = memo(() => {
+const UsersTable = memo(({ onCreateUser }: UsersTableProps) => {
   const { t } = useTranslation()
   const dir = useDirDetection()
   const queryClient = useQueryClient()
@@ -163,6 +168,7 @@ const UsersTable = memo(() => {
   const isInitializingFromURLRef = useRef(false)
   const { admin } = useAdmin()
   const canReadAllUsers = hasScopeAll(admin, 'users', 'read')
+  const canCreateUsers = hasPermission(admin, 'users', 'create')
   const canUpdateUsers = hasPermission(admin, 'users', 'update')
   const canUpdateAllUsers = hasScopeAll(admin, 'users', 'update')
   const canDeleteUsers = hasPermission(admin, 'users', 'delete')
@@ -1139,24 +1145,22 @@ const UsersTable = memo(() => {
       />
       {canBulkMutateUsers && <BulkActionsBar selectedCount={selectedCount} onClear={clearSelection} actions={bulkActions} />}
       {isEmpty && (
-        <Card className="mb-12">
-          <CardContent className="p-8 text-center">
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold">{t('users.noUsers')}</h3>
-              <p className="text-muted-foreground mx-auto max-w-2xl">{t('users.noUsersDescription')}</p>
-            </div>
-          </CardContent>
-        </Card>
+        <EmptyState
+          icon={Users}
+          title={t('emptyState.noUsers.title')}
+          description={t('emptyState.noUsers.description')}
+          action={
+            canCreateUsers && onCreateUser ? (
+              <Button size="sm" onClick={onCreateUser}>
+                <Plus className="h-4 w-4" />
+                {t('emptyState.noUsers.createFirstUser')}
+              </Button>
+            ) : undefined
+          }
+        />
       )}
       {isSearchEmpty && (
-        <Card className="mb-12">
-          <CardContent className="p-8 text-center">
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold">{t('noResults')}</h3>
-              <p className="text-muted-foreground mx-auto max-w-2xl">{t('users.noSearchResults')}</p>
-            </div>
-          </CardContent>
-        </Card>
+        <EmptyState title={t('noResults')} description={t('users.noSearchResults')} />
       )}
       {isCurrentlyLoading && !isSearchEmpty && (
         <DataTable

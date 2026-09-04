@@ -964,13 +964,22 @@ class SystemStat(Base, CreatedAtUTCMixin):
 
 class ObservabilityAlertEvent(Base, CreatedAtUTCMixin):
     __tablename__ = "observability_alert_events"
-    __table_args__ = (Index("ix_observability_alert_events_created_at", "created_at"),)
+    __table_args__ = (
+        Index("ix_observability_alert_events_created_at", "created_at"),
+        Index("ix_observability_alert_events_status", "status"),
+    )
     scope: Mapped[str] = mapped_column(String(32), nullable=False)
     node_id: Mapped[int | None] = fk_id_column("nodes.id", ondelete="SET NULL", nullable=True)
     metric: Mapped[str] = mapped_column(String(64), nullable=False)
     value: Mapped[float] = mapped_column(Float, nullable=False)
     threshold: Mapped[float] = mapped_column(Float, nullable=False)
     message: Mapped[str] = mapped_column(String(512), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="open", server_default="open")
+    acked_at: Mapped[dt | None] = mapped_column(DateTime(timezone=True), default=None)
+    acked_by: Mapped[str | None] = mapped_column(String(64), default=None)
+    resolved_at: Mapped[dt | None] = mapped_column(DateTime(timezone=True), default=None)
+    resolved_by: Mapped[str | None] = mapped_column(String(64), default=None)
+    note: Mapped[str | None] = mapped_column(String(500), default=None)
 
 
 class Settings(Base, IdMixin):

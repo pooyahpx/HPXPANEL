@@ -11,10 +11,11 @@ import { useTranslation } from 'react-i18next'
 import { queryClient } from '@/utils/query-client'
 import useDirDetection from '@/hooks/use-dir-detection'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Card, CardContent } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
+import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Power, PowerOff, RefreshCw, Search, Trash2, X } from 'lucide-react'
+import { EmptyState } from '@/components/common/empty-state'
+import { Input } from '@/components/ui/input'
+import { Power, PowerOff, Plus, RefreshCw, Search, Trash2, UsersRound, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import ViewToggle from '@/components/common/view-toggle'
 import { ListGenerator } from '@/components/common/list-generator'
@@ -328,24 +329,28 @@ export default function GroupsList({ isDialogOpen, onOpenChange }: GroupsListPro
       </div>
       {canUseBulkSelection && <BulkActionsBar selectedCount={selectedCount} onClear={clearSelection} actions={bulkActions} />}
       {isEmpty && !isCurrentlyLoading && (
-        <Card className="mb-12">
-          <CardContent className="p-8 text-center">
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold">{t('group.noGroups')}</h3>
-              <p className="text-muted-foreground mx-auto max-w-2xl">{t('group.noGroupsDescription')}</p>
-            </div>
-          </CardContent>
-        </Card>
+        <EmptyState
+          icon={UsersRound}
+          title={t('group.noGroups')}
+          description={t('group.noGroupsDescription')}
+          action={
+            canCreateGroups ? (
+              <Button
+                size="sm"
+                onClick={() => {
+                  setEditingGroup(null)
+                  onOpenChange(true)
+                }}
+              >
+                <Plus className="h-4 w-4" />
+                {t('emptyState.noGroups.createFirst', { defaultValue: 'Create your first group' })}
+              </Button>
+            ) : undefined
+          }
+        />
       )}
       {isSearchEmpty && !isCurrentlyLoading && (
-        <Card className="mb-12">
-          <CardContent className="p-8 text-center">
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold">{t('noResults')}</h3>
-              <p className="text-muted-foreground mx-auto max-w-2xl">{t('group.noSearchResults')}</p>
-            </div>
-          </CardContent>
-        </Card>
+        <EmptyState title={t('noResults')} description={t('group.noSearchResults')} />
       )}
       {(isCurrentlyLoading || (!isEmpty && !isSearchEmpty)) &&
         (viewMode === 'grid' ? (

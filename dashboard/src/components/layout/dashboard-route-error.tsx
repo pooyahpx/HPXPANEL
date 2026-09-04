@@ -15,6 +15,15 @@ export function DashboardRouteError() {
   const shouldReturnToLogin = !getAuthToken() || routeError?.status === 401 || routeError?.status === 403
   const returnPath = shouldReturnToLogin ? '/login' : '/'
   const ReturnIcon = shouldReturnToLogin ? LogIn : House
+  const errorMessage =
+    error instanceof Error
+      ? error.message
+      : typeof routeError?.data === 'string'
+        ? routeError.data
+        : typeof (error as { message?: unknown })?.message === 'string'
+          ? (error as { message: string }).message
+          : null
+  const shortMessage = errorMessage?.trim() ? errorMessage.trim().split('\n')[0]?.slice(0, 200) : null
 
   return (
     <main className="bg-background flex min-h-screen items-center justify-center px-4 py-10" dir={dir}>
@@ -26,10 +35,11 @@ export function DashboardRouteError() {
           <CardTitle className="text-2xl">{t('routeError.title')}</CardTitle>
           <CardDescription>{t('routeError.description')}</CardDescription>
         </CardHeader>
-        <CardContent className="text-center">
+        <CardContent className="space-y-2 text-center">
           <p className="text-muted-foreground font-mono text-sm">
             {routeError ? t('routeError.status', { status: routeError.status }) : t('routeError.unknownStatus')}
           </p>
+          {shortMessage ? <p className="text-muted-foreground mx-auto max-w-sm text-xs leading-relaxed">{shortMessage}</p> : null}
         </CardContent>
         <CardFooter className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-center">
           <Button variant="outline" onClick={() => navigate(returnPath, { replace: true })}>

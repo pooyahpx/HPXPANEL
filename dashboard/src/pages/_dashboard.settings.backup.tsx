@@ -25,11 +25,12 @@ import {
   useRestoreBackup,
   useRunBackup,
   useUpdateBackupConfig,
+  useValidateBackup,
   type BackupConfig,
 } from '@/service/api/backup'
 import { formatBytes } from '@/utils/formatByte'
 import { isOwner } from '@/utils/rbac'
-import { AlertTriangle, CloudUpload, Database, Download, HardDriveDownload, Loader2, RefreshCcw, RotateCcw, Save } from 'lucide-react'
+import { AlertTriangle, CloudUpload, Database, Download, HardDriveDownload, Loader2, RefreshCcw, RotateCcw, Save, ShieldCheck } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -51,6 +52,7 @@ export default function BackupSettings() {
   const saveConfig = useUpdateBackupConfig()
   const runBackup = useRunBackup()
   const restoreBackup = useRestoreBackup()
+  const validateBackup = useValidateBackup()
   const [config, setConfig] = useState<BackupConfig>(defaultConfig)
   const [restoreId, setRestoreId] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -85,6 +87,15 @@ export default function BackupSettings() {
       setRestoreId(null)
     } catch (error: any) {
       toast.error(error?.data?.detail || t('settings.backup.restoreFailed'))
+    }
+  }
+
+  const handleValidate = async (backupId: string) => {
+    try {
+      const result = await validateBackup.mutateAsync(backupId)
+      toast.success(result.message || t('settings.backup.dryRunSuccess'))
+    } catch (error: any) {
+      toast.error(error?.data?.detail || t('settings.backup.dryRunFailed'))
     }
   }
 
@@ -152,6 +163,7 @@ export default function BackupSettings() {
                 </div>
                 <Input placeholder="/var/backups/hpxpanel" disabled={!owner} value={config.remote.remote_path} onChange={e => setConfig(c => ({ ...c, remote: { ...c.remote, remote_path: e.target.value } }))} />
                 <p className="text-muted-foreground text-xs">{t('settings.backup.sftpSecretHint')}</p>
+                <p className="text-muted-foreground text-xs">{t('settings.backup.encryptionHint')}</p>
               </div>
             </div>
             {owner && (
@@ -215,6 +227,7 @@ export default function BackupSettings() {
                   <TableHead>{t('settings.backup.columns.version')}</TableHead>
                   <TableHead>{t('settings.backup.columns.size')}</TableHead>
                   <TableHead>{t('settings.backup.columns.remote')}</TableHead>
+                  <TableHead>{t('settings.backup.columns.encrypted')}</TableHead>
                   <TableHead className="text-end">{t('actions')}</TableHead>
                 </TableRow>
               </TableHeader>
@@ -227,8 +240,18 @@ export default function BackupSettings() {
                       <TableCell>{item.panel_version}</TableCell>
                       <TableCell>{formatBytes(item.size_bytes, 1, true, false)}</TableCell>
                       <TableCell>{item.remote_uploaded ? '✓' : '—'}</TableCell>
+                      <TableCell>{item.encrypted ? '✓' : '—'}</TableCell>
                       <TableCell className="text-end">
                         <div className="flex justify-end gap-1">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            title={t('settings.backup.dryRun')}
+                            disabled={!owner || validateBackup.isPending}
+                            onClick={() => handleValidate(item.id)}
+                          >
+                            <ShieldCheck className="h-4 w-4" />
+                          </Button>
                           <Button
                             size="icon"
                             variant="ghost"
@@ -247,7 +270,7 @@ export default function BackupSettings() {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-muted-foreground py-8 text-center text-sm">
+                    <TableCell colSpan={7} className="text-muted-foreground py-8 text-center text-sm">
                       {t('settings.backup.empty')}
                     </TableCell>
                   </TableRow>

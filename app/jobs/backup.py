@@ -4,7 +4,7 @@ from app import scheduler
 from app.backup.service import get_state
 from app.db import GetDB
 from app.operation import OperatorType
-from app.operation.backup import BackupOperation
+from app.operation.backup import BackupOperation, notify_backup_failure
 from app.utils.logger import get_logger
 from config import backup_settings, runtime_settings
 
@@ -26,8 +26,9 @@ async def scheduled_backup_job():
                 return
             await backup_operator.run_backup(db)
             logger.info("Scheduled HPXPANEL backup completed")
-    except Exception:
+    except Exception as exc:
         logger.exception("scheduled_backup_job failed")
+        await notify_backup_failure(f"Scheduled panel backup failed: {exc}")
 
 
 if runtime_settings.role.runs_scheduler:

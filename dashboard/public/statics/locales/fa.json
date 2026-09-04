@@ -633,8 +633,13 @@
         "engine": "دیتابیس",
         "version": "پنل",
         "size": "حجم",
-        "remote": "راه‌دور"
-      }
+        "remote": "راه‌دور",
+        "encrypted": "رمزنگاری"
+      },
+      "encryptionHint": "اختیاری: BACKUP_ENCRYPTION_KEY را در .env بگذارید تا آرشیو بکاپ رمزنگاری شود.",
+      "dryRun": "اعتبارسنجی بکاپ",
+      "dryRunSuccess": "اعتبارسنجی بکاپ موفق بود",
+      "dryRunFailed": "اعتبارسنجی بکاپ ناموفق بود"
     },
     "theme": {
       "title": "تم"

@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, UploadFile
+from fastapi import APIRouter, Depends, File, Query, UploadFile
 from fastapi.responses import FileResponse
 
 from app.db import AsyncSession, get_db
@@ -62,7 +62,7 @@ async def download_panel_backup(
 async def import_panel_backup(
     file: Annotated[UploadFile, File()],
     db: AsyncSession = Depends(get_db),
-    admin: AdminDetails = Depends(_require_owner),
+    _: AdminDetails = Depends(_require_owner),
 ):
     return await backup_operator.import_archive(db, file)
 
@@ -70,7 +70,8 @@ async def import_panel_backup(
 @router.post("/{backup_id}/restore", response_model=BackupRestoreResponse)
 async def restore_panel_backup(
     backup_id: str,
+    dry_run: bool = Query(default=False),
     db: AsyncSession = Depends(get_db),
     _: AdminDetails = Depends(_require_owner),
 ):
-    return await backup_operator.restore(db, backup_id)
+    return await backup_operator.restore(db, backup_id, dry_run=dry_run)

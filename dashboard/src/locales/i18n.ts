@@ -13,6 +13,10 @@ i18n
       debug: import.meta.env.NODE_ENV === 'development',
       returnNull: false,
       fallbackLng: 'en',
+      // All four languages after filling critical ru/zh namespaces from en.
+      // Note: ru/zh newly filled namespaces (openvpn, hpxPulse, hpxTunnel, observability,
+      // audit, copilot, settings.backup, etc.) may still be English until translated.
+      supportedLngs: ['en', 'fa', 'ru', 'zh'],
       interpolation: {
         escapeValue: false,
       },

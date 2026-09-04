@@ -35,6 +35,7 @@ class BackupManifest(BaseModel):
     database_file: str
     size_bytes: int
     sha256: str
+    encrypted: bool = False
     remote_uploaded: bool = False
     remote_error: str = ""
 
@@ -46,6 +47,7 @@ class BackupListItem(BaseModel):
     database_engine: str
     size_bytes: int
     sha256: str
+    encrypted: bool = False
     remote_uploaded: bool = False
     filename: str
 
@@ -67,3 +69,5 @@ class BackupRestoreResponse(BaseModel):
     success: bool
     message: str
     restart_required: bool = True
+    dry_run: bool = False
+    checks: list[str] = Field(default_factory=list)

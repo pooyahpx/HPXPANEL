@@ -6,6 +6,14 @@ import { LanguagesIcon } from 'lucide-react'
 import { useContext } from 'react'
 import { useTranslation } from 'react-i18next'
 
+/** Languages with complete locale files (ru/zh may still have English fallbacks in newly filled namespaces). */
+export const LANGUAGE_PICKER_OPTIONS = [
+  { code: 'en', label: 'English' },
+  { code: 'fa', label: 'فارسی' },
+  { code: 'zh', label: '简体中文' },
+  { code: 'ru', label: 'Русский' },
+] as const
+
 export const Language: React.FC = () => {
   const { i18n, t } = useTranslation()
 
@@ -33,18 +41,17 @@ export const Language: React.FC = () => {
         <PopoverContent className="w-48 p-2" side="right" align="start">
           <div className="space-y-1">
             <div className="px-2 py-1.5 text-sm font-semibold">{t('language.title', { defaultValue: 'Language' })}</div>
-            <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => changeLanguage('en')}>
-              English
-            </Button>
-            <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => changeLanguage('fa')}>
-              فارسی
-            </Button>
-            <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => changeLanguage('zh')}>
-              简体中文
-            </Button>
-            <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => changeLanguage('ru')}>
-              Русский
-            </Button>
+            {LANGUAGE_PICKER_OPTIONS.map(({ code, label }) => (
+              <Button
+                key={code}
+                variant="ghost"
+                size="sm"
+                className="w-full justify-start"
+                onClick={() => changeLanguage(code)}
+              >
+                {label}
+              </Button>
+            ))}
           </div>
         </PopoverContent>
       </Popover>
@@ -60,10 +67,11 @@ export const Language: React.FC = () => {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" side="top">
-        <DropdownMenuItem onClick={() => changeLanguage('en')}>English</DropdownMenuItem>
-        <DropdownMenuItem onClick={() => changeLanguage('fa')}>فارسی</DropdownMenuItem>
-        <DropdownMenuItem onClick={() => changeLanguage('zh')}>简体中文</DropdownMenuItem>
-        <DropdownMenuItem onClick={() => changeLanguage('ru')}>Русский</DropdownMenuItem>
+        {LANGUAGE_PICKER_OPTIONS.map(({ code, label }) => (
+          <DropdownMenuItem key={code} onClick={() => changeLanguage(code)}>
+            {label}
+          </DropdownMenuItem>
+        ))}
       </DropdownMenuContent>
     </DropdownMenu>
   )

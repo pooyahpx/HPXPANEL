@@ -24,6 +24,7 @@ export interface BackupListItem {
   database_engine: string
   size_bytes: number
   sha256: string
+  encrypted?: boolean
   remote_uploaded: boolean
   filename: string
 }
@@ -43,8 +44,13 @@ export const updateBackupConfig = (config: BackupConfig) =>
 
 export const runBackup = () => fetcher<{ manifest: { id: string }; message: string }>('/api/backup/run', { method: 'POST' })
 
-export const restoreBackup = (backupId: string) =>
-  fetcher<{ success: boolean; message: string; restart_required: boolean }>(`/api/backup/${backupId}/restore`, { method: 'POST' })
+export const restoreBackup = (backupId: string, dryRun = false) =>
+  fetcher<{ success: boolean; message: string; restart_required: boolean; dry_run?: boolean; checks?: string[] }>(
+    `/api/backup/${backupId}/restore?dry_run=${dryRun ? 'true' : 'false'}`,
+    { method: 'POST' },
+  )
+
+export const validateBackup = (backupId: string) => restoreBackup(backupId, true)
 
 export const importBackupArchive = async (file: File) => {
   const form = new FormData()
@@ -92,7 +98,12 @@ export const useRunBackup = () => {
 export const useRestoreBackup = () => {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: restoreBackup,
+    mutationFn: (backupId: string) => restoreBackup(backupId, false),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['backup', 'list'] }),
   })
 }
+
+export const useValidateBackup = () =>
+  useMutation({
+    mutationFn: (backupId: string) => validateBackup(backupId),
+  })

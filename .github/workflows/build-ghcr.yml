@@ -2,6 +2,7 @@ name: Build and push panel image (GHCR)
 
 # Builds HPXPANEL (backend + prebuilt dashboard) and pushes to GHCR.
 # Installer expects: ghcr.io/pooyahpx/hpxpanel:latest
+# Image push is gated on sqlite migrations + unit tests.
 on:
   push:
     branches: [main]
@@ -19,6 +20,7 @@ on:
       - "healthcheck.sh"
       - "pyproject.toml"
       - "uv.lock"
+      - "tests/**"
       - ".github/workflows/build-ghcr.yml"
   workflow_dispatch:
   release:
@@ -32,7 +34,38 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
+  test-sqlite:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-tags: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Set DATABASE_URL
+        run: |
+          echo "TEST_FROM=github" >> $GITHUB_ENV
+          echo "TESTING=1" >> $GITHUB_ENV
+          echo "SQLALCHEMY_DATABASE_URL=sqlite+aiosqlite:///./test.db" >> $GITHUB_ENV
+
+      - name: Install test dependencies
+        run: make setup-test
+
+      - name: Run Alembic Migrations
+        run: make run-migration
+
+      - name: Check Migrations
+        run: make check-migrations
+
+      - name: Run Tests
+        run: make test
+
   build-dashboard:
+    needs: test-sqlite
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -58,7 +91,7 @@ jobs:
           retention-days: 1
 
   build-and-push:
-    needs: build-dashboard
+    needs: [test-sqlite, build-dashboard]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

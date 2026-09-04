@@ -2,16 +2,25 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import io
 import json
 import os
 import shutil
 import sqlite3
 import subprocess
+import tempfile
 import zipfile
 from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
+from app.backup.crypto import (
+    decrypt_archive_to,
+    encrypt_archive_inplace,
+    encryption_enabled,
+    is_encrypted_archive,
+    open_archive_bytes,
+)
 from app.models.backup import BackupConfig, BackupListItem, BackupManifest, BackupStatus
 from app.version import __version__
 from config import backup_settings, database_settings
@@ -123,6 +132,10 @@ def _sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _sha256_bytes(payload: bytes) -> str:
+    return hashlib.sha256(payload).hexdigest()
+
+
 def _create_zip(source_dir: Path, archive_path: Path) -> int:
     with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as archive:
         for file_path in sorted(source_dir.rglob("*")):
@@ -131,8 +144,13 @@ def _create_zip(source_dir: Path, archive_path: Path) -> int:
     return archive_path.stat().st_size
 
 
+def _zipfile_from_archive(archive_path: Path) -> zipfile.ZipFile:
+    payload = open_archive_bytes(archive_path)
+    return zipfile.ZipFile(io.BytesIO(payload), "r")
+
+
 def _read_manifest_from_zip(archive_path: Path) -> BackupManifest:
-    with zipfile.ZipFile(archive_path, "r") as archive:
+    with _zipfile_from_archive(archive_path) as archive:
         raw = archive.read("manifest.json")
     data = json.loads(raw.decode("utf-8"))
     return BackupManifest.model_validate(data)
@@ -151,6 +169,7 @@ def list_backups() -> list[BackupListItem]:
                     database_engine=manifest.database_engine,
                     size_bytes=manifest.size_bytes,
                     sha256=manifest.sha256,
+                    encrypted=manifest.encrypted or is_encrypted_archive(archive_path),
                     remote_uploaded=manifest.remote_uploaded,
                     filename=archive_path.name,
                 )
@@ -165,6 +184,7 @@ def list_backups() -> list[BackupListItem]:
                     database_engine="unknown",
                     size_bytes=stat.st_size,
                     sha256="",
+                    encrypted=is_encrypted_archive(archive_path),
                     filename=archive_path.name,
                 )
             )
@@ -198,6 +218,10 @@ def create_backup(config: BackupConfig, *, upload_remote: bool = True) -> Backup
 
     try:
         db_file = _dump_database(work_dir)
+        encrypted = encryption_enabled()
+        remote_error = ""
+        remote_uploaded = False
+
         manifest = BackupManifest(
             id=backup_id,
             created_at=datetime.now(UTC),
@@ -205,15 +229,17 @@ def create_backup(config: BackupConfig, *, upload_remote: bool = True) -> Backup
             database_engine=_database_engine(),
             database_file=db_file.name,
             size_bytes=0,
-            sha256="",
+            sha256=_sha256_file(db_file),
+            encrypted=encrypted,
         )
         (work_dir / "manifest.json").write_text(manifest.model_dump_json(indent=2), encoding="utf-8")
         size_bytes = _create_zip(work_dir, archive_path)
         manifest.size_bytes = size_bytes
-        manifest.sha256 = _sha256_file(archive_path)
 
-        remote_error = ""
-        remote_uploaded = False
+        if encrypted:
+            encrypt_archive_inplace(archive_path)
+            manifest.size_bytes = archive_path.stat().st_size
+
         if upload_remote and config.upload_to_remote and config.remote.enabled:
             from app.backup.remote import upload_backup_sftp
 
@@ -226,8 +252,11 @@ def create_backup(config: BackupConfig, *, upload_remote: bool = True) -> Backup
         manifest.remote_uploaded = remote_uploaded
         manifest.remote_error = remote_error
 
-        with zipfile.ZipFile(archive_path, "a", compression=zipfile.ZIP_DEFLATED) as archive:
-            archive.writestr("manifest.json", manifest.model_dump_json(indent=2))
+        if not encrypted:
+            # Refresh plaintext archive so remote status is stored inside the zip.
+            (work_dir / "manifest.json").write_text(manifest.model_dump_json(indent=2), encoding="utf-8")
+            archive_path.unlink(missing_ok=True)
+            manifest.size_bytes = _create_zip(work_dir, archive_path)
 
         _apply_retention(config)
         _set_state(status=BackupStatus.success, success_at=datetime.now(UTC))
@@ -243,34 +272,93 @@ def create_backup(config: BackupConfig, *, upload_remote: bool = True) -> Backup
             _set_state(status=BackupStatus.idle)
 
 
-def restore_backup(backup_id: str) -> None:
+def validate_backup(backup_id: str) -> tuple[BackupManifest, list[str]]:
+    """Validate archive integrity without restoring. Returns manifest and check notes."""
+    archive_path = _resolve_archive(backup_id)
+    checks: list[str] = []
+    encrypted = is_encrypted_archive(archive_path)
+    if encrypted:
+        checks.append("archive is encrypted")
+        if not encryption_enabled():
+            raise RuntimeError("Backup is encrypted but BACKUP_ENCRYPTION_KEY is not configured")
+    else:
+        checks.append("archive is plaintext zip")
+
+    plaintext = open_archive_bytes(archive_path)
+
+    with zipfile.ZipFile(io.BytesIO(plaintext), "r") as archive:
+        names = set(archive.namelist())
+        if "manifest.json" not in names:
+            raise ValueError("manifest.json missing from backup archive")
+        checks.append("manifest.json present")
+        manifest = BackupManifest.model_validate(json.loads(archive.read("manifest.json")))
+        db_name = manifest.database_file
+        if db_name not in names:
+            raise ValueError(f"Database dump missing from archive: {db_name}")
+        checks.append(f"database dump present ({db_name})")
+        raw_db = archive.read(db_name)
+        if not raw_db:
+            raise ValueError(f"Database dump is empty: {db_name}")
+        checks.append(f"database dump size={len(raw_db)} bytes")
+        digest = _sha256_bytes(raw_db)
+        if manifest.sha256 and manifest.sha256 != digest:
+            raise ValueError(f"SHA256 mismatch: expected {manifest.sha256}, got {digest}")
+        checks.append(f"sha256 ok ({digest[:12]}…)")
+        if manifest.database_engine == "sqlite":
+            if not raw_db.startswith(b"SQLite format 3"):
+                raise ValueError("SQLite dump does not look like a valid database file")
+            checks.append("sqlite header valid")
+        elif manifest.database_engine == "postgresql":
+            if b"PostgreSQL" not in raw_db[:4096] and b"CREATE" not in raw_db[:4096]:
+                raise ValueError("PostgreSQL dump does not look restorable")
+            checks.append("postgresql dump looks restorable")
+        elif manifest.database_engine == "mysql":
+            checks.append("mysql dump present (panel restore still unsupported)")
+
+    if manifest.encrypted != encrypted:
+        checks.append("encrypted flag reconciled from file header")
+        manifest.encrypted = encrypted
+    return manifest, checks
+
+
+def restore_backup(backup_id: str, *, dry_run: bool = False) -> list[str]:
+    manifest, checks = validate_backup(backup_id)
+    if dry_run:
+        checks.append("dry-run only — no database writes")
+        return checks
+
     if not backup_settings.allow_panel_restore:
-        raise RuntimeError("Panel restore is disabled. Set BACKUP_ALLOW_PANEL_RESTORE=true or use hpxpanel.sh restore on the server.")
+        raise RuntimeError(
+            "Panel restore is disabled. Set BACKUP_ALLOW_PANEL_RESTORE=true or use hpxpanel.sh restore on the server."
+        )
 
     archive_path = _resolve_archive(backup_id)
-    manifest = _read_manifest_from_zip(archive_path)
     engine = manifest.database_engine
 
-    with zipfile.ZipFile(archive_path, "r") as archive:
-        if engine == "sqlite":
-            db_name = manifest.database_file
-            target = _sqlite_db_path()
-            target.parent.mkdir(parents=True, exist_ok=True)
-            with archive.open(db_name) as src, target.open("wb") as dst:
-                shutil.copyfileobj(src, dst)
-            return
+    with tempfile.TemporaryDirectory() as tmp:
+        plain_zip = Path(tmp) / "backup.zip"
+        decrypt_archive_to(archive_path, plain_zip)
+        with zipfile.ZipFile(plain_zip, "r") as archive:
+            if engine == "sqlite":
+                db_name = manifest.database_file
+                target = _sqlite_db_path()
+                target.parent.mkdir(parents=True, exist_ok=True)
+                with archive.open(db_name) as src, target.open("wb") as dst:
+                    shutil.copyfileobj(src, dst)
+                return checks
 
-        if engine == "postgresql":
-            sql_name = manifest.database_file
-            temp_sql = get_backup_dir() / f".restore_{backup_id}.sql"
-            with archive.open(sql_name) as src, temp_sql.open("wb") as dst:
-                shutil.copyfileobj(src, dst)
-            _run_command(["psql", _sync_database_url(), "-v", "ON_ERROR_STOP=1", "-f", str(temp_sql)])
-            temp_sql.unlink(missing_ok=True)
-            return
+            if engine == "postgresql":
+                sql_name = manifest.database_file
+                temp_sql = Path(tmp) / f"restore_{backup_id}.sql"
+                with archive.open(sql_name) as src, temp_sql.open("wb") as dst:
+                    shutil.copyfileobj(src, dst)
+                _run_command(["psql", _sync_database_url(), "-v", "ON_ERROR_STOP=1", "-f", str(temp_sql)])
+                return checks
 
-        if engine == "mysql":
-            raise ValueError("MySQL restore from the panel is not supported yet. Download the archive and restore with mysqldump on the server.")
+            if engine == "mysql":
+                raise ValueError(
+                    "MySQL restore from the panel is not supported yet. Download the archive and restore with mysqldump on the server."
+                )
 
     raise ValueError(f"Unsupported backup database engine: {engine}")
 
@@ -279,5 +367,9 @@ async def create_backup_async(config: BackupConfig, *, upload_remote: bool = Tru
     return await asyncio.to_thread(create_backup, config, upload_remote=upload_remote)
 
 
-async def restore_backup_async(backup_id: str) -> None:
-    await asyncio.to_thread(restore_backup, backup_id)
+async def restore_backup_async(backup_id: str, *, dry_run: bool = False) -> list[str]:
+    return await asyncio.to_thread(restore_backup, backup_id, dry_run=dry_run)
+
+
+async def validate_backup_async(backup_id: str) -> tuple[BackupManifest, list[str]]:
+    return await asyncio.to_thread(validate_backup, backup_id)

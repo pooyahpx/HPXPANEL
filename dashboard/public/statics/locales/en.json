@@ -1001,6 +1001,7 @@
       "sftpTitle": "Remote SFTP server",
       "sftpEnabled": "Enable SFTP upload",
       "sftpSecretHint": "Set BACKUP_SFTP_PASSWORD or BACKUP_SFTP_PRIVATE_KEY_PATH in .env on the panel host.",
+      "encryptionHint": "Optional: set BACKUP_ENCRYPTION_KEY in .env to encrypt backup archives at rest.",
       "actionsTitle": "Actions",
       "actionsDescription": "Run an on-demand backup or import an archive from another server.",
       "runNow": "Backup now",
@@ -1014,6 +1015,9 @@
       "runFailed": "Backup failed",
       "restoreFailed": "Restore failed",
       "importFailed": "Import failed",
+      "dryRun": "Validate backup",
+      "dryRunSuccess": "Backup validation passed",
+      "dryRunFailed": "Backup validation failed",
       "restoreTitle": "Restore database",
       "restorePrompt": "This replaces the current database with the selected backup. Continue?",
       "restoreConfirm": "Restore now",
@@ -1022,7 +1026,8 @@
         "engine": "Database",
         "version": "Panel",
         "size": "Size",
-        "remote": "Remote"
+        "remote": "Remote",
+        "encrypted": "Encrypted"
       }
     },
     "theme": {

@@ -368,6 +368,7 @@ class BackupSettings(EnvSettings):
     allow_panel_restore: bool = Field(default=False, validation_alias="BACKUP_ALLOW_PANEL_RESTORE")
     sftp_password: str = Field(default="", validation_alias="BACKUP_SFTP_PASSWORD")
     sftp_private_key_path: str = Field(default="", validation_alias="BACKUP_SFTP_PRIVATE_KEY_PATH")
+    encryption_key: str = Field(default="", validation_alias="BACKUP_ENCRYPTION_KEY")
     job_interval: int = Field(default=3600, ge=300, validation_alias="JOB_BACKUP_INTERVAL")
 
 

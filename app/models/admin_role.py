@@ -107,6 +107,10 @@ class HwidsPermissions(_ResourcePermissions):
     delete: RoleActionValue | None = None
 
 
+class AuditLogsPermissions(_ResourcePermissions):
+    read: RoleActionValue | None = None
+
+
 class RoleLimits(BaseModel):
     max_users: int | None = None
     data_limit_min: int | None = None
@@ -157,6 +161,7 @@ class RolePermissions(BaseModel):
     hwids: HwidsPermissions | None = None
     admin_roles: CRUDPermissions | None = None
     api_keys: APIKeysPermissions | None = None
+    audit_logs: AuditLogsPermissions | None = None
 
     model_config = ConfigDict(from_attributes=True)
 

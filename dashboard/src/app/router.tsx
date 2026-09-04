@@ -17,6 +17,7 @@ const Dashboard = lazyWithChunkRecovery(() => import('../pages/_dashboard._index
 const AdminsPage = lazyWithChunkRecovery(() => import('../pages/_dashboard.admins'))
 const AdminRolesPage = lazyWithChunkRecovery(() => import('../pages/_dashboard.admin-roles'))
 const ApiKeysPage = lazyWithChunkRecovery(() => import('../pages/_dashboard.api-keys'))
+const AuditPage = lazyWithChunkRecovery(() => import('../pages/_dashboard.audit'))
 const BulkPage = lazyWithChunkRecovery(() => import('../pages/_dashboard.bulk'))
 const BulkCreatePage = lazyWithChunkRecovery(() => import('../pages/_dashboard.bulk.create'))
 const BulkDataPage = lazyWithChunkRecovery(() => import('../pages/_dashboard.bulk.data'))
@@ -266,6 +267,14 @@ export const router = createHashRouter([
         element: (
           <Suspense fallback={<LoadingSpinner />}>
             <ApiKeysPage />
+          </Suspense>
+        ),
+      },
+      {
+        path: '/audit',
+        element: (
+          <Suspense fallback={<LoadingSpinner />}>
+            <AuditPage />
           </Suspense>
         ),
       },

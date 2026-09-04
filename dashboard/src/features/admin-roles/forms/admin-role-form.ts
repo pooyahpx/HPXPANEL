@@ -148,9 +148,23 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       { resource: 'hwids', action: 'delete' },
     ],
   },
+  {
+    labelKey: 'audit.title',
+    actions: [{ resource: 'audit_logs', action: 'read' }],
+  },
 ]
 
-export const LIMIT_KEYS = ['max_users', 'data_limit_min', 'data_limit_max', 'expire_days_min', 'expire_days_max', 'min_hwid_per_user', 'max_hwid_per_user', 'on_hold_timeout_days_min', 'on_hold_timeout_days_max'] as const
+export const LIMIT_KEYS = [
+  'max_users',
+  'data_limit_min',
+  'data_limit_max',
+  'expire_days_min',
+  'expire_days_max',
+  'min_hwid_per_user',
+  'max_hwid_per_user',
+  'on_hold_timeout_days_min',
+  'on_hold_timeout_days_max',
+] as const
 
 export const FEATURE_KEYS: Array<keyof RoleFeatures> = ['can_use_reset_strategy', 'can_use_next_plan']
 
@@ -261,7 +275,10 @@ const permissionValueSchema = z.union([z.boolean(), scopeSchema])
 const resourcePermissionsSchema = z.record(z.string(), permissionValueSchema)
 const permissionsSchema = z.preprocess(value => sanitizeRolePermissions(value as RolePermissionInput), z.record(z.string(), resourcePermissionsSchema))
 
-const optionalNullableNumber = z.union([z.number(), z.string().transform(v => (v === '' ? null : Number(v)))]).nullable().optional()
+const optionalNullableNumber = z
+  .union([z.number(), z.string().transform(v => (v === '' ? null : Number(v)))])
+  .nullable()
+  .optional()
 
 const limitsSchema = z.object({
   max_users: optionalNullableNumber,

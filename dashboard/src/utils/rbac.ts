@@ -59,6 +59,7 @@ export const firstAllowedRoute = (admin: AdminDetails | null | undefined) => {
   if (canReadResourcePage(admin, 'hosts')) return '/hosts'
   if (canReadResourcePage(admin, 'groups')) return '/groups'
   if (canReadResourcePage(admin, 'admins')) return '/admins'
+  if (hasPermission(admin, 'audit_logs', 'read')) return '/audit'
   if (canReadResourcePage(admin, 'nodes')) return '/nodes'
   if (canReadResourcePage(admin, 'hpx_tunnels')) return '/hpx-tunnel'
   if (canReadResourcePage(admin, 'cores')) return '/nodes/cores'
@@ -84,6 +85,7 @@ export const canAccessRoute = (admin: AdminDetails | null | undefined, pathname:
   if (pathname.startsWith('/admin-roles')) return isOwner(admin)
   if (pathname.startsWith('/admins')) return canReadResourcePage(admin, 'admins')
   if (pathname.startsWith('/api-keys')) return canReadResourcePage(admin, 'api_keys')
+  if (pathname.startsWith('/audit')) return hasPermission(admin, 'audit_logs', 'read')
   if (pathname === '/nodes/cores') return canReadResourcePage(admin, 'cores')
   if (pathname === '/nodes/cores/new') return hasPermission(admin, 'cores', 'create')
   if (pathname.startsWith('/nodes/cores/')) return hasPermission(admin, 'cores', 'update')

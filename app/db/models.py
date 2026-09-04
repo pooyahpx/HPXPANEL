@@ -6,6 +6,7 @@ from typing import Any
 from sqlalchemy import (
     JSON,
     BigInteger,
+    CheckConstraint,
     Column,
     DateTime,
     Enum as SQLEnum,
@@ -1041,6 +1042,43 @@ class APIKey(Base, CreatedAtUTCMixin):
         if self.admin is None or self.admin.status == AdminStatus.disabled:
             return False
         return not self.is_expired
+
+
+class AuditLog(Base):
+    """Immutable record of a security-sensitive administrative operation."""
+
+    __tablename__ = "audit_logs"
+    __table_args__ = (
+        CheckConstraint("result IN ('success', 'failure')", name="ck_audit_logs_result"),
+        Index("ix_audit_logs_created_at", "created_at"),
+        Index("ix_audit_logs_actor_id", "actor_id"),
+        Index("ix_audit_logs_action", "action"),
+        Index("ix_audit_logs_resource", "resource"),
+        Index("ix_audit_logs_result", "result"),
+        Index("ix_audit_logs_actor_action", "actor_id", "action"),
+        Index("ix_audit_logs_resource_result", "resource", "result"),
+    )
+
+    id: Mapped[int] = mapped_column(SqliteCompatibleBigInteger, primary_key=True, init=False, autoincrement=True)
+    action: Mapped[str] = mapped_column(String(64), nullable=False)
+    resource: Mapped[str] = mapped_column(String(64), nullable=False)
+    result: Mapped[str] = mapped_column(String(16), nullable=False)
+    actor_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True, default=None)
+    actor_username: Mapped[str | None] = mapped_column(String(128), nullable=True, default=None)
+    source_ip: Mapped[str | None] = mapped_column(String(64), nullable=True, default=None)
+    resource_id: Mapped[str | None] = mapped_column(String(256), nullable=True, default=None)
+    before: Mapped[dict | list | None] = mapped_column(PostgresJSONB, nullable=True, default=None)
+    after: Mapped[dict | list | None] = mapped_column(PostgresJSONB, nullable=True, default=None)
+    detail: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
+    created_at: Mapped[dt] = mapped_column(
+        DateTime(timezone=True), nullable=False, default_factory=lambda: dt.now(UTC), init=False
+    )
+
+
+@event.listens_for(AuditLog, "before_update")
+@event.listens_for(AuditLog, "before_delete")
+def prevent_audit_log_mutation(mapper, connection, target):
+    raise ValueError("Audit logs are append-only")
 
 
 class TempKey(Base):

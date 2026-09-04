@@ -27,6 +27,7 @@ import {
   Cpu,
   Database,
   FileCode2,
+  FileClock,
   FileUser,
   Fingerprint,
   GithubIcon,
@@ -76,6 +77,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const canReadClientTemplates = canReadResourcePage(admin, 'client_templates')
   const canReadHpxTunnels = canReadResourcePage(admin, 'hpx_tunnels')
   const canReadHpxPulse = canReadResourcePage(admin, 'hpx_pulse')
+  const canReadAudit = hasPermission(admin, 'audit_logs', 'read')
   const canReadNodeLogs = hasPermission(admin, 'nodes', 'logs')
   const canBulkCreateFromTemplate = hasPermission(admin, 'users', 'create') && canReadTemplates
   const canBulkUpdateUsers = hasScopeAll(admin, 'users', 'update')
@@ -290,6 +292,15 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               title: 'apiKeys.title',
               url: '/api-keys',
               icon: Key,
+            },
+          ]
+        : []),
+      ...(canReadAudit
+        ? [
+            {
+              title: 'audit.title',
+              url: '/audit',
+              icon: FileClock,
             },
           ]
         : []),

@@ -32,6 +32,10 @@ def backup_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     _seed_sqlite(db_path)
 
     monkeypatch.setattr(backup_service.database_settings, "url", f"sqlite+aiosqlite:///{db_path.as_posix()}")
+    # DatabaseSettings.is_* are cached_property and keep the process CI engine
+    # (mysql/postgres) unless the cache is cleared after the URL patch.
+    for attr in ("is_postgresql", "is_mysql", "is_sqlite"):
+        backup_service.database_settings.__dict__.pop(attr, None)
     monkeypatch.setattr(backup_service.backup_settings, "directory", str(backup_dir))
     monkeypatch.setattr(backup_service.backup_settings, "allow_panel_restore", True)
     monkeypatch.setattr(backup_service.backup_settings, "encryption_key", "")

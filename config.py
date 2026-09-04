@@ -334,6 +334,18 @@ class ObservabilitySettings(EnvSettings):
     alert_cpu_threshold: float = Field(
         default=90.0, ge=50, le=100, validation_alias="OBSERVABILITY_ALERT_CPU_THRESHOLD"
     )
+    alert_cpu_confirmation_samples: int = Field(
+        default=3,
+        ge=1,
+        le=5,
+        validation_alias="OBSERVABILITY_ALERT_CPU_CONFIRMATION_SAMPLES",
+    )
+    alert_cpu_confirmation_interval: float = Field(
+        default=1.0,
+        ge=0,
+        le=10,
+        validation_alias="OBSERVABILITY_ALERT_CPU_CONFIRMATION_INTERVAL",
+    )
     alert_mem_threshold: float = Field(
         default=90.0, ge=50, le=100, validation_alias="OBSERVABILITY_ALERT_MEM_THRESHOLD"
     )

@@ -50,7 +50,9 @@ const ObservabilityPage = () => {
 
   const { data, isLoading, isError } = useObservabilitySummary({
     enabled: canView,
-    refetchInterval: canView ? 2000 : false,
+    // A summary probes every node; avoid overlapping the node agent's
+    // one-second CPU samples on larger fleets.
+    refetchInterval: canView ? 10_000 : false,
   })
 
   const { data: history } = useObservabilityHistory(

@@ -1,10 +1,13 @@
 import math
 import os
 import secrets
+import threading
 import time
 from dataclasses import dataclass
 
 import psutil
+
+_cpu_sample_lock = threading.Lock()
 
 
 @dataclass
@@ -28,7 +31,12 @@ class DiskStat:
 
 
 def cpu_usage() -> CPUStat:
-    return CPUStat(cores=psutil.cpu_count(), percent=psutil.cpu_percent())
+    # interval=None measures from the previous process-wide call and produces
+    # unstable spikes when several API/jobs poll concurrently. Serialize a
+    # short fixed-window sample so every caller observes comparable data.
+    with _cpu_sample_lock:
+        percent = psutil.cpu_percent(interval=0.25)
+    return CPUStat(cores=psutil.cpu_count(), percent=percent)
 
 
 def memory_usage() -> MemoryStat:

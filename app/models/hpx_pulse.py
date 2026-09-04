@@ -69,6 +69,7 @@ class HpxPulseCreate(BaseModel):
     domain: str | None = Field(default=None, max_length=255)
     sni_hint: str | None = Field(default=None, max_length=255)
     note: str | None = Field(default=None, max_length=512)
+    auto_restart_interval_minutes: int | None = Field(default=None, ge=0, le=10080)
 
 
 class HpxPulseUpdate(BaseModel):
@@ -83,6 +84,7 @@ class HpxPulseUpdate(BaseModel):
     sni_hint: str | None = Field(default=None, max_length=255)
     note: str | None = Field(default=None, max_length=512)
     enabled: bool | None = None
+    auto_restart_interval_minutes: int | None = Field(default=None, ge=0, le=10080)
 
 
 class HpxPulseResponse(BaseModel):
@@ -117,6 +119,8 @@ class HpxPulseResponse(BaseModel):
     message: str | None = None
     latency_ms: float | None = None
     packet_loss_pct: float | None = None
+    auto_restart_interval_minutes: int | None = None
+    last_auto_restart_at: dt | None = None
     created_at: dt
 
     model_config = ConfigDict(from_attributes=True)

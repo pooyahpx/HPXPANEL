@@ -38,9 +38,20 @@ const schema = z.object({
   goal: z.enum(['stealth', 'balanced', 'speed']),
   control_port: z.coerce.number().int().min(1024).max(65535),
   port_forwards: z.array(portForwardSchema).default([]),
+  auto_restart_interval_minutes: z.coerce.number().int().min(0).max(10080),
 })
 
 type FormValues = z.infer<typeof schema>
+
+const AUTO_RESTART_PRESETS = [
+  { value: 0, labelKey: 'hpxPulse.autoRestartOff', defaultValue: 'Off' },
+  { value: 15, labelKey: 'hpxPulse.autoRestart15m', defaultValue: 'Every 15 min' },
+  { value: 30, labelKey: 'hpxPulse.autoRestart30m', defaultValue: 'Every 30 min' },
+  { value: 60, labelKey: 'hpxPulse.autoRestart1h', defaultValue: 'Every 1 hour' },
+  { value: 360, labelKey: 'hpxPulse.autoRestart6h', defaultValue: 'Every 6 hours' },
+  { value: 720, labelKey: 'hpxPulse.autoRestart12h', defaultValue: 'Every 12 hours' },
+  { value: 1440, labelKey: 'hpxPulse.autoRestart24h', defaultValue: 'Every 24 hours' },
+] as const
 
 function defaultPulseName() {
   const n = new Date()
@@ -70,6 +81,7 @@ function pulseToFormValues(pulse: HpxPulseResponse): FormValues {
     goal: pulse.goal,
     control_port: pulse.control_port,
     port_forwards: portForwards.length ? portForwards : [{ external_port: 443, internal_ip: '', internal_port: 443 }],
+    auto_restart_interval_minutes: pulse.auto_restart_interval_minutes ?? 0,
   }
 }
 
@@ -94,6 +106,7 @@ export default function HpxPulseWizard({ open, onOpenChange, onCreated, editingP
       goal: 'balanced',
       control_port: randomTunnelPort(),
       port_forwards: [{ external_port: 443, internal_ip: '', internal_port: 443 }],
+      auto_restart_interval_minutes: 0,
     },
   })
 
@@ -112,6 +125,7 @@ export default function HpxPulseWizard({ open, onOpenChange, onCreated, editingP
       goal: 'balanced',
       control_port: randomTunnelPort(),
       port_forwards: [{ external_port: 443, internal_ip: '', internal_port: 443 }],
+      auto_restart_interval_minutes: 0,
     })
     setAdvice(null)
     setSelectedProfile(null)
@@ -140,6 +154,7 @@ export default function HpxPulseWizard({ open, onOpenChange, onCreated, editingP
       }
 
       const portForwards = (values.port_forwards ?? []).map(toTunnelPortString)
+      const autoRestart = values.auto_restart_interval_minutes > 0 ? values.auto_restart_interval_minutes : 0
 
       if (isEditing && editingPulse) {
         await updateMutation.mutateAsync({
@@ -152,6 +167,7 @@ export default function HpxPulseWizard({ open, onOpenChange, onCreated, editingP
             profile_id: profileId,
             control_port: values.control_port,
             port_forwards: portForwards,
+            auto_restart_interval_minutes: autoRestart,
           },
         })
         toast.success(t('hpxPulse.updateSuccess', { defaultValue: 'Pulse updated — agents will sync' }))
@@ -171,6 +187,7 @@ export default function HpxPulseWizard({ open, onOpenChange, onCreated, editingP
         profile_id: profileId,
         control_port: values.control_port,
         port_forwards: portForwards,
+        auto_restart_interval_minutes: autoRestart || null,
       })
       toast.success(t('hpxPulse.createSuccess', { defaultValue: 'Pulse created — copy install commands below' }))
       onCreated?.(res)
@@ -265,6 +282,64 @@ export default function HpxPulseWizard({ open, onOpenChange, onCreated, editingP
                   <FormMessage />
                 </FormItem>
               )} />
+              <FormField
+                control={form.control}
+                name="auto_restart_interval_minutes"
+                render={({ field }) => {
+                  const presetValues = AUTO_RESTART_PRESETS.map(p => p.value)
+                  const isCustom = !presetValues.includes(Number(field.value) as (typeof presetValues)[number])
+                  const selectValue = isCustom ? 'custom' : String(field.value ?? 0)
+                  return (
+                    <FormItem>
+                      <FormLabel>{t('hpxPulse.autoRestart', { defaultValue: 'Auto-restart' })}</FormLabel>
+                      <Select
+                        value={selectValue}
+                        onValueChange={value => {
+                          if (value === 'custom') {
+                            field.onChange(field.value && !presetValues.includes(Number(field.value) as never) ? field.value : 45)
+                            return
+                          }
+                          field.onChange(Number(value))
+                        }}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {AUTO_RESTART_PRESETS.map(preset => (
+                            <SelectItem key={preset.value} value={String(preset.value)}>
+                              {t(preset.labelKey, { defaultValue: preset.defaultValue })}
+                            </SelectItem>
+                          ))}
+                          <SelectItem value="custom">
+                            {t('hpxPulse.autoRestartCustom', { defaultValue: 'Custom minutes…' })}
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {isCustom && (
+                        <Input
+                          type="number"
+                          min={1}
+                          max={10080}
+                          dir="ltr"
+                          className="mt-2"
+                          value={field.value || ''}
+                          onChange={e => field.onChange(Number(e.target.value) || 0)}
+                          placeholder="45"
+                        />
+                      )}
+                      <p className="text-muted-foreground text-xs">
+                        {t('hpxPulse.autoRestartHint', {
+                          defaultValue: 'Panel will queue a tunnel restart on this schedule. Agents pick it up within ~30s.',
+                        })}
+                      </p>
+                      <FormMessage />
+                    </FormItem>
+                  )
+                }}
+              />
             </div>
 
             <div className="space-y-2 rounded-lg border p-3">

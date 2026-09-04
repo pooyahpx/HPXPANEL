@@ -13,7 +13,17 @@ import {
 import { useAdmin } from '@/hooks/use-admin'
 import { hasPermission } from '@/utils/rbac'
 import { cn } from '@/lib/utils'
-import { Activity, Copy, Pencil, Plus, RefreshCw, Trash2, Zap } from 'lucide-react'
+import {
+  Activity,
+  Copy,
+  KeyRound,
+  Pencil,
+  Plus,
+  RefreshCw,
+  Timer,
+  Trash2,
+  Zap,
+} from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -45,23 +55,27 @@ function JoinCommandBlock({
     t('hpxPulse.joinCommandPrimaryGithub', { defaultValue: 'Recommended (GitHub)' })
   return (
     <div className="space-y-2">
-      <span className="text-muted-foreground font-medium">{label}</span>
-      <div className="space-y-1">
+      <span className="text-muted-foreground text-sm font-medium">{label}</span>
+      <div className="space-y-1.5">
         <p className="text-[10px] font-medium uppercase tracking-wide text-emerald-600 dark:text-emerald-400">
           {hint}
         </p>
-        <pre className="bg-muted overflow-x-auto rounded p-2 font-mono text-[11px]">{primary}</pre>
-        <Button size="sm" variant="secondary" onClick={() => onCopy(primary, label)}>
+        <pre className="bg-muted/80 overflow-x-auto rounded-lg border p-3 font-mono text-[11px] leading-relaxed">
+          {primary}
+        </pre>
+        <Button size="sm" variant="secondary" className="h-8 gap-1.5" onClick={() => onCopy(primary, label)}>
           <Copy className="size-3" /> {label}
         </Button>
       </div>
       {alt ? (
-        <div className="space-y-1">
+        <div className="space-y-1.5">
           <p className="text-muted-foreground text-[10px] font-medium uppercase tracking-wide">
             {t('hpxPulse.joinCommandAltPanel', { defaultValue: 'Alternative (panel URL)' })}
           </p>
-          <pre className="bg-muted overflow-x-auto rounded p-2 font-mono text-[11px]">{alt}</pre>
-          <Button size="sm" variant="outline" onClick={() => onCopy(alt, `${label} alt`)}>
+          <pre className="bg-muted/60 overflow-x-auto rounded-lg border border-dashed p-3 font-mono text-[11px] leading-relaxed">
+            {alt}
+          </pre>
+          <Button size="sm" variant="outline" className="h-8 gap-1.5" onClick={() => onCopy(alt, `${label} alt`)}>
             <Copy className="size-3" /> {label} (panel)
           </Button>
         </div>
@@ -69,14 +83,15 @@ function JoinCommandBlock({
     </div>
   )
 }
+
 const statusTone: Record<string, string> = {
-  running: 'bg-emerald-500/15 text-emerald-600 border-emerald-500/40 dark:text-emerald-400',
-  starting: 'bg-blue-500/15 text-blue-600 border-blue-500/40',
-  partial: 'bg-amber-500/15 text-amber-600 border-amber-500/40',
-  pending_claim: 'bg-violet-500/15 text-violet-600 border-violet-500/40',
+  running: 'bg-emerald-500/15 text-emerald-700 border-emerald-500/35 dark:text-emerald-400',
+  starting: 'bg-sky-500/15 text-sky-700 border-sky-500/35 dark:text-sky-400',
+  partial: 'bg-amber-500/15 text-amber-700 border-amber-500/35 dark:text-amber-400',
+  pending_claim: 'bg-violet-500/15 text-violet-700 border-violet-500/35 dark:text-violet-400',
   stopped: 'bg-muted text-muted-foreground border-border',
-  error: 'bg-destructive/15 text-destructive border-destructive/40',
-  unhealthy: 'bg-orange-500/15 text-orange-600 border-orange-500/40',
+  error: 'bg-destructive/15 text-destructive border-destructive/35',
+  unhealthy: 'bg-orange-500/15 text-orange-700 border-orange-500/35 dark:text-orange-400',
 }
 
 function carrierLabel(carrier: string | null, t: (k: string, o?: { defaultValue: string }) => string) {
@@ -101,6 +116,61 @@ function modeLabel(tunnelMode: string, t: (k: string, o?: { defaultValue: string
   return t('hpxPulse.modeDirect', { defaultValue: 'DIRECT' })
 }
 
+function formatAutoRestart(minutes: number | null | undefined, t: (k: string, o?: Record<string, unknown>) => string) {
+  if (!minutes || minutes < 1) return null
+  if (minutes < 60) {
+    return t('hpxPulse.autoRestartEveryMinutes', { defaultValue: 'Every {{n}} min', n: minutes })
+  }
+  if (minutes % 60 === 0) {
+    const hours = minutes / 60
+    return t('hpxPulse.autoRestartEveryHours', { defaultValue: 'Every {{n}}h', n: hours })
+  }
+  return t('hpxPulse.autoRestartEveryMinutes', { defaultValue: 'Every {{n}} min', n: minutes })
+}
+
+function AgentCell({
+  label,
+  connected,
+  host,
+  t,
+}: {
+  label: string
+  connected: boolean
+  host?: string | null
+  t: (k: string, o?: { defaultValue: string }) => string
+}) {
+  return (
+    <div
+      className={cn(
+        'relative overflow-hidden rounded-xl border px-3 py-2.5',
+        connected
+          ? 'border-emerald-500/30 bg-gradient-to-br from-emerald-500/10 to-transparent'
+          : 'border-border/70 bg-muted/30',
+      )}
+    >
+      <div className="flex items-center gap-2">
+        <span
+          className={cn(
+            'size-2 shrink-0 rounded-full',
+            connected ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.7)]' : 'bg-muted-foreground/40',
+          )}
+        />
+        <span className="text-muted-foreground text-[11px] font-medium tracking-wide uppercase">{label}</span>
+      </div>
+      <p className={cn('mt-1 text-sm font-medium', connected && 'text-emerald-700 dark:text-emerald-400')}>
+        {connected
+          ? t('hpxPulse.agentConnected', { defaultValue: 'connected' })
+          : t('hpxPulse.agentWaiting', { defaultValue: 'waiting' })}
+      </p>
+      {host ? (
+        <p className="text-muted-foreground mt-0.5 truncate font-mono text-[10px]" dir="ltr" title={host}>
+          {host}
+        </p>
+      ) : null}
+    </div>
+  )
+}
+
 function PulseCard({
   pulse,
   onDelete,
@@ -123,107 +193,161 @@ function PulseCard({
   const top = pulse.advice?.profiles.find(p => p.profile_id === pulse.profile_id)
   const isRunning = pulse.status === 'running'
   const bothAgents = pulse.iran_claimed && pulse.abroad_claimed
+  const autoLabel = formatAutoRestart(pulse.auto_restart_interval_minutes, t)
 
   return (
     <Card
       className={cn(
-        'space-y-3 p-4 transition-colors',
-        isRunning && 'border-emerald-500/50 bg-emerald-500/5 shadow-emerald-500/10 shadow-sm',
-        bothAgents && !isRunning && 'border-amber-500/40 bg-amber-500/5',
+        'group relative overflow-hidden border transition-all duration-300',
+        isRunning && 'border-emerald-500/40 shadow-[0_0_0_1px_rgba(16,185,129,0.08)]',
+        bothAgents && !isRunning && 'border-amber-500/35',
+        !isRunning && !bothAgents && 'border-border/80',
       )}
     >
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Zap className={cn('size-4', isRunning ? 'text-emerald-500' : 'text-primary')} />
-            <span className="font-semibold">{pulse.name}</span>
-            <Badge variant="outline" className={cn('text-xs capitalize', statusTone[pulse.status])}>
-              {t(`hpxPulse.status.${pulse.status}`, { defaultValue: pulse.status })}
-            </Badge>
-            <Badge variant="secondary" className="text-xs uppercase">
-              {modeLabel(pulse.tunnel_mode, t)}
-            </Badge>
-            <Badge variant="secondary" className="text-xs uppercase">
-              {carrierLabel(pulse.carrier, t)}
-            </Badge>
+      <div
+        className={cn(
+          'pointer-events-none absolute inset-x-0 top-0 h-1',
+          isRunning && 'bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-500',
+          pulse.status === 'partial' && 'bg-gradient-to-r from-amber-400 to-orange-400',
+          pulse.status === 'pending_claim' && 'bg-gradient-to-r from-violet-400 to-fuchsia-400',
+          (pulse.status === 'error' || pulse.status === 'unhealthy') && 'bg-gradient-to-r from-red-500 to-orange-500',
+          pulse.status === 'stopped' && 'bg-muted-foreground/30',
+        )}
+      />
+
+      <div className="space-y-4 p-4 pt-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0 space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <div
+                className={cn(
+                  'flex size-8 items-center justify-center rounded-lg',
+                  isRunning ? 'bg-emerald-500/15 text-emerald-500' : 'bg-primary/10 text-primary',
+                )}
+              >
+                <Zap className={cn('size-4', isRunning && 'animate-pulse')} />
+              </div>
+              <h3 className="truncate text-base font-semibold tracking-tight" dir="ltr">
+                {pulse.name}
+              </h3>
+              <Badge variant="outline" className={cn('h-6 text-[11px] capitalize', statusTone[pulse.status])}>
+                {t(`hpxPulse.status.${pulse.status}`, { defaultValue: pulse.status })}
+              </Badge>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Badge variant="secondary" className="h-5 rounded-md px-1.5 text-[10px] font-medium tracking-wide uppercase">
+                {modeLabel(pulse.tunnel_mode, t)}
+              </Badge>
+              <Badge variant="secondary" className="h-5 rounded-md px-1.5 text-[10px] font-medium tracking-wide uppercase">
+                {carrierLabel(pulse.carrier, t)}
+              </Badge>
+              <span className="text-muted-foreground text-[11px]">
+                {pulse.tunnel_mode.startsWith('reverse_') ? 'HPX Reverse' : 'HPX Direct'} · {pulse.preset}
+              </span>
+              {autoLabel && (
+                <Badge
+                  variant="outline"
+                  className="h-5 gap-1 rounded-md border-sky-500/30 bg-sky-500/10 px-1.5 text-[10px] text-sky-700 dark:text-sky-400"
+                >
+                  <Timer className="size-3" />
+                  {autoLabel}
+                </Badge>
+              )}
+            </div>
           </div>
-          <p className="text-muted-foreground mt-1 text-xs">
-            {pulse.tunnel_mode.startsWith('reverse_') ? 'HPX Reverse' : 'HPX Direct'} · {pulse.profile_id.replace('pulse-', '')} · {pulse.preset}
-          </p>
-        </div>
-        <div className="flex gap-1">
-          {canUpdate && (pulse.iran_claimed || pulse.abroad_claimed) && (
-            <Button size="sm" variant="outline" onClick={onSync} disabled={syncLoading}>
-              <RefreshCw className={cn('size-3.5', syncLoading && 'animate-spin')} />
-              {t('hpxPulse.sync', { defaultValue: 'Sync' })}
-            </Button>
-          )}
-          {canUpdate && (
-            <Button size="sm" variant="outline" onClick={onEdit}>
-              <Pencil className="size-3.5" />
-              {t('edit', { defaultValue: 'Edit' })}
-            </Button>
-          )}
-          <Button size="sm" variant="outline" onClick={onRegenerate}>
-            {t('hpxPulse.regenerate', { defaultValue: 'Tokens' })}
-          </Button>
-          <Button size="sm" variant="destructive" onClick={onDelete}>
-            <Trash2 className="size-3.5" />
-          </Button>
-        </div>
-      </div>
 
-      <div className="grid gap-2 text-xs sm:grid-cols-3">
-        <div className={cn('rounded-md border px-2 py-1.5', pulse.iran_claimed ? 'border-emerald-500/40 bg-emerald-500/5' : 'border-border')}>
-          <span className="text-muted-foreground block">{t('hpxPulse.iranAgent', { defaultValue: 'Iran agent' })}</span>
-          <span className={pulse.iran_claimed ? 'text-emerald-600 dark:text-emerald-400' : ''}>
-            {pulse.iran_claimed
-              ? t('hpxPulse.agentConnected', { defaultValue: 'connected' })
-              : t('hpxPulse.agentWaiting', { defaultValue: 'waiting' })}
-          </span>
-        </div>
-        <div className={cn('rounded-md border px-2 py-1.5', pulse.abroad_claimed ? 'border-emerald-500/40 bg-emerald-500/5' : 'border-border')}>
-          <span className="text-muted-foreground block">{t('hpxPulse.abroadAgent', { defaultValue: 'Abroad agent' })}</span>
-          <span className={pulse.abroad_claimed ? 'text-emerald-600 dark:text-emerald-400' : ''}>
-            {pulse.abroad_claimed
-              ? t('hpxPulse.agentConnected', { defaultValue: 'connected' })
-              : t('hpxPulse.agentWaiting', { defaultValue: 'waiting' })}
-          </span>
-        </div>
-        <div className={cn(
-          'rounded-md border px-2 py-1.5',
-          pulse.latency_ms != null && pulse.status === 'running'
-            ? 'border-emerald-500/40 bg-emerald-500/5'
-            : pulse.status === 'unhealthy'
-              ? 'border-orange-500/40 bg-orange-500/5'
-              : 'border-border',
-        )}>
-          <span className="text-muted-foreground flex items-center gap-1">
-            <Activity className={cn('size-3', pulse.latency_ms != null && 'animate-pulse')} />
-            {t('hpxPulse.ping', { defaultValue: 'Ping' })}
-            {pulse.latency_ms != null && (
-              <span className="text-[10px] opacity-70">{t('hpxPulse.live', { defaultValue: 'live' })}</span>
+          <div className="flex flex-wrap gap-1">
+            {canUpdate && (pulse.iran_claimed || pulse.abroad_claimed) && (
+              <Button size="sm" variant="outline" className="h-8 gap-1.5" onClick={onSync} disabled={syncLoading}>
+                <RefreshCw className={cn('size-3.5', syncLoading && 'animate-spin')} />
+                {t('hpxPulse.sync', { defaultValue: 'Sync' })}
+              </Button>
             )}
-          </span>
-          <span className={cn(
-            pulse.latency_ms != null && pulse.status === 'running' && 'font-medium text-emerald-600 dark:text-emerald-400',
-            pulse.status === 'unhealthy' && 'font-medium text-orange-600 dark:text-orange-400',
-          )}>
-            {pulse.latency_ms != null ? `${pulse.latency_ms.toFixed(1)} ms` : '—'}
-          </span>
+            {canUpdate && (
+              <Button size="sm" variant="outline" className="h-8 gap-1.5" onClick={onEdit}>
+                <Pencil className="size-3.5" />
+                {t('edit', { defaultValue: 'Edit' })}
+              </Button>
+            )}
+            <Button size="sm" variant="outline" className="h-8 gap-1.5" onClick={onRegenerate}>
+              <KeyRound className="size-3.5" />
+              {t('hpxPulse.regenerate', { defaultValue: 'Tokens' })}
+            </Button>
+            <Button size="sm" variant="ghost" className="text-destructive hover:bg-destructive/10 h-8 w-8 p-0" onClick={onDelete}>
+              <Trash2 className="size-3.5" />
+            </Button>
+          </div>
         </div>
-      </div>
 
-      <div className="text-muted-foreground grid gap-1 text-xs sm:grid-cols-2">
-        <span>{t('hpxPulse.tunnelPort', { defaultValue: 'Tunnel port' })}: {pulse.control_port}</span>
-        {pulse.port_forwards?.length ? (
-          <span>{t('hpxPulse.portForwards', { defaultValue: 'Port forwards' })}: {pulse.port_forwards.join(', ')}</span>
-        ) : null}
+        <div className="grid gap-2 sm:grid-cols-3">
+          <AgentCell
+            label={t('hpxPulse.iranAgent', { defaultValue: 'Iran agent' })}
+            connected={pulse.iran_claimed}
+            host={pulse.iran_agent_host}
+            t={t}
+          />
+          <AgentCell
+            label={t('hpxPulse.abroadAgent', { defaultValue: 'Abroad agent' })}
+            connected={pulse.abroad_claimed}
+            host={pulse.abroad_agent_host}
+            t={t}
+          />
+          <div
+            className={cn(
+              'relative overflow-hidden rounded-xl border px-3 py-2.5',
+              pulse.latency_ms != null && pulse.status === 'running'
+                ? 'border-emerald-500/30 bg-gradient-to-br from-emerald-500/10 to-transparent'
+                : pulse.status === 'unhealthy'
+                  ? 'border-orange-500/30 bg-orange-500/5'
+                  : 'border-border/70 bg-muted/30',
+            )}
+          >
+            <div className="text-muted-foreground flex items-center gap-1.5 text-[11px] font-medium tracking-wide uppercase">
+              <Activity className={cn('size-3', pulse.latency_ms != null && 'animate-pulse')} />
+              {t('hpxPulse.ping', { defaultValue: 'Ping' })}
+              {pulse.latency_ms != null && (
+                <span className="rounded bg-emerald-500/15 px-1 text-[9px] text-emerald-600 dark:text-emerald-400">
+                  {t('hpxPulse.live', { defaultValue: 'live' })}
+                </span>
+              )}
+            </div>
+            <p
+              className={cn(
+                'mt-1 text-sm font-semibold tabular-nums',
+                pulse.latency_ms != null && pulse.status === 'running' && 'text-emerald-700 dark:text-emerald-400',
+                pulse.status === 'unhealthy' && 'text-orange-600 dark:text-orange-400',
+              )}
+              dir="ltr"
+            >
+              {pulse.latency_ms != null ? `${pulse.latency_ms.toFixed(1)} ms` : '—'}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t pt-3 text-xs">
+          <span className="text-muted-foreground">
+            {t('hpxPulse.tunnelPort', { defaultValue: 'Tunnel port' })}:{' '}
+            <span className="text-foreground font-mono font-medium" dir="ltr">
+              {pulse.control_port}
+            </span>
+          </span>
+          {pulse.port_forwards?.length ? (
+            <span className="text-muted-foreground">
+              {t('hpxPulse.portForwards', { defaultValue: 'Port forwards' })}:{' '}
+              <span className="text-foreground font-mono font-medium" dir="ltr">
+                {pulse.port_forwards.join(', ')}
+              </span>
+            </span>
+          ) : null}
+        </div>
+
+        {(top || pulse.message) && (
+          <div className="space-y-1">
+            {top && <p className="text-foreground/80 text-xs">{fa ? top.title_fa : top.title}</p>}
+            {pulse.message && <p className="text-muted-foreground text-xs leading-relaxed">{pulse.message}</p>}
+          </div>
+        )}
       </div>
-      {top && (
-        <p className="text-xs">{fa ? top.title_fa : top.title}</p>
-      )}
-      {pulse.message && <p className="text-muted-foreground text-xs">{pulse.message}</p>}
     </Card>
   )
 }
@@ -244,7 +368,10 @@ export default function HpxPulseList() {
   const [syncingId, setSyncingId] = useState<number | null>(null)
 
   useEffect(() => {
-    const handler = () => setWizardOpen(true)
+    const handler = () => {
+      setEditingPulse(null)
+      setWizardOpen(true)
+    }
     window.addEventListener('openHpxPulseDialog', handler)
     return () => window.removeEventListener('openHpxPulseDialog', handler)
   }, [])
@@ -254,21 +381,40 @@ export default function HpxPulseList() {
     toast.success(t('copied', { defaultValue: 'Copied' }))
   }
 
+  const runningCount = data?.pulses?.filter(p => p.status === 'running').length ?? 0
+
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-muted-foreground text-sm">
-          {t('hpxPulse.summary', {
-            defaultValue: '{{total}} pulse tunnel(s)',
-            total: data?.total ?? 0,
-          })}
-        </p>
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-medium">
+            {t('hpxPulse.summary', {
+              defaultValue: '{{total}} pulse tunnel(s)',
+              total: data?.total ?? 0,
+            })}
+          </p>
+          {(data?.total ?? 0) > 0 && (
+            <p className="text-muted-foreground mt-0.5 text-xs">
+              {t('hpxPulse.runningCount', {
+                defaultValue: '{{count}} running',
+                count: runningCount,
+              })}
+            </p>
+          )}
+        </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
+          <Button variant="outline" size="sm" className="h-8 w-8 p-0" onClick={() => refetch()} disabled={isFetching}>
             <RefreshCw className={`size-3.5 ${isFetching ? 'animate-spin' : ''}`} />
           </Button>
           {canCreate && (
-            <Button size="sm" onClick={() => { setEditingPulse(null); setWizardOpen(true) }}>
+            <Button
+              size="sm"
+              className="h-8 gap-1.5"
+              onClick={() => {
+                setEditingPulse(null)
+                setWizardOpen(true)
+              }}
+            >
               <Plus className="size-3.5" />
               {t('hpxPulse.add', { defaultValue: 'New Pulse' })}
             </Button>
@@ -277,13 +423,13 @@ export default function HpxPulseList() {
       </div>
 
       {isError && (
-        <Card className="border-destructive/50 bg-destructive/5 space-y-1 p-4 text-sm">
-          <p className="font-medium text-destructive">
+        <Card className="border-destructive/40 bg-destructive/5 space-y-1 p-4 text-sm">
+          <p className="text-destructive font-medium">
             {t('hpxPulse.loadError', { defaultValue: 'Could not load Pulse tunnels from panel API' })}
           </p>
           <p className="text-muted-foreground text-xs">
             {t('hpxPulse.loadErrorHint', {
-              defaultValue: 'Update panel to v3.7.2+, run DB migration (alembic upgrade head), and check hpx_pulse permissions.',
+              defaultValue: 'Update panel, run DB migration (alembic upgrade head), and check hpx_pulse permissions.',
             })}
           </p>
           {(error as Error)?.message && (
@@ -293,21 +439,18 @@ export default function HpxPulseList() {
       )}
 
       {joinCommands && (
-        <Card className="space-y-2 p-4 text-xs">
-          <p className="font-medium">{t('hpxPulse.installCommands', { defaultValue: 'Install commands' })}</p>
-          <p className="text-muted-foreground text-[11px]">
-            {t('hpxPulse.panelUrlWarning', {
-              defaultValue: 'Use the exact panel URL below on both servers — a typo (e.g. duolingoo vs duolingo) means agents join a different panel than this UI.',
-            })}
-          </p>
+        <Card className="space-y-3 border-sky-500/20 bg-gradient-to-br from-sky-500/5 to-transparent p-4 text-xs">
+          <div>
+            <p className="text-sm font-semibold">{t('hpxPulse.installCommands', { defaultValue: 'Install commands' })}</p>
+            <p className="text-muted-foreground mt-1 text-[11px] leading-relaxed">
+              {t('hpxPulse.panelUrlWarning', {
+                defaultValue:
+                  'Use the exact panel URL below on both servers — a typo means agents join a different panel than this UI.',
+              })}
+            </p>
+          </div>
           {joinCommands.iran && (
-            <JoinCommandBlock
-              label="Iran"
-              primary={joinCommands.iran}
-              alt={joinCommands.iranAlt}
-              onCopy={copy}
-              t={t}
-            />
+            <JoinCommandBlock label="Iran" primary={joinCommands.iran} alt={joinCommands.iranAlt} onCopy={copy} t={t} />
           )}
           {joinCommands.abroad && (
             <JoinCommandBlock
@@ -322,13 +465,37 @@ export default function HpxPulseList() {
       )}
 
       {isLoading ? (
-        <Skeleton className="h-32 w-full" />
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Skeleton className="h-52 w-full rounded-xl" />
+          <Skeleton className="h-52 w-full rounded-xl" />
+        </div>
       ) : isError ? null : (data?.pulses?.length ?? 0) === 0 ? (
-        <Card className="text-muted-foreground p-8 text-center text-sm">
-          {t('hpxPulse.empty', { defaultValue: 'No Pulse tunnels yet. Create one with the advisor wizard.' })}
+        <Card className="flex flex-col items-center justify-center gap-3 border-dashed p-12 text-center">
+          <div className="bg-primary/10 text-primary flex size-12 items-center justify-center rounded-2xl">
+            <Zap className="size-6" />
+          </div>
+          <div className="space-y-1">
+            <p className="font-medium">{t('hpxPulse.emptyTitle', { defaultValue: 'No Pulse tunnels yet' })}</p>
+            <p className="text-muted-foreground max-w-sm text-sm">
+              {t('hpxPulse.empty', { defaultValue: 'Create one with the advisor wizard to deploy Iran + abroad agents.' })}
+            </p>
+          </div>
+          {canCreate && (
+            <Button
+              size="sm"
+              className="mt-1 gap-1.5"
+              onClick={() => {
+                setEditingPulse(null)
+                setWizardOpen(true)
+              }}
+            >
+              <Plus className="size-3.5" />
+              {t('hpxPulse.add', { defaultValue: 'New Pulse' })}
+            </Button>
+          )}
         </Card>
       ) : (
-        <div className="grid gap-3 lg:grid-cols-2">
+        <div className="grid gap-4 lg:grid-cols-2">
           {data!.pulses.map(pulse => (
             <PulseCard
               key={pulse.id}

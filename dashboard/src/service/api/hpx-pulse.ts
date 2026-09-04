@@ -67,6 +67,8 @@ export interface HpxPulseResponse {
   abroad_agent_last_seen: string | null
   message: string | null
   latency_ms?: number | null
+  auto_restart_interval_minutes?: number | null
+  last_auto_restart_at?: string | null
   created_at: string
 }
 
@@ -98,6 +100,7 @@ export interface HpxPulseCreate {
   domain?: string | null
   sni_hint?: string | null
   note?: string | null
+  auto_restart_interval_minutes?: number | null
 }
 
 export interface HpxPulseUpdate {
@@ -112,6 +115,7 @@ export interface HpxPulseUpdate {
   sni_hint?: string | null
   note?: string | null
   enabled?: boolean
+  auto_restart_interval_minutes?: number | null
 }
 
 export interface HpxPulseActionResponse {

@@ -1202,6 +1202,8 @@ class HpxPulse(Base, CreatedAtUTCMixin):
     packet_loss_pct: Mapped[float | None] = mapped_column(Float, default=None)
     message: Mapped[str | None] = mapped_column(String(1024), default=None)
     last_status_change: Mapped[dt | None] = mapped_column(DateTime(timezone=True), default=None)
+    auto_restart_interval_minutes: Mapped[int | None] = mapped_column(Integer, default=None)
+    last_auto_restart_at: Mapped[dt | None] = mapped_column(DateTime(timezone=True), default=None)
 
 
 class TelegramSubDelivery(Base):

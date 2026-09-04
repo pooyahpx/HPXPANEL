@@ -131,6 +131,8 @@ def _to_response(db_pulse: HpxPulse) -> HpxPulseResponse:
         "message": db_pulse.message,
         "latency_ms": db_pulse.latency_ms,
         "packet_loss_pct": db_pulse.packet_loss_pct,
+        "auto_restart_interval_minutes": db_pulse.auto_restart_interval_minutes,
+        "last_auto_restart_at": db_pulse.last_auto_restart_at,
         "created_at": db_pulse.created_at,
     }
     return HpxPulseResponse.model_validate(data)
@@ -377,6 +379,10 @@ class HpxPulseOperation(BaseOperation):
         if not update_data:
             await self.raise_error(message="No fields to update", code=422)
 
+        if "auto_restart_interval_minutes" in update_data:
+            interval = update_data["auto_restart_interval_minutes"]
+            update_data["auto_restart_interval_minutes"] = interval if interval and interval > 0 else None
+
         if model.profile_id is not None:
             meta = profile_meta(model.profile_id)
             update_data["profile_id"] = meta["profile_id"]
@@ -400,12 +406,22 @@ class HpxPulseOperation(BaseOperation):
                 update_data["carrier"] = chosen.carrier
                 update_data["preset"] = chosen.preset
 
-        if db_pulse.iran_agent_key_hash:
-            update_data.setdefault("iran_agent_command", "restart")
-        if db_pulse.abroad_agent_key_hash:
-            update_data.setdefault("abroad_agent_command", "restart")
-        update_data.setdefault("message", "Config updated — agents syncing")
-        update_data["last_status_change"] = dt.now(UTC)
+        # Interval-only changes should not force an immediate agent restart.
+        soft_keys = {"auto_restart_interval_minutes", "note", "enabled"}
+        needs_agent_restart = bool(set(update_data.keys()) - soft_keys)
+        if needs_agent_restart:
+            if db_pulse.iran_agent_key_hash:
+                update_data.setdefault("iran_agent_command", "restart")
+            if db_pulse.abroad_agent_key_hash:
+                update_data.setdefault("abroad_agent_command", "restart")
+            update_data.setdefault("message", "Config updated — agents syncing")
+            update_data["last_status_change"] = dt.now(UTC)
+        elif "auto_restart_interval_minutes" in update_data:
+            interval = update_data["auto_restart_interval_minutes"]
+            update_data.setdefault(
+                "message",
+                f"Auto-restart every {interval} min" if interval else "Auto-restart disabled",
+            )
 
         db_pulse = await update_hpx_pulse(db, db_pulse, update_data)
         await db.commit()

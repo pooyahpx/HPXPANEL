@@ -38,6 +38,9 @@ async def create_hpx_pulse(
         sni_hint=model.sni_hint,
         advice_json=advice_json,
         note=model.note,
+        auto_restart_interval_minutes=(
+            model.auto_restart_interval_minutes if model.auto_restart_interval_minutes and model.auto_restart_interval_minutes > 0 else None
+        ),
     )
     db.add(db_pulse)
     await db.flush()

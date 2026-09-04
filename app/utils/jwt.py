@@ -20,15 +20,28 @@ async def get_secret_key():
         return key
 
 
-async def create_admin_token(admin_id: int | None, username: str) -> str:
+async def create_admin_token(admin_id: int | None, username: str, jti: str | None = None) -> str:
     data = {"sub": username, "access": "admin", "iat": datetime.now(UTC)}
     if admin_id is not None:
         data["aid"] = int(admin_id)
+    if jti:
+        data["jti"] = jti
     if jwt_settings.access_token_expire_minutes > 0:
         expire = datetime.now(UTC) + timedelta(minutes=jwt_settings.access_token_expire_minutes)
         data["exp"] = expire
     encoded_jwt = jwt.encode(data, await get_secret_key(), algorithm="HS256")
     return encoded_jwt
+
+
+async def create_mfa_challenge_token(admin_id: int, username: str) -> str:
+    data = {
+        "sub": username,
+        "access": "mfa_challenge",
+        "aid": int(admin_id),
+        "iat": datetime.now(UTC),
+        "exp": datetime.now(UTC) + timedelta(minutes=5),
+    }
+    return jwt.encode(data, await get_secret_key(), algorithm="HS256")
 
 
 async def get_admin_payload(token: str) -> dict | None:
@@ -37,6 +50,7 @@ async def get_admin_payload(token: str) -> dict | None:
         username: str = payload.get("sub")
         access: str = payload.get("access")
         admin_id = payload.get("aid")
+        jti = payload.get("jti")
         if admin_id is not None:
             try:
                 admin_id = int(admin_id)
@@ -53,7 +67,26 @@ async def get_admin_payload(token: str) -> dict | None:
             "admin_id": admin_id,
             "username": username,
             "created_at": created_at,
+            "jti": jti,
         }
+    except jwt.exceptions.PyJWTError:
+        return
+
+
+async def get_mfa_challenge_payload(token: str) -> dict | None:
+    try:
+        payload = jwt.decode(token, await get_secret_key(), algorithms=["HS256"], leeway=5)
+        if payload.get("access") != "mfa_challenge":
+            return
+        username = payload.get("sub")
+        admin_id = payload.get("aid")
+        if not username or admin_id is None:
+            return
+        try:
+            admin_id = int(admin_id)
+        except TypeError, ValueError:
+            return
+        return {"admin_id": admin_id, "username": username}
     except jwt.exceptions.PyJWTError:
         return
 

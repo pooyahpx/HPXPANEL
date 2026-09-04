@@ -68,8 +68,10 @@ class AdminRoleData(BaseModel):
 
 
 class Token(BaseModel):
-    access_token: str
+    access_token: str = ""
     token_type: str = "bearer"
+    mfa_required: bool = False
+    mfa_token: str | None = None
 
 
 class AdminBase(BaseModel):
@@ -130,6 +132,7 @@ class AdminDetails(AdminContactInfo):
     role: AdminRoleData | None = None
     permission_overrides: RoleLimits | None = None
     access_overrides: RoleAccess | None = None
+    totp_enabled: bool = False
 
     @property
     def is_owner(self) -> bool:
@@ -209,6 +212,7 @@ class AdminValidationResult(BaseModel):
     id: int | None = None
     username: str
     status: AdminStatus = Field(default=AdminStatus.active)
+    totp_enabled: bool = False
 
 
 class AdminsResponse(BaseModel):
@@ -351,3 +355,37 @@ class BulkAdminsActionResponse(BaseModel):
 
     admins: list[str]
     count: int
+
+
+class MFAConfirmRequest(BaseModel):
+    code: str = Field(min_length=6, max_length=8)
+
+
+class MFADisableRequest(BaseModel):
+    code: str = Field(min_length=6, max_length=8)
+    password: str
+
+
+class MFATokenRequest(BaseModel):
+    mfa_token: str
+    code: str = Field(min_length=6, max_length=8)
+
+
+class TOTPSetupResponse(BaseModel):
+    secret: str
+    otpauth_url: str
+
+
+class AdminSessionResponse(BaseModel):
+    id: int
+    user_agent: str | None = None
+    ip: str | None = None
+    created_at: dt
+    last_seen_at: dt | None = None
+    current: bool = False
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AdminSessionsResponse(BaseModel):
+    sessions: list[AdminSessionResponse]

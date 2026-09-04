@@ -30,6 +30,7 @@ dependencies = [
     "httpx>=0.28.1",
     "packaging>=26.2",
     "prometheus-client>=0.21.1",
+    "pyotp>=2.9.0",
     "paramiko>=3.5.1",
     "sqlalchemy[asyncio]>=2.0.51",
     "aiosqlite>=0.21.0",

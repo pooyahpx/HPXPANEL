@@ -32,9 +32,11 @@ const NodeLogs = lazyWithChunkRecovery(() => import('../pages/_dashboard.nodes.l
 const NodeWireGuard = lazyWithChunkRecovery(() => import('../pages/_dashboard.nodes.wireguard'))
 const HpxTunnelPage = lazyWithChunkRecovery(() => import('../pages/_dashboard.hpx-tunnel'))
 const HpxPulsePage = lazyWithChunkRecovery(() => import('../pages/_dashboard.hpx-pulse'))
+const FleetPage = lazyWithChunkRecovery(() => import('../pages/_dashboard.fleet'))
 const Settings = lazyWithChunkRecovery(() => import('../pages/_dashboard.settings'))
 const CleanupSettings = lazyWithChunkRecovery(() => import('../pages/_dashboard.settings.cleanup'))
 const BackupSettings = lazyWithChunkRecovery(() => import('../pages/_dashboard.settings.backup'))
+const SecuritySettings = lazyWithChunkRecovery(() => import('../pages/_dashboard.settings.security'))
 const GeneralSettings = lazyWithChunkRecovery(() => import('../pages/_dashboard.settings.general'))
 const HwidSettings = lazyWithChunkRecovery(() => import('../pages/_dashboard.settings.hwid'))
 const NotificationSettings = lazyWithChunkRecovery(() => import('../pages/_dashboard.settings.notifications'))
@@ -117,6 +119,14 @@ export const router = createHashRouter([
         element: (
           <Suspense fallback={<LoadingSpinner />}>
             <ObservabilityPage />
+          </Suspense>
+        ),
+      },
+      {
+        path: '/fleet',
+        element: (
+          <Suspense fallback={<LoadingSpinner />}>
+            <FleetPage />
           </Suspense>
         ),
       },
@@ -356,6 +366,14 @@ export const router = createHashRouter([
             element: (
               <Suspense fallback={<LoadingSpinner />}>
                 <BackupSettings />
+              </Suspense>
+            ),
+          },
+          {
+            path: '/settings/security',
+            element: (
+              <Suspense fallback={<LoadingSpinner />}>
+                <SecuritySettings />
               </Suspense>
             ),
           },

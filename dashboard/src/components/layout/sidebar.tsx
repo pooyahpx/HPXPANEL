@@ -77,6 +77,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const canReadClientTemplates = canReadResourcePage(admin, 'client_templates')
   const canReadHpxTunnels = canReadResourcePage(admin, 'hpx_tunnels')
   const canReadHpxPulse = canReadResourcePage(admin, 'hpx_pulse')
+  const canReadFleet = canReadNodes || canReadSystem
   const canReadAudit = hasPermission(admin, 'audit_logs', 'read')
   const canReadNodeLogs = hasPermission(admin, 'nodes', 'logs')
   const canBulkCreateFromTemplate = hasPermission(admin, 'users', 'create') && canReadTemplates
@@ -229,6 +230,15 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               title: 'observability.title',
               url: '/observability',
               icon: Activity,
+            },
+          ]
+        : []),
+      ...(canReadFleet
+        ? [
+            {
+              title: 'fleet.title',
+              url: '/fleet',
+              icon: Network,
             },
           ]
         : []),

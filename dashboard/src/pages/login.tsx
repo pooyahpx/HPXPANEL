@@ -8,6 +8,7 @@ import { LoaderButton } from '@/components/ui/loader-button'
 import { PasswordInput } from '@/components/ui/password-input'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { getCurrentAdmin, useAdminMiniAppToken, useAdminToken, useCreateOwner, useDeleteOwner, useResetOwnerPassword, useUpgradeOwner } from '@/service/api'
+import { useAdminTokenMfa } from '@/service/api/security'
 import { $fetch } from '@/service/http'
 import { getAuthToken, removeAuthToken, setAuthToken } from '@/utils/authStorage'
 import { queryClient } from '@/utils/query-client'
@@ -30,7 +31,12 @@ const schema = z.object({
   password: z.string().min(1, 'login.fieldRequired'),
 })
 
+const mfaSchema = z.object({
+  code: z.string().min(6, 'login.mfaCodeRequired').max(8, 'login.mfaCodeRequired'),
+})
+
 type LoginSchema = z.infer<typeof schema>
+type MfaSchema = z.infer<typeof mfaSchema>
 type OwnerSetupMode = 'create' | 'upgrade' | 'reset' | 'delete'
 
 const validateOwnerPassword = (password: string, ctx: z.RefinementCtx) => {
@@ -181,15 +187,35 @@ export const Login: FC = () => {
     return () => controller.abort()
   }, [navigate, isTelegram])
 
+  const [mfaToken, setMfaToken] = useState<string | null>(null)
+  const mfaLogin = useAdminTokenMfa()
+
+  const {
+    register: registerMfa,
+    handleSubmit: handleMfaSubmit,
+    reset: resetMfaForm,
+    formState: { errors: mfaErrors },
+  } = useForm<MfaSchema>({
+    defaultValues: { code: '' },
+    resolver: zodResolver(mfaSchema),
+  })
+
   const {
     mutate: login,
     isPending: loading,
     error,
   } = useAdminToken({
     mutation: {
-      onSuccess({ access_token }) {
-        setAuthToken(access_token)
-        navigate('/', { replace: true })
+      onSuccess(data) {
+        if (data.mfa_required && data.mfa_token) {
+          setMfaToken(data.mfa_token)
+          resetMfaForm()
+          return
+        }
+        if (data.access_token) {
+          setAuthToken(data.access_token)
+          navigate('/', { replace: true })
+        }
       },
     },
   })
@@ -233,6 +259,24 @@ export const Login: FC = () => {
         },
       })
     }
+  }
+
+  const handleMfaLogin = async (values: MfaSchema) => {
+    if (!mfaToken) return
+    try {
+      const data = await mfaLogin.mutateAsync({ mfa_token: mfaToken, code: values.code })
+      if (data.access_token) {
+        setAuthToken(data.access_token)
+        navigate('/', { replace: true })
+      }
+    } catch (err: any) {
+      toast.error(err?.data?.detail || t('login.mfaFailed'))
+    }
+  }
+
+  const cancelMfa = () => {
+    setMfaToken(null)
+    resetMfaForm()
   }
 
   const [telegramLoading, setTelegramLoading] = useState(false)
@@ -430,11 +474,17 @@ export const Login: FC = () => {
                 {view === 'login' ? 'Sign in' : 'Owner toolkit'}
               </p>
               <h2 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">
-                {view === 'login' ? t('login.loginYourAccount') : t('setup.ownerAccess', { defaultValue: 'Owner access' })}
+                {view === 'login'
+                  ? mfaToken
+                    ? t('login.mfaVerify')
+                    : t('login.loginYourAccount')
+                  : t('setup.ownerAccess', { defaultValue: 'Owner access' })}
               </h2>
               <p className="text-muted-foreground text-sm leading-relaxed">
                 {view === 'login'
-                  ? t('login.welcomeBack')
+                  ? mfaToken
+                    ? t('login.mfaPrompt')
+                    : t('login.welcomeBack')
                   : t('setup.ownerAccessDescription', {
                       defaultValue: 'Use a temporary setup key to create, promote, reset, or remove the owner account.',
                     })}
@@ -442,6 +492,35 @@ export const Login: FC = () => {
             </div>
 
             {view === 'login' ? (
+              mfaToken ? (
+                <form onSubmit={handleMfaSubmit(handleMfaLogin)} autoComplete="one-time-code" className="space-y-3">
+                  <p className="text-muted-foreground text-sm">{t('login.mfaPrompt')}</p>
+                  <Input
+                    className="h-12"
+                    placeholder={t('login.mfaCode')}
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    {...registerMfa('code')}
+                    error={t(mfaErrors?.code?.message as string)}
+                  />
+                  {mfaLogin.error && (
+                    <Alert className="mt-2" variant="destructive">
+                      <CircleAlertIcon size="18px" />
+                      <AlertDescription>{(mfaLogin.error as any)?.data?.detail || t('login.mfaFailed')}</AlertDescription>
+                    </Alert>
+                  )}
+                  <div className="flex flex-col gap-2 pt-2">
+                    <LoaderButton isLoading={mfaLogin.isPending} type="submit" className="flex h-12 w-full items-center gap-2">
+                      <ShieldCheck size="18px" />
+                      <span>{t('login.mfaVerify')}</span>
+                    </LoaderButton>
+                    <Button type="button" variant="outline" className="flex h-11 w-full items-center gap-2" onClick={cancelMfa}>
+                      <ArrowLeft className="h-4 w-4" />
+                      <span>{t('login.backToLogin')}</span>
+                    </Button>
+                  </div>
+                </form>
+              ) : (
               <form onSubmit={handleSubmit(handleLogin)} autoComplete="on" className="space-y-3">
                 <Input className="h-12" placeholder={t('username')} autoComplete="username" {...register('username')} error={t(errors?.username?.message as string)} />
                 <PasswordInput className="h-12" placeholder={t('password')} allowBrowserSave {...register('password')} error={t(errors?.password?.message as string)} />
@@ -462,6 +541,7 @@ export const Login: FC = () => {
                   </Button>
                 </div>
               </form>
+              )
             ) : (
               <form className="flex flex-col gap-3" onSubmit={handleOwnerSubmit(onOwnerSubmit)} autoComplete="off">
                 <input type="hidden" {...registerOwner('mode')} />

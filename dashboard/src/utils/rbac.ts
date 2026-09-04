@@ -76,6 +76,7 @@ export const canAccessRoute = (admin: AdminDetails | null | undefined, pathname:
   if (pathname.startsWith('/users')) return hasPermission(admin, 'users', 'read')
   if (pathname.startsWith('/statistics')) return hasPermission(admin, 'nodes', 'stats')
   if (pathname.startsWith('/observability')) return hasPermission(admin, 'nodes', 'stats')
+  if (pathname.startsWith('/fleet')) return canReadResourcePage(admin, 'nodes') || hasPermission(admin, 'system', 'read')
   if (pathname.startsWith('/hosts')) return canReadResourcePage(admin, 'hosts')
   if (pathname.startsWith('/groups')) return canReadResourcePage(admin, 'groups')
   if (pathname === '/templates') return canReadResourcePage(admin, 'templates') || canReadResourcePage(admin, 'client_templates')

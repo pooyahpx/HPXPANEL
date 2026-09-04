@@ -89,8 +89,13 @@ class Admin(Base, CreatedAtUTCMixin):
     api_keys: Mapped[list[APIKey]] = relationship(
         back_populates="admin", init=False, default_factory=list, cascade="all, delete-orphan"
     )
+    sessions: Mapped[list[AdminSession]] = relationship(
+        back_populates="admin", init=False, default_factory=list, cascade="all, delete-orphan"
+    )
 
     password_reset_at: Mapped[dt | None] = mapped_column(DateTime(timezone=True), default=None)
+    totp_secret: Mapped[str | None] = mapped_column(String(512), default=None)
+    totp_enabled: Mapped[bool] = mapped_column(default=False, server_default="0")
     telegram_id: Mapped[int | None] = mapped_column(BigInteger, default=None)
     discord_webhook: Mapped[str | None] = mapped_column(String(1024), default=None)
     used_traffic: Mapped[int] = mapped_column(BigInteger, default=0)
@@ -162,6 +167,19 @@ class Admin(Base, CreatedAtUTCMixin):
     def has_api_keys(self) -> bool:
         """True when the admin owns at least one API key."""
         return len(self.api_keys) > 0
+
+
+class AdminSession(Base, CreatedAtUTCMixin):
+    __tablename__ = "admin_sessions"
+    __table_args__ = (Index("ix_admin_sessions_admin_id", "admin_id"),)
+
+    admin_id: Mapped[int] = fk_id_column("admins.id", ondelete="CASCADE")
+    admin: Mapped[Admin] = relationship(back_populates="sessions", init=False)
+    jti: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    user_agent: Mapped[str | None] = mapped_column(String(512), default=None)
+    ip: Mapped[str | None] = mapped_column(String(64), default=None)
+    last_seen_at: Mapped[dt | None] = mapped_column(DateTime(timezone=True), default=None)
+    revoked_at: Mapped[dt | None] = mapped_column(DateTime(timezone=True), default=None)
 
 
 class AdminUsageLogs(Base, IdMixin):

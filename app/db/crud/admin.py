@@ -103,6 +103,7 @@ def build_admin_details(
         access_overrides=RoleAccess.model_validate(db_admin.access_overrides)
         if db_admin.access_overrides
         else None,
+        totp_enabled=bool(db_admin.totp_enabled),
     )
 
 

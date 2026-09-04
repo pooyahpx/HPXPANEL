@@ -1,16 +1,28 @@
 import asyncio
 from typing import Annotated
+from uuid import uuid4
 
+import pyotp
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 
 from app import notification
 from app.db import AsyncSession, get_db
+from app.db.crud.admin import build_admin_details, get_admin_by_id as get_admin_by_id_crud
+from app.db.crud.admin_session import (
+    create_admin_session,
+    get_admin_session_by_id,
+    list_active_admin_sessions,
+    revoke_admin_session,
+    revoke_all_admin_sessions,
+)
 from app.models.admin import (
     AdminCreate,
     AdminDetails,
     AdminListQuery,
     AdminModify,
+    AdminSessionResponse,
+    AdminSessionsResponse,
     AdminSimpleListQuery,
     AdminsResponse,
     AdminsSimpleResponse,
@@ -18,21 +30,34 @@ from app.models.admin import (
     AdminUsageQuery,
     BulkAdminsActionResponse,
     BulkAdminSelection,
+    MFAConfirmRequest,
+    MFADisableRequest,
+    MFATokenRequest,
     RemoveAdminsResponse,
     Token,
+    TOTPSetupResponse,
+    verify_password,
 )
 from app.models.stats import UserUsageStatsList
 from app.operation import OperatorType
 from app.operation.admin import AdminOperation
 from app.rate_limit import rate_limiter
 from app.utils import responses
-from app.utils.jwt import create_admin_token
+from app.utils.crypto import decrypt_secret, encrypt_secret
+from app.utils.jwt import (
+    create_admin_token,
+    create_mfa_challenge_token,
+    get_admin_payload,
+    get_mfa_challenge_payload,
+    get_secret_key,
+)
 from app.utils.request import get_client_ip
 from config import rate_limit_settings
 
 from .authentication import (
     get_current,
     get_current_with_metrics,
+    oauth2_scheme,
     require_permission,
     validate_admin,
     validate_mini_app_admin,
@@ -41,6 +66,37 @@ from .dependencies import get_admin_list_query, get_admin_simple_list_query, get
 
 router = APIRouter(tags=["Admin"], prefix="/api/admin", responses={401: responses._401, 403: responses._403})
 admin_operator = AdminOperation(operator_type=OperatorType.API)
+
+
+def _request_user_agent(request: Request) -> str | None:
+    ua = request.headers.get("user-agent")
+    return ua[:512] if ua else None
+
+
+async def _issue_admin_token(
+    db: AsyncSession,
+    *,
+    admin_id: int | None,
+    username: str,
+    request: Request,
+) -> Token:
+    jti = str(uuid4()) if admin_id is not None else None
+    if admin_id is not None and jti is not None:
+        await create_admin_session(
+            db,
+            admin_id=admin_id,
+            jti=jti,
+            user_agent=_request_user_agent(request),
+            ip=get_client_ip(request),
+        )
+        await db.commit()
+    access_token = await create_admin_token(admin_id, username, jti=jti)
+    return Token(access_token=access_token)
+
+
+def _verify_totp_code(secret: str, code: str) -> bool:
+    totp = pyotp.TOTP(secret)
+    return bool(totp.verify(code.strip(), valid_window=1))
 
 
 @router.post("/token", response_model=Token)
@@ -67,8 +123,46 @@ async def admin_token(
         raise HTTPException(
             status_code=403, detail="your account has been disabled", headers={"WWW-Authenticate": "Bearer"}
         )
+
+    if db_admin.totp_enabled and db_admin.id is not None:
+        mfa_token = await create_mfa_challenge_token(db_admin.id, db_admin.username)
+        return Token(access_token="", mfa_required=True, mfa_token=mfa_token)
+
     asyncio.create_task(notification.admin_login(db_admin.username, client_ip, True))
-    return Token(access_token=await create_admin_token(db_admin.id, form_data.username))
+    return await _issue_admin_token(db, admin_id=db_admin.id, username=form_data.username, request=request)
+
+
+@router.post("/token/mfa", response_model=Token)
+async def admin_token_mfa(request: Request, body: MFATokenRequest, db: AsyncSession = Depends(get_db)):
+    """Complete MFA challenge and issue a session token."""
+    await rate_limiter.enforce_client_and_identity(
+        request,
+        "admin-mfa",
+        rate_limit_settings.admin_login_limit,
+        rate_limit_settings.admin_login_window,
+        identity=body.mfa_token[:32],
+    )
+    client_ip = get_client_ip(request)
+    challenge = await get_mfa_challenge_payload(body.mfa_token)
+    if not challenge:
+        raise HTTPException(status_code=401, detail="Invalid or expired MFA token")
+
+    db_admin = await get_admin_by_id_crud(db, challenge["admin_id"], load_users=False, load_usage_logs=False)
+    if not db_admin or not db_admin.totp_enabled or not db_admin.totp_secret:
+        raise HTTPException(status_code=401, detail="MFA is not available for this admin")
+
+    secret_key = await get_secret_key()
+    try:
+        totp_secret = decrypt_secret(db_admin.totp_secret, secret_key)
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid MFA configuration")
+
+    if not _verify_totp_code(totp_secret, body.code):
+        asyncio.create_task(notification.admin_login(db_admin.username, client_ip, False))
+        raise HTTPException(status_code=401, detail="Invalid MFA code")
+
+    asyncio.create_task(notification.admin_login(db_admin.username, client_ip, True))
+    return await _issue_admin_token(db, admin_id=db_admin.id, username=db_admin.username, request=request)
 
 
 @router.post("/miniapp/token", responses={409: responses._409})
@@ -92,7 +186,157 @@ async def admin_mini_app_token(
             status_code=403, detail="your account has been disabled", headers={"WWW-Authenticate": "Bearer"}
         )
     asyncio.create_task(notification.admin_login(db_admin.username, client_ip, True))
-    return Token(access_token=await create_admin_token(db_admin.id, db_admin.username))
+    return await _issue_admin_token(db, admin_id=db_admin.id, username=db_admin.username, request=request)
+
+
+@router.post("/security/totp/setup", response_model=TOTPSetupResponse)
+async def setup_totp(
+    db: AsyncSession = Depends(get_db),
+    admin: AdminDetails = Depends(get_current),
+):
+    if admin.id is None:
+        raise HTTPException(status_code=400, detail="TOTP is not available for env admins")
+
+    db_admin = await get_admin_by_id_crud(db, admin.id, load_users=False, load_usage_logs=False)
+    if not db_admin:
+        raise HTTPException(status_code=404, detail="Admin not found")
+    if db_admin.totp_enabled:
+        raise HTTPException(status_code=409, detail="TOTP is already enabled")
+
+    secret = pyotp.random_base32()
+    secret_key = await get_secret_key()
+    db_admin.totp_secret = encrypt_secret(secret, secret_key)
+    db_admin.totp_enabled = False
+    await db.commit()
+
+    otpauth_url = pyotp.TOTP(secret).provisioning_uri(name=db_admin.username, issuer_name="HPXPANEL")
+    return TOTPSetupResponse(secret=secret, otpauth_url=otpauth_url)
+
+
+@router.post("/security/totp/confirm", response_model=AdminDetails)
+async def confirm_totp(
+    body: MFAConfirmRequest,
+    db: AsyncSession = Depends(get_db),
+    admin: AdminDetails = Depends(get_current),
+):
+    if admin.id is None:
+        raise HTTPException(status_code=400, detail="TOTP is not available for env admins")
+
+    db_admin = await get_admin_by_id_crud(db, admin.id, load_users=False, load_usage_logs=False)
+    if not db_admin or not db_admin.totp_secret:
+        raise HTTPException(status_code=400, detail="TOTP setup has not been started")
+
+    secret_key = await get_secret_key()
+    try:
+        totp_secret = decrypt_secret(db_admin.totp_secret, secret_key)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid TOTP secret")
+
+    if not _verify_totp_code(totp_secret, body.code):
+        raise HTTPException(status_code=400, detail="Invalid MFA code")
+
+    db_admin.totp_enabled = True
+    await db.commit()
+    await db.refresh(db_admin)
+    return build_admin_details(db_admin)
+
+
+@router.post("/security/totp/disable", response_model=AdminDetails)
+async def disable_totp(
+    body: MFADisableRequest,
+    db: AsyncSession = Depends(get_db),
+    admin: AdminDetails = Depends(get_current),
+):
+    if admin.id is None:
+        raise HTTPException(status_code=400, detail="TOTP is not available for env admins")
+
+    db_admin = await get_admin_by_id_crud(db, admin.id, load_users=False, load_usage_logs=False)
+    if not db_admin:
+        raise HTTPException(status_code=404, detail="Admin not found")
+    if not await verify_password(body.password, db_admin.hashed_password):
+        raise HTTPException(status_code=401, detail="Incorrect password")
+
+    if db_admin.totp_enabled and db_admin.totp_secret:
+        secret_key = await get_secret_key()
+        try:
+            totp_secret = decrypt_secret(db_admin.totp_secret, secret_key)
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid TOTP secret")
+        if not _verify_totp_code(totp_secret, body.code):
+            raise HTTPException(status_code=400, detail="Invalid MFA code")
+
+    db_admin.totp_enabled = False
+    db_admin.totp_secret = None
+    await db.commit()
+    await db.refresh(db_admin)
+    return build_admin_details(db_admin)
+
+
+@router.get("/security/sessions", response_model=AdminSessionsResponse)
+async def list_sessions(
+    db: AsyncSession = Depends(get_db),
+    admin: AdminDetails = Depends(get_current),
+    token: str | None = Depends(oauth2_scheme),
+):
+    if admin.id is None:
+        return AdminSessionsResponse(sessions=[])
+
+    current_jti = None
+    if token:
+        payload = await get_admin_payload(token)
+        current_jti = payload.get("jti") if payload else None
+
+    sessions = await list_active_admin_sessions(db, admin.id)
+    return AdminSessionsResponse(
+        sessions=[
+            AdminSessionResponse(
+                id=session.id,
+                user_agent=session.user_agent,
+                ip=session.ip,
+                created_at=session.created_at,
+                last_seen_at=session.last_seen_at,
+                current=bool(current_jti and session.jti == current_jti),
+            )
+            for session in sessions
+        ]
+    )
+
+
+@router.delete("/security/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def revoke_session(
+    session_id: int,
+    db: AsyncSession = Depends(get_db),
+    admin: AdminDetails = Depends(get_current),
+):
+    if admin.id is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    session = await get_admin_session_by_id(db, session_id, admin.id)
+    if not session or session.revoked_at is not None:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    await revoke_admin_session(db, session)
+    await db.commit()
+    return {}
+
+
+@router.delete("/security/sessions", status_code=status.HTTP_204_NO_CONTENT)
+async def revoke_other_sessions(
+    db: AsyncSession = Depends(get_db),
+    admin: AdminDetails = Depends(get_current),
+    token: str | None = Depends(oauth2_scheme),
+):
+    if admin.id is None:
+        return {}
+
+    current_jti = None
+    if token:
+        payload = await get_admin_payload(token)
+        current_jti = payload.get("jti") if payload else None
+
+    await revoke_all_admin_sessions(db, admin.id, except_jti=current_jti)
+    await db.commit()
+    return {}
 
 
 @router.post(

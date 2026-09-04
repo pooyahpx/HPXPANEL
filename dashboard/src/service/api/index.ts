@@ -1295,6 +1295,8 @@ export interface TransportSettings {
 export interface Token {
   access_token: string
   token_type?: string
+  mfa_required?: boolean
+  mfa_token?: string | null
 }
 
 export type TelegramPanelUrl = string | null
@@ -4834,6 +4836,7 @@ export interface AdminDetails {
   role?: AdminDetailsRole
   permission_overrides?: AdminDetailsPermissionOverrides
   access_overrides?: AdminDetailsAccessOverrides
+  totp_enabled?: boolean
   readonly is_disabled: boolean
   readonly is_limited: boolean
 }

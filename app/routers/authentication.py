@@ -15,6 +15,7 @@ from app.db.crud.admin import (
     get_admin_by_id as get_admin_by_id_crud,
     get_admin_by_telegram_id,
 )
+from app.db.crud.admin_session import get_admin_session_by_jti, touch_admin_session
 from app.db.crud.api_key import get_api_key_by_raw_key
 from app.db.models import Admin, AdminUsageLogs, User
 from app.models.admin import AdminDetails, AdminRoleData, AdminStatus, AdminValidationResult, verify_password
@@ -43,6 +44,19 @@ def _is_token_valid_for_admin(db_admin: Admin, payload: dict) -> bool:
     if not payload.get("created_at"):
         return False
     return db_admin.password_reset_at.astimezone(UTC) <= payload.get("created_at")
+
+
+async def _ensure_session_valid(db: AsyncSession, payload: dict) -> bool:
+    """Validate jti-backed sessions. Legacy tokens without jti remain valid."""
+    jti = payload.get("jti")
+    if not jti:
+        return True
+    session = await get_admin_session_by_jti(db, jti)
+    if session is None or session.revoked_at is not None:
+        return False
+    await touch_admin_session(db, session)
+    await db.commit()
+    return True
 
 
 def _extract_api_key(request: Request) -> str | None:
@@ -130,6 +144,9 @@ async def get_admin(db: AsyncSession, token: str) -> AdminDetails | None:
     if not payload:
         return None
 
+    if not await _ensure_session_valid(db, payload):
+        return None
+
     db_admin = None
     if payload.get("admin_id") is not None:
         db_admin = await get_admin_by_id_crud(db, payload["admin_id"], load_users=False, load_usage_logs=False)
@@ -152,6 +169,9 @@ async def get_admin(db: AsyncSession, token: str) -> AdminDetails | None:
 async def get_admin_with_metrics(db: AsyncSession, token: str) -> AdminDetails | None:
     payload = await get_admin_payload(token)
     if not payload:
+        return None
+
+    if not await _ensure_session_valid(db, payload):
         return None
 
     total_users_subquery = (
@@ -330,6 +350,7 @@ async def validate_admin(db: AsyncSession, username: str, password: str) -> Admi
             id=db_admin.id,
             username=db_admin.username,
             status=db_admin.status,
+            totp_enabled=bool(db_admin.totp_enabled),
         )
 
     # Env admin fallback — only allowed in debug/testing

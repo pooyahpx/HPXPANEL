@@ -396,6 +396,16 @@ One shared IPsec identity workflow. Core editors for crypto, PSK, and network.
 
 > Panel + node on **one** server works for testing. For commercial setups, run the panel and nodes on **different** machines.
 
+### Distributed deploy
+
+For multi-process installs (API backend + node-worker + scheduler over NATS), use the compose template:
+
+```bash
+docker compose -f scripts/docker-compose/hpxpanel-distributed.yml --env-file .env up -d
+```
+
+Services: `nats`, `timescaledb`, `hpxpanel` (`ROLE=backend`), `node-worker`, `scheduler`. Set `NATS_ENABLED=true` (compose also injects it). Single-container installs keep `# ROLE = all-in-one` in `.env`.
+
 ### `hpxpanel` CLI
 
 ```bash

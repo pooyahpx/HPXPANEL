@@ -1,0 +1,121 @@
+# Distributed HPXPANEL layout: backend + node-worker + scheduler over NATS.
+# Service names match what scripts/hpxpanel.sh expects: hpxpanel, node-worker, scheduler.
+#
+# Prerequisites in .env:
+#   DB_NAME / DB_USER / DB_PASSWORD
+#   SQLALCHEMY_DATABASE_URL pointing at timescaledb (or pgbouncer) on this network
+#   ROLE defaults to all-in-one for single-container installs — this file overrides per service
+#
+# Example:
+#   docker compose -f scripts/docker-compose/hpxpanel-distributed.yml --env-file .env up -d
+
+services:
+  nats:
+    image: nats:2.10-alpine
+    restart: always
+    command: ["-js", "-m", "8222"]
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    networks:
+      - hpx_net
+
+  timescaledb:
+    image: timescale/timescaledb:latest-pg17
+    restart: always
+    command: >
+      postgres -c max_connections=${PG_MAX_CONNECTIONS:-400}
+               -c shared_buffers=${PG_SHARED_BUFFERS:-512MB}
+               -c work_mem=${PG_WORK_MEM:-16MB}
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - ${HPX_PG_DATA_DIR:-/var/lib/postgresql/hpxpanel}:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -q -d ${DB_NAME} -U ${DB_USER}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - hpx_net
+
+  hpxpanel:
+    image: ghcr.io/pooyahpx/hpxpanel:latest
+    restart: always
+    env_file: .env
+    environment:
+      ROLE: backend
+      NATS_ENABLED: "true"
+      NATS_URL: nats://nats:4222
+      SQLALCHEMY_DATABASE_URL: postgresql+asyncpg://${DB_USER}:${DB_PASSWORD}@timescaledb:5432/${DB_NAME}
+    ports:
+      - "${UVICORN_PORT:-8000}:${UVICORN_PORT:-8000}"
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    volumes:
+      - ${HPX_DATA_DIR:-/var/lib/hpxpanel}:/var/lib/hpxpanel
+      - /var/run/docker.sock:/var/run/docker.sock
+    healthcheck:
+      test: ["CMD", "/code/healthcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+    depends_on:
+      nats:
+        condition: service_started
+      timescaledb:
+        condition: service_healthy
+    networks:
+      - hpx_net
+
+  node-worker:
+    image: ghcr.io/pooyahpx/hpxpanel:latest
+    restart: always
+    env_file: .env
+    environment:
+      ROLE: node
+      NATS_ENABLED: "true"
+      NATS_URL: nats://nats:4222
+      SQLALCHEMY_DATABASE_URL: postgresql+asyncpg://${DB_USER}:${DB_PASSWORD}@timescaledb:5432/${DB_NAME}
+    volumes:
+      - ${HPX_DATA_DIR:-/var/lib/hpxpanel}:/var/lib/hpxpanel
+    depends_on:
+      nats:
+        condition: service_started
+      timescaledb:
+        condition: service_healthy
+      hpxpanel:
+        condition: service_healthy
+    networks:
+      - hpx_net
+
+  scheduler:
+    image: ghcr.io/pooyahpx/hpxpanel:latest
+    restart: always
+    env_file: .env
+    environment:
+      ROLE: scheduler
+      NATS_ENABLED: "true"
+      NATS_URL: nats://nats:4222
+      SQLALCHEMY_DATABASE_URL: postgresql+asyncpg://${DB_USER}:${DB_PASSWORD}@timescaledb:5432/${DB_NAME}
+    volumes:
+      - ${HPX_DATA_DIR:-/var/lib/hpxpanel}:/var/lib/hpxpanel
+    depends_on:
+      nats:
+        condition: service_started
+      timescaledb:
+        condition: service_healthy
+      hpxpanel:
+        condition: service_healthy
+    networks:
+      - hpx_net
+
+networks:
+  hpx_net:
+    driver: bridge

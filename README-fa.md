@@ -341,6 +341,16 @@ curl -fsSL https://raw.githubusercontent.com/pooyahpx/HPXPANEL/main/scripts/hpx-
 
 > پنل + نود روی **یک** سرور برای تست خوبه؛ برای فروش تجاری بهتره جدا باشن.
 
+### استقرار توزیع‌شده
+
+برای نصب چندپردازه‌ای (بک‌اند + node-worker + scheduler روی NATS) از قالب compose استفاده کنید:
+
+```bash
+docker compose -f scripts/docker-compose/hpxpanel-distributed.yml --env-file .env up -d
+```
+
+سرویس‌ها: `nats`، `timescaledb`، `hpxpanel` (`ROLE=backend`)، `node-worker`، `scheduler`. مقدار `NATS_ENABLED=true` لازم است (compose هم آن را تزریق می‌کند). نصب تک‌کانتینری همان `# ROLE = all-in-one` در `.env` را نگه می‌دارد.
+
 ### دستورات `hpxpanel`
 
 ```bash

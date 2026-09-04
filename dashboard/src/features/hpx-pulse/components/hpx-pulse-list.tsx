@@ -1,6 +1,8 @@
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Skeleton } from '@/components/ui/skeleton'
 import HpxPulseWizard from '@/features/hpx-pulse/wizard/hpx-pulse-wizard'
 import {
@@ -8,6 +10,7 @@ import {
   useGetHpxPulses,
   useRegeneratePulseTokens,
   useSyncHpxPulse,
+  useUpdateHpxPulse,
   type HpxPulseResponse,
 } from '@/service/api/hpx-pulse'
 import { useAdmin } from '@/hooks/use-admin'
@@ -20,6 +23,7 @@ import {
   Pencil,
   Plus,
   RefreshCw,
+  Save,
   Timer,
   Trash2,
   Zap,
@@ -171,21 +175,151 @@ function AgentCell({
   )
 }
 
+const AUTO_SYNC_PRESETS = [0, 15, 30, 60, 360, 720, 1440] as const
+
+function AutoSyncControl({
+  pulse,
+  disabled,
+  onSave,
+}: {
+  pulse: HpxPulseResponse
+  disabled: boolean
+  onSave: (minutes: number) => Promise<void>
+}) {
+  const { t } = useTranslation()
+  const [open, setOpen] = useState(false)
+  const [minutes, setMinutes] = useState(pulse.auto_restart_interval_minutes ?? 0)
+  const [saving, setSaving] = useState(false)
+  const active = Boolean(pulse.auto_restart_interval_minutes)
+
+  useEffect(() => {
+    if (!open) setMinutes(pulse.auto_restart_interval_minutes ?? 0)
+  }, [open, pulse.auto_restart_interval_minutes])
+
+  const save = async (value = minutes) => {
+    setSaving(true)
+    try {
+      await onSave(value)
+      setOpen(false)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          size="sm"
+          variant={active ? 'secondary' : 'outline'}
+          className={cn(
+            'h-8 gap-1.5',
+            active && 'border-sky-500/30 bg-sky-500/10 text-sky-700 hover:bg-sky-500/15 dark:text-sky-400',
+          )}
+          disabled={disabled}
+        >
+          <Timer className="size-3.5" />
+          <span>{t('hpxPulse.autoSync', { defaultValue: 'Auto sync' })}</span>
+          {active && (
+            <span className="rounded bg-sky-500/15 px-1 text-[10px]">
+              {formatAutoRestart(pulse.auto_restart_interval_minutes, t)}
+            </span>
+          )}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-80 space-y-4">
+        <div className="space-y-1">
+          <p className="flex items-center gap-2 text-sm font-semibold">
+            <Timer className="size-4 text-sky-500" />
+            {t('hpxPulse.autoSyncTitle', { defaultValue: 'Automatic tunnel sync' })}
+          </p>
+          <p className="text-muted-foreground text-xs leading-relaxed">
+            {t('hpxPulse.autoSyncDescription', {
+              defaultValue: 'Restart and refresh both connected agents on a fixed schedule.',
+            })}
+          </p>
+        </div>
+
+        <div className="grid grid-cols-4 gap-2">
+          {AUTO_SYNC_PRESETS.map(value => (
+            <Button
+              key={value}
+              type="button"
+              size="sm"
+              variant={minutes === value ? 'default' : 'outline'}
+              className="h-9 px-2 text-xs"
+              onClick={() => setMinutes(value)}
+            >
+              {value === 0
+                ? t('hpxPulse.autoRestartOff', { defaultValue: 'Off' })
+                : value < 60
+                  ? `${value}m`
+                  : `${value / 60}h`}
+            </Button>
+          ))}
+          <Button
+            type="button"
+            size="sm"
+            variant={!AUTO_SYNC_PRESETS.includes(minutes as (typeof AUTO_SYNC_PRESETS)[number]) ? 'default' : 'outline'}
+            className="h-9 px-2 text-xs"
+            onClick={() => setMinutes(45)}
+          >
+            {t('hpxPulse.custom', { defaultValue: 'Custom' })}
+          </Button>
+        </div>
+
+        {!AUTO_SYNC_PRESETS.includes(minutes as (typeof AUTO_SYNC_PRESETS)[number]) && (
+          <div className="space-y-1.5">
+            <label htmlFor={`pulse-auto-sync-${pulse.id}`} className="text-xs font-medium">
+              {t('hpxPulse.minutes', { defaultValue: 'Minutes' })}
+            </label>
+            <Input
+              id={`pulse-auto-sync-${pulse.id}`}
+              type="number"
+              min={1}
+              max={10080}
+              value={minutes}
+              dir="ltr"
+              onChange={event => setMinutes(Math.max(1, Math.min(10080, Number(event.target.value) || 1)))}
+            />
+          </div>
+        )}
+
+        <div className="flex items-center justify-between gap-2 border-t pt-3">
+          <span className="text-muted-foreground text-[11px]">
+            {minutes > 0
+              ? formatAutoRestart(minutes, t)
+              : t('hpxPulse.autoSyncDisabled', { defaultValue: 'Automatic sync is disabled' })}
+          </span>
+          <Button size="sm" className="h-8 gap-1.5" disabled={saving} onClick={() => void save()}>
+            {saving ? <RefreshCw className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}
+            {t('save', { defaultValue: 'Save' })}
+          </Button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
 function PulseCard({
   pulse,
   onDelete,
   onRegenerate,
   onSync,
+  onAutoSync,
   onEdit,
   canUpdate,
+  canDelete,
   syncLoading,
 }: {
   pulse: HpxPulseResponse
   onDelete: () => void
   onRegenerate: () => void
   onSync: () => void
+  onAutoSync: (minutes: number) => Promise<void>
   onEdit: () => void
   canUpdate: boolean
+  canDelete: boolean
   syncLoading: boolean
 }) {
   const { t, i18n } = useTranslation()
@@ -215,7 +349,7 @@ function PulseCard({
         )}
       />
 
-      <div className="space-y-4 p-4 pt-5">
+      <div className="space-y-4 p-4 pt-5 sm:p-5 sm:pt-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0 space-y-2">
             <div className="flex flex-wrap items-center gap-2">
@@ -263,29 +397,45 @@ function PulseCard({
                 {t('hpxPulse.sync', { defaultValue: 'Sync' })}
               </Button>
             )}
+            {canUpdate && <AutoSyncControl pulse={pulse} disabled={syncLoading} onSave={onAutoSync} />}
             {canUpdate && (
               <Button size="sm" variant="outline" className="h-8 gap-1.5" onClick={onEdit}>
                 <Pencil className="size-3.5" />
                 {t('edit', { defaultValue: 'Edit' })}
               </Button>
             )}
-            <Button size="sm" variant="outline" className="h-8 gap-1.5" onClick={onRegenerate}>
-              <KeyRound className="size-3.5" />
-              {t('hpxPulse.regenerate', { defaultValue: 'Tokens' })}
-            </Button>
-            <Button size="sm" variant="ghost" className="text-destructive hover:bg-destructive/10 h-8 w-8 p-0" onClick={onDelete}>
-              <Trash2 className="size-3.5" />
-            </Button>
+            {canUpdate && (
+              <Button size="sm" variant="outline" className="h-8 gap-1.5" onClick={onRegenerate}>
+                <KeyRound className="size-3.5" />
+                {t('hpxPulse.regenerate', { defaultValue: 'Tokens' })}
+              </Button>
+            )}
+            {canDelete && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="text-destructive hover:bg-destructive/10 h-8 w-8 p-0"
+                title={t('delete', { defaultValue: 'Delete' })}
+                onClick={onDelete}
+              >
+                <Trash2 className="size-3.5" />
+              </Button>
+            )}
           </div>
         </div>
 
-        <div className="grid gap-2 sm:grid-cols-3">
+        <div className="relative grid gap-2 sm:grid-cols-[1fr_auto_1fr_auto] sm:items-center">
           <AgentCell
             label={t('hpxPulse.iranAgent', { defaultValue: 'Iran agent' })}
             connected={pulse.iran_claimed}
             host={pulse.iran_agent_host}
             t={t}
           />
+          <div className="text-muted-foreground hidden items-center gap-1 sm:flex">
+            <span className="bg-border h-px w-3" />
+            <Zap className={cn('size-3.5', isRunning && 'text-emerald-500')} />
+            <span className="bg-border h-px w-3" />
+          </div>
           <AgentCell
             label={t('hpxPulse.abroadAgent', { defaultValue: 'Abroad agent' })}
             connected={pulse.abroad_claimed}
@@ -294,7 +444,7 @@ function PulseCard({
           />
           <div
             className={cn(
-              'relative overflow-hidden rounded-xl border px-3 py-2.5',
+              'relative overflow-hidden rounded-xl border px-3 py-2.5 sm:min-w-28',
               pulse.latency_ms != null && pulse.status === 'running'
                 ? 'border-emerald-500/30 bg-gradient-to-br from-emerald-500/10 to-transparent'
                 : pulse.status === 'unhealthy'
@@ -362,6 +512,7 @@ export default function HpxPulseList() {
   const deleteMutation = useDeleteHpxPulse()
   const regenMutation = useRegeneratePulseTokens()
   const syncMutation = useSyncHpxPulse()
+  const updateMutation = useUpdateHpxPulse()
   const [wizardOpen, setWizardOpen] = useState(false)
   const [editingPulse, setEditingPulse] = useState<HpxPulseResponse | null>(null)
   const [joinCommands, setJoinCommands] = useState<JoinCommandSet | null>(null)
@@ -501,6 +652,7 @@ export default function HpxPulseList() {
               key={pulse.id}
               pulse={pulse}
               canUpdate={canUpdate}
+              canDelete={canDelete}
               syncLoading={syncingId === pulse.id}
               onEdit={() => {
                 setEditingPulse(pulse)
@@ -515,6 +667,25 @@ export default function HpxPulseList() {
                   toast.error((e as Error)?.message ?? t('error', { defaultValue: 'Error' }))
                 } finally {
                   setSyncingId(null)
+                }
+              }}
+              onAutoSync={async minutes => {
+                try {
+                  await updateMutation.mutateAsync({
+                    id: pulse.id,
+                    data: { auto_restart_interval_minutes: minutes },
+                  })
+                  toast.success(
+                    minutes > 0
+                      ? t('hpxPulse.autoSyncSaved', {
+                          defaultValue: 'Auto sync enabled every {{minutes}} minutes',
+                          minutes,
+                        })
+                      : t('hpxPulse.autoSyncDisabledSuccess', { defaultValue: 'Auto sync disabled' }),
+                  )
+                } catch (e) {
+                  toast.error((e as Error)?.message ?? t('error', { defaultValue: 'Error' }))
+                  throw e
                 }
               }}
               onDelete={

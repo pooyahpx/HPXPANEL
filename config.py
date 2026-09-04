@@ -99,9 +99,7 @@ class NatsSettings(EnvSettings):
     worker_sync_subject: str = Field(default="hpxpanel.worker_sync", validation_alias="NATS_WORKER_SYNC_SUBJECT")
     node_command_subject: str = Field(default="hpxpanel.node.command", validation_alias="NATS_NODE_COMMAND_SUBJECT")
     node_rpc_subject: str = Field(default="hpxpanel.node.rpc", validation_alias="NATS_NODE_RPC_SUBJECT")
-    scheduler_rpc_subject: str = Field(
-        default="hpxpanel.scheduler.rpc", validation_alias="NATS_SCHEDULER_RPC_SUBJECT"
-    )
+    scheduler_rpc_subject: str = Field(default="hpxpanel.scheduler.rpc", validation_alias="NATS_SCHEDULER_RPC_SUBJECT")
     node_log_subject: str = Field(default="hpxpanel.node.logs", validation_alias="NATS_NODE_LOG_SUBJECT")
     node_rpc_timeout: float = Field(default=30.0, validation_alias="NATS_NODE_RPC_TIMEOUT")
     scheduler_rpc_timeout: float = Field(default=5.0, validation_alias="NATS_SCHEDULER_RPC_TIMEOUT")
@@ -116,6 +114,44 @@ class NatsSettings(EnvSettings):
     webhook_stream: str = Field(default="WEBHOOK_NOTIFICATIONS", validation_alias="NATS_WEBHOOK_STREAM")
     webhook_subject: str = Field(default="notifications.webhook", validation_alias="NATS_WEBHOOK_SUBJECT")
     webhook_consumer: str = Field(default="webhook_workers", validation_alias="NATS_WEBHOOK_CONSUMER")
+    rate_limit_kv_bucket: str = Field(default="hpxpanel_rate_limits", validation_alias="NATS_RATE_LIMIT_KV_BUCKET")
+    scheduler_lock_kv_bucket: str = Field(
+        default="hpxpanel_scheduler_locks", validation_alias="NATS_SCHEDULER_LOCK_KV_BUCKET"
+    )
+
+
+class RateLimitSettings(EnvSettings):
+    enabled: bool = Field(default=True, validation_alias="RATE_LIMIT_ENABLED")
+    admin_login_limit: int = Field(default=5, ge=1, validation_alias="RATE_LIMIT_ADMIN_LOGIN_LIMIT")
+    admin_login_window: int = Field(default=60, ge=1, validation_alias="RATE_LIMIT_ADMIN_LOGIN_WINDOW")
+    setup_limit: int = Field(default=5, ge=1, validation_alias="RATE_LIMIT_SETUP_LIMIT")
+    setup_window: int = Field(default=300, ge=1, validation_alias="RATE_LIMIT_SETUP_WINDOW")
+    pulse_claim_limit: int = Field(default=10, ge=1, validation_alias="RATE_LIMIT_PULSE_CLAIM_LIMIT")
+    pulse_claim_window: int = Field(default=60, ge=1, validation_alias="RATE_LIMIT_PULSE_CLAIM_WINDOW")
+    subscription_limit: int = Field(default=60, ge=1, validation_alias="RATE_LIMIT_SUBSCRIPTION_LIMIT")
+    subscription_window: int = Field(default=60, ge=1, validation_alias="RATE_LIMIT_SUBSCRIPTION_WINDOW")
+    memory_max_keys: int = Field(default=10000, ge=100, validation_alias="RATE_LIMIT_MEMORY_MAX_KEYS")
+    unavailable_retry_after: int = Field(default=5, ge=1, validation_alias="RATE_LIMIT_UNAVAILABLE_RETRY_AFTER")
+    backend_timeout: float = Field(default=2.0, gt=0, le=30, validation_alias="RATE_LIMIT_BACKEND_TIMEOUT")
+
+
+class SchedulerLockSettings(EnvSettings):
+    lease_seconds: int = Field(default=120, ge=15, validation_alias="SCHEDULER_LOCK_LEASE_SECONDS")
+    renew_interval: int = Field(default=30, ge=5, validation_alias="SCHEDULER_LOCK_RENEW_INTERVAL")
+    operation_timeout: float = Field(default=3.0, gt=0, le=30, validation_alias="SCHEDULER_LOCK_OPERATION_TIMEOUT")
+
+    @model_validator(mode="after")
+    def validate_renew_interval(self) -> SchedulerLockSettings:
+        if self.renew_interval + self.operation_timeout >= self.lease_seconds:
+            raise ValueError(
+                "SCHEDULER_LOCK_RENEW_INTERVAL plus SCHEDULER_LOCK_OPERATION_TIMEOUT "
+                "must be shorter than SCHEDULER_LOCK_LEASE_SECONDS"
+            )
+        return self
+
+
+class ReadinessSettings(EnvSettings):
+    timeout: float = Field(default=3.0, gt=0, le=30, validation_alias="READINESS_TIMEOUT")
 
 
 class CorsSettings(EnvSettings):
@@ -295,8 +331,12 @@ class ObservabilitySettings(EnvSettings):
     retention_interval: int = Field(default=3600, ge=300, validation_alias="JOB_OBSERVABILITY_RETENTION_INTERVAL")
     alerts_enabled: bool = Field(default=True, validation_alias="OBSERVABILITY_ALERTS_ENABLED")
     alerts_interval: int = Field(default=60, ge=15, validation_alias="JOB_OBSERVABILITY_ALERTS_INTERVAL")
-    alert_cpu_threshold: float = Field(default=90.0, ge=50, le=100, validation_alias="OBSERVABILITY_ALERT_CPU_THRESHOLD")
-    alert_mem_threshold: float = Field(default=90.0, ge=50, le=100, validation_alias="OBSERVABILITY_ALERT_MEM_THRESHOLD")
+    alert_cpu_threshold: float = Field(
+        default=90.0, ge=50, le=100, validation_alias="OBSERVABILITY_ALERT_CPU_THRESHOLD"
+    )
+    alert_mem_threshold: float = Field(
+        default=90.0, ge=50, le=100, validation_alias="OBSERVABILITY_ALERT_MEM_THRESHOLD"
+    )
     alert_packet_loss_threshold: float = Field(
         default=5.0, ge=0, le=100, validation_alias="OBSERVABILITY_ALERT_PACKET_LOSS_THRESHOLD"
     )
@@ -323,6 +363,9 @@ database_settings = DatabaseSettings()
 server_settings = ServerSettings()
 dashboard_settings = DashboardSettings()
 nats_settings = NatsSettings()
+rate_limit_settings = RateLimitSettings()
+scheduler_lock_settings = SchedulerLockSettings()
+readiness_settings = ReadinessSettings()
 cors_settings = CorsSettings()
 subscription_env_settings = SubscriptionEnvSettings()
 jwt_settings = JwtSettings()

@@ -19,8 +19,10 @@ from app.models.hpx_pulse import (
 )
 from app.operation import OperatorType
 from app.operation.hpx_pulse import HpxPulseOperation
+from app.rate_limit import rate_limiter
 from app.services.hpx_pulse import engine_mirror
 from app.utils import responses
+from config import rate_limit_settings
 
 from .authentication import require_permission
 
@@ -64,7 +66,9 @@ async def advise_hpx_pulse(
     return await pulse_operator.advise_pulse(model)
 
 
-@router.post("", response_model=HpxPulseActionResponse, status_code=status.HTTP_201_CREATED, responses={409: responses._409})
+@router.post(
+    "", response_model=HpxPulseActionResponse, status_code=status.HTTP_201_CREATED, responses={409: responses._409}
+)
 async def create_hpx_pulse(
     model: HpxPulseCreate,
     request: Request,
@@ -124,7 +128,9 @@ async def sync_hpx_pulse(
     return await pulse_operator.sync_pulse(db, admin=admin, pulse_id=pulse_id)
 
 
-@router.patch("/{pulse_id}", response_model=HpxPulseActionResponse, responses={404: responses._404, 409: responses._409})
+@router.patch(
+    "/{pulse_id}", response_model=HpxPulseActionResponse, responses={404: responses._404, 409: responses._409}
+)
 async def update_hpx_pulse(
     pulse_id: int,
     model: HpxPulseUpdate,
@@ -140,6 +146,13 @@ async def claim_hpx_pulse_agent(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
+    await rate_limiter.enforce(
+        request,
+        "hpx-pulse-agent-claim",
+        rate_limit_settings.pulse_claim_limit,
+        rate_limit_settings.pulse_claim_window,
+        identity=model.join_token,
+    )
     return await pulse_operator.claim_agent(db, model=model, panel_url=_request_base_url(request))
 
 

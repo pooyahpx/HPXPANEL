@@ -24,7 +24,7 @@ check_http_health() {
         curl_flags="$curl_flags --insecure"
     fi
 
-    curl $curl_flags "${protocol}://${host}:${port}/health" 2>/dev/null
+    curl $curl_flags "${protocol}://${host}:${port}/ready" 2>/dev/null
     return $?
 }
 
@@ -37,7 +37,7 @@ check_uds_health() {
     fi
 
     # Use curl with unix socket
-    curl -sf --unix-socket "$socket_path" "http://localhost/health" 2>/dev/null
+    curl -sf --unix-socket "$socket_path" "http://localhost/ready" 2>/dev/null
     return $?
 }
 

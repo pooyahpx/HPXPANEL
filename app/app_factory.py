@@ -10,11 +10,12 @@ from app.middlewares import setup_middleware
 from app.nats import is_nats_enabled
 from app.nats.message import MessageTopic
 from app.nats.router import router
+from app.rate_limit import rate_limiter
 from app.settings import handle_settings_message
 from app.subscription.client_templates import handle_client_template_message
 from app.utils.logger import get_logger
 from app.version import __version__
-from config import observability_settings, runtime_settings, subscription_env_settings
+from config import observability_settings, runtime_settings, server_settings, subscription_env_settings
 
 logger = get_logger("app-factory")
 
@@ -82,9 +83,12 @@ def _register_scheduler_hooks():
         return
 
     from app.scheduler import scheduler
+    from app.scheduler_lock import scheduler_lock_manager
 
+    on_startup(scheduler_lock_manager.start)
     on_startup(scheduler.start)
     on_shutdown(scheduler.shutdown)
+    on_shutdown(scheduler_lock_manager.close)
 
     # Notification dispatcher (consumer loop) is only needed by scheduler role
     if not runtime_settings.role.runs_scheduler:
@@ -107,6 +111,8 @@ def create_app() -> FastAPI:
 
     if runtime_settings.role.requires_nats and not is_nats_enabled():
         raise RuntimeError("NATS must be enabled for backend / node / scheduler roles.")
+    if server_settings.workers > 1 and not is_nats_enabled():
+        raise RuntimeError("NATS must be enabled when UVICORN_WORKERS is greater than 1.")
 
     app = FastAPI(
         title="HPXPANEL API",
@@ -119,6 +125,8 @@ def create_app() -> FastAPI:
     setup_middleware(app)
 
     on_startup(_validate_subscription_path)
+    on_startup(rate_limiter.start)
+    on_shutdown(rate_limiter.close)
 
     if runtime_settings.role.runs_panel:
         import dashboard

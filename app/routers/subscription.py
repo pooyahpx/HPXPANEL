@@ -7,11 +7,27 @@ from app.models.stats import UserUsageStatsList
 from app.models.user import SubscriptionUserResponse
 from app.operation import OperatorType
 from app.operation.subscription import SubscriptionOperation
-from config import subscription_env_settings
+from app.rate_limit import rate_limiter
+from config import rate_limit_settings, subscription_env_settings
 
 from .dependencies import get_subscription_headers, get_subscription_usage_query
 
-router = APIRouter(tags=["Subscription"], prefix=f"/{subscription_env_settings.path}")
+
+async def _rate_limit_subscription(request: Request) -> None:
+    await rate_limiter.enforce(
+        request,
+        "subscription",
+        rate_limit_settings.subscription_limit,
+        rate_limit_settings.subscription_window,
+        identity=request.path_params.get("token"),
+    )
+
+
+router = APIRouter(
+    tags=["Subscription"],
+    prefix=f"/{subscription_env_settings.path}",
+    dependencies=[Depends(_rate_limit_subscription)],
+)
 subscription_operator = SubscriptionOperation(operator_type=OperatorType.API)
 
 

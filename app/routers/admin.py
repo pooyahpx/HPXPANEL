@@ -24,9 +24,11 @@ from app.models.admin import (
 from app.models.stats import UserUsageStatsList
 from app.operation import OperatorType
 from app.operation.admin import AdminOperation
+from app.rate_limit import rate_limiter
 from app.utils import responses
 from app.utils.jwt import create_admin_token
 from app.utils.request import get_client_ip
+from config import rate_limit_settings
 
 from .authentication import (
     get_current,
@@ -46,6 +48,13 @@ async def admin_token(
     request: Request, form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)
 ):
     """Authenticate an admin and issue a token."""
+    await rate_limiter.enforce_client_and_identity(
+        request,
+        "admin-login",
+        rate_limit_settings.admin_login_limit,
+        rate_limit_settings.admin_login_window,
+        identity=form_data.username,
+    )
     client_ip = get_client_ip(request)
     db_admin = await validate_admin(db, form_data.username, form_data.password)
     if not db_admin:
@@ -67,6 +76,13 @@ async def admin_mini_app_token(
     request: Request, x_telegram_authorization: str = Header(), db: AsyncSession = Depends(get_db)
 ):
     """Authenticate an admin via Telegram MiniApp and issue a token."""
+    await rate_limiter.enforce_client_and_identity(
+        request,
+        "admin-miniapp-login",
+        rate_limit_settings.admin_login_limit,
+        rate_limit_settings.admin_login_window,
+        identity=x_telegram_authorization,
+    )
     client_ip = get_client_ip(request)
     db_admin = await validate_mini_app_admin(db, x_telegram_authorization)
     if not db_admin:

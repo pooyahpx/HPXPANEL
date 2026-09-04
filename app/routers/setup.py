@@ -15,10 +15,21 @@ from app.db.crud.admin import (
 from app.db.crud.temp_key import TempKeyConsumeError, consume_temp_key
 from app.models.admin import AdminCreate, AdminDetails
 from app.models.setup import OwnerCreateRequest, OwnerResetRequest, OwnerUpgradeRequest
+from app.rate_limit import rate_limiter
 from app.utils import responses
 from app.utils.request import get_client_ip
+from config import rate_limit_settings
 
 router = APIRouter(tags=["Setup"], prefix="/api/setup")
+
+
+async def _enforce_owner_mutation_limit(request: Request) -> None:
+    await rate_limiter.enforce(
+        request,
+        "setup-owner",
+        rate_limit_settings.setup_limit,
+        rate_limit_settings.setup_window,
+    )
 
 
 async def _consume_key_or_raise(db: AsyncSession, key_str: str, action: str, request: Request) -> None:
@@ -45,6 +56,7 @@ async def create_owner(
     db: AsyncSession = Depends(get_db),
 ):
     """Create the owner admin using a one-time temp key."""
+    await _enforce_owner_mutation_limit(request)
     if await get_owner(db) is not None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="owner already exists")
 
@@ -72,6 +84,7 @@ async def reset_owner_password(
     db: AsyncSession = Depends(get_db),
 ):
     """Reset the owner admin's password using a one-time temp key."""
+    await _enforce_owner_mutation_limit(request)
     await _consume_key_or_raise(db, body.key, action="reset_owner", request=request)
 
     owner = await get_owner(db)
@@ -97,6 +110,7 @@ async def delete_owner(
     key: str = Query(..., description="One-time temp key for deleting the owner admin"),
 ):
     """Delete the owner admin using a one-time temp key."""
+    await _enforce_owner_mutation_limit(request)
     await _consume_key_or_raise(db, key, action="delete_owner", request=request)
 
     owner = await get_owner(db)
@@ -123,6 +137,7 @@ async def upgrade_owner(
     db: AsyncSession = Depends(get_db),
 ):
     """Upgrade an existing admin to owner using a one-time temp key."""
+    await _enforce_owner_mutation_limit(request)
     if await owner_exists(db):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="owner already exists")
 

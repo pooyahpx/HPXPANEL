@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import hashlib
 import logging
 import os
+import secrets
 from pathlib import Path
 
 import aiohttp
@@ -87,11 +90,11 @@ def bundled_checksums_path() -> Path | None:
 
 
 def cached_asset_path(arch: str) -> Path:
-    return _CACHE_DIR / asset_name(arch)
+    return _CACHE_DIR / release_tag() / asset_name(arch)
 
 
 def cached_checksums_path() -> Path:
-    return _CACHE_DIR / _CHECKSUMS_NAME
+    return _CACHE_DIR / release_tag() / _CHECKSUMS_NAME
 
 
 def install_script_path() -> Path:
@@ -129,28 +132,73 @@ async def ensure_checksums_cached() -> Path:
     return dest
 
 
+def expected_checksum(checksums_path: Path, name: str) -> str:
+    for raw_line in checksums_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split(maxsplit=1)
+        if len(parts) != 2:
+            continue
+        checksum, filename = parts
+        if filename.lstrip("*") != name:
+            continue
+        checksum = checksum.casefold()
+        if len(checksum) != 64 or any(char not in "0123456789abcdef" for char in checksum):
+            raise ValueError(f"invalid SHA256 checksum for {name}")
+        return checksum
+    raise ValueError(f"missing SHA256 checksum for {name}")
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        while chunk := handle.read(1024 * 1024):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+async def verify_asset(path: Path, checksums_path: Path, name: str) -> None:
+    try:
+        expected = expected_checksum(checksums_path, name)
+        actual = await asyncio.to_thread(_sha256_file, path)
+        if not secrets.compare_digest(actual, expected):
+            raise ValueError(f"SHA256 mismatch for {name}")
+    except Exception:
+        with contextlib.suppress(OSError):
+            path.unlink(missing_ok=True)
+        raise
+
+
 async def ensure_engine_cached(arch: str) -> Path:
     normalized = normalize_arch(arch)
+    name = asset_name(normalized)
+    checksums = await ensure_checksums_cached()
     bundled = bundled_asset_path(normalized)
     if bundled is not None:
+        await verify_asset(bundled, checksums, name)
         return bundled
 
     dest = cached_asset_path(normalized)
     if dest.is_file() and dest.stat().st_size > 0:
+        await verify_asset(dest, checksums, name)
         return dest
 
     lock = _download_locks.setdefault(normalized, asyncio.Lock())
     async with lock:
         bundled = bundled_asset_path(normalized)
         if bundled is not None:
+            await verify_asset(bundled, checksums, name)
             return bundled
         if dest.is_file() and dest.stat().st_size > 0:
+            await verify_asset(dest, checksums, name)
             return dest
 
         url = github_download_url(normalized)
         logger.info("Caching HPX tunnel engine %s from %s", normalized, url)
         try:
             await _download_to_path(url, dest)
+            await verify_asset(dest, checksums, name)
         except Exception:
             if dest.is_file():
                 dest.unlink(missing_ok=True)

@@ -4106,5 +4106,31 @@
       "panelUrl": "Iran agent cannot reach panel — what should I check?",
       "importProxyLink": "Paste this link; preview first, then I reply yes and you create the Host in the panel (no server command): vless://..."
     }
+  },
+  "fleet": {
+    "title": "Fleet",
+    "subtitle": "Unified view of edge nodes, HPX tunnels, and Pulse agents",
+    "typeNode": "Node",
+    "typeTunnel": "Tunnel",
+    "typePulse": "Pulse",
+    "colType": "Type",
+    "colName": "Name",
+    "colStatus": "Status",
+    "colHost": "Host / version",
+    "colLastSeen": "Last seen",
+    "colActions": "Actions",
+    "openNodes": "Nodes",
+    "openTunnel": "Tunnel",
+    "openPulse": "Pulse",
+    "regenerateToken": "Join token",
+    "regenerateSuccess": "Join token regenerated",
+    "regenerateFailed": "Could not regenerate join token",
+    "agentClaimed": "Agent claimed",
+    "agentPending": "Waiting for agent",
+    "claimed": "claimed",
+    "pending": "pending",
+    "pulseAgents": "Iran {{iran}} · Abroad {{abroad}}",
+    "empty": "No nodes, tunnels, or pulses yet",
+    "loadError": "Could not load fleet summary"
   }
 }

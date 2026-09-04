@@ -4,6 +4,7 @@ import { getCurrentAdmin } from '@/service/api'
 import { hasPermission } from '@/utils/rbac'
 import { createHashRouter, Navigate, RouteObject } from 'react-router'
 import { LoadingSpinner } from '@/components/common/loading-spinner'
+import { DashboardRouteError } from '@/components/layout/dashboard-route-error'
 import { TabbedRouteSuspenseFallback } from '@/components/layout/tabbed-route-suspense-fallback'
 import { lazyWithChunkRecovery } from '@/utils/chunk-recovery'
 // Replace direct imports with lazy imports for route-level components
@@ -82,11 +83,7 @@ export const router = createHashRouter([
         <DashboardLayout />
       </Suspense>
     ),
-    errorElement: (
-      <Suspense fallback={<LoadingSpinner />}>
-        <Login />
-      </Suspense>
-    ),
+    errorElement: <DashboardRouteError />,
     loader: fetchAdminLoader,
     children: [
       {

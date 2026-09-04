@@ -3,7 +3,7 @@ from datetime import UTC, datetime as dt, timedelta as td
 from app import scheduler
 from app.telegram.utils.sub_delivery import scan_all_telegram_subs
 from app.utils.logger import get_logger
-from config import job_settings
+from config import job_settings, runtime_settings
 
 logger = get_logger("review-telegram-subs")
 
@@ -17,7 +17,7 @@ async def review_telegram_subs_job():
         logger.exception("review_telegram_subs_job failed")
 
 
-if scheduler:
+if runtime_settings.role.runs_scheduler:
     interval = max(60, job_settings.review_users_interval)
     now = dt.now(UTC)
     scheduler.add_job(

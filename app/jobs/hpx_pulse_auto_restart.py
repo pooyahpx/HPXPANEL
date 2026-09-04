@@ -5,6 +5,7 @@ from app.db import GetDB
 from app.db.crud.hpx_pulse import get_hpx_pulses, update_hpx_pulse
 from app.db.models import HpxPulseStatus
 from app.utils.logger import get_logger
+from config import runtime_settings
 
 logger = get_logger("hpx-pulse-auto-restart")
 
@@ -48,7 +49,7 @@ async def hpx_pulse_auto_restart_job():
         logger.exception("hpx_pulse_auto_restart_job failed")
 
 
-if scheduler:
+if runtime_settings.role.runs_scheduler:
     now = dt.now(UTC)
     scheduler.add_job(
         hpx_pulse_auto_restart_job,

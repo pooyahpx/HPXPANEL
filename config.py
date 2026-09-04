@@ -305,6 +305,10 @@ class ObservabilitySettings(EnvSettings):
         default=True, validation_alias="OBSERVABILITY_AUTO_ENABLE_NODE_STATS_ON_PG"
     )
     metrics_token: str = Field(default="", validation_alias="OBSERVABILITY_METRICS_TOKEN")
+    metrics_allow_unauthenticated: bool = Field(
+        default=False,
+        validation_alias="OBSERVABILITY_METRICS_ALLOW_UNAUTHENTICATED",
+    )
 
 
 class BackupSettings(EnvSettings):

@@ -9,6 +9,7 @@ from app.operation.hpx_tunnel import HpxTunnelOperation
 from app.services.hpx_tunnel.healer import evaluate_and_repair
 from app.services.hpx_tunnel.manager import health_ping_target, ping_host, start_tunnel, stop_container
 from app.utils.logger import get_logger
+from config import runtime_settings
 
 logger = get_logger("hpx-tunnel-checker")
 hpx_tunnel_operator = HpxTunnelOperation(operator_type=OperatorType.SYSTEM)
@@ -117,7 +118,7 @@ async def hpx_tunnel_checker_job():
         logger.exception("hpx_tunnel_checker_job failed")
 
 
-if scheduler:
+if runtime_settings.role.runs_scheduler:
     now = dt.now(UTC)
     scheduler.add_job(
         hpx_tunnel_checker_job,

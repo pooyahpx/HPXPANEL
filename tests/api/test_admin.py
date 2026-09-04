@@ -110,6 +110,32 @@ def test_admin_login():
     return response.json()["access_token"]
 
 
+def test_failed_admin_login_never_passes_submitted_password_to_notifications(monkeypatch: pytest.MonkeyPatch):
+    secret = "submitted-password-MUST-NOT-LEAK"
+    notification_calls = []
+
+    def capture_notification(*args):
+        notification_calls.append(args)
+
+        async def completed():
+            return None
+
+        return completed()
+
+    monkeypatch.setattr("app.routers.admin.notification.admin_login", capture_notification)
+
+    response = client.post(
+        url="/api/admin/token",
+        data={"username": "missing-admin", "password": secret, "grant_type": "password"},
+    )
+
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+    assert len(notification_calls) == 1
+    assert notification_calls[0][0] == "missing-admin"
+    assert notification_calls[0][2] is False
+    assert secret not in repr(notification_calls)
+
+
 def test_admin_token_contains_admin_id_claim(access_token):
     admin = create_admin(access_token)
     try:

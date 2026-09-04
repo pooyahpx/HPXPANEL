@@ -11,6 +11,15 @@
   "allStatuses": "All Statuses",
   "status": "Status",
   "statistics": "Statistics",
+  "routeError": {
+    "title": "Something went wrong",
+    "description": "The dashboard could not load this page. Reload it or return to a safe screen.",
+    "status": "Error {{status}}",
+    "unknownStatus": "Unexpected dashboard error",
+    "reload": "Reload page",
+    "returnDashboard": "Return to dashboard",
+    "returnLogin": "Return to login"
+  },
   "observability": {
     "title": "Observability",
     "subtitle": "Real-time node health, protocol status, history, and alerts",

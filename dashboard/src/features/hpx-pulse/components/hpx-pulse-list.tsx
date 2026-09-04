@@ -508,7 +508,7 @@ export default function HpxPulseList() {
   const canCreate = hasPermission(admin, 'hpx_pulse', 'create')
   const canUpdate = hasPermission(admin, 'hpx_pulse', 'update')
   const canDelete = hasPermission(admin, 'hpx_pulse', 'delete')
-  const { data, isLoading, isError, error, refetch, isFetching } = useGetHpxPulses({ limit: 50, offset: 0 })
+  const { data, isLoading, isError, error, refetch } = useGetHpxPulses({ limit: 50, offset: 0 })
   const deleteMutation = useDeleteHpxPulse()
   const regenMutation = useRegeneratePulseTokens()
   const syncMutation = useSyncHpxPulse()
@@ -532,47 +532,8 @@ export default function HpxPulseList() {
     toast.success(t('copied', { defaultValue: 'Copied' }))
   }
 
-  const runningCount = data?.pulses?.filter(p => p.status === 'running').length ?? 0
-
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="text-sm font-medium">
-            {t('hpxPulse.summary', {
-              defaultValue: '{{total}} pulse tunnel(s)',
-              total: data?.total ?? 0,
-            })}
-          </p>
-          {(data?.total ?? 0) > 0 && (
-            <p className="text-muted-foreground mt-0.5 text-xs">
-              {t('hpxPulse.runningCount', {
-                defaultValue: '{{count}} running',
-                count: runningCount,
-              })}
-            </p>
-          )}
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" className="h-8 w-8 p-0" onClick={() => refetch()} disabled={isFetching}>
-            <RefreshCw className={`size-3.5 ${isFetching ? 'animate-spin' : ''}`} />
-          </Button>
-          {canCreate && (
-            <Button
-              size="sm"
-              className="h-8 gap-1.5"
-              onClick={() => {
-                setEditingPulse(null)
-                setWizardOpen(true)
-              }}
-            >
-              <Plus className="size-3.5" />
-              {t('hpxPulse.add', { defaultValue: 'New Pulse' })}
-            </Button>
-          )}
-        </div>
-      </div>
-
+    <div className="space-y-5 pt-1">
       {isError && (
         <Card className="border-destructive/40 bg-destructive/5 space-y-1 p-4 text-sm">
           <p className="text-destructive font-medium">

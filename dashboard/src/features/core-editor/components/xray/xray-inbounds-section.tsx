@@ -2420,12 +2420,13 @@ export function XrayInboundsSection({ headerAddPulse, headerAddEpoch }: XrayInbo
         data={profile.inbounds}
         summary={
           <section className="command-surface overflow-hidden" aria-label={t('coreEditor.inbound.matrix', { defaultValue: 'Inbound signal matrix' })}>
-            <div className="bg-foreground text-background flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+            <div className="border-border/60 bg-muted/25 relative flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3 ps-5">
+              <span className="bg-primary absolute inset-y-0 start-0 w-1" aria-hidden="true" />
               <div>
-                <p className="font-mono text-[10px] font-bold tracking-[0.18em] uppercase opacity-70">HPXPANEL // SIGNAL</p>
-                <h2 className="font-display mt-1 text-lg font-black tracking-tight uppercase sm:text-xl">{t('coreEditor.inbound.matrixTitle', { defaultValue: 'Inbound channels' })}</h2>
+                <p className="text-muted-foreground font-mono text-[10px] font-bold tracking-[0.18em] uppercase">HPXPANEL // SIGNAL</p>
+                <h2 className="font-display text-foreground mt-1 text-lg font-black tracking-tight uppercase sm:text-xl">{t('coreEditor.inbound.matrixTitle', { defaultValue: 'Inbound channels' })}</h2>
               </div>
-              <p className="font-mono text-[10px] font-bold tracking-[0.14em] uppercase opacity-70">
+              <p className="text-muted-foreground font-mono text-[10px] font-bold tracking-[0.14em] uppercase">
                 {profile.inbounds.length} live · {new Set(profile.inbounds.map(i => String(i.protocol || 'unknown'))).size} protocols
               </p>
             </div>

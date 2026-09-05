@@ -4,7 +4,26 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.db.models import Admin, AdminRole, ShopConfig, ShopOrder, ShopOrderStatus, ShopPlan, TelegramProfile, TelegramSubDelivery, TelegramSupportTicket, User
+from app.db.models import (
+    Admin,
+    AdminRole,
+    ShopConfig,
+    ShopOrder,
+    ShopOrderStatus,
+    ShopPlan,
+    TelegramProfile,
+    TelegramSubDelivery,
+    TelegramSupportTicket,
+    User,
+)
+
+
+async def _assign_sqlite_pk(db: AsyncSession, model, instance) -> None:
+    """Shop tables were created with BIGINT PKs; SQLite only autoincrements INTEGER PKs."""
+    bind = await db.connection()
+    if bind.dialect.name == "sqlite":
+        next_id = (await db.execute(select(func.coalesce(func.max(model.id), 0) + 1))).scalar_one()
+        instance.id = int(next_id)
 
 
 async def get_or_create_telegram_profile(db: AsyncSession, telegram_id: int, lang: str | None = None) -> TelegramProfile:
@@ -163,6 +182,7 @@ async def upsert_shop_config(
     config = await get_shop_config_by_admin(db, admin_id)
     if config is None:
         config = ShopConfig(admin_id=admin_id)
+        await _assign_sqlite_pk(db, ShopConfig, config)
         db.add(config)
     if enabled is not None:
         config.enabled = enabled
@@ -238,6 +258,7 @@ async def create_shop_plan(
         hwid_limit=hwid_limit,
         is_active=True,
     )
+    await _assign_sqlite_pk(db, ShopPlan, plan)
     db.add(plan)
     await db.commit()
     await db.refresh(plan)
@@ -281,6 +302,7 @@ async def create_shop_order(
         receipt_file_id=receipt_file_id,
         status=ShopOrderStatus.pending,
     )
+    await _assign_sqlite_pk(db, ShopOrder, order)
     db.add(order)
     await db.commit()
     await db.refresh(order)
@@ -298,6 +320,23 @@ async def list_pending_orders(db: AsyncSession, admin_id: int) -> list[ShopOrder
         .order_by(ShopOrder.id.asc())
     )
     return list((await db.execute(stmt)).scalars().all())
+
+
+async def list_orders_for_admin(
+    db: AsyncSession,
+    admin_id: int,
+    *,
+    status: ShopOrderStatus | None = None,
+    offset: int = 0,
+    limit: int = 50,
+) -> tuple[list[ShopOrder], int]:
+    filters = [ShopOrder.admin_id == admin_id]
+    if status is not None:
+        filters.append(ShopOrder.status == status)
+    base = select(ShopOrder).where(*filters)
+    total = int((await db.execute(select(func.count()).select_from(base.subquery()))).scalar_one() or 0)
+    stmt = base.order_by(ShopOrder.id.desc()).offset(offset).limit(limit)
+    return list((await db.execute(stmt)).scalars().all()), total
 
 
 async def list_buyer_orders(db: AsyncSession, buyer_telegram_id: int, limit: int = 10) -> list[ShopOrder]:

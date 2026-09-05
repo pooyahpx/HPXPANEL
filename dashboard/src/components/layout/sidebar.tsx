@@ -50,6 +50,7 @@ import {
   Settings,
   Settings2,
   Share2Icon,
+  ShoppingBag,
   UserCog,
   UserKey,
   UserPlus,
@@ -216,6 +217,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               title: 'users',
               url: '/users',
               icon: UsersIcon,
+            },
+            {
+              title: 'shop.title',
+              url: '/shop',
+              icon: ShoppingBag,
             },
           ]
         : []),

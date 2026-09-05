@@ -1,7 +1,8 @@
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { DecimalInput } from '@/components/common/decimal-input'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -13,7 +14,7 @@ import { cn } from '@/lib/utils'
 import { CoresSimpleResponse, DataLimitResetStrategy, getNode, NodeConnectionType, NodeResponse, useCreateNode, useGetNode, useModifyNode } from '@/service/api'
 import { formatBytes, gbToBytes } from '@/utils/formatByte'
 import { queryClient } from '@/utils/query-client'
-import { Loader2, RefreshCw, Settings, Server, Pencil } from 'lucide-react'
+import { Loader2, RefreshCw, Settings, Server, Pencil, Shield } from 'lucide-react'
 import React, { useEffect, useRef, useState } from 'react'
 import { UseFormReturn } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
@@ -364,33 +365,45 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
 
   return (
     <Dialog open={isDialogOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="h-full max-w-full focus:outline-none sm:max-w-[90vw] lg:h-auto lg:max-w-[1000px]" onOpenAutoFocus={e => e.preventDefault()}>
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+      <DialogContent className="flex h-full max-h-[92dvh] max-w-full flex-col gap-0 overflow-hidden focus:outline-none sm:max-w-[92vw] lg:h-auto lg:max-w-[1080px]" onOpenAutoFocus={e => e.preventDefault()}>
+        <DialogHeader className="shrink-0 space-y-3 border-b pb-4">
+          <DialogTitle className="flex items-center gap-2.5">
             {editingNode ? <Pencil className="h-5 w-5" /> : <Server className="h-5 w-5" />}
             <span>{editingNode ? t('editNode.title') : t('nodeModal.title')}</span>
           </DialogTitle>
           <DialogDescription className="sr-only">{t('nodeModal.description', { defaultValue: 'Configure node settings and connection details.' })}</DialogDescription>
-        </DialogHeader>
 
-        {/* Status Check Results - Positioned at the top of the modal */}
-        <div className="flex flex-col gap-4">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <div
-                className={`h-2 w-2 rounded-full ${
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <Badge
+                variant="outline"
+                className={cn(
+                  'h-7 gap-1.5 px-2.5 text-[10px] font-semibold tracking-wide uppercase',
                   currentNode?.status === 'connecting' || (statusChecking && !currentNode?.status)
-                    ? 'bg-yellow-500 dark:bg-yellow-400'
+                    ? 'border-amber-500/35 bg-amber-500/10 text-amber-700 dark:text-amber-400'
                     : currentNode?.status === 'connected'
-                      ? 'bg-green-500 dark:bg-green-400'
+                      ? 'border-emerald-500/35 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
                       : currentNode?.status === 'error'
-                        ? 'bg-red-500 dark:bg-red-400'
+                        ? 'border-destructive/35 bg-destructive/10 text-destructive'
                         : currentNode?.status === 'limited'
-                          ? 'bg-orange-500 dark:bg-orange-400'
-                          : 'bg-gray-500 dark:bg-gray-400'
-                }`}
-              />
-              <span className="text-foreground text-sm font-medium">
+                          ? 'border-orange-500/35 bg-orange-500/10 text-orange-700 dark:text-orange-400'
+                          : 'border-border bg-muted/40 text-muted-foreground',
+                )}
+              >
+                <span
+                  className={cn(
+                    'h-1.5 w-1.5 rounded-full',
+                    currentNode?.status === 'connecting' || (statusChecking && !currentNode?.status)
+                      ? 'bg-amber-500'
+                      : currentNode?.status === 'connected'
+                        ? 'bg-emerald-500'
+                        : currentNode?.status === 'error'
+                          ? 'bg-destructive'
+                          : currentNode?.status === 'limited'
+                            ? 'bg-orange-500'
+                            : 'bg-muted-foreground/50',
+                  )}
+                />
                 {currentNode?.status === 'connecting' || (statusChecking && !currentNode?.status)
                   ? t('nodeModal.status.connecting')
                   : currentNode?.status === 'connected'
@@ -400,49 +413,45 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
                       : currentNode?.status === 'limited'
                         ? t('status.limited', { defaultValue: 'Limited' })
                         : t('nodeModal.status.disabled')}
-              </span>
+              </Badge>
               {currentNode?.status === 'error' && (
-                <Button variant="ghost" size="sm" onClick={() => setShowErrorDetails(!showErrorDetails)} className="text-muted-foreground hover:text-foreground h-6 px-2 text-xs">
+                <Button variant="ghost" size="sm" onClick={() => setShowErrorDetails(!showErrorDetails)} className="text-muted-foreground hover:text-foreground h-7 px-2 text-xs">
                   {showErrorDetails ? t('nodeModal.hideDetails') : t('nodeModal.showDetails')}
                 </Button>
               )}
             </div>
-            <Button variant="outline" size="sm" onClick={checkNodeStatus} disabled={statusChecking || !form.formState.isValid} className="flex-shrink-0 px-2 text-xs">
-              {statusChecking ? (
-                <div className="flex items-center gap-1">
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                  <span className="text-xs">{t('nodeModal.statusChecking')}</span>
-                </div>
-              ) : (
-                <div className="flex items-center gap-1">
-                  <RefreshCw className="h-3 w-3" />
-                  <span className="text-xs">{t('nodeModal.statusCheck')}</span>
-                </div>
-              )}
+            <Button variant="outline" size="sm" onClick={checkNodeStatus} disabled={statusChecking || !form.formState.isValid} className="h-8 gap-1.5">
+              {statusChecking ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+              <span className="text-xs">{statusChecking ? t('nodeModal.statusChecking') : t('nodeModal.statusCheck')}</span>
             </Button>
           </div>
+
           {showErrorDetails && currentNode?.status === 'error' && (
             <div
               dir="ltr"
-              className="max-h-32 overflow-y-auto rounded bg-red-50 p-3 text-xs break-words whitespace-pre-wrap text-red-500 dark:bg-red-900/20 dark:text-red-400"
+              className="border-destructive/30 bg-destructive/10 text-destructive max-h-32 overflow-y-auto rounded-lg border p-3 text-xs break-words whitespace-pre-wrap"
               style={{ whiteSpace: 'pre-line' }}
             >
               {errorDetails || currentNode?.message}
             </div>
           )}
-        </div>
+        </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="flex min-h-0 flex-1 flex-col">
             <div
               className={cn(
-                '-mr-2 overflow-y-auto px-1 pr-2 sm:-mr-4 sm:px-2 sm:pr-4',
-                showErrorDetails && currentNode?.status === 'error' ? 'max-h-[62.3dvh] sm:max-h-[56.8dvh]' : 'max-h-[71dvh] sm:max-h-[70dvh]',
+                'min-h-0 flex-1 overflow-y-auto px-0.5 py-5',
                 isFetchingNodeData && 'pointer-events-none blur-sm',
               )}
             >
-              <div className="flex h-full flex-col items-start gap-4 lg:flex-row">
-                <div className="w-full flex-1 space-y-4">
+              <div className="grid gap-5 lg:grid-cols-2 lg:items-stretch">
+                <div className="border-border/60 bg-card/30 space-y-4 rounded-xl border p-4 sm:p-5">
+                  <div className="space-y-1">
+                    <p className="text-primary font-mono text-[10px] font-bold tracking-[0.14em] uppercase">{t('nodeModal.connectionBrief', { defaultValue: 'Connection' })}</p>
+                    <p className="text-muted-foreground text-xs">{t('nodeModal.connectionHint', { defaultValue: 'Identity, endpoint, and core binding' })}</p>
+                  </div>
+
                   <FormField
                     control={form.control}
                     name="name"
@@ -457,7 +466,7 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
                     )}
                   />
 
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-[1fr_7.5rem]">
                     <FormField
                       control={form.control}
                       name="address"
@@ -544,12 +553,12 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
                                 type="text"
                                 placeholder={t('nodeModal.apiKeyPlaceholder')}
                                 autoComplete="off"
-                                className="min-w-0"
+                                className="min-w-0 font-mono text-xs sm:text-sm"
                                 {...field}
                                 onChange={e => field.onChange(e.target.value)}
                               />
-                              <Button type="button" variant="ghost" size="icon" onClick={generateUUID} className="shrink-0" title={t('nodeModal.generateApiKey', { defaultValue: 'Generate API key' })}>
-                                <RefreshCw className="h-3 w-3" aria-hidden />
+                              <Button type="button" variant="outline" size="icon" onClick={generateUUID} className="h-10 w-10 shrink-0" title={t('nodeModal.generateApiKey', { defaultValue: 'Generate API key' })}>
+                                <RefreshCw className="h-3.5 w-3.5" aria-hidden />
                               </Button>
                             </div>
                           </FormControl>
@@ -558,15 +567,15 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
                       )
                     }}
                   />
-                  <Accordion type="single" collapsible className="!mt-0 mb-2 w-full pb-2">
-                    <AccordionItem className="rounded-sm border px-4 [&_[data-state=closed]]:no-underline [&_[data-state=open]]:no-underline" value="advanced-settings">
-                      <AccordionTrigger>
+                  <Accordion type="single" collapsible className="w-full">
+                    <AccordionItem className="bg-muted/20 rounded-lg border px-4 [&_[data-state=closed]]:no-underline [&_[data-state=open]]:no-underline" value="advanced-settings">
+                      <AccordionTrigger className="py-3 hover:no-underline">
                         <div className="flex items-center gap-2">
                           <Settings className="h-4 w-4" />
                           <span>{t('settings.notifications.advanced.title')}</span>
                         </div>
                       </AccordionTrigger>
-                      <AccordionContent className="px-2">
+                      <AccordionContent className="px-1 pb-4">
                         <div className="flex flex-col gap-4">
                           <div className="flex flex-col gap-4 sm:flex-row">
                             <FormField
@@ -1122,13 +1131,24 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
                   control={form.control}
                   name="server_ca"
                   render={({ field }) => (
-                    <FormItem className="h-full w-full flex-1 pb-4 lg:mb-0">
-                      <FormLabel>{t('nodeModal.certificate')}</FormLabel>
+                    <FormItem className="border-border/60 bg-card/30 flex h-full min-h-[320px] flex-col rounded-xl border p-4 sm:min-h-[420px] sm:p-5">
+                      <div className="mb-3 flex items-start justify-between gap-3">
+                        <div className="space-y-1">
+                          <FormLabel className="flex items-center gap-2 text-sm">
+                            <Shield className="text-primary h-4 w-4" />
+                            {t('nodeModal.certificate')}
+                          </FormLabel>
+                          <p className="text-muted-foreground text-xs">{t('nodeModal.certificateHint', { defaultValue: 'Server CA used to trust this node' })}</p>
+                        </div>
+                      </div>
                       <FormControl>
                         <Textarea
                           dir="ltr"
                           placeholder={t('nodeModal.certificatePlaceholder')}
-                          className={cn('h-[200px] font-mono text-xs lg:h-[92%]', !!form.formState.errors.server_ca && 'border-destructive')}
+                          className={cn(
+                            'bg-muted/20 min-h-[240px] flex-1 resize-none font-mono text-[11px] leading-relaxed sm:min-h-[340px] sm:text-xs',
+                            !!form.formState.errors.server_ca && 'border-destructive',
+                          )}
                           {...field}
                         />
                       </FormControl>
@@ -1138,7 +1158,7 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
                 />
               </div>
             </div>
-            <div className="flex justify-end gap-2 pt-3">
+            <DialogFooter className="shrink-0 gap-2 border-t pt-4 sm:justify-end">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={addNodeMutation.isPending || modifyNodeMutation.isPending}>
                 {t('cancel')}
               </Button>
@@ -1150,7 +1170,7 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
               >
                 {editingNode ? t('modify') : t('create')}
               </LoaderButton>
-            </div>
+            </DialogFooter>
           </form>
         </Form>
       </DialogContent>

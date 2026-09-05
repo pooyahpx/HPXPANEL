@@ -94,6 +94,8 @@ export interface CoreEditorDataTableProps<TData> {
   searchPlaceholder?: string
   /** Optional controls rendered next to the grid/list view toggle. */
   toolbarActions?: ReactNode
+  /** Optional summary strip above the toolbar (counts, filters, …). */
+  summary?: ReactNode
   getRowActions?: (row: TData, index: number) => CoreEditorRowAction[]
 }
 
@@ -116,6 +118,7 @@ export function CoreEditorDataTable<TData>({
   getSearchableText,
   searchPlaceholder,
   toolbarActions,
+  summary,
   getRowActions,
 }: CoreEditorDataTableProps<TData>) {
   const { t, i18n } = useTranslation()
@@ -219,7 +222,7 @@ export function CoreEditorDataTable<TData>({
         width,
         align: 'start' as const,
         headerClassName: cn('truncate', column.id === 'index' && 'pr-1 md:pr-6 lg:pr-12'),
-        className: cn('text-sm py-2', column.id === 'index' && 'pr-1 md:pr-6 lg:pr-12'),
+        className: cn('py-3.5 text-sm', column.id === 'index' && 'pr-1 md:pr-6 lg:pr-12'),
         skeletonClassName,
         hideOnMobile: !primaryMobileIds.has(column.id),
         header: hdr && !hdr.isPlaceholder ? flexRender(column.columnDef.header, hdr.getContext()) : null,
@@ -372,7 +375,7 @@ export function CoreEditorDataTable<TData>({
         data={displayData}
         getRowId={listGetRowId}
         className={cn('gap-4', reorderEnabled ? 'max-w-full min-w-0 overflow-hidden' : null)}
-        emptyState={<div className="text-muted-foreground rounded-md border px-4 py-10 text-center text-sm">{emptyDisplay}</div>}
+        emptyState={<div className="text-muted-foreground rounded-xl border px-4 py-12 text-center text-sm">{emptyDisplay}</div>}
         showEmptyState={displayData.length === 0}
         enableSelection={selectionEnabled}
         injectSelectionProps={selectionEnabled}
@@ -386,7 +389,8 @@ export function CoreEditorDataTable<TData>({
         data={displayData}
         columns={listColumns}
         getRowId={listGetRowId}
-        className={cn('gap-1.5', reorderEnabled ? 'max-w-full min-w-0 overflow-hidden' : null)}
+        className={cn('gap-2.5', reorderEnabled ? 'max-w-full min-w-0 overflow-hidden' : null)}
+        headerClassName="rounded-lg border border-border/50 bg-muted/20 px-3 py-2.5"
         onRowClick={
           onRowClick
             ? item => {
@@ -420,19 +424,20 @@ export function CoreEditorDataTable<TData>({
   const clearSearch = () => setSearchQuery('')
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="space-y-4">
+      {summary}
+      <div className="border-border/60 bg-card/20 flex flex-wrap items-center justify-between gap-3 rounded-xl border p-3 sm:p-3.5">
         <div className="relative min-w-0 flex-1 sm:max-w-md">
-          <Search className={cn('text-muted-foreground pointer-events-none absolute top-1/2 h-4 w-4 -translate-y-1/2', dir === 'rtl' ? 'right-2.5' : 'left-2.5')} aria-hidden />
+          <Search className={cn('text-muted-foreground pointer-events-none absolute top-1/2 h-4 w-4 -translate-y-1/2', dir === 'rtl' ? 'right-3' : 'left-3')} aria-hidden />
           <Input
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             placeholder={searchPlaceholder ?? t('search')}
-            className={cn(dir === 'rtl' ? 'pr-9 pl-9' : 'pr-9 pl-9')}
+            className={cn('h-10', dir === 'rtl' ? 'pr-9 pl-9' : 'pr-9 pl-9')}
             aria-label={t('search')}
           />
           {searchQuery ? (
-            <button type="button" onClick={clearSearch} className={cn('text-muted-foreground hover:text-foreground absolute top-1/2 -translate-y-1/2', dir === 'rtl' ? 'left-1.5' : 'right-1.5')}>
+            <button type="button" onClick={clearSearch} className={cn('text-muted-foreground hover:text-foreground absolute top-1/2 -translate-y-1/2', dir === 'rtl' ? 'left-2' : 'right-2')}>
               <X className="h-4 w-4" />
             </button>
           ) : null}

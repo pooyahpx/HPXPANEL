@@ -25,11 +25,11 @@ export function CoreEditorLayout({ header, sectionHeader, main, dirty, canSave, 
   return (
     <div className={cn('flex min-h-0 flex-1 flex-col gap-0', className)}>
       <CoreCommandMenu />
-      <div className="px-4 pt-3 pb-2 md:pt-6 md:pb-0">{header}</div>
+      <div className="px-4 pt-4 pb-2 md:pt-6 md:pb-0">{header}</div>
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {sectionHeader}
         <CoreSectionTabs />
-        <div className="min-h-0 min-w-0 flex-1 overflow-y-auto px-4 py-4">{main}</div>
+        <div className="min-h-0 min-w-0 flex-1 overflow-y-auto px-4 py-5 md:py-6">{main}</div>
       </div>
       <StickySaveBar
         dirty={dirty}

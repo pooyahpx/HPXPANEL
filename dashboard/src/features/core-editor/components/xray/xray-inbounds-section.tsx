@@ -1254,22 +1254,26 @@ export function XrayInboundsSection({ headerAddPulse, headerAddEpoch }: XrayInbo
       {
         id: 'index',
         header: '#',
-        cell: ({ row }) => row.index + 1,
+        cell: ({ row }) => <span className="text-muted-foreground font-mono text-xs tabular-nums">{row.index + 1}</span>,
       },
       {
         accessorKey: 'tag',
         header: () => t('coreEditor.col.tag', { defaultValue: 'Tag' }),
-        cell: ({ row }) => <span className="text-xs">{row.original.tag}</span>,
+        cell: ({ row }) => <span className="font-medium tracking-tight">{row.original.tag}</span>,
       },
       {
         accessorKey: 'protocol',
         header: () => t('coreEditor.col.protocol', { defaultValue: 'Protocol' }),
-        cell: ({ row }) => formatInboundProtocolForUi(row.original.protocol, t),
+        cell: ({ row }) => (
+          <span className="border-primary/25 bg-primary/10 text-primary inline-flex items-center rounded-md border px-2 py-0.5 font-mono text-[10px] font-semibold tracking-wide uppercase">
+            {formatInboundProtocolForUi(row.original.protocol, t)}
+          </span>
+        ),
       },
       {
         id: 'port',
         header: () => t('coreEditor.col.port', { defaultValue: 'Port' }),
-        cell: ({ row }) => formatInboundPort(row.original),
+        cell: ({ row }) => <span className="font-mono text-xs tabular-nums">{formatInboundPort(row.original)}</span>,
       },
     ],
     [t],
@@ -2414,8 +2418,31 @@ export function XrayInboundsSection({ headerAddPulse, headerAddEpoch }: XrayInbo
       <CoreEditorDataTable
         columns={columns}
         data={profile.inbounds}
+        summary={
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="border-border/60 bg-card/40 rounded-xl border px-4 py-3.5">
+              <div className="text-muted-foreground text-[11px] font-medium tracking-[0.12em] uppercase">{t('coreEditor.inbound.total', { defaultValue: 'Inbounds' })}</div>
+              <div className="mt-1.5 text-2xl font-semibold tracking-tight tabular-nums">{profile.inbounds.length}</div>
+            </div>
+            <div className="border-border/60 bg-card/40 rounded-xl border px-4 py-3.5">
+              <div className="text-muted-foreground text-[11px] font-medium tracking-[0.12em] uppercase">{t('coreEditor.inbound.protocols', { defaultValue: 'Protocols' })}</div>
+              <div className="mt-1.5 text-2xl font-semibold tracking-tight tabular-nums">{new Set(profile.inbounds.map(i => String(i.protocol || 'unknown'))).size}</div>
+            </div>
+            <div className="border-border/60 bg-card/40 rounded-xl border px-4 py-3.5">
+              <div className="text-muted-foreground text-[11px] font-medium tracking-[0.12em] uppercase">{t('coreEditor.inbound.ports', { defaultValue: 'Ports in use' })}</div>
+              <div className="mt-1.5 truncate text-sm font-semibold tracking-tight tabular-nums sm:text-base">
+                {profile.inbounds
+                  .map(i => formatInboundPort(i))
+                  .filter(Boolean)
+                  .slice(0, 4)
+                  .join(' · ') || '—'}
+                {profile.inbounds.length > 4 ? '…' : ''}
+              </div>
+            </div>
+          </div>
+        }
         toolbarActions={
-          <Button type="button" size="sm" className="h-9 px-2 sm:px-3" onClick={beginAddInbound}>
+          <Button type="button" size="sm" className="h-10 px-3" onClick={beginAddInbound}>
             <Plus className="h-4 w-4" />
             <span className="hidden sm:inline">{t('coreEditor.inbound.add', { defaultValue: 'Add inbound' })}</span>
           </Button>

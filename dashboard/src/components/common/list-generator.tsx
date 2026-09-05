@@ -199,9 +199,9 @@ export function ListGenerator<T>({
   }
 
   return (
-    <div className={cn('flex w-full flex-col gap-2', className)}>
+    <div className={cn('flex w-full flex-col gap-3', className)}>
       {!hideHeader && (
-        <div className={cn(listTemplateClassName, 'text-muted-foreground gap-3 px-3 text-xs font-semibold uppercase', headerClassName)} style={listTemplateStyleVars}>
+        <div className={cn(listTemplateClassName, 'text-muted-foreground gap-3 px-3.5 py-1 text-xs font-semibold tracking-wide uppercase', headerClassName)} style={listTemplateStyleVars}>
           {enableSorting && <div aria-hidden="true" />}
           {enableSelection && (
             <div className="flex items-center justify-center">
@@ -258,7 +258,7 @@ export function ListGenerator<T>({
               key={!enableSorting ? rowId : undefined}
               className={cn(
                 listTemplateClassName,
-                'bg-background gap-3 overflow-hidden rounded-md border px-3 py-3',
+                'bg-background gap-3 overflow-hidden rounded-lg border px-3.5 py-3.5',
                 onRowClick && 'hover:bg-muted/40 cursor-pointer transition-colors',
                 isSelected && 'border-primary/40 bg-muted/40',
                 renderRowClassName(item, index),

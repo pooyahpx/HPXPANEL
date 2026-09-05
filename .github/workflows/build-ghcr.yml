@@ -1,6 +1,7 @@
 name: Build and push panel image (GHCR)
 
-# Builds HPXPANEL (backend + prebuilt dashboard) and pushes to GHCR.
+# Builds HPXPANEL (backend + prebuilt dashboard) and pushes a multi-arch
+# (linux/amd64 + linux/arm64) image to GHCR, then signs it with cosign (keyless).
 # Installer expects: ghcr.io/pooyahpx/hpxpanel:latest
 # Image push is gated on sqlite migrations + unit tests.
 on:
@@ -29,6 +30,7 @@ on:
 permissions:
   contents: read
   packages: write
+  id-token: write
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -90,9 +92,19 @@ jobs:
           path: ./dashboard/build/
           retention-days: 1
 
-  build-and-push:
+  build-images:
     needs: [test-sqlite, build-dashboard]
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            platform: linux/amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -104,18 +116,11 @@ jobs:
           name: dashboard-build
           path: ./dashboard/build/
 
-      - name: Compute tags
-        id: meta
+      - name: Image name
+        id: image
         run: |
-          set -eux
           owner="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
-          image="ghcr.io/${owner}/hpxpanel"
-          tags="${image}:latest,${image}:${GITHUB_SHA::7}"
-          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
-            tags="${tags},${image}:${GITHUB_REF_NAME}"
-          fi
-          echo "image=${image}" >> "$GITHUB_OUTPUT"
-          echo "tags=${tags}" >> "$GITHUB_OUTPUT"
+          echo "name=ghcr.io/${owner}/hpxpanel" >> "$GITHUB_OUTPUT"
 
       - uses: docker/setup-buildx-action@v3
 
@@ -125,21 +130,110 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: docker/build-push-action@v6
+      - name: Build and push ${{ matrix.arch }} by digest
+        id: build
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile
-          platforms: linux/amd64
+          platforms: ${{ matrix.platform }}
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
+          provenance: false
+          outputs: type=image,name=${{ steps.image.outputs.name }},push-by-digest=true,name-canonical=true,push=true
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.title=HPXPANEL
             org.opencontainers.image.revision=${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=hpxpanel-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=hpxpanel-${{ matrix.arch }}
+
+      - name: Export digest
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          echo "${digest}"
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ matrix.arch }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge-and-sign:
+    needs: [build-images]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Image + tags
+        id: meta
+        run: |
+          set -eux
+          owner="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
+          image="ghcr.io/${owner}/hpxpanel"
+          tag_args=("-t" "${image}:latest" "-t" "${image}:${GITHUB_SHA::7}")
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            tag_args+=("-t" "${image}:${GITHUB_REF_NAME}")
+          fi
+          echo "image=${image}" >> "$GITHUB_OUTPUT"
+          echo "tag_args=${tag_args[*]}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: /tmp/digests
+          pattern: digests-*
+          merge-multiple: true
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create multi-arch manifest
+        id: merge
+        working-directory: /tmp/digests
+        run: |
+          set -eux
+          image="${{ steps.meta.outputs.image }}"
+          refs=()
+          for f in *; do
+            refs+=("${image}@sha256:${f}")
+          done
+          # shellcheck disable=SC2086
+          docker buildx imagetools create ${{ steps.meta.outputs.tag_args }} "${refs[@]}"
+          digest="$(docker buildx imagetools inspect "${image}:latest" --format '{{println .Manifest.Digest}}')"
+          echo "digest=${digest}" >> "$GITHUB_OUTPUT"
+          docker buildx imagetools inspect "${image}:latest"
+
+      - uses: sigstore/cosign-installer@v3
+
+      - name: Sign multi-arch image (keyless)
+        env:
+          COSIGN_EXPERIMENTAL: "1"
+        run: |
+          set -eux
+          image="${{ steps.meta.outputs.image }}"
+          digest="${{ steps.merge.outputs.digest }}"
+          cosign sign --yes "${image}@${digest}"
 
       - name: Summary
         run: |
-          echo "### HPXPANEL image pushed" >> "$GITHUB_STEP_SUMMARY"
-          echo "\`${{ steps.meta.outputs.tags }}\`" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "### HPXPANEL multi-arch image pushed + signed"
+            echo ""
+            echo "- Image: \`${{ steps.meta.outputs.image }}\`"
+            echo "- Digest: \`${{ steps.merge.outputs.digest }}\`"
+            echo "- Platforms: \`linux/amd64\`, \`linux/arm64\`"
+            echo "- Signature: cosign keyless (Sigstore)"
+            echo ""
+            echo "Verify:"
+            echo "\`\`\`bash"
+            echo "cosign verify \\"
+            echo "  --certificate-identity-regexp='https://github.com/${{ github.repository }}/.github/workflows/build-ghcr.yml@.*' \\"
+            echo "  --certificate-oidc-issuer=https://token.actions.githubusercontent.com \\"
+            echo "  ${{ steps.meta.outputs.image }}@${{ steps.merge.outputs.digest }}"
+            echo "\`\`\`"
+          } >> "$GITHUB_STEP_SUMMARY"

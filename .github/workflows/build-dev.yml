@@ -1,6 +1,6 @@
 name: Build-Docker-dev
 
-# Dev-branch image builds → GHCR only (no Docker Hub secrets required).
+# Dev-branch image builds to GHCR only (no Docker Hub secrets required).
 # Production releases use build-ghcr.yml on main/tags.
 on:
   push:

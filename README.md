@@ -57,6 +57,15 @@ Then open **HPXPANEL → Nodes** and paste the values from `hpxnode`. See [Post-
 
 **Dashboard:** `https://YOUR_DOMAIN:8000/dashboard/`
 
+Official panel images on GHCR are **multi-arch** (`linux/amd64` + `linux/arm64`) and signed with **cosign** (Sigstore keyless). Verify a release digest:
+
+```bash
+cosign verify \
+  --certificate-identity-regexp='https://github.com/pooyahpx/HPXPANEL/.github/workflows/build-ghcr.yml@.*' \
+  --certificate-oidc-issuer=https://token.actions.githubusercontent.com \
+  ghcr.io/pooyahpx/hpxpanel:latest
+```
+
 **HPX Pulse — manual tunnel engine** (Iran VPS, if `join` hangs on panel mirror download):
 ```bash
 curl --http1.1 --connect-timeout 20 --max-time 300 -fsSL \

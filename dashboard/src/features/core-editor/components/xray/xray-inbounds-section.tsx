@@ -1259,13 +1259,13 @@ export function XrayInboundsSection({ headerAddPulse, headerAddEpoch }: XrayInbo
       {
         accessorKey: 'tag',
         header: () => t('coreEditor.col.tag', { defaultValue: 'Tag' }),
-        cell: ({ row }) => <span className="font-medium tracking-tight">{row.original.tag}</span>,
+        cell: ({ row }) => <span className="font-display text-base font-bold tracking-tight">{row.original.tag}</span>,
       },
       {
         accessorKey: 'protocol',
         header: () => t('coreEditor.col.protocol', { defaultValue: 'Protocol' }),
         cell: ({ row }) => (
-          <span className="border-primary/25 bg-primary/10 text-primary inline-flex items-center rounded-md border px-2 py-0.5 font-mono text-[10px] font-semibold tracking-wide uppercase">
+          <span className="border-primary bg-primary text-primary-foreground inline-flex items-center border px-2.5 py-1 font-mono text-[10px] font-bold tracking-[0.12em] uppercase shadow-[2px_2px_0_hsl(var(--pixel-border))]">
             {formatInboundProtocolForUi(row.original.protocol, t)}
           </span>
         ),
@@ -1273,7 +1273,7 @@ export function XrayInboundsSection({ headerAddPulse, headerAddEpoch }: XrayInbo
       {
         id: 'port',
         header: () => t('coreEditor.col.port', { defaultValue: 'Port' }),
-        cell: ({ row }) => <span className="font-mono text-xs tabular-nums">{formatInboundPort(row.original)}</span>,
+        cell: ({ row }) => <span className="font-display text-lg font-black tabular-nums">{formatInboundPort(row.original)}</span>,
       },
     ],
     [t],
@@ -2419,32 +2419,43 @@ export function XrayInboundsSection({ headerAddPulse, headerAddEpoch }: XrayInbo
         columns={columns}
         data={profile.inbounds}
         summary={
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div className="border-border/60 bg-card/40 rounded-xl border px-4 py-3.5">
-              <div className="text-muted-foreground text-[11px] font-medium tracking-[0.12em] uppercase">{t('coreEditor.inbound.total', { defaultValue: 'Inbounds' })}</div>
-              <div className="mt-1.5 text-2xl font-semibold tracking-tight tabular-nums">{profile.inbounds.length}</div>
+          <section className="command-surface overflow-hidden" aria-label={t('coreEditor.inbound.matrix', { defaultValue: 'Inbound signal matrix' })}>
+            <div className="bg-foreground text-background flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+              <div>
+                <p className="font-mono text-[10px] font-bold tracking-[0.18em] uppercase opacity-70">HPXPANEL // SIGNAL</p>
+                <h2 className="font-display mt-1 text-lg font-black tracking-tight uppercase sm:text-xl">{t('coreEditor.inbound.matrixTitle', { defaultValue: 'Inbound channels' })}</h2>
+              </div>
+              <p className="font-mono text-[10px] font-bold tracking-[0.14em] uppercase opacity-70">
+                {profile.inbounds.length} live · {new Set(profile.inbounds.map(i => String(i.protocol || 'unknown'))).size} protocols
+              </p>
             </div>
-            <div className="border-border/60 bg-card/40 rounded-xl border px-4 py-3.5">
-              <div className="text-muted-foreground text-[11px] font-medium tracking-[0.12em] uppercase">{t('coreEditor.inbound.protocols', { defaultValue: 'Protocols' })}</div>
-              <div className="mt-1.5 text-2xl font-semibold tracking-tight tabular-nums">{new Set(profile.inbounds.map(i => String(i.protocol || 'unknown'))).size}</div>
-            </div>
-            <div className="border-border/60 bg-card/40 rounded-xl border px-4 py-3.5">
-              <div className="text-muted-foreground text-[11px] font-medium tracking-[0.12em] uppercase">{t('coreEditor.inbound.ports', { defaultValue: 'Ports in use' })}</div>
-              <div className="mt-1.5 truncate text-sm font-semibold tracking-tight tabular-nums sm:text-base">
-                {profile.inbounds
-                  .map(i => formatInboundPort(i))
-                  .filter(Boolean)
-                  .slice(0, 4)
-                  .join(' · ') || '—'}
-                {profile.inbounds.length > 4 ? '…' : ''}
+            <div className="grid divide-y sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+              <div className="px-4 py-4">
+                <div className="text-muted-foreground font-mono text-[10px] font-bold tracking-[0.14em] uppercase">{t('coreEditor.inbound.total', { defaultValue: 'Channels' })}</div>
+                <div className="font-display text-primary mt-2 text-3xl font-black tracking-tight tabular-nums">{profile.inbounds.length}</div>
+              </div>
+              <div className="px-4 py-4">
+                <div className="text-muted-foreground font-mono text-[10px] font-bold tracking-[0.14em] uppercase">{t('coreEditor.inbound.protocols', { defaultValue: 'Protocols' })}</div>
+                <div className="font-display mt-2 text-3xl font-black tracking-tight tabular-nums">{new Set(profile.inbounds.map(i => String(i.protocol || 'unknown'))).size}</div>
+              </div>
+              <div className="px-4 py-4">
+                <div className="text-muted-foreground font-mono text-[10px] font-bold tracking-[0.14em] uppercase">{t('coreEditor.inbound.ports', { defaultValue: 'Ports hot' })}</div>
+                <div dir="ltr" className="mt-2 font-mono text-sm font-bold tracking-tight tabular-nums sm:text-base">
+                  {profile.inbounds
+                    .map(i => formatInboundPort(i))
+                    .filter(Boolean)
+                    .slice(0, 5)
+                    .join(' · ') || '—'}
+                  {profile.inbounds.length > 5 ? '…' : ''}
+                </div>
               </div>
             </div>
-          </div>
+          </section>
         }
         toolbarActions={
-          <Button type="button" size="sm" className="h-10 px-3" onClick={beginAddInbound}>
+          <Button type="button" size="sm" className="h-11 gap-1.5 px-4 shadow-[3px_3px_0_hsl(var(--pixel-border))]" onClick={beginAddInbound}>
             <Plus className="h-4 w-4" />
-            <span className="hidden sm:inline">{t('coreEditor.inbound.add', { defaultValue: 'Add inbound' })}</span>
+            <span className="hidden font-bold tracking-wide uppercase sm:inline">{t('coreEditor.inbound.add', { defaultValue: 'Add inbound' })}</span>
           </Button>
         }
         getSearchableText={inboundSearchHaystack}

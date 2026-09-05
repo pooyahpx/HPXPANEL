@@ -1,9 +1,9 @@
 /** List vs grid for {@link CoreEditorDataTable} sections (inbounds, outbounds, routing, …). */
 export type CoreEditorViewMode = 'list' | 'grid'
 
-export const CORE_EDITOR_VIEW_MODE_STORAGE_KEY = 'view-mode:core-editor-lists'
+export const CORE_EDITOR_VIEW_MODE_STORAGE_KEY = 'view-mode:core-editor-lists-v2'
 
-export const DEFAULT_CORE_EDITOR_VIEW_MODE: CoreEditorViewMode = 'list'
+export const DEFAULT_CORE_EDITOR_VIEW_MODE: CoreEditorViewMode = 'grid'
 
 const NUM_USERS_PER_PAGE_LOCAL_STORAGE_KEY = 'hpxpanel-num-users-per-page'
 const NUM_ADMINS_PER_PAGE_LOCAL_STORAGE_KEY = 'hpxpanel-num-admins-per-page'

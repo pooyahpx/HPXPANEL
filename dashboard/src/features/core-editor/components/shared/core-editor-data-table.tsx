@@ -3,7 +3,6 @@ import { ListGenerator, type ListColumn } from '@/components/common/list-generat
 import { ListGeneratorGrid } from '@/components/common/list-generator-grid'
 import { BulkActionsBar } from '@/features/users/components/bulk-actions-bar'
 import { BulkActionAlertDialog } from '@/features/users/components/bulk-action-alert-dialog'
-import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import useDirDetection from '@/hooks/use-dir-detection'
@@ -38,32 +37,28 @@ function defaultSearchHaystack<TData>(item: TData): string {
 /** Grid loading placeholder aligned with {@link CoreEditorListItemCard} / {@link CoreEditorSortableGridCard}. */
 function CoreEditorGridCardSkeleton({ reorderEnabled, selectionEnabled }: { reorderEnabled: boolean; selectionEnabled: boolean }) {
   return (
-    <Card className={cn('relative h-full max-w-full min-w-0 overflow-hidden px-4 py-5', 'group cursor-default')}>
-      <div className="flex max-w-full min-w-0 items-start gap-3">
-        {reorderEnabled ? <Skeleton className="mt-0.5 h-11 w-10 shrink-0 rounded-md sm:mt-1 sm:h-6 sm:w-6" aria-hidden /> : null}
-        {selectionEnabled ? (
-          <div className="pt-1">
-            <Skeleton className="h-3.5 w-3.5 shrink-0 rounded-[3px]" aria-hidden />
+    <div className="command-surface relative h-full max-w-full min-w-0 overflow-hidden">
+      <span className="bg-primary absolute inset-y-0 start-0 w-1" aria-hidden="true" />
+      <div className="flex max-w-full min-w-0 items-stretch gap-0 ps-1">
+        {(reorderEnabled || selectionEnabled) && (
+          <div className="border-border/60 flex shrink-0 flex-col items-center gap-2 border-e px-2 py-4">
+            {reorderEnabled ? <Skeleton className="h-6 w-6 shrink-0 rounded-md" aria-hidden /> : null}
+            {selectionEnabled ? <Skeleton className="h-3.5 w-3.5 shrink-0 rounded-[3px]" aria-hidden /> : null}
           </div>
-        ) : null}
-        <div className="flex max-w-full min-w-0 flex-1 items-start gap-3 overflow-hidden">
-          <div className="min-w-0 flex-1 overflow-hidden">
-            <div className="flex min-w-0 items-center gap-2">
-              <Skeleton className="h-5 w-[min(100%,14rem)]" />
-            </div>
-            <div className="mt-2 space-y-0.5">
-              <Skeleton className="h-3.5 w-10 sm:w-12" />
-              <Skeleton className="h-[13px] w-full max-w-48" />
-              <Skeleton className="h-[13px] w-full max-w-40" />
-              <Skeleton className="hidden h-[13px] w-full max-w-36 sm:block" />
-            </div>
+        )}
+        <div className="flex min-w-0 flex-1 flex-col gap-3 p-4 sm:p-5">
+          <Skeleton className="h-7 w-[min(100%,14rem)]" />
+          <div className="flex flex-wrap gap-2">
+            <Skeleton className="h-6 w-16 rounded-md" />
+            <Skeleton className="h-6 w-20 rounded-md" />
           </div>
-          <div className="flex shrink-0">
-            <Skeleton className="size-8 rounded-md" aria-hidden />
+          <div className="border-border/70 mt-auto flex items-end justify-between border-t pt-3">
+            <Skeleton className="h-3 w-16" />
+            <Skeleton className="h-8 w-20" />
           </div>
         </div>
       </div>
-    </Card>
+    </div>
   )
 }
 
@@ -314,16 +309,17 @@ export function CoreEditorDataTable<TData>({
     const columnsForBody = listColumnsSansMenu.filter(c => c.id !== '__menu')
 
     const indexCol = columnsForBody.find(c => c.id === 'index')
-    const payloadCols = columnsForBody.filter(c => c.id !== 'index')
+    const portCol = columnsForBody.find(c => c.id === 'port')
+    const payloadCols = columnsForBody.filter(c => c.id !== 'index' && c.id !== 'port')
 
     const primary = payloadCols[0]?.cell(item)
-    const title = <div className="truncate font-medium">{primary ?? <span className="text-muted-foreground">—</span>}</div>
+    const title = <div className="truncate">{primary ?? <span className="text-muted-foreground">—</span>}</div>
 
     const lines: ReactNode[] = []
     if (indexCol && displayIndex !== undefined) {
       lines.push(
-        <span dir="ltr" className="text-muted-foreground/90 text-[11px]">
-          {indexCol.header != null ? String(indexCol.header) : '#'} {displayIndex + 1}
+        <span dir="ltr" className="text-muted-foreground/90 font-mono text-[10px] font-bold tracking-[0.14em] uppercase">
+          CH {String(displayIndex + 1).padStart(2, '0')}
         </span>,
       )
     }
@@ -332,8 +328,7 @@ export function CoreEditorDataTable<TData>({
       const val = col.cell(item)
       if (val === null || val === undefined || val === false) return
       lines.push(
-        <div key={col.id} className="flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
-          {col.header != null ? <span className="text-muted-foreground shrink-0 text-[11px] font-medium tracking-wide">{col.header}</span> : null}
+        <div key={col.id} className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
           <span className="min-w-0">{val}</span>
         </div>,
       )
@@ -348,16 +343,19 @@ export function CoreEditorDataTable<TData>({
       />
     )
 
-    return { title, lines, menu }
+    const hero = portCol ? portCol.cell(item) : undefined
+
+    return { title, lines, menu, hero }
   }
 
   const gridItem = (item: TData, displayIndex: number) => {
-    const { title, lines, menu } = buildGridPresentation(item, displayIndex)
+    const { title, lines, menu, hero } = buildGridPresentation(item, displayIndex)
     const originalIndex = originalIndices[displayIndex]
 
     const cardProps = {
       title,
       lines,
+      hero,
       actionsMenu: menu,
       onOpen: () => handleRowActivation(item, originalIndex),
     }
@@ -375,7 +373,7 @@ export function CoreEditorDataTable<TData>({
         data={displayData}
         getRowId={listGetRowId}
         className={cn('gap-4', reorderEnabled ? 'max-w-full min-w-0 overflow-hidden' : null)}
-        emptyState={<div className="text-muted-foreground rounded-xl border px-4 py-12 text-center text-sm">{emptyDisplay}</div>}
+        emptyState={<div className="text-muted-foreground command-surface px-4 py-12 text-center text-sm">{emptyDisplay}</div>}
         showEmptyState={displayData.length === 0}
         enableSelection={selectionEnabled}
         injectSelectionProps={selectionEnabled}
@@ -389,8 +387,9 @@ export function CoreEditorDataTable<TData>({
         data={displayData}
         columns={listColumns}
         getRowId={listGetRowId}
-        className={cn('gap-2.5', reorderEnabled ? 'max-w-full min-w-0 overflow-hidden' : null)}
-        headerClassName="rounded-lg border border-border/50 bg-muted/20 px-3 py-2.5"
+        className={cn('gap-2', reorderEnabled ? 'max-w-full min-w-0 overflow-hidden' : null)}
+        headerClassName="border-y-2 border-[hsl(var(--pixel-border))] bg-muted/30 px-3 py-3 font-mono text-[10px] font-bold tracking-[0.12em] !rounded-none"
+        rowClassName="!rounded-none border-2 shadow-[3px_3px_0_hsl(var(--pixel-border))] relative before:absolute before:inset-y-0 before:start-0 before:w-1 before:bg-primary before:content-['']"
         onRowClick={
           onRowClick
             ? item => {
@@ -400,7 +399,7 @@ export function CoreEditorDataTable<TData>({
               }
             : undefined
         }
-        emptyState={<div className="text-muted-foreground rounded-md border px-4 py-10 text-center text-sm">{emptyDisplay}</div>}
+        emptyState={<div className="text-muted-foreground command-surface px-4 py-12 text-center text-sm">{emptyDisplay}</div>}
         showEmptyState={displayData.length === 0}
         enableSelection={selectionEnabled}
         selectedRowIds={selectionEnabled ? selectedRows : undefined}
@@ -424,16 +423,16 @@ export function CoreEditorDataTable<TData>({
   const clearSearch = () => setSearchQuery('')
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {summary}
-      <div className="border-border/60 bg-card/20 flex flex-wrap items-center justify-between gap-3 rounded-xl border p-3 sm:p-3.5">
+      <div className="command-surface flex flex-wrap items-center justify-between gap-3 p-3 sm:p-4">
         <div className="relative min-w-0 flex-1 sm:max-w-md">
           <Search className={cn('text-muted-foreground pointer-events-none absolute top-1/2 h-4 w-4 -translate-y-1/2', dir === 'rtl' ? 'right-3' : 'left-3')} aria-hidden />
           <Input
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             placeholder={searchPlaceholder ?? t('search')}
-            className={cn('h-10', dir === 'rtl' ? 'pr-9 pl-9' : 'pr-9 pl-9')}
+            className={cn('h-11 border-2', dir === 'rtl' ? 'pr-9 pl-9' : 'pr-9 pl-9')}
             aria-label={t('search')}
           />
           {searchQuery ? (

@@ -1,6 +1,4 @@
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { DecimalInput } from '@/components/common/decimal-input'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
@@ -14,7 +12,7 @@ import { cn } from '@/lib/utils'
 import { CoresSimpleResponse, DataLimitResetStrategy, getNode, NodeConnectionType, NodeResponse, useCreateNode, useGetNode, useModifyNode } from '@/service/api'
 import { formatBytes, gbToBytes } from '@/utils/formatByte'
 import { queryClient } from '@/utils/query-client'
-import { Loader2, RefreshCw, Settings, Server, Pencil, Shield } from 'lucide-react'
+import { Cable, Loader2, RefreshCw, Settings, Server, Pencil, Shield } from 'lucide-react'
 import React, { useEffect, useRef, useState } from 'react'
 import { UseFormReturn } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
@@ -49,6 +47,7 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
   const [showErrorDetails, setShowErrorDetails] = useState(false)
   const [debouncedValues, setDebouncedValues] = useState<NodeFormValues | null>(null)
   const [isFetchingNodeData, setIsFetchingNodeData] = useState(false)
+  const [deckTab, setDeckTab] = useState<'link' | 'trust' | 'advanced'>('link')
 
   const { data: node, refetch: refetchNode } = useGetNode(
     editingNodeId || 0,
@@ -74,6 +73,7 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
       setErrorDetails(null)
       setAutoCheck(true)
       setIsFetchingNodeData(false)
+      setDeckTab('link')
       lastSyncedNodeRef.current = null
     }
   }, [isDialogOpen])
@@ -363,73 +363,95 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
     }
   }
 
+  const statusKey = currentNode?.status
+  const statusConnecting = statusKey === 'connecting' || (statusChecking && !statusKey)
+  const statusLabel = statusConnecting
+    ? t('nodeModal.status.connecting')
+    : statusKey === 'connected'
+      ? t('nodeModal.status.connected')
+      : statusKey === 'error'
+        ? t('nodeModal.status.error')
+        : statusKey === 'limited'
+          ? t('status.limited', { defaultValue: 'Limited' })
+          : t('nodeModal.status.disabled')
+
+  const deckTabs = [
+    { id: 'link' as const, label: t('nodeModal.connectionBrief', { defaultValue: 'Link' }), hint: t('nodeModal.connectionHint', { defaultValue: 'Endpoint & core' }), icon: Cable },
+    { id: 'trust' as const, label: t('nodeModal.certificate', { defaultValue: 'Trust' }), hint: t('nodeModal.certificateHint', { defaultValue: 'Server CA' }), icon: Shield },
+    { id: 'advanced' as const, label: t('settings.notifications.advanced.title', { defaultValue: 'Advanced' }), hint: t('nodeModal.advancedHint', { defaultValue: 'Limits & timeouts' }), icon: Settings },
+  ]
+
   return (
     <Dialog open={isDialogOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="flex h-full max-h-[92dvh] max-w-full flex-col gap-0 overflow-hidden focus:outline-none sm:max-w-[92vw] lg:h-auto lg:max-w-[1080px]" onOpenAutoFocus={e => e.preventDefault()}>
-        <DialogHeader className="shrink-0 space-y-3 border-b pb-4">
-          <DialogTitle className="flex items-center gap-2.5">
-            {editingNode ? <Pencil className="h-5 w-5" /> : <Server className="h-5 w-5" />}
-            <span>{editingNode ? t('editNode.title') : t('nodeModal.title')}</span>
-          </DialogTitle>
-          <DialogDescription className="sr-only">{t('nodeModal.description', { defaultValue: 'Configure node settings and connection details.' })}</DialogDescription>
+      <DialogContent
+        className="command-surface flex h-full max-h-[94dvh] max-w-full flex-col gap-0 overflow-hidden border p-0 shadow-[6px_6px_0_hsl(var(--pixel-border))] focus:outline-none sm:max-w-[92vw] lg:h-auto lg:max-w-[1100px]"
+        onOpenAutoFocus={e => e.preventDefault()}
+      >
+        <DialogHeader className="mission-brief relative shrink-0 space-y-0 border-b px-5 py-4 sm:px-6 sm:py-5">
+          <div className="mission-brief__index" aria-hidden="true">
+            {editingNode ? 'EN' : 'CN'}
+          </div>
+          <div className="relative z-10 flex flex-wrap items-start justify-between gap-4">
+            <div className="min-w-0 space-y-1">
+              <DialogTitle className="flex items-center gap-2.5">
+                <span className="bg-primary text-primary-foreground flex h-9 w-9 items-center justify-center border border-[hsl(var(--pixel-border))] shadow-[2px_2px_0_hsl(var(--pixel-border))]">
+                  {editingNode ? <Pencil className="h-4 w-4" /> : <Server className="h-4 w-4" />}
+                </span>
+                <span className="font-display text-xl font-bold tracking-tight uppercase sm:text-2xl">{editingNode ? t('editNode.title') : t('nodeModal.title')}</span>
+              </DialogTitle>
+              <DialogDescription className="font-mono text-[10px] font-bold tracking-[0.16em] uppercase">
+                {t('nodeModal.description', { defaultValue: 'Node control deck · link · trust · advanced' })}
+              </DialogDescription>
+            </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex min-w-0 flex-wrap items-center gap-2">
-              <Badge
-                variant="outline"
+            <div className="flex flex-wrap items-center gap-2">
+              <div
                 className={cn(
-                  'h-7 gap-1.5 px-2.5 text-[10px] font-semibold tracking-wide uppercase',
-                  currentNode?.status === 'connecting' || (statusChecking && !currentNode?.status)
-                    ? 'border-amber-500/35 bg-amber-500/10 text-amber-700 dark:text-amber-400'
-                    : currentNode?.status === 'connected'
-                      ? 'border-emerald-500/35 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
-                      : currentNode?.status === 'error'
-                        ? 'border-destructive/35 bg-destructive/10 text-destructive'
-                        : currentNode?.status === 'limited'
-                          ? 'border-orange-500/35 bg-orange-500/10 text-orange-700 dark:text-orange-400'
+                  'flex h-10 items-center gap-2 border px-3 font-mono text-[10px] font-bold tracking-[0.12em] uppercase',
+                  statusConnecting
+                    ? 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400'
+                    : statusKey === 'connected'
+                      ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
+                      : statusKey === 'error'
+                        ? 'border-destructive/40 bg-destructive/10 text-destructive'
+                        : statusKey === 'limited'
+                          ? 'border-orange-500/40 bg-orange-500/10 text-orange-700 dark:text-orange-400'
                           : 'border-border bg-muted/40 text-muted-foreground',
                 )}
               >
                 <span
                   className={cn(
-                    'h-1.5 w-1.5 rounded-full',
-                    currentNode?.status === 'connecting' || (statusChecking && !currentNode?.status)
-                      ? 'bg-amber-500'
-                      : currentNode?.status === 'connected'
+                    'h-2 w-2',
+                    statusConnecting
+                      ? 'animate-pulse bg-amber-500'
+                      : statusKey === 'connected'
                         ? 'bg-emerald-500'
-                        : currentNode?.status === 'error'
+                        : statusKey === 'error'
                           ? 'bg-destructive'
-                          : currentNode?.status === 'limited'
+                          : statusKey === 'limited'
                             ? 'bg-orange-500'
                             : 'bg-muted-foreground/50',
                   )}
+                  aria-hidden
                 />
-                {currentNode?.status === 'connecting' || (statusChecking && !currentNode?.status)
-                  ? t('nodeModal.status.connecting')
-                  : currentNode?.status === 'connected'
-                    ? t('nodeModal.status.connected')
-                    : currentNode?.status === 'error'
-                      ? t('nodeModal.status.error')
-                      : currentNode?.status === 'limited'
-                        ? t('status.limited', { defaultValue: 'Limited' })
-                        : t('nodeModal.status.disabled')}
-              </Badge>
-              {currentNode?.status === 'error' && (
-                <Button variant="ghost" size="sm" onClick={() => setShowErrorDetails(!showErrorDetails)} className="text-muted-foreground hover:text-foreground h-7 px-2 text-xs">
+                {statusLabel}
+              </div>
+              {statusKey === 'error' && (
+                <Button variant="ghost" size="sm" onClick={() => setShowErrorDetails(!showErrorDetails)} className="text-muted-foreground hover:text-foreground h-10 px-2 text-xs">
                   {showErrorDetails ? t('nodeModal.hideDetails') : t('nodeModal.showDetails')}
                 </Button>
               )}
+              <Button variant="outline" size="sm" onClick={checkNodeStatus} disabled={statusChecking || !form.formState.isValid} className="h-10 gap-1.5 border-2 shadow-[2px_2px_0_hsl(var(--pixel-border))]">
+                {statusChecking ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                <span className="text-xs font-bold tracking-wide uppercase">{statusChecking ? t('nodeModal.statusChecking') : t('nodeModal.statusCheck')}</span>
+              </Button>
             </div>
-            <Button variant="outline" size="sm" onClick={checkNodeStatus} disabled={statusChecking || !form.formState.isValid} className="h-8 gap-1.5">
-              {statusChecking ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-              <span className="text-xs">{statusChecking ? t('nodeModal.statusChecking') : t('nodeModal.statusCheck')}</span>
-            </Button>
           </div>
 
-          {showErrorDetails && currentNode?.status === 'error' && (
+          {showErrorDetails && statusKey === 'error' && (
             <div
               dir="ltr"
-              className="border-destructive/30 bg-destructive/10 text-destructive max-h-32 overflow-y-auto rounded-lg border p-3 text-xs break-words whitespace-pre-wrap"
+              className="border-destructive/40 bg-destructive/10 text-destructive relative z-10 mt-4 max-h-32 overflow-y-auto border p-3 font-mono text-xs break-words whitespace-pre-wrap"
               style={{ whiteSpace: 'pre-line' }}
             >
               {errorDetails || currentNode?.message}
@@ -439,19 +461,66 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="flex min-h-0 flex-1 flex-col">
-            <div
-              className={cn(
-                'min-h-0 flex-1 overflow-y-auto px-0.5 py-5',
-                isFetchingNodeData && 'pointer-events-none blur-sm',
-              )}
-            >
-              <div className="grid gap-5 lg:grid-cols-2 lg:items-stretch">
-                <div className="border-border/60 bg-card/30 space-y-4 rounded-xl border p-4 sm:p-5">
-                  <div className="space-y-1">
-                    <p className="text-primary font-mono text-[10px] font-bold tracking-[0.14em] uppercase">{t('nodeModal.connectionBrief', { defaultValue: 'Connection' })}</p>
+            <div className={cn('flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row', isFetchingNodeData && 'pointer-events-none blur-sm')}>
+              <nav
+                className="border-border bg-card/40 flex shrink-0 gap-1 overflow-x-auto border-b p-2 lg:w-52 lg:flex-col lg:gap-0 lg:overflow-visible lg:border-e lg:border-b-0 lg:p-0"
+                aria-label={t('nodeModal.deckNav', { defaultValue: 'Node deck' })}
+              >
+                {deckTabs.map((tab, i) => {
+                  const Icon = tab.icon
+                  const isActive = deckTab === tab.id
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => setDeckTab(tab.id)}
+                      aria-current={isActive ? 'step' : undefined}
+                      className={cn(
+                        'flex min-w-36 flex-1 items-center gap-3 border px-3 py-2.5 text-start transition-colors lg:min-w-0 lg:flex-none lg:border-x-0 lg:border-t-0 lg:border-b lg:px-4 lg:py-4',
+                        isActive ? 'border-primary/40 bg-primary/10 text-primary lg:border-border' : 'border-transparent text-muted-foreground hover:bg-muted/40 hover:text-foreground lg:border-border',
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          'flex h-8 w-8 shrink-0 items-center justify-center border font-mono text-[10px] font-bold',
+                          isActive ? 'border-primary bg-primary text-primary-foreground shadow-[2px_2px_0_hsl(var(--pixel-border))]' : 'border-border',
+                        )}
+                        aria-hidden="true"
+                      >
+                        {String(i + 1).padStart(2, '0')}
+                      </span>
+                      <span className="min-w-0">
+                        <span className="flex items-center gap-1.5 truncate text-xs font-bold">
+                          <Icon className="h-3.5 w-3.5 shrink-0 opacity-80" aria-hidden />
+                          {tab.label}
+                        </span>
+                        <span className="mt-0.5 hidden truncate font-mono text-[9px] tracking-[0.12em] uppercase opacity-70 lg:block">{tab.hint}</span>
+                      </span>
+                      {isActive && <span className="ms-auto hidden h-6 w-0.5 bg-current lg:block" aria-hidden="true" />}
+                    </button>
+                  )
+                })}
+                <div className="hidden flex-1 lg:block" aria-hidden="true" />
+                <div className="border-border hidden border-t px-4 py-3 lg:block">
+                  <p className="text-muted-foreground font-mono text-[9px] font-bold tracking-[0.13em] uppercase">{t('nodeModal.liveEndpoint', { defaultValue: 'Live endpoint' })}</p>
+                  <p className="mt-1 truncate text-xs font-bold">{form.watch('name') || '—'}</p>
+                  <p dir="ltr" className="text-muted-foreground mt-0.5 font-mono text-[10px] tabular-nums">
+                    {(form.watch('address') || '—') + ':' + (form.watch('port') || '—')}
+                  </p>
+                </div>
+              </nav>
+
+              <div className="min-h-0 min-w-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5 sm:py-5">
+                <div className={cn('space-y-4', deckTab === 'link' ? 'animate-rise block' : 'hidden')}>
+                  <div className="border-border bg-card/40 space-y-1 border p-4">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-primary font-mono text-[10px] font-bold tracking-[0.14em] uppercase">01 / Link</p>
+                      <span className="online-beacon" aria-hidden="true" />
+                    </div>
                     <p className="text-muted-foreground text-xs">{t('nodeModal.connectionHint', { defaultValue: 'Identity, endpoint, and core binding' })}</p>
                   </div>
 
+                  <div className="border-border bg-card/30 space-y-4 border p-4 sm:p-5">
                   <FormField
                     control={form.control}
                     name="name"
@@ -567,15 +636,18 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
                       )
                     }}
                   />
-                  <Accordion type="single" collapsible className="w-full">
-                    <AccordionItem className="bg-muted/20 rounded-lg border px-4 [&_[data-state=closed]]:no-underline [&_[data-state=open]]:no-underline" value="advanced-settings">
-                      <AccordionTrigger className="py-3 hover:no-underline">
-                        <div className="flex items-center gap-2">
-                          <Settings className="h-4 w-4" />
-                          <span>{t('settings.notifications.advanced.title')}</span>
-                        </div>
-                      </AccordionTrigger>
-                      <AccordionContent className="px-1 pb-4">
+                  </div>
+                </div>
+
+                <div className={cn('space-y-4', deckTab === 'advanced' ? 'animate-rise block' : 'hidden')}>
+                  <div className="border-border bg-card/40 space-y-1 border p-4">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-primary font-mono text-[10px] font-bold tracking-[0.14em] uppercase">03 / Advanced</p>
+                      <span className="online-beacon" aria-hidden="true" />
+                    </div>
+                    <p className="text-muted-foreground text-xs">{t('nodeModal.advancedHint', { defaultValue: 'Usage limits, keep-alive, and timeouts' })}</p>
+                  </div>
+                  <div className="border-border bg-card/30 space-y-4 border p-4 sm:p-5">
                         <div className="flex flex-col gap-4">
                           <div className="flex flex-col gap-4 sm:flex-row">
                             <FormField
@@ -1123,30 +1195,34 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
                             />
                           </div>
                         </div>
-                      </AccordionContent>
-                    </AccordionItem>
-                  </Accordion>
+                  </div>
                 </div>
+
+                <div className={cn('space-y-4', deckTab === 'trust' ? 'animate-rise block' : 'hidden')}>
+                  <div className="border-border bg-card/40 space-y-1 border p-4">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-primary font-mono text-[10px] font-bold tracking-[0.14em] uppercase">02 / Trust</p>
+                      <span className="online-beacon" aria-hidden="true" />
+                    </div>
+                    <p className="text-muted-foreground text-xs">{t('nodeModal.certificateHint', { defaultValue: 'Server CA used to trust this node' })}</p>
+                  </div>
                 <FormField
                   control={form.control}
                   name="server_ca"
                   render={({ field }) => (
-                    <FormItem className="border-border/60 bg-card/30 flex h-full min-h-[320px] flex-col rounded-xl border p-4 sm:min-h-[420px] sm:p-5">
+                    <FormItem className="border-border bg-card/30 flex min-h-[360px] flex-col border p-4 sm:min-h-[440px] sm:p-5">
                       <div className="mb-3 flex items-start justify-between gap-3">
-                        <div className="space-y-1">
-                          <FormLabel className="flex items-center gap-2 text-sm">
-                            <Shield className="text-primary h-4 w-4" />
-                            {t('nodeModal.certificate')}
-                          </FormLabel>
-                          <p className="text-muted-foreground text-xs">{t('nodeModal.certificateHint', { defaultValue: 'Server CA used to trust this node' })}</p>
-                        </div>
+                        <FormLabel className="flex items-center gap-2 text-sm">
+                          <Shield className="text-primary h-4 w-4" />
+                          {t('nodeModal.certificate')}
+                        </FormLabel>
                       </div>
                       <FormControl>
                         <Textarea
                           dir="ltr"
                           placeholder={t('nodeModal.certificatePlaceholder')}
                           className={cn(
-                            'bg-muted/20 min-h-[240px] flex-1 resize-none font-mono text-[11px] leading-relaxed sm:min-h-[340px] sm:text-xs',
+                            'bg-muted/20 min-h-[280px] flex-1 resize-none font-mono text-[11px] leading-relaxed sm:min-h-[360px] sm:text-xs',
                             !!form.formState.errors.server_ca && 'border-destructive',
                           )}
                           {...field}
@@ -1156,10 +1232,11 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
                     </FormItem>
                   )}
                 />
+                </div>
               </div>
             </div>
-            <DialogFooter className="shrink-0 gap-2 border-t pt-4 sm:justify-end">
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={addNodeMutation.isPending || modifyNodeMutation.isPending}>
+            <DialogFooter className="shrink-0 gap-2 border-t px-4 py-4 sm:justify-end sm:px-5">
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={addNodeMutation.isPending || modifyNodeMutation.isPending} className="border-2">
                 {t('cancel')}
               </Button>
               <LoaderButton
@@ -1167,6 +1244,7 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
                 disabled={addNodeMutation.isPending || modifyNodeMutation.isPending}
                 isLoading={addNodeMutation.isPending || modifyNodeMutation.isPending}
                 loadingText={editingNode ? t('modifying') : t('creating')}
+                className="shadow-[3px_3px_0_hsl(var(--pixel-border))]"
               >
                 {editingNode ? t('modify') : t('create')}
               </LoaderButton>

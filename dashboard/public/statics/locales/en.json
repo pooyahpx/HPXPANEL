@@ -57,6 +57,10 @@
     "emptyPlansHint": "Create a plan to start selling through Telegram.",
     "buyer": "Buyer",
     "plan": "Plan",
+    "receipt": "Receipt",
+    "viewReceipt": "View receipt",
+    "noReceipt": "No receipt",
+    "receiptLoadFailed": "Could not load receipt",
     "statusLabel": "Status",
     "user": "Created user",
     "actions": "Actions",
@@ -88,6 +92,7 @@
     "saved": "Settings saved",
     "toman": "Toman",
     "denied": "You do not have permission to view the shop.",
+    "ordersBrief": "Review receipts, approve buyers, reject invalid payments",
     "status": {
       "pending": "Pending",
       "approved": "Approved",

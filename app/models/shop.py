@@ -91,6 +91,7 @@ class ShopOrderResponse(BaseModel):
     buyer_username: str | None = None
     status: ShopOrderStatusLiteral
     receipt_file_id: str | None = None
+    has_receipt: bool = False
     created_user_id: int | None = None
     created_username: str | None = None
     plan_name: str | None = None

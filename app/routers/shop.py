@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Response, status
 
 from app.db import AsyncSession, get_db
 from app.db.models import ShopOrderStatus
@@ -100,6 +100,21 @@ async def list_shop_orders(
     admin: AdminDetails = Depends(require_permission("users", "read")),
 ):
     return await shop_operator.list_orders(db, admin, status=status_filter, offset=offset, limit=limit)
+
+
+@router.get("/orders/{order_id}/receipt", responses={404: responses._404})
+async def get_shop_order_receipt(
+    order_id: int,
+    db: AsyncSession = Depends(get_db),
+    admin: AdminDetails = Depends(require_permission("users", "read")),
+):
+    """Proxy the Telegram receipt photo so the dashboard can display it."""
+    content, media_type = await shop_operator.get_order_receipt(db, admin, order_id)
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={"Cache-Control": "private, max-age=300"},
+    )
 
 
 @router.post("/orders/{order_id}/approve", response_model=ShopApproveResponse)

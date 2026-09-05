@@ -71,6 +71,7 @@ export interface ShopOrder {
   buyer_username?: string | null
   status: ShopOrderStatus
   receipt_file_id?: string | null
+  has_receipt?: boolean
   created_user_id?: number | null
   created_username?: string | null
   plan_name?: string | null
@@ -130,6 +131,12 @@ export const approveShopOrder = (orderId: number) =>
 
 export const rejectShopOrder = (orderId: number, note?: string) =>
   fetcher<ShopOrder>(`/api/shop/orders/${orderId}/reject`, { method: 'POST', body: note ? { note } : {} })
+
+export const getShopOrderReceiptUrl = (orderId: number) => `/api/shop/orders/${orderId}/receipt`
+
+export async function fetchShopOrderReceiptBlob(orderId: number): Promise<Blob> {
+  return fetcher<Blob>(getShopOrderReceiptUrl(orderId), { responseType: 'blob' })
+}
 
 export const useShopConfig = (enabled = true) =>
   useQuery({ queryKey: shopKeys.config, queryFn: getShopConfig, enabled, staleTime: 10_000 })

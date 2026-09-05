@@ -4,6 +4,7 @@ import logging
 import secrets
 from datetime import UTC, datetime as dt, timedelta as td
 
+from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.crud.admin import build_admin_details, get_admin_by_id
@@ -118,6 +119,7 @@ async def _order_response(db: AsyncSession, order: ShopOrder) -> ShopOrderRespon
         buyer_username=order.buyer_username,
         status=order.status,
         receipt_file_id=order.receipt_file_id,
+        has_receipt=bool(order.receipt_file_id),
         created_user_id=order.created_user_id,
         created_username=created_username,
         plan_name=plan.name if plan else None,
@@ -213,6 +215,54 @@ class ShopOperation(BaseOperation):
             orders=[await _order_response(db, order) for order in orders],
             total=total,
         )
+
+    async def get_order_receipt(self, db: AsyncSession, admin: AdminDetails, order_id: int) -> tuple[bytes, str]:
+        """Fetch the card-to-card receipt image from Telegram for the panel UI."""
+        import io
+        import mimetypes
+        from pathlib import Path
+
+        from aiogram import Bot
+
+        from app.settings import telegram_settings
+        from app.telegram import get_bot
+
+        shop_admin = await self._resolve_shop_admin(db, admin)
+        order = await get_shop_order(db, order_id)
+        if order is None or order.admin_id != shop_admin.id:
+            await self.raise_error("Order not found", 404, db)
+        if not order.receipt_file_id:
+            await self.raise_error("Receipt not found", 404, db)
+
+        bot = get_bot()
+        owned = False
+        if bot is None:
+            settings = await telegram_settings()
+            if not settings.token:
+                await self.raise_error("Telegram bot is not configured", 503, db)
+            bot = Bot(token=settings.token)
+            owned = True
+
+        try:
+            file = await bot.get_file(order.receipt_file_id)
+            if not file.file_path:
+                await self.raise_error("Receipt file unavailable", 502, db)
+            buf = io.BytesIO()
+            await bot.download_file(file.file_path, destination=buf)
+            content = buf.getvalue()
+            if not content:
+                await self.raise_error("Receipt file empty", 502, db)
+            media_type = mimetypes.guess_type(Path(file.file_path).name)[0] or "image/jpeg"
+            return content, media_type
+        except HTTPException:
+            raise
+        except Exception as exc:
+            logger.warning("Failed to fetch shop receipt for order %s: %s", order_id, exc)
+            await self.raise_error("Could not download receipt from Telegram", 502, db)
+            raise  # pragma: no cover
+        finally:
+            if owned:
+                await bot.session.close()
 
     async def get_stats(self, db: AsyncSession, admin: AdminDetails) -> ShopStatsResponse:
         shop_admin = await self._resolve_shop_admin(db, admin)

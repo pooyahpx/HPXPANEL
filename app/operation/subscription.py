@@ -7,9 +7,12 @@ from fastapi.responses import HTMLResponse
 
 from app.db import AsyncSession
 from app.db.crud.hwid import (
+    delete_user_hwid,
     get_user_hwid_by_value,
     get_user_hwid_count,
+    get_user_hwids,
     register_user_hwid,
+    reset_user_hwids,
 )
 from app.db.crud.user import (
     attach_user_group_quotas,
@@ -23,7 +26,13 @@ from app.models.admin import AdminDetails
 from app.models.settings import Application, ConfigFormat, HWIDSettings, SubRule, Subscription as SubSettings
 from app.models.stats import UserUsageStatsList
 from app.models.subscription import SubscriptionUsageQuery
-from app.models.user import SubscriptionUserResponse, UserGroupQuotaResponse, UsersResponseWithInbounds
+from app.models.user import (
+    SubscriptionUserResponse,
+    UserGroupQuotaResponse,
+    UserHWIDListResponse,
+    UserHWIDResponse,
+    UsersResponseWithInbounds,
+)
 from app.settings import hwid_settings, subscription_settings
 from app.subscription.share import (
     apply_custom_format_variables,
@@ -673,6 +682,9 @@ class SubscriptionOperation(BaseOperation):
             "group_quotas": group_quota_rows,
             "announce": formatted_announce,
             "announce_url": sub_settings.announce_url,
+            "support_url": (getattr(user.admin, "support_url", None) if user.admin else None) or sub_settings.support_url,
+            "is_hwid_enabled": is_hwid_enabled,
+            "hwid_limit": user.hwid_limit,
             "apps": self._make_apps_import_urls(
                 sub_settings.applications,
                 format_variables,
@@ -799,6 +811,33 @@ class SubscriptionOperation(BaseOperation):
             format_variables,
             is_hwid_enabled=is_hwid_enabled,
         )
+
+    async def user_subscription_hwids(self, db: AsyncSession, token: str) -> UserHWIDListResponse:
+        """List registered devices for the subscription owner (token-auth self-service)."""
+        db_user = await self.get_validated_sub(db, token, load_admin_role=True)
+        if not await self.is_user_hwid_enabled(db_user):
+            return UserHWIDListResponse(hwids=[], count=0)
+        hwids = await get_user_hwids(db, db_user.id)
+        items = [UserHWIDResponse.model_validate(row) for row in hwids]
+        return UserHWIDListResponse(hwids=items, count=len(items))
+
+    async def delete_subscription_hwid(self, db: AsyncSession, token: str, hwid: str) -> dict:
+        """Remove one registered device belonging to the subscription owner."""
+        db_user = await self.get_validated_sub(db, token, load_admin_role=True)
+        if not await self.is_user_hwid_enabled(db_user):
+            await self.raise_error(message="HWID management is disabled for this subscription", code=403)
+        deleted = await delete_user_hwid(db, db_user.id, hwid)
+        if not deleted:
+            await self.raise_error(message="HWID not found", code=404)
+        return {}
+
+    async def reset_subscription_hwids(self, db: AsyncSession, token: str) -> dict:
+        """Clear all registered devices for the subscription owner."""
+        db_user = await self.get_validated_sub(db, token, load_admin_role=True)
+        if not await self.is_user_hwid_enabled(db_user):
+            await self.raise_error(message="HWID management is disabled for this subscription", code=403)
+        count = await reset_user_hwids(db, db_user.id)
+        return {"count": count}
 
     def _make_apps_import_urls(
         self, applications: list[Application], format_variables: dict, *, is_hwid_enabled: bool

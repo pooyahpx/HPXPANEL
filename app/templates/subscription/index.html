@@ -100,6 +100,15 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid hsl(v
 .chart-canvas-wrap canvas{width:100%;height:100%;display:block}
 .chart-empty,.chart-loading{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:hsl(var(--muted-fg));font-size:.9rem;pointer-events:none}
 .apps-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.device-list{display:flex;flex-direction:column;gap:10px}
+.device-row{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:12px;border:2px solid hsl(var(--border));background:hsl(var(--muted)/.35)}
+.device-meta{min-width:0}
+.device-meta .name{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:.78rem;font-weight:700;word-break:break-all}
+.device-meta .sub{color:hsl(var(--muted-fg));font-size:.82rem;margin-top:4px}
+.device-actions{display:flex;gap:8px;flex-wrap:wrap}
+.support-cta{display:inline-flex;align-items:center;gap:8px;min-height:40px;padding:0 14px;border:2px solid hsl(var(--pixel));background:hsl(var(--primary));color:hsl(var(--primary-fg));box-shadow:3px 3px 0 hsl(var(--pixel));font-family:"JetBrains Mono",ui-monospace,monospace;font-size:.72rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;text-decoration:none}
+.support-cta:active{transform:translate(2px,2px);box-shadow:none}
+.footer{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;margin-top:8px}
 .app-card{padding:16px;border:2px solid hsl(var(--pixel));background:hsl(var(--card));box-shadow:4px 4px 0 hsl(var(--pixel))}
 .app-hd{display:flex;align-items:center;gap:12px;margin-bottom:10px}
 .app-icon{width:42px;height:42px;object-fit:cover;border:2px solid hsl(var(--pixel));background:hsl(var(--muted))}
@@ -383,8 +392,31 @@ var QRCode;!function(){function a(a){this.mode=c.MODE_8BIT_BYTE,this.data=a,this
   </section>
   {% endif %}
 
+  {% if is_hwid_enabled %}
+  <section class="panel" style="margin-bottom:16px" id="devicesPanel">
+    <div class="panel-hd">
+      <h2>Devices</h2>
+      <span class="panel-index">07 / HWID{% if hwid_limit %} · limit {{ hwid_limit }}{% endif %}</span>
+    </div>
+    <div class="apps-body">
+      <div class="device-actions" style="margin-bottom:12px">
+        <button type="button" class="icon-btn" onclick="loadDevices()">Refresh</button>
+        <button type="button" class="icon-btn" onclick="resetDevices()">Reset all</button>
+      </div>
+      <div class="device-list" id="deviceList">
+        <p class="empty" id="deviceEmpty">Loading devices…</p>
+      </div>
+    </div>
+  </section>
+  {% endif %}
+
   <footer class="footer">
-    <a href="https://github.com/pooyahpx" target="_blank" rel="noopener noreferrer" aria-label="dev by hpx on GitHub">dev by hpx</a>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center">
+      {% if support_url %}
+      <a class="support-cta" href="{{ support_url }}" target="_blank" rel="noopener noreferrer">Support</a>
+      {% endif %}
+      <a href="https://github.com/pooyahpx" target="_blank" rel="noopener noreferrer" aria-label="dev by hpx on GitHub">dev by hpx</a>
+    </div>
   </footer>
 </div>
 
@@ -419,7 +451,90 @@ var QRCode;!function(){function a(a){this.mode=c.MODE_8BIT_BYTE,this.data=a,this
       document.getElementById('theme-icon').textContent = 'Dark';
     }
     setRange('7d', document.querySelector('.range-btn[data-range="7d"]'));
+    if (document.getElementById('deviceList')) {
+      loadDevices();
+    }
   });
+
+  function formatDeviceTime(value) {
+    if (!value) return '—';
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return '—';
+    return d.toLocaleString();
+  }
+
+  window.loadDevices = async function () {
+    const list = document.getElementById('deviceList');
+    if (!list) return;
+    list.innerHTML = '<p class="empty">Loading devices…</p>';
+    try {
+      const res = await fetch(path + '/hwids');
+      if (!res.ok) throw new Error('devices fetch failed');
+      const data = await res.json();
+      const rows = data.hwids || [];
+      if (!rows.length) {
+        list.innerHTML = '<p class="empty">No devices registered yet. Open this subscription in a client to register a device.</p>';
+        return;
+      }
+      list.innerHTML = rows.map(function (row) {
+        const title = row.device_model || row.device_os || row.hwid;
+        const meta = [
+          row.device_os,
+          row.os_version,
+          'last ' + formatDeviceTime(row.last_used_at)
+        ].filter(Boolean).join(' · ');
+        return (
+          '<div class="device-row">' +
+            '<div class="device-meta">' +
+              '<div class="name">' + escapeHtml(title) + '</div>' +
+              '<div class="sub">' + escapeHtml(meta) + '</div>' +
+              '<div class="sub">' + escapeHtml(row.hwid) + '</div>' +
+            '</div>' +
+            '<div class="device-actions">' +
+              '<button type="button" class="icon-btn" data-hwid="' + encodeURIComponent(row.hwid) + '" onclick="removeDevice(this)">Remove</button>' +
+            '</div>' +
+          '</div>'
+        );
+      }).join('');
+    } catch (e) {
+      list.innerHTML = '<p class="empty">Could not load devices</p>';
+    }
+  };
+
+  window.removeDevice = async function (button) {
+    const hwid = decodeURIComponent(button.dataset.hwid || '');
+    if (!hwid) return;
+    if (!window.confirm('Remove this device?')) return;
+    button.disabled = true;
+    try {
+      const res = await fetch(path + '/hwids/' + encodeURIComponent(hwid), { method: 'DELETE' });
+      if (!res.ok) throw new Error('delete failed');
+      await loadDevices();
+    } catch (e) {
+      button.disabled = false;
+      window.alert('Could not remove device');
+    }
+  };
+
+  window.resetDevices = async function () {
+    if (!window.confirm('Remove all registered devices?')) return;
+    try {
+      const res = await fetch(path + '/hwids/reset', { method: 'POST' });
+      if (!res.ok) throw new Error('reset failed');
+      await loadDevices();
+    } catch (e) {
+      window.alert('Could not reset devices');
+    }
+  };
+
+  function escapeHtml(value) {
+    return String(value || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
 
   window.copyLink = function (button) {
     const link = button.dataset.link || '';

@@ -1,10 +1,10 @@
-from fastapi import APIRouter, Depends, Header, Request, Response
+from fastapi import APIRouter, Depends, Header, Request, Response, status
 from fastapi.responses import JSONResponse
 
 from app.db import AsyncSession, get_db
 from app.models.settings import Application, ConfigFormat
 from app.models.stats import UserUsageStatsList
-from app.models.user import SubscriptionUserResponse
+from app.models.user import SubscriptionUserResponse, UserHWIDListResponse
 from app.operation import OperatorType
 from app.operation.subscription import SubscriptionOperation
 from app.rate_limit import rate_limiter
@@ -101,6 +101,24 @@ async def get_sub_user_usage(
 ):
     """Fetches the usage statistics for the user within a specified date range."""
     return await subscription_operator.get_user_usage(db, token=token, query=query)
+
+
+@router.get("/{token}/hwids", response_model=UserHWIDListResponse)
+async def user_subscription_hwids(token: str, db: AsyncSession = Depends(get_db)):
+    """List devices registered to this subscription (self-service)."""
+    return await subscription_operator.user_subscription_hwids(db, token)
+
+
+@router.delete("/{token}/hwids/{hwid}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_subscription_hwid(token: str, hwid: str, db: AsyncSession = Depends(get_db)):
+    """Remove one device from this subscription (self-service)."""
+    await subscription_operator.delete_subscription_hwid(db, token, hwid)
+
+
+@router.post("/{token}/hwids/reset")
+async def reset_subscription_hwids(token: str, db: AsyncSession = Depends(get_db)):
+    """Clear all devices registered to this subscription (self-service)."""
+    return await subscription_operator.reset_subscription_hwids(db, token)
 
 
 @router.get("/{token}/{client_type}")

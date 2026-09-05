@@ -38,6 +38,7 @@ import { BulkActionAlertDialog } from '@/features/users/components/bulk-action-a
 import { NodeActionsMenuModalHost } from '@/features/nodes/components/node-actions-menu'
 import { useAdmin } from '@/hooks/use-admin'
 import { hasPermission } from '@/utils/rbac'
+import { cn } from '@/lib/utils'
 
 const NODES_PER_PAGE = 15
 
@@ -676,9 +677,34 @@ export default function NodesList() {
   }
   const activeBulkActionConfig = bulkAction ? bulkActionConfigs[bulkAction] : null
 
+  const statusSummary = useMemo(() => {
+    const source = shouldUseLocalSearch && allNodes.length > 0 ? allNodes : nodesData
+    return {
+      connected: source.filter(n => n.status === 'connected').length,
+      connecting: source.filter(n => n.status === 'connecting').length,
+      error: source.filter(n => n.status === 'error').length,
+      disabled: source.filter(n => n.status === 'disabled' || n.status === 'limited').length,
+      total: totalNodesFromResponse || source.length,
+    }
+  }, [allNodes, nodesData, shouldUseLocalSearch, totalNodesFromResponse])
+
   return (
-    <div className="flex w-full flex-col items-start gap-2 px-4">
-      <div className="w-full flex-1 space-y-4 py-4">
+    <div className="mx-auto flex w-full max-w-[1680px] flex-col items-start gap-0 px-4 md:px-6">
+      <div className="w-full flex-1 space-y-5 py-5 md:space-y-6 md:py-7">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {[
+            { label: t('nodeModal.status.connected', { defaultValue: 'Connected' }), value: statusSummary.connected, tone: 'text-emerald-500' },
+            { label: t('nodeModal.status.connecting', { defaultValue: 'Connecting' }), value: statusSummary.connecting, tone: 'text-amber-500' },
+            { label: t('nodeModal.status.error', { defaultValue: 'Error' }), value: statusSummary.error, tone: 'text-destructive' },
+            { label: t('nodes.totalNodes', { defaultValue: 'Total nodes' }), value: statusSummary.total, tone: 'text-foreground' },
+          ].map(item => (
+            <Card key={item.label} className="border-border/60 bg-card/40 px-4 py-3.5">
+              <div className="text-muted-foreground text-[11px] font-medium tracking-[0.12em] uppercase">{item.label}</div>
+              <div className={cn('mt-1.5 text-2xl font-semibold tracking-tight tabular-nums', item.tone)}>{item.value}</div>
+            </Card>
+          ))}
+        </div>
+
         <NodeFilters
           filters={filters}
           onFilterChange={handleFilterChange}
@@ -698,7 +724,7 @@ export default function NodesList() {
                 getRowId={node => node.id}
                 isLoading={showLoadingSpinner || showPageLoadingSkeletons}
                 loadingRows={6}
-                className="gap-4"
+                className="gap-5"
                 gridClassName="transform-gpu animate-slide-up"
                 gridStyle={{ animationDuration: '500ms', animationDelay: '100ms', animationFillMode: 'both' }}
                 enableSelection={canUseBulkSelection}
@@ -720,29 +746,19 @@ export default function NodesList() {
                   />
                 )}
                 renderSkeleton={i => (
-                  <Card key={i} className="group relative h-full p-4">
-                    <div className="flex items-center gap-3">
-                      <div className="min-w-0 flex-1">
-                        <div className="mb-1 flex items-center gap-2">
-                          <Skeleton className="h-2 w-2 shrink-0 rounded-full" />
-                          <Skeleton className="h-5 w-32 sm:w-40" />
-                        </div>
-                        <Skeleton className="mb-1 h-4 w-28 sm:w-36" />
-                        {i % 3 === 0 && <Skeleton className="mt-1 mb-2 h-3 w-40 sm:w-48" />}
-                        <div className="mt-2 space-y-1.5">
-                          <Skeleton className="h-1.5 w-full rounded-full" />
-                          <div className="flex items-center justify-between gap-2">
-                            <Skeleton className="h-3 w-20" />
-                            <Skeleton className="h-3 w-16" />
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <Skeleton className="h-2.5 w-16" />
-                            <Skeleton className="h-2.5 w-16" />
-                          </div>
-                        </div>
+                  <Card key={i} className="group relative h-full p-5">
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-2">
+                        <Skeleton className="h-6 w-20 rounded-full" />
+                        <Skeleton className="h-6 w-14 rounded-full" />
                       </div>
-                      <div>
-                        <Skeleton className="h-9 w-9 shrink-0 rounded-md" />
+                      <Skeleton className="h-6 w-40" />
+                      <Skeleton className="h-16 w-full rounded-lg" />
+                      <div className="grid grid-cols-2 gap-2">
+                        <Skeleton className="h-14 rounded-lg" />
+                        <Skeleton className="h-14 rounded-lg" />
+                        <Skeleton className="h-14 rounded-lg" />
+                        <Skeleton className="h-14 rounded-lg" />
                       </div>
                     </div>
                   </Card>

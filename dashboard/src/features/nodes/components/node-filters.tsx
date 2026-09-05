@@ -84,13 +84,13 @@ export const NodeFilters = ({ filters, onFilterChange, refetch, isFetching, adva
   }
 
   return (
-    <div dir={dir} className="flex items-center gap-2 md:gap-4">
+    <div dir={dir} className="flex flex-wrap items-center gap-2 md:gap-3">
       {/* Search Input */}
-      <div className="relative min-w-0 flex-1 md:w-[calc(100%/3-10px)] md:flex-none">
-        <SearchIcon className={cn('absolute', dir === 'rtl' ? 'right-2' : 'left-2', 'text-input-placeholder top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400')} />
-        <Input placeholder={t('search')} value={search} onChange={handleSearchChange} className="pr-10 pl-8" />
+      <div className="relative min-w-0 flex-1 md:max-w-md md:flex-none md:grow">
+        <SearchIcon className={cn('absolute', dir === 'rtl' ? 'right-3' : 'left-3', 'text-muted-foreground top-1/2 h-4 w-4 -translate-y-1/2')} />
+        <Input placeholder={t('search')} value={search} onChange={handleSearchChange} className="h-10 pr-10 pl-9" />
         {search && (
-          <button type="button" onClick={clearSearch} className={cn('absolute', dir === 'rtl' ? 'left-2' : 'right-2', 'top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600')}>
+          <button type="button" onClick={clearSearch} className={cn('absolute', dir === 'rtl' ? 'left-3' : 'right-3', 'text-muted-foreground hover:text-foreground top-1/2 -translate-y-1/2')}>
             <X className="h-4 w-4" />
           </button>
         )}
@@ -99,7 +99,7 @@ export const NodeFilters = ({ filters, onFilterChange, refetch, isFetching, adva
       <div className="flex flex-shrink-0 items-center gap-2">
         {/* Advanced Filter Button */}
         <div className="flex h-full flex-shrink-0 items-center gap-1">
-          <Button type="button" size="icon-md" variant="ghost" className="relative flex h-9 w-9 items-center justify-center rounded-lg border" onClick={handleOpenAdvanceSearch}>
+          <Button type="button" size="icon-md" variant="ghost" className="relative flex h-10 w-10 items-center justify-center rounded-lg border" onClick={handleOpenAdvanceSearch}>
             <Filter className="h-4 w-4" />
             {hasActiveAdvanceFilters() && (
               <Badge variant="default" className="bg-primary text-primary-foreground absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full p-0 text-[10.5px]">
@@ -114,7 +114,7 @@ export const NodeFilters = ({ filters, onFilterChange, refetch, isFetching, adva
                   type="button"
                   size="sm"
                   variant="outline"
-                  className={cn('h-9 w-9 p-0', dir === 'rtl' ? 'rounded-r-none border-r-0' : 'rounded-l-none border-l-0')}
+                  className={cn('h-10 w-10 p-0', dir === 'rtl' ? 'rounded-r-none border-r-0' : 'rounded-l-none border-l-0')}
                   onClick={onClearAdvanceSearch}
                 >
                   <X className="h-3 w-3" />
@@ -133,7 +133,7 @@ export const NodeFilters = ({ filters, onFilterChange, refetch, isFetching, adva
           size="icon-md"
           onClick={handleManualRefresh}
           variant="ghost"
-          className={cn('relative flex h-9 w-9 items-center justify-center rounded-lg border transition-all duration-200', isFetching && 'opacity-70')}
+          className={cn('relative flex h-10 w-10 items-center justify-center rounded-lg border transition-all duration-200', isFetching && 'opacity-70')}
           aria-label={t('autoRefresh.refreshNow')}
           title={t('autoRefresh.refreshNow')}
         >

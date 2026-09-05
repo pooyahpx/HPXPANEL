@@ -200,6 +200,20 @@ export default function Cores({ cores, onDuplicateCore, onDeleteCore, canCreate 
     }
   }
 
+  const typeSummary = useMemo(() => {
+    const typeCounts = coresList.reduce<Record<string, number>>((acc, core) => {
+      const key = String(core.type ?? 'xray')
+      acc[key] = (acc[key] || 0) + 1
+      return acc
+    }, {})
+    return [
+      { label: t('core.totalCores', { defaultValue: 'Total cores' }), value: coresList.length },
+      { label: 'Xray', value: typeCounts.xray || 0 },
+      { label: 'WireGuard', value: typeCounts.wg || 0 },
+      { label: t('core.otherTypes', { defaultValue: 'Other' }), value: (typeCounts.ikev2 || 0) + (typeCounts.l2tp || 0) + (typeCounts.openvpn || 0) },
+    ]
+  }, [coresList, t])
+
   const listColumns = useCoresListColumns({
     onEdit: handleRowEdit,
     onDuplicate: canCreate ? onDuplicateCore : undefined,
@@ -210,16 +224,25 @@ export default function Cores({ cores, onDuplicateCore, onDeleteCore, canCreate 
   })
 
   return (
-    <div className={cn('flex w-full flex-col gap-4 pt-4', dir === 'rtl' && 'rtl')}>
-      <div className="flex items-center gap-2 md:gap-3">
-        <div className="relative min-w-0 flex-1 md:w-[calc(100%/3-10px)] md:flex-none" dir={dir}>
-          <Search className={cn('absolute', dir === 'rtl' ? 'right-2' : 'left-2', 'text-muted-foreground top-1/2 h-4 w-4 -translate-y-1/2')} />
-          <Input placeholder={t('search')} value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className={cn('pr-10 pl-8', dir === 'rtl' && 'pr-8 pl-10')} />
+    <div className={cn('mx-auto flex w-full max-w-[1680px] flex-col gap-5 px-4 pt-5 md:gap-6 md:px-6 md:pt-7', dir === 'rtl' && 'rtl')}>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {typeSummary.map(item => (
+          <Card key={item.label} className="border-border/60 bg-card/40 px-4 py-3.5">
+            <div className="text-muted-foreground text-[11px] font-medium tracking-[0.12em] uppercase">{item.label}</div>
+            <div className="mt-1.5 text-2xl font-semibold tracking-tight tabular-nums">{item.value}</div>
+          </Card>
+        ))}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 md:gap-3">
+        <div className="relative min-w-0 flex-1 md:max-w-md md:flex-none md:grow" dir={dir}>
+          <Search className={cn('absolute', dir === 'rtl' ? 'right-3' : 'left-3', 'text-muted-foreground top-1/2 h-4 w-4 -translate-y-1/2')} />
+          <Input placeholder={t('search')} value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className={cn('h-10 pr-10 pl-9', dir === 'rtl' && 'pr-9 pl-10')} />
           {searchQuery && (
             <button
               type="button"
               onClick={() => setSearchQuery('')}
-              className={cn('absolute', dir === 'rtl' ? 'left-2' : 'right-2', 'text-muted-foreground hover:text-foreground top-1/2 -translate-y-1/2')}
+              className={cn('absolute', dir === 'rtl' ? 'left-3' : 'right-3', 'text-muted-foreground hover:text-foreground top-1/2 -translate-y-1/2')}
             >
               <X className="h-4 w-4" />
             </button>
@@ -227,7 +250,7 @@ export default function Cores({ cores, onDuplicateCore, onDeleteCore, canCreate 
         </div>
         <div className="flex flex-shrink-0 items-center gap-2">
           {canCreate && (
-            <Button type="button" size="sm" variant="secondary" className="gap-1.5" onClick={() => setOpenVpnWizardOpen(true)}>
+            <Button type="button" size="sm" variant="secondary" className="h-10 gap-1.5" onClick={() => setOpenVpnWizardOpen(true)}>
               <Sparkles className="h-4 w-4" />
               <span className="max-sm:sr-only">{t('openvpn.wizard.button')}</span>
             </Button>
@@ -237,7 +260,7 @@ export default function Cores({ cores, onDuplicateCore, onDeleteCore, canCreate 
             size="icon-md"
             variant="ghost"
             onClick={handleRefreshClick}
-            className={cn('h-9 w-9 rounded-lg border', isFetching && 'opacity-70')}
+            className={cn('h-10 w-10 rounded-lg border', isFetching && 'opacity-70')}
             aria-label={t('autoRefresh.refreshNow')}
             title={t('autoRefresh.refreshNow')}
           >
@@ -254,7 +277,7 @@ export default function Cores({ cores, onDuplicateCore, onDeleteCore, canCreate 
             getRowId={core => core.id}
             isLoading={isLoading}
             loadingRows={6}
-            className="gap-4"
+            className="gap-5"
             enableSelection={canDelete}
             injectSelectionProps={canDelete}
             selectedRowIds={selectedCoreIds}
@@ -273,12 +296,18 @@ export default function Cores({ cores, onDuplicateCore, onDeleteCore, canCreate 
               />
             )}
             renderSkeleton={i => (
-              <Card key={i} className="px-4 py-5">
-                <div className="flex items-center gap-2 sm:gap-3">
-                  <Skeleton className="h-2 w-2 shrink-0 rounded-full" />
-                  <Skeleton className="h-5 w-24 sm:w-32" />
-                  <div className="ml-auto shrink-0">
-                    <Skeleton className="h-8 w-8" />
+              <Card key={i} className="p-5">
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2">
+                    <Skeleton className="h-6 w-16 rounded-full" />
+                    <Skeleton className="h-6 w-16 rounded-full" />
+                  </div>
+                  <Skeleton className="h-6 w-36" />
+                  <div className="grid grid-cols-2 gap-2">
+                    <Skeleton className="h-14 rounded-lg" />
+                    <Skeleton className="h-14 rounded-lg" />
+                    <Skeleton className="h-14 rounded-lg" />
+                    <Skeleton className="h-14 rounded-lg" />
                   </div>
                 </div>
               </Card>

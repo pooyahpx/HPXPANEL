@@ -48,8 +48,9 @@ export default function Node({
   const { latestVersion: latestXrayVersion, hasUpdate: hasXrayUpdate } = useXrayReleases()
   const { latestVersion: latestNodeVersion, hasUpdate: hasNodeUpdate } = useNodeReleases()
   const coreVersion = node.core_version ?? node.xray_version
-  const resolvedCoreType = coresData?.cores?.find(c => c.id === node.core_config_id)?.type ?? null
-  const resolvedCoreTypeString = String(resolvedCoreType ?? '')
+  const resolvedCore = coresData?.cores?.find(c => c.id === node.core_config_id)
+  const resolvedCoreType = resolvedCore?.type ?? null
+  const resolvedCoreTypeString = String(resolvedCoreType ?? 'xray')
   const isWireGuardCore = resolvedCoreType === 'wg'
   const isXrayBackend = resolvedCoreType !== 'wg'
   const coreUpdateVersion = node.xray_version ?? coreVersion
@@ -61,43 +62,42 @@ export default function Node({
       case 'connected':
         return {
           label: t('nodeModal.status.connected', { defaultValue: 'Connected' }),
+          badge: 'border-emerald-500/35 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
+          ring: 'border-emerald-500/25',
+          dot: 'bg-emerald-500',
         }
       case 'connecting':
         return {
           label: t('nodeModal.status.connecting', { defaultValue: 'Connecting' }),
+          badge: 'border-amber-500/35 bg-amber-500/10 text-amber-700 dark:text-amber-400',
+          ring: 'border-amber-500/25',
+          dot: 'bg-amber-500',
         }
       case 'error':
         return {
           label: t('nodeModal.status.error', { defaultValue: 'Error' }),
+          badge: 'border-destructive/35 bg-destructive/10 text-destructive',
+          ring: 'border-destructive/30',
+          dot: 'bg-destructive',
         }
       case 'limited':
         return {
           label: t('status.limited', { defaultValue: 'Limited' }),
+          badge: 'border-orange-500/35 bg-orange-500/10 text-orange-700 dark:text-orange-400',
+          ring: 'border-orange-500/25',
+          dot: 'bg-orange-500',
         }
       default:
         return {
           label: t('nodeModal.status.disabled', { defaultValue: 'Disabled' }),
+          badge: 'border-border bg-muted/40 text-muted-foreground',
+          ring: 'border-border/70',
+          dot: 'bg-muted-foreground/50',
         }
     }
   }
 
   const statusConfig = getStatusConfig()
-
-  const getStatusDotColor = () => {
-    switch (node.status) {
-      case 'connected':
-        return 'bg-green-500'
-      case 'connecting':
-        return 'bg-amber-500'
-      case 'error':
-        return 'bg-destructive'
-      case 'limited':
-        return 'bg-orange-500'
-      default:
-        return 'bg-gray-400 dark:bg-gray-600'
-    }
-  }
-
   const uplink = node.uplink || 0
   const downlink = node.downlink || 0
   const totalUsed = uplink + downlink
@@ -105,6 +105,7 @@ export default function Node({
   const lifetimeDownlink = node.lifetime_downlink || 0
   const totalLifetime = lifetimeUplink + lifetimeDownlink
   const hasUsageDisplay = !(totalUsed === 0 && !node.data_limit && totalLifetime === 0)
+
   const handleCoreVersionClick = (event: MouseEvent<HTMLButtonElement>) => {
     if (!canUpdateCore || !hasCoreUpdate) return
     event.preventDefault()
@@ -112,40 +113,41 @@ export default function Node({
     setShowUpdateCoreDialog(true)
   }
 
+  const TypeIcon = resolvedCoreTypeString === 'ikev2' ? ShieldCheck : resolvedCoreTypeString === 'l2tp' ? Network : null
+
   return (
     <TooltipProvider>
       <Card
-        className={cn('group relative h-full overflow-hidden border transition-colors', canUpdate && 'hover:bg-accent cursor-pointer', selected && 'border-primary/50 bg-accent/30')}
+        className={cn(
+          'group relative h-full overflow-hidden border transition-all duration-200',
+          statusConfig.ring,
+          canUpdate && 'hover:bg-accent/40 cursor-pointer hover:shadow-sm',
+          selected && 'border-primary/50 bg-accent/30 ring-primary/20 ring-1',
+        )}
         onClick={() => {
           if (canUpdate) onEdit(node)
         }}
       >
-        <div className="flex items-start gap-3 p-3">
-          {selectionControl ? <div className="pt-1">{selectionControl}</div> : null}
-          <div className="min-w-0 flex-1">
-            {/* Header */}
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0 flex-1">
-                <div className="mb-0.5 flex items-center gap-1.5">
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <div className={cn('h-2 w-2 shrink-0 rounded-full', getStatusDotColor())} />
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>{statusConfig.label}</p>
-                    </TooltipContent>
-                  </Tooltip>
-                  <h3 className="truncate text-sm leading-tight font-semibold tracking-tight sm:text-base">{node.name}</h3>
-                  {(resolvedCoreTypeString === 'ikev2' || resolvedCoreTypeString === 'l2tp') && (
-                    <Badge variant="outline" className="h-5 gap-1 px-1.5 text-[10px]">
-                      {resolvedCoreTypeString === 'ikev2' ? <ShieldCheck className="h-3 w-3" /> : <Network className="h-3 w-3" />}
-                      {t(`coreTypes.${resolvedCoreTypeString}`)}
-                    </Badge>
-                  )}
+        <div className="flex items-start gap-3 p-4 sm:p-5">
+          {selectionControl ? <div className="pt-1.5">{selectionControl}</div> : null}
+          <div className="min-w-0 flex-1 space-y-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1 space-y-2.5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="outline" className={cn('h-6 gap-1.5 px-2 text-[10px] font-semibold tracking-wide uppercase', statusConfig.badge)}>
+                    <span className={cn('h-1.5 w-1.5 rounded-full', statusConfig.dot)} />
+                    {statusConfig.label}
+                  </Badge>
+                  <Badge variant="outline" className="h-6 gap-1 px-2 text-[10px] font-medium tracking-wide uppercase">
+                    {TypeIcon ? <TypeIcon className="h-3 w-3" /> : null}
+                    {t(`coreTypes.${resolvedCoreTypeString}`, {
+                      defaultValue: resolvedCoreTypeString === 'wg' ? 'WireGuard' : resolvedCoreTypeString === 'xray' ? 'Xray' : resolvedCoreTypeString.toUpperCase(),
+                    })}
+                  </Badge>
                   {node.status === 'error' && node.message ? (
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <AlertCircle className="text-destructive h-3.5 w-3.5 shrink-0 cursor-help sm:h-4 sm:w-4" />
+                        <AlertCircle className="text-destructive h-4 w-4 shrink-0 cursor-help" />
                       </TooltipTrigger>
                       <TooltipContent className="max-w-xs" side="top">
                         <p className="text-xs">{node.message}</p>
@@ -153,7 +155,13 @@ export default function Node({
                     </Tooltip>
                   ) : null}
                 </div>
+
+                <div className="space-y-1">
+                  <h3 className="truncate text-base leading-tight font-semibold tracking-tight sm:text-lg">{node.name}</h3>
+                  {resolvedCore?.name ? <p className="text-muted-foreground truncate text-xs">{resolvedCore.name}</p> : null}
+                </div>
               </div>
+
               <NodeActionsMenu
                 node={node}
                 onEdit={onEdit}
@@ -168,18 +176,16 @@ export default function Node({
               />
             </div>
 
-            {/* Connection Info */}
-            <div className="mb-2 space-y-1.5">
-              <div className={cn('text-muted-foreground flex items-center gap-1.5 text-[10px] sm:text-xs', dir === 'rtl' ? 'flex-row-reverse justify-end' : 'flex-row')}>
-                <Link2 className="h-3 w-3 shrink-0 opacity-70 sm:h-3.5 sm:w-3.5" />
-                <span dir="ltr" className="truncate font-mono">
+            <div className="bg-muted/30 border-border/50 space-y-2.5 rounded-lg border px-3 py-2.5">
+              <div className={cn('text-muted-foreground flex items-center gap-2 text-xs', dir === 'rtl' ? 'flex-row-reverse justify-end' : 'flex-row')}>
+                <Link2 className="h-3.5 w-3.5 shrink-0 opacity-70" />
+                <span dir="ltr" className="truncate font-mono text-[12px] sm:text-[13px]">
                   {node.address}:{node.port}
                 </span>
               </div>
 
-              {/* Version Info */}
               {(coreVersion || node.node_version) && (
-                <div className="flex flex-wrap items-center gap-3">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                   {coreVersion && (
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -187,16 +193,16 @@ export default function Node({
                           type="button"
                           onClick={handleCoreVersionClick}
                           className={cn(
-                            'group/version inline-flex items-center rounded-sm bg-transparent p-0 text-left',
-                            canUpdateCore && hasCoreUpdate && 'focus-visible:ring-ring cursor-pointer focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none',
+                            'inline-flex items-center gap-1.5 rounded-md px-0 text-left',
+                            canUpdateCore && hasCoreUpdate && 'focus-visible:ring-ring cursor-pointer focus-visible:ring-2 focus-visible:outline-none',
                             (!canUpdateCore || !hasCoreUpdate) && 'cursor-default',
-                            dir === 'rtl' ? 'flex-row-reverse gap-1' : 'gap-1',
                           )}
                           aria-label={t('nodeModal.updateCore', { defaultValue: 'Update Core' })}
                         >
-                          <Package className={cn('h-3 w-3 shrink-0 transition-colors sm:h-3.5 sm:w-3.5', hasCoreUpdate ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground')} />
-                          <span className={cn('font-mono text-[10px] font-medium sm:text-[11px]', hasCoreUpdate ? 'text-amber-700 dark:text-amber-300' : 'text-muted-foreground')}>{coreVersion}</span>
-                          {hasCoreUpdate && <div className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />}
+                          <Package className={cn('h-3.5 w-3.5 shrink-0', hasCoreUpdate ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground')} />
+                          <span className="text-muted-foreground text-[10px] tracking-wide uppercase">{t('node.xrayVersion', { defaultValue: 'Core' })}</span>
+                          <span className={cn('font-mono text-xs font-medium', hasCoreUpdate ? 'text-amber-700 dark:text-amber-300' : 'text-foreground')}>{coreVersion}</span>
+                          {hasCoreUpdate && <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />}
                         </button>
                       </TooltipTrigger>
                       <TooltipContent side="top" className="max-w-xs">
@@ -227,12 +233,11 @@ export default function Node({
                   {node.node_version && (
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <div className={cn('group/version inline-flex items-center', dir === 'rtl' ? 'flex-row-reverse gap-1' : 'gap-1')}>
-                          <Server className={cn('h-3 w-3 shrink-0 transition-colors sm:h-3.5 sm:w-3.5', hasNodeVersionUpdate ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground')} />
-                          <span className={cn('font-mono text-[10px] font-medium sm:text-[11px]', hasNodeVersionUpdate ? 'text-amber-700 dark:text-amber-300' : 'text-muted-foreground')}>
-                            {node.node_version}
-                          </span>
-                          {hasNodeVersionUpdate && <div className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />}
+                        <div className="inline-flex items-center gap-1.5">
+                          <Server className={cn('h-3.5 w-3.5 shrink-0', hasNodeVersionUpdate ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground')} />
+                          <span className="text-muted-foreground text-[10px] tracking-wide uppercase">{t('node.coreVersion', { defaultValue: 'Node' })}</span>
+                          <span className={cn('font-mono text-xs font-medium', hasNodeVersionUpdate ? 'text-amber-700 dark:text-amber-300' : 'text-foreground')}>{node.node_version}</span>
+                          {hasNodeVersionUpdate && <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />}
                         </div>
                       </TooltipTrigger>
                       <TooltipContent side="top" className="max-w-xs">
@@ -264,12 +269,7 @@ export default function Node({
               )}
             </div>
 
-            {hasUsageDisplay && (
-              <>
-                <Separator className="my-1.5 opacity-50" />
-                <NodeUsageDisplay node={node} />
-              </>
-            )}
+            {hasUsageDisplay ? <NodeUsageDisplay node={node} /> : null}
           </div>
         </div>
       </Card>

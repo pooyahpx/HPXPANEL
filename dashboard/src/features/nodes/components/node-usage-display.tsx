@@ -5,12 +5,14 @@ import { formatBytes } from '@/utils/formatByte'
 import { NodeResponse } from '@/service/api'
 import { Download, Gauge, HardDrive, Upload } from 'lucide-react'
 import { statusColors } from '@/constants/UserSettings'
+import { useTranslation } from 'react-i18next'
 
 interface NodeUsageDisplayProps {
   node: NodeResponse
 }
 
 export default function NodeUsageDisplay({ node }: NodeUsageDisplayProps) {
+  const { t } = useTranslation()
   const isRTL = useDirDetection() === 'rtl'
   const uplink = node.uplink || 0
   const downlink = node.downlink || 0
@@ -30,42 +32,69 @@ export default function NodeUsageDisplay({ node }: NodeUsageDisplayProps) {
   }
 
   if (totalUsed === 0 && !dataLimit && totalLifetime === 0) {
-    return <span className="text-muted-foreground text-xs">-</span>
+    return null
   }
 
-  return (
-    <div className={cn('min-w-0 space-y-1 overflow-x-hidden', isRTL ? 'text-right' : 'text-left')}>
-      {!isUnlimited && dataLimit && <Progress value={progressValue} className="h-1" indicatorClassName={getProgressColor()} />}
+  const tiles = [
+    {
+      key: 'session',
+      label: t('nodes.metrics.session', { defaultValue: 'Session' }),
+      value: formatBytes(totalUsed),
+      icon: Gauge,
+      tone: 'text-foreground',
+    },
+    {
+      key: 'lifetime',
+      label: t('nodes.metrics.lifetime', { defaultValue: 'Lifetime' }),
+      value: totalLifetime > 0 ? formatBytes(totalLifetime) : '—',
+      icon: HardDrive,
+      tone: 'text-muted-foreground',
+    },
+    {
+      key: 'up',
+      label: t('nodes.metrics.uplink', { defaultValue: 'Uplink' }),
+      value: formatBytes(uplink),
+      icon: Upload,
+      tone: 'text-sky-500 dark:text-sky-400',
+    },
+    {
+      key: 'down',
+      label: t('nodes.metrics.downlink', { defaultValue: 'Downlink' }),
+      value: formatBytes(downlink),
+      icon: Download,
+      tone: 'text-emerald-500 dark:text-emerald-400',
+    },
+  ]
 
-      <div className={cn('flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] leading-4', isRTL ? 'justify-end' : 'justify-start')}>
-        <span dir="ltr" className={cn('text-foreground inline-flex shrink-0 items-center gap-0.5 font-semibold', isRTL && 'flex-row-reverse')}>
-          <Gauge className="h-2.5 w-2.5 shrink-0" strokeWidth={2.25} />
-          {formatBytes(totalUsed)}
-        </span>
-        {!isUnlimited && dataLimit && (
-          <span dir="ltr" className="text-muted-foreground shrink-0">
-            / {formatBytes(dataLimit)}
-          </span>
-        )}
-        {totalLifetime > 0 && (
-          <span dir="ltr" className={cn('text-muted-foreground inline-flex shrink-0 items-center gap-0.5', isRTL && 'flex-row-reverse')}>
-            <HardDrive className="h-2.5 w-2.5 shrink-0" strokeWidth={2.25} />
-            {formatBytes(totalLifetime)}
-          </span>
-        )}
-        {(uplink > 0 || downlink > 0) && <span className="bg-border hidden h-3 w-px shrink-0 sm:inline-block" />}
-        {uplink > 0 && (
-          <span dir="ltr" className={cn('inline-flex shrink-0 items-center gap-0.5 font-medium text-blue-500 dark:text-blue-400', isRTL && 'flex-row-reverse')}>
-            <Upload className="h-2.5 w-2.5 shrink-0" strokeWidth={2.25} />
-            {formatBytes(uplink)}
-          </span>
-        )}
-        {downlink > 0 && (
-          <span dir="ltr" className={cn('inline-flex shrink-0 items-center gap-0.5 font-medium text-emerald-500 dark:text-emerald-400', isRTL && 'flex-row-reverse')}>
-            <Download className="h-2.5 w-2.5 shrink-0" strokeWidth={2.25} />
-            {formatBytes(downlink)}
-          </span>
-        )}
+  return (
+    <div className={cn('min-w-0 space-y-3', isRTL ? 'text-right' : 'text-left')}>
+      {!isUnlimited && dataLimit ? (
+        <div className="space-y-1.5">
+          <div className="text-muted-foreground flex items-center justify-between gap-2 text-[11px]">
+            <span>{t('nodes.metrics.quota', { defaultValue: 'Quota' })}</span>
+            <span dir="ltr" className="font-mono tabular-nums">
+              {formatBytes(totalUsed)} / {formatBytes(dataLimit)}
+            </span>
+          </div>
+          <Progress value={progressValue} className="h-1.5" indicatorClassName={getProgressColor()} />
+        </div>
+      ) : null}
+
+      <div className="grid grid-cols-2 gap-2">
+        {tiles.map(tile => {
+          const Icon = tile.icon
+          return (
+            <div key={tile.key} className="bg-muted/35 border-border/50 rounded-lg border px-2.5 py-2">
+              <div className="text-muted-foreground mb-1 flex items-center gap-1 text-[10px] font-medium tracking-wide uppercase">
+                <Icon className={cn('h-3 w-3 shrink-0', tile.tone)} strokeWidth={2.25} />
+                <span>{tile.label}</span>
+              </div>
+              <div dir="ltr" className={cn('truncate text-sm font-semibold tabular-nums', tile.tone)}>
+                {tile.value}
+              </div>
+            </div>
+          )
+        })}
       </div>
     </div>
   )

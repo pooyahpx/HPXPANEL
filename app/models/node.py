@@ -380,6 +380,8 @@ class NodeResponse(Node):
         if self.core_config_id:
             object.__setattr__(self, "core_config_ids", [self.core_config_id])
         return self
+
+
 class NodesResponse(BaseModel):
     nodes: list[NodeResponse]
     total: int

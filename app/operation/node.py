@@ -64,8 +64,8 @@ from app.models.stats import (
 from app.nats.node_rpc import node_nats_client
 from app.node import core_users, node_manager
 from app.operation import BaseOperation, OperatorType
-from app.utils.logger import get_logger
 from app.services.openvpn.monitoring import _normalize_online_stats
+from app.utils.logger import get_logger
 from config import runtime_settings
 
 MAX_MESSAGE_LENGTH = 128
@@ -588,7 +588,9 @@ class NodeOperation(BaseOperation):
     async def get_user_ip_list_all_nodes(self, db: AsyncSession, user_id: int) -> UserIPListAll:
         return await self._get_user_ip_list_all_impl(db, user_id)
 
-    async def _get_node_user_ip_list_safe(self, node_id: int, email: str) -> tuple[dict[str, int], dict[str, str]] | None:
+    async def _get_node_user_ip_list_safe(
+        self, node_id: int, email: str
+    ) -> tuple[dict[str, int], dict[str, str]] | None:
         """Wrapper method that returns None instead of raising exceptions"""
         try:
             node = await node_manager.get_node(node_id)

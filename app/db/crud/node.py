@@ -245,10 +245,14 @@ async def get_limited_nodes(db: AsyncSession) -> list[Node]:
     Returns:
         list[Node]: Nodes that should be limited
     """
-    query = select(Node).options(selectinload(Node.usage_logs)).where(
-        and_(
-            Node.status.in_([NodeStatus.error, NodeStatus.connected, NodeStatus.connecting]),
-            Node.is_limited,
+    query = (
+        select(Node)
+        .options(selectinload(Node.usage_logs))
+        .where(
+            and_(
+                Node.status.in_([NodeStatus.error, NodeStatus.connected, NodeStatus.connecting]),
+                Node.is_limited,
+            )
         )
     )
     nodes = (await db.execute(query)).unique().scalars().all()
@@ -856,10 +860,11 @@ async def bulk_reset_node_usage(db: AsyncSession, nodes: list[Node]) -> list[Nod
     # Re-fetch all nodes in a single query instead of N individual refreshes
     node_ids = [node.id for node in nodes]
     refreshed = (
-        await db.execute(
-            select(Node).options(selectinload(Node.usage_logs)).where(Node.id.in_(node_ids))
-        )
-    ).unique().scalars().all()
+        (await db.execute(select(Node).options(selectinload(Node.usage_logs)).where(Node.id.in_(node_ids))))
+        .unique()
+        .scalars()
+        .all()
+    )
     # Preserve input order
     refreshed_by_id = {n.id: n for n in refreshed}
     return [refreshed_by_id[nid] for nid in node_ids if nid in refreshed_by_id]

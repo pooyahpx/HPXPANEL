@@ -825,7 +825,9 @@ class AdminNotificationReminder(Base, CreatedAtUTCMixin):
     __tablename__ = "admin_notification_reminders"
     __table_args__ = (
         Index("ix_admin_notification_reminders_admin_id_type", "admin_id", "type"),
-        UniqueConstraint("admin_id", "type", "threshold", name="uq_admin_notification_reminders_admin_id_type_threshold"),
+        UniqueConstraint(
+            "admin_id", "type", "threshold", name="uq_admin_notification_reminders_admin_id_type_threshold"
+        ),
     )
     admin_id: Mapped[int] = fk_id_column("admins.id", ondelete="CASCADE")
     admin: Mapped[Admin] = relationship(back_populates="notification_reminders", init=False)
@@ -1363,4 +1365,3 @@ class ShopOrder(Base, CreatedAtUTCMixin):
     receipt_file_id: Mapped[str | None] = mapped_column(String(256), default=None)
     created_user_id: Mapped[int | None] = fk_id_column("users.id", ondelete="SET NULL", default=None)
     note: Mapped[str | None] = mapped_column(String(500), default=None)
-

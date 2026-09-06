@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from pydantic import ValidationError
 
 from app.db.models import CoreType, NodeStatus
 from app.models.node import NodeModify
@@ -26,7 +27,7 @@ def test_node_modify_partial_without_cores():
 
 
 def test_node_modify_rejects_empty_core_list():
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         NodeModify(core_config_ids=[])
 
 

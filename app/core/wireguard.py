@@ -91,6 +91,30 @@ class WireGuardConfig(dict):
             normalized_addresses.append(str(ip_interface(cidr.strip())))
         self["address"] = normalized_addresses
 
+        mtu = self.get("mtu")
+        if mtu in (None, ""):
+            self.pop("mtu", None)
+        else:
+            if not isinstance(mtu, int) or mtu < 576 or mtu > 9000:
+                raise ValueError("mtu must be an integer between 576 and 9000")
+            self["mtu"] = mtu
+
+        dns = self.get("dns")
+        if dns in (None, ""):
+            self.pop("dns", None)
+        else:
+            if not isinstance(dns, list):
+                raise TypeError("dns must be a list of strings")
+            normalized_dns: list[str] = []
+            for entry in dns:
+                if not isinstance(entry, str) or not entry.strip():
+                    raise ValueError("dns entries must be non-empty strings")
+                normalized_dns.append(entry.strip())
+            if normalized_dns:
+                self["dns"] = normalized_dns
+            else:
+                self.pop("dns", None)
+
     def _resolve_inbounds(self):
         interface_name = self["interface_name"]
         metadata = {
@@ -105,6 +129,10 @@ class WireGuardConfig(dict):
             "private_key": self.get("private_key", ""),
             "pre_shared_key": self.get("pre_shared_key", ""),
         }
+        if "mtu" in self:
+            metadata["mtu"] = self["mtu"]
+        if "dns" in self:
+            metadata["dns"] = list(self["dns"])
         self._inbounds = [interface_name]
         self._inbounds_by_tag = {interface_name: metadata}
 

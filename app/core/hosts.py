@@ -28,8 +28,8 @@ from app.nats import is_nats_enabled
 from app.nats.client import setup_nats_kv
 from app.nats.message import MessageTopic
 from app.nats.router import router
-from app.utils.openvpn import get_openvpn_core_for_inbounds
 from app.utils.logger import get_logger
+from app.utils.openvpn import get_openvpn_core_for_inbounds
 from config import runtime_settings
 from role import Role
 
@@ -93,7 +93,15 @@ async def _prepare_subscription_inbound_data(
 
         reserved = wg_over.reserved.strip() if wg_over.reserved else None
 
-        dns = list(wg_over.dns) if wg_over.dns else None
+        inbound_dns = inbound_config.get("dns")
+        dns = (
+            list(wg_over.dns)
+            if wg_over.dns
+            else list(inbound_dns)
+            if isinstance(inbound_dns, list) and inbound_dns
+            else None
+        )
+        mtu = wg_over.mtu if wg_over.mtu is not None else inbound_config.get("mtu")
 
         return SubscriptionInboundData(
             remark=host.remark,
@@ -110,7 +118,7 @@ async def _prepare_subscription_inbound_data(
             wireguard_local_address=inbound_config.get("address", []) or [],
             wireguard_allowed_ips=allowed_ips,
             wireguard_keepalive=keepalive,
-            wireguard_mtu=wg_over.mtu,
+            wireguard_mtu=mtu,
             wireguard_reserved=reserved,
             wireguard_dns=dns,
             fragment_settings=host.fragment_settings.model_dump() if host.fragment_settings else None,

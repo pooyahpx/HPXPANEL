@@ -3023,13 +3023,17 @@
       "generatePreSharedKey": "Generate pre-shared key",
       "preSharedKeyGenerated": "Pre-shared key generated",
       "preSharedKeyFailed": "Could not generate pre-shared key",
+      "mtuHint": "Optional (576–9000). Overridden per host if set.",
+      "dnsHint": "Optional. One per line. Overridden per host if set.",
       "fields": {
         "interfaceName": "Interface name",
         "privateKey": "Private key",
         "publicKey": "Public key",
         "preSharedKey": "Pre-shared key",
         "listenPort": "Listen port",
-        "address": "Address"
+        "address": "Address",
+        "mtu": "MTU",
+        "dns": "DNS"
       }
     },
     "ipsec": {

@@ -53,6 +53,48 @@ function generateWireGuardPreSharedKey(): string {
   return btoa(binary)
 }
 
+function draftExtraMtu(draft: WireGuardCoreDraft): string {
+  const value = draft.extra.mtu
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value)
+  if (typeof value === 'string') return value
+  return ''
+}
+
+function draftExtraDns(draft: WireGuardCoreDraft): string {
+  const value = draft.extra.dns
+  if (Array.isArray(value)) {
+    return value.filter((entry): entry is string => typeof entry === 'string').join('\n')
+  }
+  if (typeof value === 'string') return value
+  return ''
+}
+
+function withExtraMtu(draft: WireGuardCoreDraft, raw: string): WireGuardCoreDraft {
+  const extra = { ...draft.extra }
+  const trimmed = raw.trim()
+  if (!trimmed) {
+    delete extra.mtu
+  } else {
+    const parsed = Number(trimmed)
+    extra.mtu = Number.isInteger(parsed) ? parsed : trimmed
+  }
+  return { ...draft, extra }
+}
+
+function withExtraDns(draft: WireGuardCoreDraft, raw: string): WireGuardCoreDraft {
+  const extra = { ...draft.extra }
+  const entries = raw
+    .split('\n')
+    .map(line => line.trim())
+    .filter(Boolean)
+  if (entries.length === 0) {
+    delete extra.dns
+  } else {
+    extra.dns = entries
+  }
+  return { ...draft, extra }
+}
+
 export function WireGuardCoreForm({ className }: { className?: string }) {
   const { t } = useTranslation()
   const dir = useDirDetection()
@@ -61,7 +103,14 @@ export function WireGuardCoreForm({ className }: { className?: string }) {
   const updateWgDraft = useCoreEditorStore(s => s.updateWgDraft)
   const caps = useMemo(() => getWireGuardCoreFormCapabilities(), [])
 
-  const values = useMemo(() => (draft ? draftToFormValues(draft, caps.fieldOrder) : {}), [draft, caps.fieldOrder])
+  const values = useMemo(() => {
+    if (!draft) return {}
+    return {
+      ...draftToFormValues(draft, caps.fieldOrder),
+      mtu: draftExtraMtu(draft),
+      dns: draftExtraDns(draft),
+    }
+  }, [draft, caps.fieldOrder])
 
   const form = useForm<Record<string, string>>({ values })
   const formFieldOrder = useMemo(() => orderedWireGuardFieldKeys(caps.fieldOrder), [caps.fieldOrder])
@@ -331,6 +380,63 @@ export function WireGuardCoreForm({ className }: { className?: string }) {
             }
             return null
           })}
+
+          <FormField
+            control={form.control}
+            name="mtu"
+            render={({ field: f }) => (
+              <FormItem>
+                <FormLabel>{t('coreEditor.wg.fields.mtu', { defaultValue: 'MTU' })}</FormLabel>
+                <FormControl>
+                  <Input
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="1420"
+                    className="text-xs"
+                    dir="ltr"
+                    {...f}
+                    onChange={e => {
+                      const val = e.target.value
+                      f.onChange(val)
+                      updateWgDraft(d => withExtraMtu(d, val))
+                    }}
+                  />
+                </FormControl>
+                <p className="text-muted-foreground text-xs">
+                  {t('coreEditor.wg.mtuHint', { defaultValue: 'Optional (576–9000). Overridden per host if set.' })}
+                </p>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="dns"
+            render={({ field: f }) => (
+              <FormItem className="sm:col-span-2">
+                <FormLabel>{t('coreEditor.wg.fields.dns', { defaultValue: 'DNS' })}</FormLabel>
+                <FormControl>
+                  <Textarea
+                    rows={3}
+                    className="text-xs"
+                    dir="ltr"
+                    placeholder={'1.1.1.1\n8.8.8.8'}
+                    {...f}
+                    onChange={e => {
+                      const val = e.target.value
+                      f.onChange(val)
+                      updateWgDraft(d => withExtraDns(d, val))
+                    }}
+                  />
+                </FormControl>
+                <p className="text-muted-foreground text-xs">
+                  {t('coreEditor.wg.dnsHint', { defaultValue: 'Optional. One per line. Overridden per host if set.' })}
+                </p>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
         </div>
       </form>
     </Form>

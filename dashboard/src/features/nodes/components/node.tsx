@@ -48,14 +48,17 @@ export default function Node({
   const { latestVersion: latestXrayVersion, hasUpdate: hasXrayUpdate } = useXrayReleases()
   const { latestVersion: latestNodeVersion, hasUpdate: hasNodeUpdate } = useNodeReleases()
   const coreVersion = node.core_version ?? node.xray_version
-  const resolvedCore = coresData?.cores?.find(c => c.id === node.core_config_id)
+  const boundCoreIds = node.core_config_ids?.length ? node.core_config_ids : node.core_config_id ? [node.core_config_id] : []
+  const resolvedCores = (coresData?.cores || []).filter(c => boundCoreIds.includes(c.id))
+  const resolvedCore = resolvedCores[0] || coresData?.cores?.find(c => c.id === node.core_config_id)
+  const resolvedCoreTypes = resolvedCores.map(c => c.type)
   const resolvedCoreType = resolvedCore?.type ?? null
   const resolvedCoreTypeString = String(resolvedCoreType ?? 'xray')
-  const isWireGuardCore = resolvedCoreType === 'wg'
-  const isXrayBackend = resolvedCoreType !== 'wg'
+  const isWireGuardCore = resolvedCoreTypes.includes('wg') || resolvedCoreType === 'wg'
+  const isXrayBackend = resolvedCoreTypes.includes('xray') || (!resolvedCoreTypes.length && resolvedCoreType !== 'wg')
   const coreUpdateVersion = node.xray_version ?? coreVersion
   const hasCoreUpdate = !!(isXrayBackend && coreUpdateVersion && latestXrayVersion && hasXrayUpdate(coreUpdateVersion))
-  const hasNodeVersionUpdate = !isWireGuardCore && !!latestNodeVersion && !!node.node_version && hasNodeUpdate(node.node_version)
+  const hasNodeVersionUpdate = !!latestNodeVersion && !!node.node_version && hasNodeUpdate(node.node_version)
 
   const getStatusConfig = () => {
     switch (node.status) {
@@ -113,8 +116,6 @@ export default function Node({
     setShowUpdateCoreDialog(true)
   }
 
-  const TypeIcon = resolvedCoreTypeString === 'ikev2' ? ShieldCheck : resolvedCoreTypeString === 'l2tp' ? Network : null
-
   return (
     <TooltipProvider>
       <Card
@@ -138,12 +139,18 @@ export default function Node({
                     <span className={cn('h-1.5 w-1.5 rounded-full', statusConfig.dot)} />
                     {statusConfig.label}
                   </Badge>
-                  <Badge variant="outline" className="h-6 gap-1 px-2 text-[10px] font-medium tracking-wide uppercase">
-                    {TypeIcon ? <TypeIcon className="h-3 w-3" /> : null}
-                    {t(`coreTypes.${resolvedCoreTypeString}`, {
-                      defaultValue: resolvedCoreTypeString === 'wg' ? 'WireGuard' : resolvedCoreTypeString === 'xray' ? 'Xray' : resolvedCoreTypeString.toUpperCase(),
-                    })}
-                  </Badge>
+                  {(resolvedCores.length ? resolvedCores : [{ id: 0, type: resolvedCoreTypeString }]).map(core => {
+                    const typeStr = String(core.type ?? 'xray')
+                    const Icon = typeStr === 'ikev2' ? ShieldCheck : typeStr === 'l2tp' ? Network : null
+                    return (
+                      <Badge key={`${core.id}-${typeStr}`} variant="outline" className="h-6 gap-1 px-2 text-[10px] font-medium tracking-wide uppercase">
+                        {Icon ? <Icon className="h-3 w-3" /> : null}
+                        {t(`coreTypes.${typeStr}`, {
+                          defaultValue: typeStr === 'wg' ? 'WireGuard' : typeStr === 'xray' ? 'Xray' : typeStr.toUpperCase(),
+                        })}
+                      </Badge>
+                    )
+                  })}
                   {node.status === 'error' && node.message ? (
                     <Tooltip>
                       <TooltipTrigger asChild>

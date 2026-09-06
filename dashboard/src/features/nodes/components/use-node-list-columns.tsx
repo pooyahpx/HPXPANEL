@@ -82,23 +82,35 @@ export const useNodeListColumns = ({
         width: '2fr',
         cell: node => {
           const coreVersion = node.core_version ?? node.xray_version
-          const resolvedCoreType = coresData?.cores?.find(c => c.id === node.core_config_id)?.type ?? null
+          const boundIds = node.core_config_ids?.length ? node.core_config_ids : node.core_config_id ? [node.core_config_id] : []
+          const boundCores = (coresData?.cores || []).filter(c => boundIds.includes(c.id))
+          const resolvedCoreType = boundCores[0]?.type ?? coresData?.cores?.find(c => c.id === node.core_config_id)?.type ?? null
           const resolvedCoreTypeString = String(resolvedCoreType ?? '')
-          const isWireGuardCore = resolvedCoreType === 'wg'
-          const isXrayBackend = resolvedCoreType !== 'wg'
+          const isWireGuardCore = boundCores.some(c => c.type === 'wg') || resolvedCoreType === 'wg'
+          const isXrayBackend = boundCores.some(c => c.type === 'xray') || (!boundCores.length && resolvedCoreType !== 'wg')
           const coreUpdateVersion = node.xray_version ?? coreVersion
           const hasCoreUpdate = !!(isXrayBackend && coreUpdateVersion && latestXrayVersion && hasXrayUpdate(coreUpdateVersion))
-          const hasNodeVersionUpdate = !isWireGuardCore && !!latestNodeVersion && !!node.node_version && hasNodeUpdate(node.node_version)
+          const hasNodeVersionUpdate = !!latestNodeVersion && !!node.node_version && hasNodeUpdate(node.node_version)
 
-          if (!coreVersion && !node.node_version) return null
+          if (!coreVersion && !node.node_version && !boundCores.length) return null
 
           return (
             <TooltipProvider>
               <div className="flex flex-col gap-1 text-xs">
-                {(resolvedCoreTypeString === 'ikev2' || resolvedCoreTypeString === 'l2tp') && (
-                  <Badge variant="outline" className="h-5 w-fit px-1.5 text-[10px]">
-                    {t(`coreTypes.${resolvedCoreTypeString}`)}
-                  </Badge>
+                {boundCores.length > 0 ? (
+                  <div className="flex flex-wrap gap-1">
+                    {boundCores.map(core => (
+                      <Badge key={core.id} variant="outline" className="h-5 w-fit px-1.5 text-[10px] uppercase">
+                        {String(core.type)}
+                      </Badge>
+                    ))}
+                  </div>
+                ) : (
+                  (resolvedCoreTypeString === 'ikev2' || resolvedCoreTypeString === 'l2tp') && (
+                    <Badge variant="outline" className="h-5 w-fit px-1.5 text-[10px]">
+                      {t(`coreTypes.${resolvedCoreTypeString}`)}
+                    </Badge>
+                  )
                 )}
                 {coreVersion && (
                   <Tooltip>

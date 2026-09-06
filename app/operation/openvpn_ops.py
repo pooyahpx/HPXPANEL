@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.openvpn import OpenVPNConfig
 from app.db.crud.core import get_core_config_by_id
 from app.db.crud.group import create_group
-from app.db.crud.node import get_node_by_id
+from app.db.crud.node import get_node_by_id, node_bound_core_ids
 from app.db.models import CoreType
 from app.models.admin import AdminDetails
 from app.models.group import GroupCreate
@@ -19,7 +19,6 @@ from app.operation.host import HostOperation
 from app.operation.user import UserOperation
 from app.services.openvpn.monitoring import build_node_openvpn_monitoring, build_openvpn_health
 from app.utils.openvpn_core import openvpn_pki_ready
-
 
 def _slug_username(value: str) -> str:
     cleaned = re.sub(r"[^a-zA-Z0-9_]+", "_", value.strip().lower()).strip("_")
@@ -63,7 +62,10 @@ class OpenVPNOperation(BaseOperation):
         db_node = await get_node_by_id(db, payload.node_id)
         if db_node is None:
             await self.raise_error(message="Node not found", code=404)
-        if db_node.core_config_id != payload.core_id:
+        bound_ids = set(node_bound_core_ids(db_node) or [])
+        if db_node.core_config_id:
+            bound_ids.add(db_node.core_config_id)
+        if payload.core_id not in bound_ids:
             await self.raise_error(message="Node must use the selected OpenVPN core", code=400)
 
         ovpn = OpenVPNConfig(core.config, skip_validation=True)

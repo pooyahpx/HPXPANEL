@@ -47,7 +47,8 @@ class Node(BaseModel):
     connection_type: NodeConnectionType
     server_ca: str
     keep_alive: int
-    core_config_id: int
+    core_config_id: int | None = None
+    core_config_ids: list[int] | None = None
     api_key: str
     data_limit: int = Field(default=0)
     data_limit_reset_strategy: DataLimitResetStrategy = Field(default=DataLimitResetStrategy.no_reset)
@@ -69,6 +70,7 @@ class NodeCreate(Node):
                 "connection_type": "grpc",
                 "keep_alive": 60,
                 "core_config_id": 1,
+                "core_config_ids": [1],
                 "api_key": "valid uuid",
             }
         }
@@ -136,6 +138,41 @@ class NodeCreate(Node):
             raise ValueError("Invalid UUID format for api_key")
         return v
 
+    @field_validator("core_config_ids")
+    @classmethod
+    def validate_core_config_ids(cls, v: list[int] | None) -> list[int] | None:
+        if v is None:
+            return v
+        if not v:
+            raise ValueError("core_config_ids must contain at least one core")
+        if len(v) != len(set(v)):
+            raise ValueError("core_config_ids must not contain duplicates")
+        if any(not isinstance(i, int) or i < 1 for i in v):
+            raise ValueError("core_config_ids must be positive integers")
+        return v
+
+    @model_validator(mode="after")
+    def sync_core_fields(self):
+        """Keep primary FK and ids list aligned when either is provided."""
+        ids = list(self.core_config_ids or [])
+        if ids:
+            object.__setattr__(self, "core_config_id", ids[0])
+            return self
+        if self.core_config_id:
+            object.__setattr__(self, "core_config_ids", [self.core_config_id])
+        return self
+
+    @model_validator(mode="after")
+    def require_at_least_one_core(self):
+        ids = list(self.core_config_ids or [])
+        if not ids and self.core_config_id:
+            ids = [self.core_config_id]
+        if not ids:
+            raise ValueError("At least one core is required (core_config_id or core_config_ids)")
+        object.__setattr__(self, "core_config_ids", ids)
+        object.__setattr__(self, "core_config_id", ids[0])
+        return self
+
     @model_validator(mode="after")
     def validate_reset_time_for_strategy(self):
         if self.data_limit_reset_strategy is None:
@@ -168,7 +205,7 @@ class NodeCreate(Node):
         return ProxyValidator.validate_proxy_url(v)
 
 
-class NodeModify(NodeCreate):
+class NodeModify(BaseModel):
     name: str | None = Field(default=None)
     address: str | None = Field(default=None)
     port: int | None = Field(default=None)
@@ -178,12 +215,15 @@ class NodeModify(NodeCreate):
     connection_type: NodeConnectionType | None = Field(default=None)
     keep_alive: int | None = Field(default=None)
     core_config_id: int | None = Field(default=None)
+    core_config_ids: list[int] | None = Field(default=None)
     api_key: str | None = Field(default=None)
     data_limit: int | None = None
     data_limit_reset_strategy: DataLimitResetStrategy | None = None
     reset_time: int | None = None
     default_timeout: int | None = Field(default=None, ge=3, le=60)
     internal_timeout: int | None = Field(default=None, ge=3, le=60)
+    api_port: int | None = Field(default=None)
+    proxy_url: str | None = Field(default=None, max_length=256)
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -197,16 +237,126 @@ class NodeModify(NodeCreate):
                 "server_ca": "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----",
                 "keep_alive": 60,
                 "core_config_id": 1,
+                "core_config_ids": [1],
                 "api_key": "valid uuid",
             }
         }
     )
+
+    @field_validator("address")
+    @classmethod
+    def validate_address(cls, v: str | None) -> str | None:
+        if v is None or not v:
+            return v
+        try:
+            ip_address(v)
+            return v
+        except ValueError:
+            if v.lower() == "localhost":
+                return v
+            if re.match(r"^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,14}$", v):
+                return v
+            raise ValueError("Invalid address format, must be a valid IPv4/IPv6 or domain")
+
+    @field_validator("port")
+    @classmethod
+    def validate_port(cls, v: int | None) -> int | None:
+        if v is None or not v:
+            return v
+        if not 1 <= v <= 65535:
+            raise ValueError("Port must be between 1 and 65535")
+        return v
+
+    @field_validator("server_ca")
+    @classmethod
+    def validate_certificate(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        v = v.strip()
+        if not re.search(CERT_PATTERN, v, re.DOTALL):
+            raise ValueError("Invalid certificate format - must contain PEM certificate blocks")
+        if re.search(KEY_PATTERN, v):
+            raise ValueError("Certificate contains private key material")
+        if len(v) > 2048:
+            raise ValueError("Certificate too large (max 2048 characters)")
+        try:
+            load_pem_x509_certificate(v.encode("utf-8"))
+        except Exception:
+            raise ValueError("Invalid certificate structure")
+        return v
+
+    @field_validator("api_key", mode="before")
+    @classmethod
+    def validate_api_key(cls, v) -> str | None:
+        if not v:
+            return v
+        try:
+            UUID(v)
+        except ValueError:
+            raise ValueError("Invalid UUID format for api_key")
+        return v
+
+    @field_validator("core_config_ids")
+    @classmethod
+    def validate_core_config_ids(cls, v: list[int] | None) -> list[int] | None:
+        if v is None:
+            return v
+        if not v:
+            raise ValueError("core_config_ids must contain at least one core")
+        if len(v) != len(set(v)):
+            raise ValueError("core_config_ids must not contain duplicates")
+        if any(not isinstance(i, int) or i < 1 for i in v):
+            raise ValueError("core_config_ids must be positive integers")
+        return v
+
+    @field_validator("proxy_url")
+    @classmethod
+    def validate_proxy_url(cls, v):
+        if v is None:
+            return v
+        return ProxyValidator.validate_proxy_url(v)
+
+    @model_validator(mode="after")
+    def sync_core_fields_on_modify(self):
+        ids_provided = "core_config_ids" in self.model_fields_set
+        id_provided = "core_config_id" in self.model_fields_set
+        if not ids_provided and not id_provided:
+            return self
+        ids = list(self.core_config_ids or [])
+        if not ids and self.core_config_id:
+            ids = [self.core_config_id]
+        if not ids:
+            raise ValueError("At least one core is required (core_config_id or core_config_ids)")
+        object.__setattr__(self, "core_config_ids", ids)
+        object.__setattr__(self, "core_config_id", ids[0])
+        return self
+
+    @model_validator(mode="after")
+    def validate_reset_time_for_strategy(self):
+        if self.data_limit_reset_strategy is None or self.reset_time is None:
+            return self
+        if self.data_limit_reset_strategy == DataLimitResetStrategy.no_reset or self.reset_time == -1:
+            return self
+        max_values = {
+            DataLimitResetStrategy.day: SECONDS_IN_DAY,
+            DataLimitResetStrategy.week: SECONDS_IN_WEEK,
+            DataLimitResetStrategy.month: SECONDS_IN_MONTH,
+            DataLimitResetStrategy.year: SECONDS_IN_YEAR,
+        }
+        max_value = max_values.get(self.data_limit_reset_strategy)
+        if max_value and self.reset_time >= max_value:
+            raise ValueError(
+                f"reset_time must be less than {max_value} for {self.data_limit_reset_strategy.value} strategy, "
+                f"got {self.reset_time}"
+            )
+        return self
 
 
 class NodeResponse(Node):
     id: int
     api_key: str | None
     core_config_id: int | None
+    core_config_ids: list[int] = Field(default_factory=list)
     xray_version: str | None
     node_version: str | None
     status: NodeStatus
@@ -223,7 +373,13 @@ class NodeResponse(Node):
     def core_version(self) -> str | None:
         return self.xray_version
 
-
+    @model_validator(mode="after")
+    def fill_core_config_ids(self):
+        if self.core_config_ids:
+            return self
+        if self.core_config_id:
+            object.__setattr__(self, "core_config_ids", [self.core_config_id])
+        return self
 class NodesResponse(BaseModel):
     nodes: list[NodeResponse]
     total: int

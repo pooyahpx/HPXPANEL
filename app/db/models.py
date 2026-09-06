@@ -655,6 +655,14 @@ class Node(Base, CreatedAtUTCMixin):
         back_populates="node", cascade="all, delete-orphan", init=False
     )
     core_config: Mapped[CoreConfig | None] = relationship("CoreConfig", init=False)
+    core_bindings: Mapped[list["NodeCoreBinding"]] = relationship(
+        "NodeCoreBinding",
+        back_populates="node",
+        cascade="all, delete-orphan",
+        order_by="NodeCoreBinding.sort_order",
+        init=False,
+        default_factory=list,
+    )
     stats: Mapped[list[NodeStat]] = relationship(back_populates="node", cascade="all, delete-orphan", init=False)
     status: Mapped[NodeStatus] = mapped_column(SQLEnum(NodeStatus), default=NodeStatus.connecting)
     last_status_change: Mapped[dt | None] = mapped_column(DateTime(timezone=True), init=False)
@@ -729,6 +737,31 @@ class Node(Base, CreatedAtUTCMixin):
     @used_traffic.expression
     def used_traffic(cls):
         return cls.downlink + cls.uplink
+
+    @property
+    def core_config_ids(self) -> list[int]:
+        """Ordered core IDs bound to this node (falls back to legacy primary FK)."""
+        bindings = self.__dict__.get("core_bindings")
+        if bindings:
+            ordered = sorted(bindings, key=lambda b: (b.sort_order, b.id or 0))
+            return [b.core_config_id for b in ordered]
+        if self.core_config_id:
+            return [self.core_config_id]
+        return []
+
+
+class NodeCoreBinding(Base, IdMixin):
+    """Many-to-many: a panel node may run multiple cores on one hpx-node agent."""
+
+    __tablename__ = "node_core_bindings"
+    __table_args__ = (UniqueConstraint("node_id", "core_config_id", name="uq_node_core_bindings_node_core"),)
+
+    node_id: Mapped[int] = fk_id_column("nodes.id", ondelete="CASCADE")
+    core_config_id: Mapped[int] = fk_id_column("core_configs.id", ondelete="CASCADE")
+    sort_order: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    is_primary: Mapped[bool] = mapped_column(default=False, server_default="0")
+    node: Mapped[Node] = relationship("Node", back_populates="core_bindings", init=False)
+    core_config: Mapped["CoreConfig"] = relationship("CoreConfig", init=False)
 
 
 class NodeUserUsage(Base, IdMixin):

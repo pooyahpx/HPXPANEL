@@ -2247,6 +2247,8 @@ export interface NodeResponse {
   server_ca: string
   keep_alive: number
   core_config_id: NodeResponseCoreConfigId
+  /** Bound cores in start order (primary first). */
+  core_config_ids?: number[]
   api_key: NodeResponseApiKey
   data_limit?: number
   data_limit_reset_strategy?: DataLimitResetStrategy
@@ -2351,6 +2353,7 @@ export interface NodeModify {
   server_ca?: NodeModifyServerCa
   keep_alive?: NodeModifyKeepAlive
   core_config_id?: NodeModifyCoreConfigId
+  core_config_ids?: number[]
   api_key?: NodeModifyApiKey
   data_limit?: NodeModifyDataLimit
   data_limit_reset_strategy?: NodeModifyDataLimitResetStrategy
@@ -2377,7 +2380,8 @@ export interface NodeCreate {
   connection_type: NodeConnectionType
   server_ca: string
   keep_alive: number
-  core_config_id: number
+  core_config_id?: number
+  core_config_ids?: number[]
   api_key: string
   data_limit?: number
   data_limit_reset_strategy?: DataLimitResetStrategy

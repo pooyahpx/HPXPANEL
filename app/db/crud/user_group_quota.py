@@ -65,15 +65,32 @@ async def get_node_inbound_tags(db: AsyncSession, node_ids: list[int]) -> dict[i
     if not node_ids:
         return {}
     from app.core.manager import core_manager
+    from app.db.models import NodeCoreBinding
 
     stmt = select(Node.id, Node.core_config_id).where(Node.id.in_(node_ids))
     rows = (await db.execute(stmt)).all()
-    core_ids = {core_id for _, core_id in rows if core_id is not None}
+    binding_rows = (
+        await db.execute(select(NodeCoreBinding.node_id, NodeCoreBinding.core_config_id).where(NodeCoreBinding.node_id.in_(node_ids)))
+    ).all()
+
+    node_to_cores: dict[int, set[int]] = {node_id: set() for node_id, _ in rows}
+    for node_id, core_id in rows:
+        if core_id is not None:
+            node_to_cores.setdefault(node_id, set()).add(core_id)
+    for node_id, core_id in binding_rows:
+        node_to_cores.setdefault(node_id, set()).add(core_id)
+
+    core_ids = {core_id for cores in node_to_cores.values() for core_id in cores}
     cores = await core_manager.get_cores(core_ids | {1}) if core_ids else {}
     mapping: dict[int, set[str]] = {}
-    for node_id, core_id in rows:
-        core = cores.get(core_id) or cores.get(1)
-        mapping[node_id] = set(core.inbounds or []) if core else set()
+    for node_id, bound in node_to_cores.items():
+        tags: set[str] = set()
+        ids = bound or {1}
+        for core_id in ids:
+            core = cores.get(core_id) or cores.get(1)
+            if core:
+                tags.update(core.inbounds or [])
+        mapping[node_id] = tags
     return mapping
 
 

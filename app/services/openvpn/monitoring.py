@@ -86,8 +86,18 @@ async def build_node_openvpn_monitoring(db: AsyncSession, node_id: int) -> OpenV
     if db_node is None:
         raise ValueError("Node not found")
 
-    core = await get_core_config_by_id(db, db_node.core_config_id)
-    if core is None or core.type != CoreType.openvpn:
+    bound_ids = list(db_node.core_config_ids or [])
+    if not bound_ids and db_node.core_config_id:
+        bound_ids = [db_node.core_config_id]
+
+    core = None
+    for core_id in bound_ids:
+        candidate = await get_core_config_by_id(db, core_id)
+        if candidate is not None and candidate.type == CoreType.openvpn:
+            core = candidate
+            break
+
+    if core is None:
         return OpenVPNNodeMonitoringResponse(node_id=node_id, core_id=db_node.core_config_id)
 
     config = OpenVPNConfig(core.config, skip_validation=True)

@@ -1,7 +1,7 @@
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import CoreConfig, Node
+from app.db.models import CoreConfig, Node, NodeCoreBinding
 from app.models.core import (
     CoreCreate,
     CoreListQuery,
@@ -184,6 +184,7 @@ async def remove_cores(db: AsyncSession, core_ids: list[int]) -> None:
     if not core_ids:
         return
 
+    await db.execute(delete(NodeCoreBinding).where(NodeCoreBinding.core_config_id.in_(core_ids)))
     await db.execute(update(Node).where(Node.core_config_id.in_(core_ids)).values(core_config_id=None))
     await db.execute(delete(CoreConfig).where(CoreConfig.id.in_(core_ids)))
     await db.commit()

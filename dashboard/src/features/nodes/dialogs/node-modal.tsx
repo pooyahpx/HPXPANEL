@@ -5,6 +5,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Textarea } from '@/components/ui/textarea'
 import useDirDetection from '@/hooks/use-dir-detection'
 import useDynamicErrorHandler from '@/hooks/use-dynamic-errors.ts'
@@ -120,6 +121,7 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
         keep_alive: node.keep_alive,
         keep_alive_unit: 'seconds',
         api_key: (node.api_key as string) || '',
+        core_config_ids: node.core_config_ids?.length ? node.core_config_ids : node.core_config_id ? [node.core_config_id] : cores?.[0]?.id ? [cores[0].id] : [],
         core_config_id: node.core_config_id ?? cores?.[0]?.id,
         data_limit: dataLimitGB,
         data_limit_reset_strategy: node.data_limit_reset_strategy ?? DataLimitResetStrategy.no_reset,
@@ -176,6 +178,7 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
           keep_alive: nodeData.keep_alive,
           keep_alive_unit: 'seconds',
           api_key: (nodeData.api_key as string) || '',
+          core_config_ids: nodeData.core_config_ids?.length ? nodeData.core_config_ids : nodeData.core_config_id ? [nodeData.core_config_id] : cores?.[0]?.id ? [cores[0].id] : [],
           core_config_id: nodeData.core_config_id ?? cores?.[0]?.id,
           data_limit: dataLimitGB,
           data_limit_reset_strategy: nodeData.data_limit_reset_strategy ?? DataLimitResetStrategy.no_reset,
@@ -206,6 +209,7 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
               keep_alive: nodeData.keep_alive,
               keep_alive_unit: 'seconds',
               api_key: (nodeData.api_key as string) || '',
+              core_config_ids: nodeData.core_config_ids?.length ? nodeData.core_config_ids : nodeData.core_config_id ? [nodeData.core_config_id] : cores?.[0]?.id ? [cores[0].id] : [],
               core_config_id: nodeData.core_config_id ?? cores?.[0]?.id,
               data_limit: dataLimitGB,
               data_limit_reset_strategy: nodeData.data_limit_reset_strategy ?? DataLimitResetStrategy.no_reset,
@@ -237,6 +241,7 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
         keep_alive: 60,
         keep_alive_unit: 'seconds',
         api_key: '',
+        core_config_ids: cores?.[0]?.id ? [cores[0].id] : [],
         core_config_id: cores?.[0]?.id,
         data_limit: 0,
         data_limit_reset_strategy: DataLimitResetStrategy.no_reset,
@@ -250,8 +255,9 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
 
   useEffect(() => {
     if (isDialogOpen && cores?.[0]?.id) {
-      const currentValue = form.getValues('core_config_id')
-      if (!currentValue || currentValue < 1) {
+      const currentIds = form.getValues('core_config_ids') || []
+      if (!currentIds.length) {
+        form.setValue('core_config_ids', [cores[0].id], { shouldValidate: true })
         form.setValue('core_config_id', cores[0].id, { shouldValidate: true })
       }
     }
@@ -358,7 +364,7 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
       onOpenChange(false)
       form.reset()
     } catch (error: any) {
-      const fields = ['name', 'address', 'port', 'core_config_id', 'api_key', 'keep_alive_unit', 'keep_alive', 'server_ca', 'connection_type', 'proxy_url', '']
+      const fields = ['name', 'address', 'port', 'core_config_id', 'core_config_ids', 'api_key', 'keep_alive_unit', 'keep_alive', 'server_ca', 'connection_type', 'proxy_url', '']
       handleError({ error, fields, form, contextKey: 'nodes' })
     }
   }
@@ -573,36 +579,73 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
 
                   <FormField
                     control={form.control}
-                    name="core_config_id"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{t('nodeModal.coreConfig')}</FormLabel>
-                        <Select onValueChange={value => field.onChange(parseInt(value))} value={field.value ? field.value.toString() : t('nodeModal.selectCoreConfig')} disabled={isLoadingCores}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder={isLoadingCores ? t('loading', { defaultValue: 'Loading...' }) : t('nodeModal.selectCoreConfig')} />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
+                    name="core_config_ids"
+                    render={({ field }) => {
+                      const selected = field.value || []
+                      const selectedCores = (cores || []).filter(c => selected.includes(c.id))
+                      const hasXray = selectedCores.some(c => c.type === 'xray')
+                      const toggleCore = (coreId: number, coreType: string | undefined, checked: boolean) => {
+                        if (checked) {
+                          if (coreType === 'xray' && hasXray && !selected.includes(coreId)) {
+                            toast.error(t('nodeModal.oneXrayOnly', { defaultValue: 'Only one Xray core can be bound to a node' }))
+                            return
+                          }
+                          const next = [...selected, coreId]
+                          field.onChange(next)
+                          form.setValue('core_config_id', next[0], { shouldValidate: true })
+                          return
+                        }
+                        const next = selected.filter(id => id !== coreId)
+                        if (!next.length) {
+                          toast.error(t('nodeModal.keepOneCore', { defaultValue: 'Keep at least one core selected' }))
+                          return
+                        }
+                        field.onChange(next)
+                        form.setValue('core_config_id', next[0], { shouldValidate: true })
+                      }
+                      return (
+                        <FormItem>
+                          <FormLabel>{t('nodeModal.coreConfigs', { defaultValue: 'Cores' })}</FormLabel>
+                          <p className="text-muted-foreground text-xs">{t('nodeModal.multiCoreHint', { defaultValue: 'Bind multiple cores (e.g. Xray + WireGuard). First selected is primary.' })}</p>
+                          <div className="border-border mt-2 max-h-48 space-y-2 overflow-y-auto border p-3">
                             {isLoadingCores ? (
-                              <SelectItem value="__loading_cores__" disabled>
-                                <span className="flex items-center gap-2">
-                                  <Loader2 className="h-3 w-3 animate-spin" />
-                                  {t('loading', { defaultValue: 'Loading...' })}
-                                </span>
-                              </SelectItem>
+                              <div className="text-muted-foreground flex items-center gap-2 text-sm">
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                {t('loading', { defaultValue: 'Loading...' })}
+                              </div>
                             ) : (
-                              cores?.map((core: CoreSimple) => (
-                                <SelectItem key={core.id} value={core.id.toString()}>
-                                  {core.name}
-                                </SelectItem>
-                              ))
+                              cores?.map((core: CoreSimple) => {
+                                const checked = selected.includes(core.id)
+                                const disableXray = core.type === 'xray' && hasXray && !checked
+                                return (
+                                  <label
+                                    key={core.id}
+                                    className={cn(
+                                      'hover:bg-muted/40 flex cursor-pointer items-center gap-3 rounded-md px-2 py-2',
+                                      disableXray && 'opacity-50',
+                                    )}
+                                  >
+                                    <Checkbox
+                                      checked={checked}
+                                      disabled={disableXray}
+                                      onCheckedChange={value => toggleCore(core.id, core.type, !!value)}
+                                    />
+                                    <span className="min-w-0 flex-1 truncate text-sm font-medium">{core.name}</span>
+                                    <span className="border-primary/30 bg-primary/10 text-primary shrink-0 border px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase">
+                                      {String(core.type || 'core')}
+                                    </span>
+                                    {checked && selected[0] === core.id ? (
+                                      <span className="text-muted-foreground font-mono text-[9px] font-bold tracking-wide uppercase">Primary</span>
+                                    ) : null}
+                                  </label>
+                                )
+                              })
                             )}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
+                          </div>
+                          <FormMessage />
+                        </FormItem>
+                      )
+                    }}
                   />
 
                   <FormField

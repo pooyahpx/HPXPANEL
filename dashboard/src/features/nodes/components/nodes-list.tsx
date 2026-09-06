@@ -251,6 +251,7 @@ export default function NodesList() {
         server_ca: node.server_ca,
         keep_alive: node.keep_alive,
         core_config_id: toOptional(node.core_config_id),
+        core_config_ids: node.core_config_ids?.length ? node.core_config_ids : node.core_config_id ? [node.core_config_id] : undefined,
         api_key: toOptional(node.api_key),
         data_limit: toOptional(node.data_limit),
         data_limit_reset_strategy: toOptional(node.data_limit_reset_strategy),

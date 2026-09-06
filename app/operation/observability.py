@@ -273,11 +273,14 @@ class ObservabilityOperation(BaseOperation):
         core_protocols_by_id: dict[int, set[str]],
         latency_map: dict[str, int],
     ) -> list[ProtocolHealth]:
-        labels = sorted(core_protocols_by_id.get(node.core_config_id or -1, set()))
+        labels: set[str] = set()
+        for core_id in node.core_config_ids or ([node.core_config_id] if node.core_config_id else []):
+            labels.update(core_protocols_by_id.get(core_id or -1, set()))
         if not labels:
-            labels = ["xray"]
+            labels = {"xray"}
+        ordered = sorted(labels)
         protocols: list[ProtocolHealth] = []
-        for label in labels:
+        for label in ordered:
             delay = latency_map.get(label) or (min(latency_map.values()) if latency_map else None)
             protocols.append(
                 ProtocolHealth(

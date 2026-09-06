@@ -10,6 +10,7 @@ from app.db.compiles_types import DateDiff
 from app.db.models import (
     DataLimitResetStrategy,
     Node,
+    NodeCoreBinding,
     NodeStat,
     NodeStatus,
     NodeUsage,
@@ -51,6 +52,45 @@ async def load_node_attrs(node: Node):
         await node.awaitable_attrs.usage_logs
     except AttributeError:
         pass
+    try:
+        await node.awaitable_attrs.core_bindings
+    except AttributeError:
+        pass
+
+
+def node_bound_core_ids(node: Node) -> list[int]:
+    """Ordered core IDs for a node (bindings first, else legacy FK)."""
+    return list(node.core_config_ids)
+
+
+async def replace_node_core_bindings(db: AsyncSession, db_node: Node, core_ids: list[int]) -> None:
+    """Rewrite junction rows and sync denormalized primary FK."""
+    if not core_ids:
+        raise ValueError("At least one core_config_id is required")
+
+    await db.execute(delete(NodeCoreBinding).where(NodeCoreBinding.node_id == db_node.id))
+    for index, core_id in enumerate(core_ids):
+        db.add(
+            NodeCoreBinding(
+                node_id=db_node.id,
+                core_config_id=core_id,
+                sort_order=index,
+                is_primary=(index == 0),
+            )
+        )
+    db_node.core_config_id = core_ids[0]
+    await db.flush()
+
+
+def _core_filter_clause(core_id: int):
+    bound = select(NodeCoreBinding.node_id).where(NodeCoreBinding.core_config_id == core_id)
+    if core_id == 1:
+        return or_(
+            Node.core_config_id == core_id,
+            Node.core_config_id.is_(None),
+            Node.id.in_(bound),
+        )
+    return or_(Node.core_config_id == core_id, Node.id.in_(bound))
 
 
 async def get_node(db: AsyncSession, name: str) -> Node | None:
@@ -116,10 +156,7 @@ async def get_nodes(
         stmt = stmt.where(Node.status.not_in([NodeStatus.disabled, NodeStatus.limited]))
 
     if params.core_id:
-        if params.core_id == 1:
-            stmt = stmt.where(or_(Node.core_config_id == params.core_id, Node.core_config_id.is_(None)))
-        else:
-            stmt = stmt.where(Node.core_config_id == params.core_id)
+        stmt = stmt.where(_core_filter_clause(params.core_id))
 
     if params.ids:
         stmt = stmt.where(Node.id.in_(params.ids))
@@ -143,8 +180,8 @@ async def get_nodes(
     # Order by created_at and id for consistent results
     stmt = stmt.order_by(Node.created_at.asc(), Node.id.asc())
 
-    # Eagerly load usage_logs to avoid N+1 queries (one extra SELECT per node)
-    stmt = stmt.options(selectinload(Node.usage_logs))
+    # Eagerly load usage_logs + core bindings to avoid N+1 queries
+    stmt = stmt.options(selectinload(Node.usage_logs), selectinload(Node.core_bindings))
 
     db_nodes = (await db.execute(stmt)).unique().scalars().all()
 
@@ -397,9 +434,17 @@ async def create_node(db: AsyncSession, node: NodeCreate) -> Node:
     Returns:
         Node: The newly created Node object.
     """
-    db_node = Node(**node.model_dump())
+    core_ids = list(node.core_config_ids or [])
+    if not core_ids and node.core_config_id:
+        core_ids = [node.core_config_id]
+
+    payload = node.model_dump(exclude={"core_config_ids"})
+    payload["core_config_id"] = core_ids[0]
+    db_node = Node(**payload)
 
     db.add(db_node)
+    await db.flush()
+    await replace_node_core_bindings(db, db_node, core_ids)
     await db.commit()
     await db.refresh(db_node)
     await load_node_attrs(db_node)
@@ -417,6 +462,7 @@ async def remove_node(db: AsyncSession, db_node: Node) -> None:
     node_id = db_node.id
 
     # Remove dependent rows explicitly to avoid ORM cascading overhead on large tables.
+    await db.execute(delete(NodeCoreBinding).where(NodeCoreBinding.node_id == node_id))
     await db.execute(delete(NodeUserUsage).where(NodeUserUsage.node_id == node_id))
     await db.execute(delete(NodeUsage).where(NodeUsage.node_id == node_id))
     await db.execute(delete(NodeUsageResetLogs).where(NodeUsageResetLogs.node_id == node_id))
@@ -439,12 +485,23 @@ async def modify_node(db: AsyncSession, db_node: Node, modify: NodeModify) -> No
         Node: The modified Node object.
     """
 
-    node_data = modify.model_dump(exclude_none=True)
+    node_data = modify.model_dump(exclude_none=True, exclude={"core_config_ids"})
     if "proxy_url" in modify.model_fields_set and modify.proxy_url is None:
         node_data["proxy_url"] = None
 
+    core_ids: list[int] | None = None
+    if "core_config_ids" in modify.model_fields_set or "core_config_id" in modify.model_fields_set:
+        core_ids = list(modify.core_config_ids or [])
+        if not core_ids and modify.core_config_id:
+            core_ids = [modify.core_config_id]
+        if core_ids:
+            node_data["core_config_id"] = core_ids[0]
+
     for key, value in node_data.items():
         setattr(db_node, key, value)
+
+    if core_ids is not None:
+        await replace_node_core_bindings(db, db_node, core_ids)
 
     db_node.xray_version = None
     db_node.message = None
@@ -819,6 +876,7 @@ async def remove_nodes(db: AsyncSession, node_ids: list[int]) -> None:
     if not node_ids:
         return
 
+    await db.execute(delete(NodeCoreBinding).where(NodeCoreBinding.node_id.in_(node_ids)))
     await db.execute(delete(NodeUserUsage).where(NodeUserUsage.node_id.in_(node_ids)))
     await db.execute(delete(NodeUsage).where(NodeUsage.node_id.in_(node_ids)))
     await db.execute(delete(NodeUsageResetLogs).where(NodeUsageResetLogs.node_id.in_(node_ids)))

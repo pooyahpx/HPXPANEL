@@ -20,13 +20,14 @@ from app.db.crud.node import (
     get_nodes_simple,
     get_nodes_usage,
     modify_node,
+    node_bound_core_ids,
     remove_node,
     remove_nodes,
     reset_node_usage,
     update_node_status,
 )
 from app.db.crud.user import get_user_by_id, get_user_count_metric_stats
-from app.db.models import Node, NodeStatus
+from app.db.models import CoreType as DBCoreType, Node, NodeStatus
 from app.models.admin import AdminDetails
 from app.models.core import CoreType
 from app.models.node import (
@@ -244,76 +245,116 @@ class NodeOperation(BaseOperation):
         return cores_by_id, users_by_core
 
     @staticmethod
+    async def _union_users_for_cores(db: AsyncSession, cores: list) -> list:
+        """One SyncUsers list covering every bound core (agent fans out to all backends)."""
+        tags: set[str] = set()
+        protocols = set()
+        for core in cores:
+            if core is None:
+                continue
+            tags.update(core.inbounds or [])
+            protocols.update(core.protocols or [])
+        return await core_users(
+            db=db,
+            inbound_tags=tags,
+            allowed_protocols=frozenset(protocols) if protocols else None,
+        )
+
+    async def _validate_node_core_ids(self, db: AsyncSession, core_ids: list[int]) -> None:
+        if not core_ids:
+            await self.raise_error(message="At least one core is required", code=400)
+        if len(core_ids) != len(set(core_ids)):
+            await self.raise_error(message="Duplicate core IDs are not allowed", code=400)
+
+        xray_count = 0
+        for core_id in core_ids:
+            db_core = await self.get_validated_core_config(db, core_id)
+            if db_core.type == DBCoreType.xray:
+                xray_count += 1
+        if xray_count > 1:
+            await self.raise_error(
+                message="A node can bind at most one Xray core (hpx-node allows a single Xray instance)",
+                code=400,
+            )
+
+    @staticmethod
     async def connect_node(db_node: Node, core, users: list) -> dict | None:
+        """Back-compat: start a single core on the node."""
+        return await NodeOperation.connect_node_multi(db_node, [(core, users)])
+
+    @staticmethod
+    async def connect_node_multi(db_node: Node, cores_with_users: list[tuple[object | None, list]]) -> dict | None:
         """
-        Connect to a node and return status result (does NOT update database).
+        Start every bound core on the same agent client (additive Starts on hpx-node).
 
-        Args:
-            db_node (Node): Node object from database.
-            core: Pre-fetched core config for this node.
-            users (list): Pre-fetched core users list.
-
-        Returns:
-            dict: {node_id, status, message, xray_version, node_version, old_status}
-            None: if connection should be skipped
+        Returns status result dict (does NOT update database).
         """
         pg_node: PasarGuardNode | None = await node_manager.get_node(db_node.id)
         if pg_node is None:
             return None
-        if core is None:
+
+        pairs = [(core, users) for core, users in cores_with_users if core is not None]
+        if not pairs:
             return None
 
         old_status = db_node.status
-        logger.info(f'Connecting to "{db_node.name}" node')
-        try:
-            type = _backend_type_for_core(core.type)
-            start_kwargs = {
-                "config": core.to_str(),
-                "backend_type": type,
-                "users": users,
-                "keep_alive": db_node.keep_alive,
-            }
-            if core.type == CoreType.xray:
-                start_kwargs["exclude_inbounds"] = core.exclude_inbound_tags
+        logger.info(f'Connecting to "{db_node.name}" node ({len(pairs)} core(s))')
 
-            info = await pg_node.start(**start_kwargs)
-            logger.info(f'Connected to "{db_node.name}" node v{info.node_version}, core run on v{info.core_version}')
+        last_info = None
+        errors: list[str] = []
+        primary_core_version = ""
 
-            return {
-                "node_id": db_node.id,
-                "status": NodeStatus.connected,
-                "message": "",
-                "xray_version": info.core_version,
-                "node_version": info.node_version,
-                "old_status": old_status,
-            }
-        except RuntimeError as e:
-            detail = str(e)
-            logger.error(f"Failed to connect node {db_node.name} with id {db_node.id}, Error: {detail}")
+        for index, (core, users) in enumerate(pairs):
+            try:
+                backend_type = _backend_type_for_core(core.type)
+                start_kwargs = {
+                    "config": core.to_str(),
+                    "backend_type": backend_type,
+                    "users": users,
+                    "keep_alive": db_node.keep_alive,
+                }
+                if core.type == CoreType.xray or core.type == DBCoreType.xray:
+                    start_kwargs["exclude_inbounds"] = core.exclude_inbound_tags
+
+                info = await pg_node.start(**start_kwargs)
+                last_info = info
+                if index == 0:
+                    primary_core_version = info.core_version or ""
+                logger.info(
+                    f'Connected core {getattr(core, "type", "?")} on "{db_node.name}" '
+                    f"node v{info.node_version}, core v{info.core_version}"
+                )
+            except RuntimeError as e:
+                errors.append(str(e))
+                logger.error(f'Failed core start on "{db_node.name}": {e}')
+            except NodeAPIError as e:
+                if e.code == -4:
+                    return None
+                detail = e.detail[:1020] + "..." if len(e.detail) > 1024 else e.detail
+                errors.append(detail)
+                logger.error(f'Failed core start on "{db_node.name}": {detail}')
+
+        if errors:
+            message = " | ".join(errors)
+            if len(message) > 1020:
+                message = message[:1020] + "..."
             return {
                 "node_id": db_node.id,
                 "status": NodeStatus.error,
-                "message": detail,
-                "xray_version": "",
-                "node_version": "",
+                "message": message,
+                "xray_version": primary_core_version,
+                "node_version": getattr(last_info, "node_version", "") or "",
                 "old_status": old_status,
             }
-        except NodeAPIError as e:
-            if e.code == -4:
-                return None
 
-            detail = e.detail[:1020] + "..." if len(e.detail) > 1024 else e.detail
-
-            logger.error(f"Failed to connect node {db_node.name} with id {db_node.id}, Error: {detail}")
-
-            return {
-                "node_id": db_node.id,
-                "status": NodeStatus.error,
-                "message": detail,
-                "xray_version": "",
-                "node_version": "",
-                "old_status": old_status,
-            }
+        return {
+            "node_id": db_node.id,
+            "status": NodeStatus.connected,
+            "message": "",
+            "xray_version": primary_core_version or (last_info.core_version if last_info else ""),
+            "node_version": last_info.node_version if last_info else "",
+            "old_status": old_status,
+        }
 
     async def _connect_single_node_background(self, node_id: int) -> None:
         try:
@@ -323,7 +364,10 @@ class NodeOperation(BaseOperation):
             logger.error(f"Background node connection failed for node {node_id}: {exc}")
 
     async def create_node(self, db: AsyncSession, new_node: NodeCreate, admin: AdminDetails) -> NodeResponse:
-        await self.get_validated_core_config(db, new_node.core_config_id)
+        core_ids = list(new_node.core_config_ids or [])
+        if not core_ids and new_node.core_config_id:
+            core_ids = [new_node.core_config_id]
+        await self._validate_node_core_ids(db, core_ids)
         try:
             db_node = await create_node(db, new_node)
         except IntegrityError:
@@ -344,8 +388,11 @@ class NodeOperation(BaseOperation):
 
     async def modify_node(self, db: AsyncSession, node_id: int, modified_node: NodeModify, admin: AdminDetails) -> Node:
         db_node = await self.get_validated_node(db=db, node_id=node_id)
-        if modified_node.core_config_id is not None:
-            await self.get_validated_core_config(db, modified_node.core_config_id)
+        if "core_config_ids" in modified_node.model_fields_set or "core_config_id" in modified_node.model_fields_set:
+            core_ids = list(modified_node.core_config_ids or [])
+            if not core_ids and modified_node.core_config_id:
+                core_ids = [modified_node.core_config_id]
+            await self._validate_node_core_ids(db, core_ids)
 
         try:
             db_node = await modify_node(db, db_node, modified_node)
@@ -600,7 +647,13 @@ class NodeOperation(BaseOperation):
         if not nodes:
             return
 
-        core_ids = {node.core_config_id or 1 for node in nodes}
+        core_ids: set[int] = set()
+        node_core_ids: dict[int, list[int]] = {}
+        for node in nodes:
+            ids = node_bound_core_ids(node) or [node.core_config_id or 1]
+            node_core_ids[node.id] = ids
+            core_ids.update(ids)
+
         cores_by_id, users_by_core = await self._get_core_users_map(db, core_ids)
 
         async def connect_single(node: Node) -> dict | None:
@@ -619,8 +672,10 @@ class NodeOperation(BaseOperation):
                     "old_status": node.status,
                 }
 
-            core_id = node.core_config_id or 1
-            return await self.connect_node(node, cores_by_id.get(core_id), users_by_core.get(core_id, []))
+            pairs = [
+                (cores_by_id.get(core_id), users_by_core.get(core_id, [])) for core_id in node_core_ids.get(node.id, [])
+            ]
+            return await self.connect_node_multi(node, pairs)
 
         results = await asyncio.gather(*[connect_single(node) for node in nodes])
 
@@ -672,10 +727,9 @@ class NodeOperation(BaseOperation):
         if db_node is None or db_node.status in (NodeStatus.disabled, NodeStatus.limited):
             return
 
-        core_id = db_node.core_config_id or 1
-        cores_by_id, users_by_core = await self._get_core_users_map(db, {core_id})
-        core = cores_by_id.get(core_id)
-        users = users_by_core.get(core_id, [])
+        core_ids = node_bound_core_ids(db_node) or [db_node.core_config_id or 1]
+        cores_by_id, users_by_core = await self._get_core_users_map(db, set(core_ids))
+        pairs = [(cores_by_id.get(core_id), users_by_core.get(core_id, [])) for core_id in core_ids]
 
         # Update node manager
         try:
@@ -698,8 +752,8 @@ class NodeOperation(BaseOperation):
             asyncio.create_task(notification.error_node(node_notif))
             return
 
-        # Connect the node
-        result = await NodeOperation.connect_node(db_node, core, users)
+        # Connect the node (multi-core Starts)
+        result = await NodeOperation.connect_node_multi(db_node, pairs)
 
         if not result:
             return
@@ -955,9 +1009,10 @@ class NodeOperation(BaseOperation):
             await self.raise_error(message="Node is not connected", code=409)
 
         try:
-            core_id = db_node.core_config_id or 1
-            _, users_by_core = await self._get_core_users_map(db, {core_id})
-            users = users_by_core.get(core_id, [])
+            core_ids = node_bound_core_ids(db_node) or [db_node.core_config_id or 1]
+            cores_by_id, _ = await self._get_core_users_map(db, set(core_ids))
+            cores = [cores_by_id.get(core_id) for core_id in core_ids]
+            users = await self._union_users_for_cores(db, cores)
             await pg_node.sync_users(users, flush_pending=flush_users)
         except NodeAPIError as e:
             await update_node_status(db=db, db_node=db_node, status=NodeStatus.error, message=e.detail)
@@ -1078,6 +1133,7 @@ class NodeOperation(BaseOperation):
             server_ca=node.server_ca,
             keep_alive=node.keep_alive,
             core_config_id=node.core_config_id,
+            core_config_ids=node_bound_core_ids(node) or ([node.core_config_id] if node.core_config_id else None),
             api_key=node.api_key,
             data_limit=node.data_limit,
             data_limit_reset_strategy=node.data_limit_reset_strategy,

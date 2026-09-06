@@ -264,8 +264,8 @@ export default function NodeActionsMenu({
     syncNodeSnapshot(node)
   }, [node])
 
-  const isWireGuard = coresData?.cores?.find(core => core.id === node.core_config_id)?.type === 'wg'
-  const isOpenVPN = coresData?.cores?.find(core => core.id === node.core_config_id)?.type === 'openvpn'
+  const isWireGuard = (coresData?.cores || []).some(core => (node.core_config_ids?.length ? node.core_config_ids : [node.core_config_id]).includes(core.id) && core.type === 'wg')
+  const isOpenVPN = (coresData?.cores || []).some(core => (node.core_config_ids?.length ? node.core_config_ids : [node.core_config_id]).includes(core.id) && core.type === 'openvpn')
   const hasRowActions = canUpdate || canDelete || canReconnect || canUpdateCore || canReadStats
   const primaryActionCount = canUpdate ? 2 : 0
   const secondaryActionCount = (canReadStats ? (isOpenVPN ? 2 : 1) : 0) + (canUpdate ? 2 : 0) + (canReconnect ? 1 : 0)

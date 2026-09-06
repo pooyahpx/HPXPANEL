@@ -756,8 +756,8 @@ class NodeCoreBinding(Base, IdMixin):
     __tablename__ = "node_core_bindings"
     __table_args__ = (UniqueConstraint("node_id", "core_config_id", name="uq_node_core_bindings_node_core"),)
 
-    node_id: Mapped[int] = fk_id_column("nodes.id", ondelete="CASCADE")
-    core_config_id: Mapped[int] = fk_id_column("core_configs.id", ondelete="CASCADE")
+    node_id: Mapped[int] = fk_id_column("nodes.id", ondelete="CASCADE", index=True)
+    core_config_id: Mapped[int] = fk_id_column("core_configs.id", ondelete="CASCADE", index=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     is_primary: Mapped[bool] = mapped_column(default=False, server_default="0")
     node: Mapped[Node] = relationship("Node", back_populates="core_bindings", init=False)

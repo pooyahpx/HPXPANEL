@@ -453,3 +453,37 @@ async def notify_owner_user_created(
         await bot.send_message(owner.telegram_id, text)
     except Exception:
         pass
+
+
+async def notify_admin_create_budget_charged(
+    *,
+    db: AsyncSession,
+    bot: Bot | None,
+    admin: AdminDetails,
+    username: str,
+    gb: int,
+    days: int,
+    amount: int,
+    remaining: int,
+    telegram_id: int | None = None,
+) -> None:
+    """Notify the creating admin that create-budget was deducted."""
+    if bot is None or amount <= 0:
+        return
+    chat_id = telegram_id or admin.telegram_id
+    if not chat_id:
+        return
+    lang = (await get_telegram_lang(db, chat_id)) or "fa"
+    text = rich(
+        lang,
+        "admin_create_budget_charged",
+        username=username,
+        gb=gb,
+        days=days,
+        amount=f"{amount:,}",
+        remaining=f"{remaining:,}",
+    )
+    try:
+        await bot.send_message(chat_id, text)
+    except Exception:
+        pass

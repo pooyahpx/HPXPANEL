@@ -109,7 +109,11 @@ from app.operation.permissions import (
     is_scope_all,
 )
 from app.settings import hwid_settings, subscription_settings
-from app.utils.admin_create_budget import cost_from_user_payload
+from app.utils.admin_create_budget import (
+    cost_from_user_payload,
+    data_limit_to_billable_gb,
+    expire_to_billable_days,
+)
 from app.utils.helpers import (
     fix_datetime_timezone,
     is_absolute_url,
@@ -210,6 +214,37 @@ async def _notify_owner_user_created(user, admin: AdminDetails) -> None:
             groups=groups,
             data_limit=user.data_limit,
             expire=user.expire,
+        )
+
+
+async def _notify_admin_create_budget_charged(
+    admin: AdminDetails,
+    *,
+    username: str,
+    gb: int,
+    days: int,
+    amount: int,
+    remaining: int,
+    telegram_id: int | None = None,
+) -> None:
+    from app.db import GetDB
+    from app.telegram import get_bot
+    from app.telegram.utils.shop_helpers import notify_admin_create_budget_charged
+
+    bot = get_bot()
+    if bot is None:
+        return
+    async with GetDB() as db:
+        await notify_admin_create_budget_charged(
+            db=db,
+            bot=bot,
+            admin=admin,
+            username=username,
+            gb=gb,
+            days=days,
+            amount=amount,
+            remaining=remaining,
+            telegram_id=telegram_id,
         )
 
 
@@ -786,6 +821,9 @@ class UserOperation(BaseOperation):
         new_user.proxy_settings = await self._prepare_user_proxy_settings(db, all_groups, new_user.proxy_settings)
 
         budget_cost = 0
+        budget_remaining = 0
+        budget_gb = 0
+        budget_days = 0
         if db_admin is not None and not admin.is_owner and bool(db_admin.create_budget_enabled):
             budget_cost = cost_from_user_payload(
                 new_user,
@@ -793,8 +831,16 @@ class UserOperation(BaseOperation):
                 price_per_day=int(db_admin.create_budget_price_per_day or 0),
             )
             if budget_cost > 0:
+                status_value = getattr(getattr(new_user, "status", None), "value", getattr(new_user, "status", None))
+                budget_gb = data_limit_to_billable_gb(getattr(new_user, "data_limit", None))
+                if status_value == "on_hold":
+                    budget_days = expire_to_billable_days(
+                        on_hold_expire_duration=getattr(new_user, "on_hold_expire_duration", None)
+                    )
+                else:
+                    budget_days = expire_to_billable_days(expire=getattr(new_user, "expire", None))
                 try:
-                    await charge_admin_create_budget(db, db_admin.id, budget_cost)
+                    budget_remaining = await charge_admin_create_budget(db, db_admin.id, budget_cost)
                 except ValueError:
                     await self.raise_error(
                         message=(
@@ -827,6 +873,18 @@ class UserOperation(BaseOperation):
         asyncio.create_task(notification.create_user(user, admin))
         if not skip_role_limits and not admin.is_owner:
             asyncio.create_task(_notify_owner_user_created(user, admin))
+        if budget_cost > 0 and not admin.is_owner:
+            asyncio.create_task(
+                _notify_admin_create_budget_charged(
+                    admin,
+                    username=user.username,
+                    gb=budget_gb,
+                    days=budget_days,
+                    amount=budget_cost,
+                    remaining=budget_remaining,
+                    telegram_id=getattr(db_admin, "telegram_id", None) if db_admin is not None else None,
+                )
+            )
 
         return user
 

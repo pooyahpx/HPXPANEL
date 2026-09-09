@@ -104,6 +104,12 @@ class DeckPanel(InlineKeyboardBuilder):
                 text=t(lang, "btn_demote_admin"),
                 callback_data=panel_cb(action=AdminPanelAction.demote_admin),
             )
+            rows.append(2)
+            self.button(
+                text=t(lang, "btn_manage_create_budget"),
+                callback_data=panel_cb(action=AdminPanelAction.manage_create_budget),
+            )
+            rows.append(1)
             self.button(
                 text=t(lang, "btn_manage_permissions"),
                 callback_data=panel_cb(action=AdminPanelAction.manage_permissions),
@@ -113,7 +119,6 @@ class DeckPanel(InlineKeyboardBuilder):
                 callback_data=panel_cb(action=AdminPanelAction.sold_subs),
             )
             rows.append(2)
-            rows.append(1)
 
         if rows:
             self.adjust(*rows)

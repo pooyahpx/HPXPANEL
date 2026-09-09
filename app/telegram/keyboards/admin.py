@@ -24,6 +24,10 @@ class AdminPanelAction(str, Enum):
     perm_set_role = "perm_set_role"
     perm_edit_role = "perm_edit_role"
     perm_toggle = "perm_toggle"
+    manage_create_budget = "manage_create_budget"
+    budget_admin = "budget_admin"
+    budget_toggle = "budget_toggle"
+    budget_set = "budget_set"
     sold_subs = "sold_subs"
     sold_sub_detail = "sold_sub_detail"
 

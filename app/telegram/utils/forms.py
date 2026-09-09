@@ -90,5 +90,9 @@ class PromoteAdmin(StatesGroup):
     waiting_username = State()
 
 
+class ManageCreateBudget(StatesGroup):
+    waiting_value = State()
+
+
 class ClaimOwner(StatesGroup):
     waiting_password = State()

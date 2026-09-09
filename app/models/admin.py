@@ -149,6 +149,13 @@ class AdminDetails(AdminContactInfo):
     create_budget_price_per_day: int = 0
     create_budget_price_tiers: list[CreateBudgetPriceTier] = Field(default_factory=list)
 
+    @field_validator("create_budget_price_tiers", mode="before")
+    @classmethod
+    def normalize_create_budget_price_tiers(cls, value):
+        from app.utils.admin_create_budget import normalize_price_tiers
+
+        return normalize_price_tiers(value)
+
     @property
     def is_owner(self) -> bool:
         return self.role.is_owner if self.role is not None else False

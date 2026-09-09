@@ -147,6 +147,7 @@ export default function AdminsPage() {
       create_budget_toman: admin.create_budget_toman ?? 0,
       create_budget_price_per_gb: admin.create_budget_price_per_gb ?? 0,
       create_budget_price_per_day: admin.create_budget_price_per_day ?? 0,
+      create_budget_price_tiers: admin.create_budget_price_tiers ?? [],
       is_disabled: admin.status === 'disabled' || admin.is_disabled || undefined,
       discord_webhook: admin.discord_webhook || '',
       sub_template: admin.sub_template || '',

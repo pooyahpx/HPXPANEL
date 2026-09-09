@@ -92,6 +92,9 @@ class PromoteAdmin(StatesGroup):
 
 class ManageCreateBudget(StatesGroup):
     waiting_value = State()
+    waiting_tier_gb = State()
+    waiting_tier_price = State()
+    waiting_tier_days = State()
 
 
 class ClaimOwner(StatesGroup):

@@ -122,7 +122,61 @@ class ShopStatsResponse(BaseModel):
     orders_rejected: int = 0
 
 
+class CreateBudgetLedgerEntry(BaseModel):
+    id: int
+    admin_id: int
+    admin_username: str | None = None
+    entry_type: str
+    amount_toman: int
+    balance_after: int
+    actor_admin_id: int | None = None
+    user_id: int | None = None
+    username: str | None = None
+    billable_gb: int = 0
+    billable_days: int = 0
+    price_per_gb: int | None = None
+    price_per_day: int | None = None
+    pricing_mode: str | None = None
+    tier_gb: int | None = None
+    detail: str | None = None
+    created_at: dt | None = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CreateBudgetLedgerListResponse(BaseModel):
+    entries: list[CreateBudgetLedgerEntry]
+    total: int
+
+
 class ShopApproveResponse(BaseModel):
     order: ShopOrderResponse
     username: str
     subscription_url: str | None = None
+
+
+class CreateBudgetLedgerEntry(BaseModel):
+    id: int
+    admin_id: int
+    admin_username: str | None = None
+    entry_type: str
+    amount_toman: int
+    balance_after: int
+    actor_admin_id: int | None = None
+    user_id: int | None = None
+    username: str | None = None
+    billable_gb: int = 0
+    billable_days: int = 0
+    price_per_gb: int | None = None
+    price_per_day: int | None = None
+    pricing_mode: str | None = None
+    tier_gb: int | None = None
+    detail: str | None = None
+    created_at: dt | None = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CreateBudgetLedgerListResponse(BaseModel):
+    entries: list[CreateBudgetLedgerEntry]
+    total: int

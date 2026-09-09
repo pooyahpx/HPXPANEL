@@ -6,6 +6,7 @@ from app.db import AsyncSession, get_db
 from app.db.models import ShopOrderStatus
 from app.models.admin import AdminDetails
 from app.models.shop import (
+    CreateBudgetLedgerListResponse,
     ShopApproveResponse,
     ShopConfigResponse,
     ShopConfigUpdate,
@@ -136,3 +137,17 @@ async def reject_shop_order(
 ):
     note = payload.note if payload else None
     return await shop_operator.reject_order(db, admin, order_id, note=note)
+
+
+@router.get("/accounting", response_model=CreateBudgetLedgerListResponse)
+async def list_create_budget_accounting(
+    admin_id: Annotated[int | None, Query()] = None,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    db: AsyncSession = Depends(get_db),
+    admin: AdminDetails = Depends(require_permission("users", "read")),
+):
+    """Create-budget accounting ledger (owner: all/filter; admin: own only)."""
+    return await shop_operator.list_create_budget_accounting(
+        db, admin, admin_id=admin_id, offset=offset, limit=limit
+    )

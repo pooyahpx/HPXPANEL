@@ -22,6 +22,7 @@ from app.db.models import (
     ReminderType,
     User,
 )
+from app.utils.admin_create_budget import normalize_price_tiers
 from app.models.admin import (
     AdminCreate,
     AdminDetails,
@@ -106,6 +107,7 @@ def build_admin_details(
         create_budget_toman=int(db_admin.create_budget_toman or 0),
         create_budget_price_per_gb=int(db_admin.create_budget_price_per_gb or 0),
         create_budget_price_per_day=int(db_admin.create_budget_price_per_day or 0),
+        create_budget_price_tiers=normalize_price_tiers(getattr(db_admin, "create_budget_price_tiers", None)),
     )
 
 
@@ -242,11 +244,28 @@ async def update_admin(db: AsyncSession, db_admin: Admin, modified_admin: AdminM
     if modified_admin.create_budget_enabled is not None:
         db_admin.create_budget_enabled = bool(modified_admin.create_budget_enabled)
     if modified_admin.create_budget_toman is not None:
-        db_admin.create_budget_toman = max(0, int(modified_admin.create_budget_toman))
+        previous_balance = int(db_admin.create_budget_toman or 0)
+        new_balance = max(0, int(modified_admin.create_budget_toman))
+        db_admin.create_budget_toman = new_balance
+        delta = new_balance - previous_balance
+        if delta != 0:
+            from app.db.crud.create_budget_ledger import add_create_budget_ledger_entry
+
+            await add_create_budget_ledger_entry(
+                db,
+                admin_id=db_admin.id,
+                entry_type="top_up" if delta > 0 else "adjust",
+                amount_toman=delta,
+                balance_after=new_balance,
+                detail=f"balance set to {new_balance}",
+                commit=False,
+            )
     if modified_admin.create_budget_price_per_gb is not None:
         db_admin.create_budget_price_per_gb = max(0, int(modified_admin.create_budget_price_per_gb))
     if modified_admin.create_budget_price_per_day is not None:
         db_admin.create_budget_price_per_day = max(0, int(modified_admin.create_budget_price_per_day))
+    if modified_admin.create_budget_price_tiers is not None:
+        db_admin.create_budget_price_tiers = normalize_price_tiers(modified_admin.create_budget_price_tiers)
 
     await db.commit()
     await db.refresh(db_admin)
@@ -254,8 +273,27 @@ async def update_admin(db: AsyncSession, db_admin: Admin, modified_admin: AdminM
     return db_admin
 
 
-async def charge_admin_create_budget(db: AsyncSession, admin_id: int, amount: int) -> int:
+async def charge_admin_create_budget(
+    db: AsyncSession,
+    admin_id: int,
+    amount: int,
+    *,
+    entry_type: str | None = None,
+    actor_admin_id: int | None = None,
+    user_id: int | None = None,
+    username: str | None = None,
+    billable_gb: int = 0,
+    billable_days: int = 0,
+    price_per_gb: int | None = None,
+    price_per_day: int | None = None,
+    pricing_mode: str | None = None,
+    tier_gb: int | None = None,
+    detail: str | None = None,
+    write_ledger: bool = True,
+) -> int:
     """Adjust create budget by amount (negative = refund). Returns remaining balance."""
+    from app.db.crud.create_budget_ledger import add_create_budget_ledger_entry
+
     if amount == 0:
         balance = (await db.execute(select(Admin.create_budget_toman).where(Admin.id == admin_id))).scalar_one_or_none()
         return int(balance or 0)
@@ -270,8 +308,28 @@ async def charge_admin_create_budget(db: AsyncSession, admin_id: int, amount: in
         remaining = result.scalar_one_or_none()
         if remaining is None:
             raise ValueError("insufficient create budget")
+        remaining_i = int(remaining)
+        if write_ledger:
+            await add_create_budget_ledger_entry(
+                db,
+                admin_id=admin_id,
+                entry_type=entry_type or "charge",
+                amount_toman=-int(amount),
+                balance_after=remaining_i,
+                actor_admin_id=actor_admin_id,
+                user_id=user_id,
+                username=username,
+                billable_gb=billable_gb,
+                billable_days=billable_days,
+                price_per_gb=price_per_gb,
+                price_per_day=price_per_day,
+                pricing_mode=pricing_mode,
+                tier_gb=tier_gb,
+                detail=detail,
+                commit=False,
+            )
         await db.commit()
-        return int(remaining)
+        return remaining_i
 
     result = await db.execute(
         update(Admin)
@@ -280,8 +338,28 @@ async def charge_admin_create_budget(db: AsyncSession, admin_id: int, amount: in
         .returning(Admin.create_budget_toman)
     )
     remaining = result.scalar_one()
+    remaining_i = int(remaining)
+    if write_ledger:
+        await add_create_budget_ledger_entry(
+            db,
+            admin_id=admin_id,
+            entry_type=entry_type or "refund",
+            amount_toman=abs(int(amount)),
+            balance_after=remaining_i,
+            actor_admin_id=actor_admin_id,
+            user_id=user_id,
+            username=username,
+            billable_gb=billable_gb,
+            billable_days=billable_days,
+            price_per_gb=price_per_gb,
+            price_per_day=price_per_day,
+            pricing_mode=pricing_mode,
+            tier_gb=tier_gb,
+            detail=detail,
+            commit=False,
+        )
     await db.commit()
-    return int(remaining)
+    return remaining_i
 
 
 async def remove_admin(db: AsyncSession, dbadmin: Admin) -> None:

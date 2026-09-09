@@ -204,6 +204,13 @@ export default function AdminModal({ isDialogOpen, onOpenChange, editingAdminId,
         create_budget_toman: Math.max(0, Math.round(Number(values.create_budget_toman) || 0)),
         create_budget_price_per_gb: Math.max(0, Math.round(Number(values.create_budget_price_per_gb) || 0)),
         create_budget_price_per_day: Math.max(0, Math.round(Number(values.create_budget_price_per_day) || 0)),
+        create_budget_price_tiers: (values.create_budget_price_tiers || [])
+          .filter(t => Number(t.gb) > 0)
+          .map(t => ({
+            gb: Math.max(1, Math.round(Number(t.gb) || 1)),
+            price_toman: Math.max(0, Math.round(Number(t.price_toman) || 0)),
+            days: t.days == null || t.days === '' ? null : Math.max(1, Math.round(Number(t.days) || 1)),
+          })),
       }
       if (editingAdmin && editingAdminId != null) {
         const updatedAdmin = await modifyAdminMutation.mutateAsync({
@@ -252,6 +259,13 @@ export default function AdminModal({ isDialogOpen, onOpenChange, editingAdminId,
           create_budget_toman: Math.max(0, Math.round(Number(values.create_budget_toman) || 0)),
           create_budget_price_per_gb: Math.max(0, Math.round(Number(values.create_budget_price_per_gb) || 0)),
           create_budget_price_per_day: Math.max(0, Math.round(Number(values.create_budget_price_per_day) || 0)),
+          create_budget_price_tiers: (values.create_budget_price_tiers || [])
+            .filter(t => Number(t.gb) > 0)
+            .map(t => ({
+              gb: Math.max(1, Math.round(Number(t.gb) || 1)),
+              price_toman: Math.max(0, Math.round(Number(t.price_toman) || 0)),
+              days: t.days == null || t.days === '' ? null : Math.max(1, Math.round(Number(t.days) || 1)),
+            })),
         }
         const createdAdmin = await addAdminMutation.mutateAsync({
           data: createData,
@@ -981,6 +995,99 @@ function AdminCreateBudgetFields({ form }: { form: AdminForm }) {
           defaultValue: 'Cost = (GB × price/GB) + (days × price/day). Charged when this admin creates a user.',
         })}
       </p>
+
+      <div className={enabled ? 'space-y-2' : 'pointer-events-none space-y-2 opacity-50'}>
+        <div className="flex items-center justify-between gap-2">
+          <FormLabel className="text-xs">
+            {t('admins.createBudgetTiers', { defaultValue: 'Custom GB packages' })}
+          </FormLabel>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              const current = form.getValues('create_budget_price_tiers') || []
+              form.setValue('create_budget_price_tiers', [...current, { gb: 100, price_toman: 0, days: null }])
+            }}
+          >
+            {t('admins.createBudgetAddTier', { defaultValue: 'Add package' })}
+          </Button>
+        </div>
+        <p className="text-muted-foreground text-[11px]">
+          {t('admins.createBudgetTiersHint', {
+            defaultValue: 'Exact GB match uses fixed price instead of per-GB. Optional days makes a full package price.',
+          })}
+        </p>
+        {(form.watch('create_budget_price_tiers') || []).map((_, index) => (
+          <div key={index} className="grid grid-cols-[1fr_1fr_1fr_auto] items-end gap-2">
+            <FormField
+              control={form.control}
+              name={`create_budget_price_tiers.${index}.gb`}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-[11px]">GB</FormLabel>
+                  <FormControl>
+                    <DecimalInput
+                      value={typeof field.value === 'number' ? field.value : null}
+                      emptyValue={1 as any}
+                      zeroValue={1}
+                      onValueChange={value => field.onChange(value ?? 1)}
+                    />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name={`create_budget_price_tiers.${index}.price_toman`}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-[11px]">{t('admins.createBudgetTierPrice', { defaultValue: 'Fixed price' })}</FormLabel>
+                  <FormControl>
+                    <DecimalInput
+                      value={typeof field.value === 'number' ? field.value : null}
+                      emptyValue={0 as any}
+                      zeroValue={0}
+                      onValueChange={value => field.onChange(value ?? 0)}
+                    />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name={`create_budget_price_tiers.${index}.days`}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-[11px]">{t('admins.createBudgetTierDays', { defaultValue: 'Days (optional)' })}</FormLabel>
+                  <FormControl>
+                    <DecimalInput
+                      value={typeof field.value === 'number' ? field.value : null}
+                      emptyValue={null as any}
+                      zeroValue={0}
+                      onValueChange={value => field.onChange(value && value > 0 ? value : null)}
+                    />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                const current = form.getValues('create_budget_price_tiers') || []
+                form.setValue(
+                  'create_budget_price_tiers',
+                  current.filter((_, i) => i !== index),
+                )
+              }}
+            >
+              <Trash2 className="size-4" />
+            </Button>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

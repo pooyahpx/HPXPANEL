@@ -28,6 +28,7 @@ import {
   useShopOrders,
   useShopPlans,
   useShopStats,
+  useShopAccounting,
   useUpdateShopConfig,
   useUpdateShopPlan,
 } from '@/service/api/shop'
@@ -134,6 +135,7 @@ export default function ShopPage() {
   const { data: stats, isLoading: statsLoading, refetch: refetchStats } = useShopStats(canView)
   const { data: plans, isLoading: plansLoading, refetch: refetchPlans } = useShopPlans(canView)
   const { data: ordersData, isLoading: ordersLoading, isFetching, refetch: refetchOrders } = useShopOrders(orderFilter, canView)
+  const { data: accountingData, isLoading: accountingLoading, refetch: refetchAccounting } = useShopAccounting(undefined, canView)
 
   const updateConfig = useUpdateShopConfig()
   const createPlan = useCreateShopPlan()
@@ -198,6 +200,7 @@ export default function ShopPage() {
     refetchStats()
     refetchPlans()
     refetchOrders()
+    refetchAccounting()
   }
 
   if (!canView) {
@@ -243,12 +246,15 @@ export default function ShopPage() {
         </div>
 
         <Tabs defaultValue="orders" className="w-full space-y-5">
-          <TabsList className="grid h-auto w-full grid-cols-3 gap-1 p-1 sm:w-auto sm:inline-grid">
+          <TabsList className="grid h-auto w-full grid-cols-2 gap-1 p-1 sm:w-auto sm:inline-grid sm:grid-cols-4">
             <TabsTrigger value="orders" className="px-4 py-2.5">
               {t('shop.orders')}
             </TabsTrigger>
             <TabsTrigger value="plans" className="px-4 py-2.5">
               {t('shop.plans')}
+            </TabsTrigger>
+            <TabsTrigger value="accounting" className="px-4 py-2.5">
+              {t('shop.accounting', { defaultValue: 'Accounting' })}
             </TabsTrigger>
             <TabsTrigger value="settings" className="px-4 py-2.5">
               {t('shop.settings')}
@@ -492,6 +498,63 @@ export default function ShopPage() {
                       ))}
                     </TableBody>
                   </Table>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+
+          <TabsContent value="accounting" className="mt-0 space-y-5">
+            {accountingLoading ? (
+              <Skeleton className="h-72 w-full rounded-xl" />
+            ) : !(accountingData?.entries?.length) ? (
+              <EmptyState
+                icon={ShoppingBag}
+                title={t('shop.accountingEmpty', { defaultValue: 'No budget transactions yet' })}
+                description={t('shop.accountingEmptyHint', {
+                  defaultValue: 'Charges appear here when budgeted admins create users.',
+                })}
+              />
+            ) : (
+              <Card className="border-border/60 overflow-hidden">
+                <CardContent className="p-0">
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="hover:bg-transparent">
+                          <TableHead className="w-14 px-4 py-3.5">#</TableHead>
+                          <TableHead className="px-4 py-3.5">{t('shop.accountingAdmin', { defaultValue: 'Admin' })}</TableHead>
+                          <TableHead className="px-4 py-3.5">{t('shop.accountingType', { defaultValue: 'Type' })}</TableHead>
+                          <TableHead className="px-4 py-3.5">{t('shop.accountingAmount', { defaultValue: 'Amount' })}</TableHead>
+                          <TableHead className="px-4 py-3.5">{t('shop.user')}</TableHead>
+                          <TableHead className="px-4 py-3.5">{t('shop.accountingUsage', { defaultValue: 'GB / Days' })}</TableHead>
+                          <TableHead className="px-4 py-3.5">{t('shop.accountingBalance', { defaultValue: 'Balance after' })}</TableHead>
+                          <TableHead className="px-4 py-3.5">{t('shop.accountingDetail', { defaultValue: 'Detail' })}</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {accountingData.entries.map(entry => (
+                          <TableRow key={entry.id}>
+                            <TableCell className="px-4 py-3 font-mono text-xs">{entry.id}</TableCell>
+                            <TableCell className="px-4 py-3">{entry.admin_username || entry.admin_id}</TableCell>
+                            <TableCell className="px-4 py-3">{entry.entry_type}{entry.pricing_mode ? ` · ${entry.pricing_mode}` : ''}</TableCell>
+                            <TableCell className="px-4 py-3 tabular-nums">
+                              {formatPrice(entry.amount_toman)} {t('shop.toman')}
+                            </TableCell>
+                            <TableCell className="px-4 py-3 font-mono text-xs">{entry.username || '—'}</TableCell>
+                            <TableCell className="px-4 py-3 tabular-nums">
+                              {entry.billable_gb} / {entry.billable_days}
+                            </TableCell>
+                            <TableCell className="px-4 py-3 tabular-nums">
+                              {formatPrice(entry.balance_after)}
+                            </TableCell>
+                            <TableCell className="text-muted-foreground max-w-[220px] truncate px-4 py-3 text-xs">
+                              {entry.detail || '—'}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
                 </CardContent>
               </Card>
             )}

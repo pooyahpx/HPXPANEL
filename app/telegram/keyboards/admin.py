@@ -28,6 +28,10 @@ class AdminPanelAction(str, Enum):
     budget_admin = "budget_admin"
     budget_toggle = "budget_toggle"
     budget_set = "budget_set"
+    budget_tiers = "budget_tiers"
+    budget_tier_add = "budget_tier_add"
+    budget_tier_del = "budget_tier_del"
+    budget_ledger = "budget_ledger"
     sold_subs = "sold_subs"
     sold_sub_detail = "sold_sub_detail"
 

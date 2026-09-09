@@ -102,12 +102,38 @@ export interface ShopApproveResponse {
   subscription_url?: string | null
 }
 
+export interface CreateBudgetLedgerEntry {
+  id: number
+  admin_id: number
+  admin_username?: string | null
+  entry_type: string
+  amount_toman: number
+  balance_after: number
+  actor_admin_id?: number | null
+  user_id?: number | null
+  username?: string | null
+  billable_gb: number
+  billable_days: number
+  price_per_gb?: number | null
+  price_per_day?: number | null
+  pricing_mode?: string | null
+  tier_gb?: number | null
+  detail?: string | null
+  created_at?: string | null
+}
+
+export interface CreateBudgetLedgerList {
+  entries: CreateBudgetLedgerEntry[]
+  total: number
+}
+
 const shopKeys = {
   all: ['shop'] as const,
   config: ['shop', 'config'] as const,
   stats: ['shop', 'stats'] as const,
   plans: ['shop', 'plans'] as const,
   orders: (status?: ShopOrderStatus | 'all') => ['shop', 'orders', status ?? 'all'] as const,
+  accounting: (adminId?: number | 'all') => ['shop', 'accounting', adminId ?? 'all'] as const,
 }
 
 export const getShopConfig = () => fetcher<ShopConfig>('/api/shop/config')
@@ -116,6 +142,13 @@ export const updateShopConfig = (body: ShopConfigUpdate) =>
 
 export const getShopStats = () => fetcher<ShopStats>('/api/shop/stats')
 export const getShopPlans = () => fetcher<ShopPlan[]>('/api/shop/plans')
+export const getShopAccounting = (adminId?: number, offset = 0, limit = 50) => {
+  const params = new URLSearchParams()
+  if (adminId != null) params.set('admin_id', String(adminId))
+  params.set('offset', String(offset))
+  params.set('limit', String(limit))
+  return fetcher<CreateBudgetLedgerList>(`/api/shop/accounting?${params.toString()}`)
+}
 export const createShopPlan = (body: ShopPlanCreate) =>
   fetcher<ShopPlan>('/api/shop/plans', { method: 'POST', body })
 export const updateShopPlan = (planId: number, body: ShopPlanUpdate) =>
@@ -208,5 +241,13 @@ export function useRejectShopOrder() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: shopKeys.all })
     },
+  })
+}
+
+export function useShopAccounting(adminId?: number, enabled = true) {
+  return useQuery({
+    queryKey: shopKeys.accounting(adminId ?? 'all'),
+    queryFn: () => getShopAccounting(adminId),
+    enabled,
   })
 }

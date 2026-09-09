@@ -28,6 +28,8 @@ from app.db.crud.user import get_user_by_id
 from app.db.models import ShopOrder, ShopOrderStatus, ShopPlan, UserStatus
 from app.models.admin import AdminDetails
 from app.models.shop import (
+    CreateBudgetLedgerEntry,
+    CreateBudgetLedgerListResponse,
     ShopApproveResponse,
     ShopCard,
     ShopConfigResponse,
@@ -390,3 +392,52 @@ class ShopOperation(BaseOperation):
             await bot.send_message(order.buyer_telegram_id, t(buyer_lang, "order_rejected", id=order.id))
         except Exception:
             logger.debug("Failed to notify rejected shop buyer %s", order.buyer_telegram_id, exc_info=True)
+
+    async def list_create_budget_accounting(
+        self,
+        db: AsyncSession,
+        admin: AdminDetails,
+        *,
+        admin_id: int | None = None,
+        offset: int = 0,
+        limit: int = 50,
+    ) -> CreateBudgetLedgerListResponse:
+        from app.db.crud.create_budget_ledger import get_admin_usernames_map, list_create_budget_ledger
+
+        # Owner sees all (optional filter). Non-owner only their own ledger.
+        if admin.is_owner:
+            target_admin_id = admin_id
+        else:
+            if admin.id is None:
+                raise HTTPException(status_code=403, detail="Admin id required")
+            if admin_id is not None and int(admin_id) != int(admin.id):
+                raise HTTPException(status_code=403, detail="Not allowed to view other admins")
+            target_admin_id = int(admin.id)
+
+        rows, total = await list_create_budget_ledger(
+            db, admin_id=target_admin_id, offset=offset, limit=limit
+        )
+        names = await get_admin_usernames_map(db, {int(r.admin_id) for r in rows})
+        entries = [
+            CreateBudgetLedgerEntry(
+                id=r.id,
+                admin_id=r.admin_id,
+                admin_username=names.get(int(r.admin_id)),
+                entry_type=r.entry_type,
+                amount_toman=r.amount_toman,
+                balance_after=r.balance_after,
+                actor_admin_id=r.actor_admin_id,
+                user_id=r.user_id,
+                username=r.username,
+                billable_gb=r.billable_gb,
+                billable_days=r.billable_days,
+                price_per_gb=r.price_per_gb,
+                price_per_day=r.price_per_day,
+                pricing_mode=r.pricing_mode,
+                tier_gb=r.tier_gb,
+                detail=r.detail,
+                created_at=r.created_at,
+            )
+            for r in rows
+        ]
+        return CreateBudgetLedgerListResponse(entries=entries, total=total)

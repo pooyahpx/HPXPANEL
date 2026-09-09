@@ -466,6 +466,7 @@ async def notify_admin_create_budget_charged(
     amount: int,
     remaining: int,
     telegram_id: int | None = None,
+    pricing_mode: str = "linear",
 ) -> None:
     """Notify the creating admin that create-budget was deducted."""
     if bot is None or amount <= 0:
@@ -474,6 +475,7 @@ async def notify_admin_create_budget_charged(
     if not chat_id:
         return
     lang = (await get_telegram_lang(db, chat_id)) or "fa"
+    mode_label = t(lang, "budget_mode_tier") if pricing_mode == "tier" else t(lang, "budget_mode_linear")
     text = rich(
         lang,
         "admin_create_budget_charged",
@@ -482,8 +484,48 @@ async def notify_admin_create_budget_charged(
         days=days,
         amount=f"{amount:,}",
         remaining=f"{remaining:,}",
+        mode=mode_label,
     )
     try:
         await bot.send_message(chat_id, text)
+    except Exception:
+        pass
+
+
+async def notify_owner_create_budget_charged(
+    *,
+    db: AsyncSession,
+    bot: Bot | None,
+    creator: AdminDetails,
+    username: str,
+    gb: int,
+    days: int,
+    amount: int,
+    remaining: int,
+    pricing_mode: str = "linear",
+) -> None:
+    """Notify panel owner when an admin's create-budget is charged."""
+    if bot is None or amount <= 0 or creator.is_owner:
+        return
+    owner = await get_owner_admin(db)
+    if owner is None or not owner.telegram_id:
+        return
+    if creator.telegram_id and int(owner.telegram_id) == int(creator.telegram_id):
+        return
+    lang = (await get_telegram_lang(db, owner.telegram_id)) or "fa"
+    mode_label = t(lang, "budget_mode_tier") if pricing_mode == "tier" else t(lang, "budget_mode_linear")
+    text = rich(
+        lang,
+        "owner_create_budget_charged",
+        admin=creator.username,
+        username=username,
+        gb=gb,
+        days=days,
+        amount=f"{amount:,}",
+        remaining=f"{remaining:,}",
+        mode=mode_label,
+    )
+    try:
+        await bot.send_message(owner.telegram_id, text)
     except Exception:
         pass

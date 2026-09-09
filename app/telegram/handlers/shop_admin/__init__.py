@@ -394,6 +394,73 @@ async def shop_stats(event: types.CallbackQuery, db: AsyncSession, admin: AdminD
     await event.answer()
 
 
+@router.callback_query(ShopAdminKeyboard.Callback.filter(ShopAdminAction.accounting == F.action))
+async def shop_accounting(event: types.CallbackQuery, db: AsyncSession, admin: AdminDetails, callback_data: ShopAdminKeyboard.Callback):
+    from aiogram.utils.keyboard import InlineKeyboardBuilder
+
+    from app.db.crud.admin import get_admins_simple
+    from app.db.crud.create_budget_ledger import list_create_budget_ledger
+    from app.models.admin import AdminSimpleListQuery
+
+    lang = await _lang(db, event.from_user.id)
+    kb = InlineKeyboardBuilder()
+
+    # Owner can pick an admin (id>0) or view all (id=0). Non-owner: own ledger only.
+    if admin.is_owner and callback_data.id == 0:
+        admin_rows, _ = await get_admins_simple(db, AdminSimpleListQuery(all=True), include_owner=False)
+        kb.button(
+            text=t(lang, "accounting_all"),
+            callback_data=ShopAdminKeyboard.Callback(action=ShopAdminAction.accounting, id=-1),
+        )
+        for admin_id, username in admin_rows:
+            kb.button(
+                text=f"👤 {username}",
+                callback_data=ShopAdminKeyboard.Callback(action=ShopAdminAction.accounting, id=admin_id),
+            )
+        kb.button(text=t(lang, "btn_back"), callback_data=ShopAdminKeyboard.Callback(action=ShopAdminAction.home))
+        kb.adjust(1)
+        text = t(lang, "accounting_pick_admin")
+        try:
+            await event.message.edit_text(text, reply_markup=kb.as_markup())
+        except TelegramBadRequest:
+            await event.message.answer(text, reply_markup=kb.as_markup())
+        await event.answer()
+        return
+
+    if admin.is_owner:
+        target_id = None if callback_data.id < 0 else callback_data.id
+    else:
+        target_id = admin.id
+
+    rows, total = await list_create_budget_ledger(db, admin_id=target_id, offset=0, limit=20)
+    if not rows:
+        body = t(lang, "accounting_empty")
+    else:
+        lines = []
+        for row in rows:
+            sign = "+" if row.amount_toman >= 0 else ""
+            created = row.created_at.strftime("%m-%d %H:%M") if row.created_at else "—"
+            user = row.username or "—"
+            lines.append(
+                f"• #{row.id} {created} · adm{row.admin_id} · {row.entry_type} · "
+                f"{sign}{row.amount_toman:,}T · {row.billable_gb}GB/{row.billable_days}d · {user}"
+            )
+        body = "\n".join(lines)
+    text = rich(lang, "accounting_home", total=total, body=body)
+    kb.button(text=t(lang, "btn_back"), callback_data=ShopAdminKeyboard.Callback(action=ShopAdminAction.home))
+    if admin.is_owner:
+        kb.button(
+            text=t(lang, "accounting_pick_admin"),
+            callback_data=ShopAdminKeyboard.Callback(action=ShopAdminAction.accounting, id=0),
+        )
+    kb.adjust(1)
+    try:
+        await event.message.edit_text(text, reply_markup=kb.as_markup())
+    except TelegramBadRequest:
+        await event.message.answer(text, reply_markup=kb.as_markup())
+    await event.answer()
+
+
 @router.callback_query(ShopAdminKeyboard.Callback.filter(ShopAdminAction.toggle_test == F.action))
 async def toggle_test(event: types.CallbackQuery, db: AsyncSession, admin: AdminDetails):
     lang = await _lang(db, event.from_user.id)

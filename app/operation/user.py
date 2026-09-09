@@ -109,11 +109,7 @@ from app.operation.permissions import (
     is_scope_all,
 )
 from app.settings import hwid_settings, subscription_settings
-from app.utils.admin_create_budget import (
-    cost_from_user_payload,
-    data_limit_to_billable_gb,
-    expire_to_billable_days,
-)
+from app.utils.admin_create_budget import quote_from_user_payload
 from app.utils.helpers import (
     fix_datetime_timezone,
     is_absolute_url,
@@ -226,10 +222,15 @@ async def _notify_admin_create_budget_charged(
     amount: int,
     remaining: int,
     telegram_id: int | None = None,
+    pricing_mode: str = "linear",
+    notify_owner: bool = True,
 ) -> None:
     from app.db import GetDB
     from app.telegram import get_bot
-    from app.telegram.utils.shop_helpers import notify_admin_create_budget_charged
+    from app.telegram.utils.shop_helpers import (
+        notify_admin_create_budget_charged,
+        notify_owner_create_budget_charged,
+    )
 
     bot = get_bot()
     if bot is None:
@@ -245,7 +246,20 @@ async def _notify_admin_create_budget_charged(
             amount=amount,
             remaining=remaining,
             telegram_id=telegram_id,
+            pricing_mode=pricing_mode,
         )
+        if notify_owner:
+            await notify_owner_create_budget_charged(
+                db=db,
+                bot=bot,
+                creator=admin,
+                username=username,
+                gb=gb,
+                days=days,
+                amount=amount,
+                remaining=remaining,
+                pricing_mode=pricing_mode,
+            )
 
 
 async def _notify_telegram_sub_revoked(user_id: int) -> None:
@@ -824,23 +838,38 @@ class UserOperation(BaseOperation):
         budget_remaining = 0
         budget_gb = 0
         budget_days = 0
+        budget_pricing_mode = "linear"
+        budget_tier_gb = None
+        budget_quote = None
         if db_admin is not None and not admin.is_owner and bool(db_admin.create_budget_enabled):
-            budget_cost = cost_from_user_payload(
+            budget_quote = quote_from_user_payload(
                 new_user,
                 price_per_gb=int(db_admin.create_budget_price_per_gb or 0),
                 price_per_day=int(db_admin.create_budget_price_per_day or 0),
+                tiers=getattr(db_admin, "create_budget_price_tiers", None),
             )
+            budget_cost = int(budget_quote.amount)
+            budget_gb = int(budget_quote.gb)
+            budget_days = int(budget_quote.days)
+            budget_pricing_mode = budget_quote.pricing_mode
+            budget_tier_gb = budget_quote.tier_gb
             if budget_cost > 0:
-                status_value = getattr(getattr(new_user, "status", None), "value", getattr(new_user, "status", None))
-                budget_gb = data_limit_to_billable_gb(getattr(new_user, "data_limit", None))
-                if status_value == "on_hold":
-                    budget_days = expire_to_billable_days(
-                        on_hold_expire_duration=getattr(new_user, "on_hold_expire_duration", None)
-                    )
-                else:
-                    budget_days = expire_to_billable_days(expire=getattr(new_user, "expire", None))
                 try:
-                    budget_remaining = await charge_admin_create_budget(db, db_admin.id, budget_cost)
+                    budget_remaining = await charge_admin_create_budget(
+                        db,
+                        db_admin.id,
+                        budget_cost,
+                        entry_type="charge",
+                        actor_admin_id=db_admin.id,
+                        username=getattr(new_user, "username", None),
+                        billable_gb=budget_gb,
+                        billable_days=budget_days,
+                        price_per_gb=int(db_admin.create_budget_price_per_gb or 0),
+                        price_per_day=int(db_admin.create_budget_price_per_day or 0),
+                        pricing_mode=budget_pricing_mode,
+                        tier_gb=budget_tier_gb,
+                        detail=f"create user {getattr(new_user, 'username', '')}",
+                    )
                 except ValueError:
                     await self.raise_error(
                         message=(
@@ -855,12 +884,56 @@ class UserOperation(BaseOperation):
             db_user = await create_user(db, new_user, all_groups, db_admin)
         except IntegrityError:
             if budget_cost > 0 and db_admin is not None:
-                await charge_admin_create_budget(db, db_admin.id, -budget_cost)
+                await charge_admin_create_budget(
+                    db,
+                    db_admin.id,
+                    -budget_cost,
+                    entry_type="refund",
+                    actor_admin_id=db_admin.id,
+                    username=getattr(new_user, "username", None),
+                    billable_gb=budget_gb,
+                    billable_days=budget_days,
+                    pricing_mode=budget_pricing_mode,
+                    tier_gb=budget_tier_gb,
+                    detail="refund: user already exists",
+                )
             await self.raise_error(message="User already exists", code=409, db=db)
         except ValueError as exc:  # WireGuard subnet exhausted
             if budget_cost > 0 and db_admin is not None:
-                await charge_admin_create_budget(db, db_admin.id, -budget_cost)
+                await charge_admin_create_budget(
+                    db,
+                    db_admin.id,
+                    -budget_cost,
+                    entry_type="refund",
+                    actor_admin_id=db_admin.id,
+                    username=getattr(new_user, "username", None),
+                    billable_gb=budget_gb,
+                    billable_days=budget_days,
+                    pricing_mode=budget_pricing_mode,
+                    tier_gb=budget_tier_gb,
+                    detail=f"refund: {exc}",
+                )
             await self.raise_error(message=str(exc), code=400, db=db)
+
+        if budget_cost > 0 and db_admin is not None:
+            from app.db.models import CreateBudgetLedger
+            from sqlalchemy import select, update
+
+            row_id = (
+                await db.execute(
+                    select(CreateBudgetLedger.id)
+                    .where(
+                        CreateBudgetLedger.admin_id == db_admin.id,
+                        CreateBudgetLedger.entry_type == "charge",
+                        CreateBudgetLedger.username == db_user.username,
+                    )
+                    .order_by(CreateBudgetLedger.id.desc())
+                    .limit(1)
+                )
+            ).scalar_one_or_none()
+            if row_id:
+                await db.execute(update(CreateBudgetLedger).where(CreateBudgetLedger.id == row_id).values(user_id=db_user.id))
+                await db.commit()
 
         await self._finalize_openvpn_proxy_settings(db, db_user, all_groups)
         user = await self.update_user(db_user)
@@ -883,6 +956,8 @@ class UserOperation(BaseOperation):
                     amount=budget_cost,
                     remaining=budget_remaining,
                     telegram_id=getattr(db_admin, "telegram_id", None) if db_admin is not None else None,
+                    pricing_mode=budget_pricing_mode,
+                    notify_owner=True,
                 )
             )
 

@@ -4783,6 +4783,7 @@ export interface AdminModify {
   create_budget_toman?: number | null
   create_budget_price_per_gb?: number | null
   create_budget_price_per_day?: number | null
+  create_budget_price_tiers?: { gb: number; price_toman: number; days?: number | null }[] | null
   sub_template?: AdminModifySubTemplate
   sub_domain?: AdminModifySubDomain
   profile_title?: AdminModifyProfileTitle
@@ -4851,6 +4852,7 @@ export interface AdminDetails {
   create_budget_toman?: number
   create_budget_price_per_gb?: number
   create_budget_price_per_day?: number
+  create_budget_price_tiers?: { gb: number; price_toman: number; days?: number | null }[]
   readonly is_disabled: boolean
   readonly is_limited: boolean
 }
@@ -4894,6 +4896,7 @@ export interface AdminCreate {
   create_budget_toman?: number | null
   create_budget_price_per_gb?: number | null
   create_budget_price_per_day?: number | null
+  create_budget_price_tiers?: { gb: number; price_toman: number; days?: number | null }[] | null
   sub_template?: AdminCreateSubTemplate
   sub_domain?: AdminCreateSubDomain
   profile_title?: AdminCreateProfileTitle

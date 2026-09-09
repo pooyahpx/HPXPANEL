@@ -121,6 +121,14 @@ class AdminContactInfo(AdminBase):
         return value
 
 
+class CreateBudgetPriceTier(BaseModel):
+    """Exact-GB (optional days) fixed price instead of linear per-GB billing."""
+
+    gb: int = Field(ge=1)
+    price_toman: int = Field(ge=0)
+    days: int | None = Field(default=None, ge=1)
+
+
 class AdminDetails(AdminContactInfo):
     """Complete admin model with all fields for database representation and API responses."""
 
@@ -139,6 +147,7 @@ class AdminDetails(AdminContactInfo):
     create_budget_toman: int = 0
     create_budget_price_per_gb: int = 0
     create_budget_price_per_day: int = 0
+    create_budget_price_tiers: list[CreateBudgetPriceTier] = Field(default_factory=list)
 
     @property
     def is_owner(self) -> bool:
@@ -181,6 +190,7 @@ class AdminModify(BaseModel):
     create_budget_toman: int | None = Field(default=None, ge=0)
     create_budget_price_per_gb: int | None = Field(default=None, ge=0)
     create_budget_price_per_day: int | None = Field(default=None, ge=0)
+    create_budget_price_tiers: list[CreateBudgetPriceTier] | None = None
 
     @field_validator("discord_webhook")
     @classmethod

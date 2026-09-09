@@ -58,6 +58,15 @@ export const adminFormSchema = z
     create_budget_toman: z.union([z.literal('').transform(() => null), z.null(), z.coerce.number().min(0)]).optional(),
     create_budget_price_per_gb: z.union([z.literal('').transform(() => null), z.null(), z.coerce.number().min(0)]).optional(),
     create_budget_price_per_day: z.union([z.literal('').transform(() => null), z.null(), z.coerce.number().min(0)]).optional(),
+    create_budget_price_tiers: z
+      .array(
+        z.object({
+          gb: z.coerce.number().min(1),
+          price_toman: z.coerce.number().min(0),
+          days: z.union([z.literal('').transform(() => null), z.null(), z.coerce.number().min(1)]).optional(),
+        }),
+      )
+      .optional(),
     is_disabled: z.boolean().optional(),
     discord_webhook: z.string().optional(),
     sub_domain: z.string().optional(),
@@ -161,6 +170,7 @@ export const adminFormDefaultValues: Partial<AdminFormValuesInput> = {
   create_budget_toman: 0,
   create_budget_price_per_gb: 0,
   create_budget_price_per_day: 0,
+  create_budget_price_tiers: [],
   is_disabled: false,
   discord_webhook: '',
   sub_domain: '',

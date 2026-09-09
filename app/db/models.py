@@ -121,6 +121,7 @@ class Admin(Base, CreatedAtUTCMixin):
     create_budget_toman: Mapped[int] = mapped_column(BigInteger, default=0, server_default="0")
     create_budget_price_per_gb: Mapped[int] = mapped_column(BigInteger, default=0, server_default="0")
     create_budget_price_per_day: Mapped[int] = mapped_column(BigInteger, default=0, server_default="0")
+    create_budget_price_tiers: Mapped[list | None] = mapped_column(PostgresJSONB, default=None)
 
     @hybrid_property
     def is_disabled(self) -> bool:
@@ -1358,6 +1359,36 @@ class TelegramSubDelivery(Base):
     sub_version: Mapped[str] = mapped_column(String(64))
     source_id: Mapped[int | None] = mapped_column(Integer, default=None)
     updated_at: Mapped[dt] = mapped_column(DateTime(timezone=True), default_factory=lambda: dt.now(UTC), init=False)
+
+
+class CreateBudgetLedger(Base):
+    """Append-only accounting for per-admin create-budget charges and adjustments."""
+
+    __tablename__ = "create_budget_ledger"
+    __table_args__ = (
+        Index("ix_create_budget_ledger_admin_created", "admin_id", "created_at"),
+        Index("ix_create_budget_ledger_entry_type", "entry_type"),
+        Index("ix_create_budget_ledger_user_id", "user_id"),
+    )
+
+    id: Mapped[int] = mapped_column(SqliteCompatibleBigInteger, primary_key=True, init=False, autoincrement=True)
+    admin_id: Mapped[int] = fk_id_column("admins.id", ondelete="CASCADE")
+    entry_type: Mapped[str] = mapped_column(String(32), nullable=False)  # charge|refund|top_up|adjust
+    amount_toman: Mapped[int] = mapped_column(BigInteger, nullable=False)  # signed: +credit / -debit
+    balance_after: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    actor_admin_id: Mapped[int | None] = mapped_column(SqliteCompatibleBigInteger, nullable=True, default=None)
+    user_id: Mapped[int | None] = mapped_column(SqliteCompatibleBigInteger, nullable=True, default=None)
+    username: Mapped[str | None] = mapped_column(String(128), nullable=True, default=None)
+    billable_gb: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    billable_days: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    price_per_gb: Mapped[int | None] = mapped_column(BigInteger, nullable=True, default=None)
+    price_per_day: Mapped[int | None] = mapped_column(BigInteger, nullable=True, default=None)
+    pricing_mode: Mapped[str | None] = mapped_column(String(16), nullable=True, default=None)
+    tier_gb: Mapped[int | None] = mapped_column(Integer, nullable=True, default=None)
+    detail: Mapped[str | None] = mapped_column(String(500), nullable=True, default=None)
+    created_at: Mapped[dt] = mapped_column(
+        DateTime(timezone=True), nullable=False, default_factory=lambda: dt.now(UTC), init=False
+    )
 
 
 class ShopConfig(Base, CreatedAtUTCMixin):

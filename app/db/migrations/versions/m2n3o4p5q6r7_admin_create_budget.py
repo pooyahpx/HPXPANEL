@@ -9,8 +9,6 @@ Create Date: 2026-09-09 11:40:00.000000
 import sqlalchemy as sa
 from alembic import op
 
-from app.db.compiles_types import SqliteCompatibleBigInteger
-
 revision = "m2n3o4p5q6r7"
 down_revision = "l1m2n3o4p5q6"
 branch_labels = None
@@ -24,15 +22,15 @@ def upgrade() -> None:
     )
     op.add_column(
         "admins",
-        sa.Column("create_budget_toman", SqliteCompatibleBigInteger(), nullable=False, server_default="0"),
+        sa.Column("create_budget_toman", sa.BigInteger(), nullable=False, server_default="0"),
     )
     op.add_column(
         "admins",
-        sa.Column("create_budget_price_per_gb", SqliteCompatibleBigInteger(), nullable=False, server_default="0"),
+        sa.Column("create_budget_price_per_gb", sa.BigInteger(), nullable=False, server_default="0"),
     )
     op.add_column(
         "admins",
-        sa.Column("create_budget_price_per_day", SqliteCompatibleBigInteger(), nullable=False, server_default="0"),
+        sa.Column("create_budget_price_per_day", sa.BigInteger(), nullable=False, server_default="0"),
     )
 
 

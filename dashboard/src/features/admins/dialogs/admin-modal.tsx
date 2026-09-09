@@ -22,7 +22,7 @@ import { upsertAdminInAdminsCache } from '@/utils/adminsCache'
 import { removeAuthToken } from '@/utils/authStorage'
 import { bytesToFormGigabytes, formatBytes, gbToBytes } from '@/utils/formatByte'
 import { useQueryClient } from '@tanstack/react-query'
-import { Bell, IdCard, Pencil, Plus, Sliders, Trash2, UserCog } from 'lucide-react'
+import { Bell, IdCard, Pencil, Plus, Sliders, Trash2, UserCog, Wallet } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { UseFormReturn, useWatch } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
@@ -200,6 +200,10 @@ export default function AdminModal({ isDialogOpen, onOpenChange, editingAdminId,
         role_id: values.role_id,
         permission_overrides: normalizePermissionOverrides(values.permission_overrides),
         access_overrides: normalizeAccessOverrides(values.access_overrides),
+        create_budget_enabled: values.create_budget_enabled ?? false,
+        create_budget_toman: Math.max(0, Math.round(Number(values.create_budget_toman) || 0)),
+        create_budget_price_per_gb: Math.max(0, Math.round(Number(values.create_budget_price_per_gb) || 0)),
+        create_budget_price_per_day: Math.max(0, Math.round(Number(values.create_budget_price_per_day) || 0)),
       }
       if (editingAdmin && editingAdminId != null) {
         const updatedAdmin = await modifyAdminMutation.mutateAsync({
@@ -244,6 +248,10 @@ export default function AdminModal({ isDialogOpen, onOpenChange, editingAdminId,
           role_id: values.role_id,
           permission_overrides: normalizePermissionOverrides(values.permission_overrides),
           access_overrides: normalizeAccessOverrides(values.access_overrides),
+          create_budget_enabled: values.create_budget_enabled ?? false,
+          create_budget_toman: Math.max(0, Math.round(Number(values.create_budget_toman) || 0)),
+          create_budget_price_per_gb: Math.max(0, Math.round(Number(values.create_budget_price_per_gb) || 0)),
+          create_budget_price_per_day: Math.max(0, Math.round(Number(values.create_budget_price_per_day) || 0)),
         }
         const createdAdmin = await addAdminMutation.mutateAsync({
           data: createData,
@@ -417,6 +425,17 @@ export default function AdminModal({ isDialogOpen, onOpenChange, editingAdminId,
 
               {/* Advanced settings: collapsed by default */}
               <Accordion type="single" collapsible value={openSection} onValueChange={handleAccordionChange} className="!mt-0 flex w-full flex-col gap-y-3">
+                <AccordionItem className="rounded-md border px-4 [&_[data-state=closed]]:no-underline [&_[data-state=open]]:no-underline" value="create-budget">
+                  <AccordionTrigger>
+                    <div className="flex items-center gap-2">
+                      <Wallet className="h-4 w-4" />
+                      <span>{t('admins.createBudgetSection', { defaultValue: 'Create budget' })}</span>
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent className="px-1 pt-1">
+                    <AdminCreateBudgetFields form={form} />
+                  </AccordionContent>
+                </AccordionItem>
                 <AccordionItem className="rounded-md border px-4 [&_[data-state=closed]]:no-underline [&_[data-state=open]]:no-underline" value="profile">
                   <AccordionTrigger>
                     <div className="flex items-center gap-2">
@@ -872,6 +891,97 @@ function AdminDataLimitField({ form }: { form: AdminForm }) {
         )
       }}
     />
+  )
+}
+
+function AdminCreateBudgetFields({ form }: { form: AdminForm }) {
+  const { t } = useTranslation()
+  const enabled = useWatch({ control: form.control, name: 'create_budget_enabled' })
+
+  return (
+    <div className="flex flex-col gap-4 pb-2">
+      <FormField
+        control={form.control}
+        name="create_budget_enabled"
+        render={({ field }) => (
+          <FormItem className="flex items-center justify-between gap-3 rounded-md border px-3 py-2">
+            <div className="space-y-0.5">
+              <FormLabel className="text-sm">{t('admins.createBudgetEnabled', { defaultValue: 'Enable create budget' })}</FormLabel>
+              <p className="text-muted-foreground text-xs">
+                {t('admins.createBudgetEnabledHint', {
+                  defaultValue: 'When enabled, creating users deducts toman from this admin balance.',
+                })}
+              </p>
+            </div>
+            <FormControl>
+              <Switch checked={!!field.value} onCheckedChange={field.onChange} />
+            </FormControl>
+          </FormItem>
+        )}
+      />
+
+      <div className={enabled ? 'grid gap-3 sm:grid-cols-3' : 'pointer-events-none grid gap-3 opacity-50 sm:grid-cols-3'}>
+        <FormField
+          control={form.control}
+          name="create_budget_toman"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-xs">{t('admins.createBudgetBalance', { defaultValue: 'Balance (toman)' })}</FormLabel>
+              <FormControl>
+                <DecimalInput
+                  value={typeof field.value === 'number' ? field.value : null}
+                  emptyValue={0 as any}
+                  zeroValue={0}
+                  onValueChange={value => field.onChange(value ?? 0)}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="create_budget_price_per_gb"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-xs">{t('admins.createBudgetPricePerGb', { defaultValue: 'Price per GB' })}</FormLabel>
+              <FormControl>
+                <DecimalInput
+                  value={typeof field.value === 'number' ? field.value : null}
+                  emptyValue={0 as any}
+                  zeroValue={0}
+                  onValueChange={value => field.onChange(value ?? 0)}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="create_budget_price_per_day"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-xs">{t('admins.createBudgetPricePerDay', { defaultValue: 'Price per day' })}</FormLabel>
+              <FormControl>
+                <DecimalInput
+                  value={typeof field.value === 'number' ? field.value : null}
+                  emptyValue={0 as any}
+                  zeroValue={0}
+                  onValueChange={value => field.onChange(value ?? 0)}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      </div>
+      <p className="text-muted-foreground text-xs">
+        {t('admins.createBudgetFormula', {
+          defaultValue: 'Cost = (GB × price/GB) + (days × price/day). Charged when this admin creates a user.',
+        })}
+      </p>
+    </div>
   )
 }
 

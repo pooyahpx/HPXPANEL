@@ -259,7 +259,10 @@ async def process_done(event: CallbackQuery, db: AsyncSession, admin: AdminDetai
     del data["duration"]
 
     new_user = UserCreate(**data)
-    user = await user_operations.create_user(db, new_user, admin)
+    try:
+        user = await user_operations.create_user(db, new_user, admin)
+    except ValueError as exc:
+        return await event.answer(str(exc)[:MAX_CALLBACK_ALERT_LENGTH], show_alert=True)
     groups = await user_operations.validate_all_groups(db, user)
     await event.answer(Texts.user_created)
     return await event.message.edit_text(
@@ -621,9 +624,15 @@ async def create_user_from_template_choose(
     await state.clear()
     await delete_messages(event, state)
 
-    user = await user_operations.create_user_from_template(
-        db, CreateUserFromTemplate(username=username, user_template_id=template_id), admin
-    )
+    try:
+        user = await user_operations.create_user_from_template(
+            db, CreateUserFromTemplate(username=username, user_template_id=template_id), admin
+        )
+    except ValueError as exc:
+        text = str(exc)[:MAX_CALLBACK_ALERT_LENGTH]
+        if isinstance(event, Message):
+            return await event.answer(text)
+        return await event.answer(text, show_alert=True)
     groups = await user_operations.validate_all_groups(db, user)
     if isinstance(event, Message):
         return await event.answer(

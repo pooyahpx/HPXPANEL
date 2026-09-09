@@ -4777,6 +4777,10 @@ export interface AdminModify {
   discord_webhook?: AdminModifyDiscordWebhook
   status?: AdminModifyStatus
   data_limit?: AdminModifyDataLimit
+  create_budget_enabled?: boolean | null
+  create_budget_toman?: number | null
+  create_budget_price_per_gb?: number | null
+  create_budget_price_per_day?: number | null
   sub_template?: AdminModifySubTemplate
   sub_domain?: AdminModifySubDomain
   profile_title?: AdminModifyProfileTitle
@@ -4841,6 +4845,10 @@ export interface AdminDetails {
   permission_overrides?: AdminDetailsPermissionOverrides
   access_overrides?: AdminDetailsAccessOverrides
   totp_enabled?: boolean
+  create_budget_enabled?: boolean
+  create_budget_toman?: number
+  create_budget_price_per_gb?: number
+  create_budget_price_per_day?: number
   readonly is_disabled: boolean
   readonly is_limited: boolean
 }
@@ -4880,6 +4888,10 @@ export interface AdminCreate {
   discord_webhook?: AdminCreateDiscordWebhook
   status?: AdminCreateStatus
   data_limit?: AdminCreateDataLimit
+  create_budget_enabled?: boolean | null
+  create_budget_toman?: number | null
+  create_budget_price_per_gb?: number | null
+  create_budget_price_per_day?: number | null
   sub_template?: AdminCreateSubTemplate
   sub_domain?: AdminCreateSubDomain
   profile_title?: AdminCreateProfileTitle

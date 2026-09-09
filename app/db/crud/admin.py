@@ -100,10 +100,12 @@ def build_admin_details(
         permission_overrides=RoleLimits.model_validate(db_admin.permission_overrides)
         if db_admin.permission_overrides
         else None,
-        access_overrides=RoleAccess.model_validate(db_admin.access_overrides)
-        if db_admin.access_overrides
-        else None,
+        access_overrides=RoleAccess.model_validate(db_admin.access_overrides) if db_admin.access_overrides else None,
         totp_enabled=bool(db_admin.totp_enabled),
+        create_budget_enabled=bool(db_admin.create_budget_enabled),
+        create_budget_toman=int(db_admin.create_budget_toman or 0),
+        create_budget_price_per_gb=int(db_admin.create_budget_price_per_gb or 0),
+        create_budget_price_per_day=int(db_admin.create_budget_price_per_day or 0),
     )
 
 
@@ -171,7 +173,10 @@ async def create_admin(db: AsyncSession, admin: AdminCreate) -> Admin:
     Returns:
         Admin: The created admin object.
     """
-    db_admin = Admin(**admin.model_dump(exclude={"password"}), hashed_password=await hash_password(admin.password))
+    db_admin = Admin(
+        **admin.model_dump(exclude={"password"}, exclude_none=True),
+        hashed_password=await hash_password(admin.password),
+    )
     db.add(db_admin)
     await db.commit()
     await db.refresh(db_admin)
@@ -234,11 +239,49 @@ async def update_admin(db: AsyncSession, db_admin: Admin, modified_admin: AdminM
         db_admin.note = modified_admin.note
     if modified_admin.notification_enable is not None:
         db_admin.notification_enable = modified_admin.notification_enable.model_dump()
+    if modified_admin.create_budget_enabled is not None:
+        db_admin.create_budget_enabled = bool(modified_admin.create_budget_enabled)
+    if modified_admin.create_budget_toman is not None:
+        db_admin.create_budget_toman = max(0, int(modified_admin.create_budget_toman))
+    if modified_admin.create_budget_price_per_gb is not None:
+        db_admin.create_budget_price_per_gb = max(0, int(modified_admin.create_budget_price_per_gb))
+    if modified_admin.create_budget_price_per_day is not None:
+        db_admin.create_budget_price_per_day = max(0, int(modified_admin.create_budget_price_per_day))
 
     await db.commit()
     await db.refresh(db_admin)
     await load_admin_attrs(db_admin)
     return db_admin
+
+
+async def charge_admin_create_budget(db: AsyncSession, admin_id: int, amount: int) -> int:
+    """Adjust create budget by amount (negative = refund). Returns remaining balance."""
+    if amount == 0:
+        balance = (await db.execute(select(Admin.create_budget_toman).where(Admin.id == admin_id))).scalar_one_or_none()
+        return int(balance or 0)
+
+    if amount > 0:
+        result = await db.execute(
+            update(Admin)
+            .where(Admin.id == admin_id, Admin.create_budget_toman >= amount)
+            .values(create_budget_toman=Admin.create_budget_toman - amount)
+            .returning(Admin.create_budget_toman)
+        )
+        remaining = result.scalar_one_or_none()
+        if remaining is None:
+            raise ValueError("insufficient create budget")
+        await db.commit()
+        return int(remaining)
+
+    result = await db.execute(
+        update(Admin)
+        .where(Admin.id == admin_id)
+        .values(create_budget_toman=Admin.create_budget_toman + abs(amount))
+        .returning(Admin.create_budget_toman)
+    )
+    remaining = result.scalar_one()
+    await db.commit()
+    return int(remaining)
 
 
 async def remove_admin(db: AsyncSession, dbadmin: Admin) -> None:
@@ -545,9 +588,7 @@ async def get_usage_percentage_reached_admins(
     return list((await db.execute(stmt)).scalars().all())
 
 
-async def bulk_create_admin_notification_reminders(
-    db: AsyncSession, reminder_data: list[dict]
-) -> list[dict]:
+async def bulk_create_admin_notification_reminders(db: AsyncSession, reminder_data: list[dict]) -> list[dict]:
     """Bulk-insert admin reminder rows after successful sends."""
     if not reminder_data:
         return []
@@ -565,11 +606,7 @@ async def bulk_create_admin_notification_reminders(
     types = {d["type"] for d in unique_reminder_data}
 
     # Lock the Admin rows to serialize reminder checks/creation for these admins
-    await db.execute(
-        select(Admin.id)
-        .where(Admin.id.in_(list(admin_ids)))
-        .with_for_update()
-    )
+    await db.execute(select(Admin.id).where(Admin.id.in_(list(admin_ids))).with_for_update())
 
     # Fetch existing reminders that match these criteria
     stmt = select(AdminNotificationReminder).where(

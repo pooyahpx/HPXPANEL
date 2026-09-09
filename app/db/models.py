@@ -117,6 +117,10 @@ class Admin(Base, CreatedAtUTCMixin):
     role: Mapped[AdminRole | None] = relationship(back_populates="admins", init=False, lazy="select")
     permission_overrides: Mapped[dict | None] = mapped_column(PostgresJSONB, default=None)
     access_overrides: Mapped[dict | None] = mapped_column(PostgresJSONB, default=None)
+    create_budget_enabled: Mapped[bool] = mapped_column(default=False, server_default="0")
+    create_budget_toman: Mapped[int] = mapped_column(BigInteger, default=0, server_default="0")
+    create_budget_price_per_gb: Mapped[int] = mapped_column(BigInteger, default=0, server_default="0")
+    create_budget_price_per_day: Mapped[int] = mapped_column(BigInteger, default=0, server_default="0")
 
     @hybrid_property
     def is_disabled(self) -> bool:

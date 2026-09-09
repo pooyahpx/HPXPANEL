@@ -133,6 +133,10 @@ class AdminDetails(AdminContactInfo):
     permission_overrides: RoleLimits | None = None
     access_overrides: RoleAccess | None = None
     totp_enabled: bool = False
+    create_budget_enabled: bool = False
+    create_budget_toman: int = 0
+    create_budget_price_per_gb: int = 0
+    create_budget_price_per_day: int = 0
 
     @property
     def is_owner(self) -> bool:
@@ -171,6 +175,10 @@ class AdminModify(BaseModel):
     role_id: int | None = None
     permission_overrides: RoleLimits | None = None
     access_overrides: RoleAccess | None = None
+    create_budget_enabled: bool | None = None
+    create_budget_toman: int | None = Field(default=None, ge=0)
+    create_budget_price_per_gb: int | None = Field(default=None, ge=0)
+    create_budget_price_per_day: int | None = Field(default=None, ge=0)
 
     @field_validator("discord_webhook")
     @classmethod

@@ -11,7 +11,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app import notification
 from app.db import AsyncSession
-from app.db.crud.admin import get_admin
+from app.db.crud.admin import charge_admin_create_budget, get_admin
 from app.db.crud.bulk import (
     count_bulk_datalimit_targets,
     count_bulk_expire_targets,
@@ -23,6 +23,8 @@ from app.db.crud.bulk import (
 )
 from app.db.crud.hwid import get_user_hwid_count
 from app.db.crud.user import (
+    attach_user_group_quotas,
+    attach_users_group_quotas,
     build_revoked_proxy_settings,
     bulk_reset_user_data_usage,
     bulk_revoke_user_sub,
@@ -41,17 +43,15 @@ from app.db.crud.user import (
     get_users_simple,
     get_users_sub_update_list,
     get_users_subscription_agent_counts,
-    attach_user_group_quotas,
-    attach_users_group_quotas,
     load_user_attrs,
     lock_admin_quota_row,
     modify_user as crud_modify_user,
+    refresh_and_load_user,
     remove_expired_users,
     remove_user,
     remove_users,
     reset_user_by_next,
     reset_user_data_usage,
-    refresh_and_load_user,
     revoke_user_sub,
     set_owner,
 )
@@ -109,6 +109,7 @@ from app.operation.permissions import (
     is_scope_all,
 )
 from app.settings import hwid_settings, subscription_settings
+from app.utils.admin_create_budget import cost_from_user_payload
 from app.utils.helpers import (
     fix_datetime_timezone,
     is_absolute_url,
@@ -118,9 +119,9 @@ from app.utils.helpers import (
 from app.utils.hwid import resolve_effective_hwid_settings
 from app.utils.jwt import create_subscription_token
 from app.utils.logger import get_logger
+from app.utils.openvpn import ensure_openvpn_credentials
 from app.utils.system import readable_duration, readable_size
 from app.utils.wireguard import ensure_unique_wireguard_public_key, prepare_wireguard_keys
-from app.utils.openvpn import ensure_openvpn_credentials
 from config import subscription_env_settings, usage_settings
 
 
@@ -784,17 +785,44 @@ class UserOperation(BaseOperation):
         new_user.proxy_settings.wireguard.peer_ips = []
         new_user.proxy_settings = await self._prepare_user_proxy_settings(db, all_groups, new_user.proxy_settings)
 
+        budget_cost = 0
+        if db_admin is not None and not admin.is_owner and bool(db_admin.create_budget_enabled):
+            budget_cost = cost_from_user_payload(
+                new_user,
+                price_per_gb=int(db_admin.create_budget_price_per_gb or 0),
+                price_per_day=int(db_admin.create_budget_price_per_day or 0),
+            )
+            if budget_cost > 0:
+                try:
+                    await charge_admin_create_budget(db, db_admin.id, budget_cost)
+                except ValueError:
+                    await self.raise_error(
+                        message=(
+                            f"Insufficient create budget: need {budget_cost} toman, "
+                            f"have {int(db_admin.create_budget_toman or 0)} toman"
+                        ),
+                        code=402,
+                        db=db,
+                    )
+
         try:
             db_user = await create_user(db, new_user, all_groups, db_admin)
         except IntegrityError:
+            if budget_cost > 0 and db_admin is not None:
+                await charge_admin_create_budget(db, db_admin.id, -budget_cost)
             await self.raise_error(message="User already exists", code=409, db=db)
         except ValueError as exc:  # WireGuard subnet exhausted
+            if budget_cost > 0 and db_admin is not None:
+                await charge_admin_create_budget(db, db_admin.id, -budget_cost)
             await self.raise_error(message=str(exc), code=400, db=db)
 
         await self._finalize_openvpn_proxy_settings(db, db_user, all_groups)
         user = await self.update_user(db_user)
 
-        logger.info(f'New user "{db_user.username}" with id "{db_user.id}" added by admin "{admin.username}"')
+        logger.info(
+            f'New user "{db_user.username}" with id "{db_user.id}" added by admin "{admin.username}"'
+            + (f" (budget -{budget_cost} toman)" if budget_cost else "")
+        )
 
         asyncio.create_task(notification.create_user(user, admin))
         if not skip_role_limits and not admin.is_owner:
@@ -1223,9 +1251,7 @@ class UserOperation(BaseOperation):
     async def renew_openvpn_cert_by_id(self, db: AsyncSession, user_id: int, admin: AdminDetails) -> UserResponse:
         from app.utils.openvpn import user_has_openvpn_access
 
-        db_user = await self.get_validated_user_by_id(
-            db, user_id, admin, load_usage_logs=False, scope_action="update"
-        )
+        db_user = await self.get_validated_user_by_id(db, user_id, admin, load_usage_logs=False, scope_action="update")
         groups = await db_user.awaitable_attrs.groups
         if not await user_has_openvpn_access(db, groups):
             await self.raise_error("User is not assigned to an OpenVPN group", 400, db=db)
@@ -1240,9 +1266,7 @@ class UserOperation(BaseOperation):
         from app.models.proxy import ProxyTable
         from app.utils.openvpn import clear_openvpn_credentials, user_has_openvpn_access
 
-        db_user = await self.get_validated_user_by_id(
-            db, user_id, admin, load_usage_logs=False, scope_action="update"
-        )
+        db_user = await self.get_validated_user_by_id(db, user_id, admin, load_usage_logs=False, scope_action="update")
         groups = await db_user.awaitable_attrs.groups
         if not await user_has_openvpn_access(db, groups):
             await self.raise_error("User is not assigned to an OpenVPN group", 400, db=db)

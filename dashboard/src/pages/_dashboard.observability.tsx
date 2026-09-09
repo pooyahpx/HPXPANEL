@@ -1,22 +1,34 @@
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Textarea } from '@/components/ui/textarea'
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart'
 import useDirDetection from '@/hooks/use-dir-detection'
 import { useAdmin } from '@/hooks/use-admin'
 import { cn } from '@/lib/utils'
 import {
   AlertEventStatus,
+  AlertSeverity,
   ProtocolHealthStatus,
+  useObservabilityAlert,
   useObservabilityHistory,
   useObservabilitySummary,
   usePatchObservabilityAlert,
+  usePostObservabilityAlertAction,
+  usePostObservabilityAlertNote,
+  type AlertPlaybookAction,
+  type ObservabilityAlertEvent,
 } from '@/service/api/observability'
 import { hasPermission } from '@/utils/rbac'
-import { Activity, AlertTriangle, Cpu, HardDrive, Network, Server, Users } from 'lucide-react'
+import { Activity, AlertTriangle, Cpu, HardDrive, Loader2, Network, Server, Users } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 import { CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts'
 
 const statusColor: Record<ProtocolHealthStatus, string> = {
@@ -30,6 +42,12 @@ const alertStatusVariant: Record<AlertEventStatus, 'destructive' | 'secondary' |
   open: 'destructive',
   acked: 'secondary',
   resolved: 'outline',
+}
+
+const severityVariant: Record<AlertSeverity, 'outline' | 'secondary' | 'destructive'> = {
+  info: 'outline',
+  warning: 'secondary',
+  critical: 'destructive',
 }
 
 const nodeStatusDot = (status: string) => {
@@ -61,7 +79,13 @@ const ObservabilityPage = () => {
   const canView = hasPermission(admin, 'nodes', 'stats')
   const canUpdate = hasPermission(admin, 'nodes', 'update')
   const [historyScope, setHistoryScope] = useState<'master' | number>('master')
+  const [selectedAlertId, setSelectedAlertId] = useState<number | null>(null)
+  const [noteText, setNoteText] = useState('')
+  const [assigneeInput, setAssigneeInput] = useState('')
+  const [severityInput, setSeverityInput] = useState<AlertSeverity>('warning')
   const patchAlert = usePatchObservabilityAlert()
+  const postNote = usePostObservabilityAlertNote()
+  const postAction = usePostObservabilityAlertAction()
 
   const { data, isLoading, isError } = useObservabilitySummary({
     enabled: canView,
@@ -78,6 +102,10 @@ const ObservabilityPage = () => {
     { enabled: canView && Boolean(data?.node_stats_recording_enabled) },
   )
 
+  const { data: selectedAlert, isLoading: alertDetailLoading } = useObservabilityAlert(selectedAlertId, {
+    enabled: selectedAlertId != null,
+  })
+
   const connectedNodes = useMemo(() => data?.nodes.filter(node => node.status === 'connected').length ?? 0, [data?.nodes])
   const chartData = useMemo(
     () =>
@@ -89,8 +117,54 @@ const ObservabilityPage = () => {
     [history?.stats],
   )
 
+  const actionPending = postAction.isPending || postNote.isPending || patchAlert.isPending
+
   const handleAlertStatus = (alertId: number, status: AlertEventStatus) => {
     patchAlert.mutate({ alertId, body: { status } })
+  }
+
+  const openAlertSheet = (alert: ObservabilityAlertEvent) => {
+    setSelectedAlertId(alert.id)
+    setNoteText('')
+    setAssigneeInput(alert.assignee ?? '')
+    setSeverityInput(alert.severity ?? 'warning')
+  }
+
+  const closeAlertSheet = (open: boolean) => {
+    if (!open) {
+      setSelectedAlertId(null)
+      setNoteText('')
+    }
+  }
+
+  const runAction = async (action: AlertPlaybookAction, extra?: { note?: string; severity?: AlertSeverity; assignee?: string }) => {
+    if (selectedAlertId == null) return
+    try {
+      await postAction.mutateAsync({
+        alertId: selectedAlertId,
+        body: {
+          action,
+          note: extra?.note,
+          severity: extra?.severity,
+          assignee: extra?.assignee,
+        },
+      })
+      if (action === 'add_note') setNoteText('')
+      toast.success(t('observability.actionSuccess'))
+    } catch (error: any) {
+      toast.error(error?.data?.detail || t('observability.actionFailed'))
+    }
+  }
+
+  const handleAddNote = async () => {
+    if (selectedAlertId == null || !noteText.trim()) return
+    try {
+      await postNote.mutateAsync({ alertId: selectedAlertId, body: { message: noteText.trim() } })
+      setNoteText('')
+      toast.success(t('observability.actionSuccess'))
+    } catch (error: any) {
+      toast.error(error?.data?.detail || t('observability.actionFailed'))
+    }
   }
 
   if (!canView) {
@@ -100,6 +174,9 @@ const ObservabilityPage = () => {
       </div>
     )
   }
+
+  const sheetAlert = selectedAlert
+  const sheetStatus = (sheetAlert?.status ?? 'open') as AlertEventStatus
 
   return (
     <div dir={dir} className="w-full">
@@ -286,11 +363,27 @@ const ObservabilityPage = () => {
             <div className="command-surface divide-y">
               {data.recent_alerts.map(alert => {
                 const status = (alert.status ?? 'open') as AlertEventStatus
+                const severity = (alert.severity ?? 'warning') as AlertSeverity
                 return (
-                  <div key={alert.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-xs">
+                  <div
+                    key={alert.id}
+                    role="button"
+                    tabIndex={0}
+                    className="hover:bg-muted/40 flex cursor-pointer flex-wrap items-center justify-between gap-2 px-4 py-3 text-xs"
+                    onClick={() => openAlertSheet(alert)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        openAlertSheet(alert)
+                      }
+                    }}
+                  >
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="font-medium">{alert.message}</p>
+                        <Badge variant={severityVariant[severity]} className="font-mono text-[10px] uppercase">
+                          {t(`observability.severityLevels.${severity}`)}
+                        </Badge>
                         <Badge variant={alertStatusVariant[status]} className="font-mono text-[10px] uppercase">
                           {t(`observability.status.${status}`)}
                         </Badge>
@@ -298,9 +391,10 @@ const ObservabilityPage = () => {
                       <p className="text-muted-foreground font-mono text-[10px]">
                         {alert.scope}
                         {alert.node_name ? ` · ${alert.node_name}` : ''} · {alert.metric} = {alert.value.toFixed(1)}
+                        {alert.assignee ? ` · ${alert.assignee}` : ''}
                       </p>
                     </div>
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2" onClick={e => e.stopPropagation()}>
                       {canUpdate && status === 'open' && (
                         <Button
                           size="sm"
@@ -334,6 +428,147 @@ const ObservabilityPage = () => {
           </section>
         )}
       </main>
+
+      <Sheet open={selectedAlertId != null} onOpenChange={closeAlertSheet}>
+        <SheetContent side="right" className="flex w-full flex-col overflow-y-auto sm:max-w-lg">
+          <SheetHeader>
+            <SheetTitle>{t('observability.incidentDetails')}</SheetTitle>
+            <SheetDescription>{sheetAlert?.message || t('observability.timeline')}</SheetDescription>
+          </SheetHeader>
+
+          {alertDetailLoading && !sheetAlert ? (
+            <div className="flex items-center gap-2 py-8">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span className="text-muted-foreground text-sm">{t('loading', { defaultValue: 'Loading…' })}</span>
+            </div>
+          ) : sheetAlert ? (
+            <div className="mt-4 space-y-5">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant={severityVariant[(sheetAlert.severity ?? 'warning') as AlertSeverity]} className="font-mono text-[10px] uppercase">
+                  {t(`observability.severityLevels.${sheetAlert.severity ?? 'warning'}`)}
+                </Badge>
+                <Badge variant={alertStatusVariant[sheetStatus]} className="font-mono text-[10px] uppercase">
+                  {t(`observability.status.${sheetStatus}`)}
+                </Badge>
+                {sheetAlert.assignee && (
+                  <span className="text-muted-foreground font-mono text-[10px]">
+                    {t('observability.assignee')}: {sheetAlert.assignee}
+                  </span>
+                )}
+              </div>
+
+              <div>
+                <h3 className="mb-2 font-mono text-[10px] font-bold tracking-[0.14em] uppercase">{t('observability.timeline')}</h3>
+                <ol className="border-border max-h-64 space-y-3 overflow-y-auto border-s-2 ps-3">
+                  {(sheetAlert.timeline ?? []).length === 0 ? (
+                    <li className="text-muted-foreground text-xs">{t('observability.timelineEmpty')}</li>
+                  ) : (
+                    (sheetAlert.timeline ?? []).map(event => (
+                      <li key={event.id} className="space-y-0.5 text-xs">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant="outline" className="rounded-none font-mono text-[9px] uppercase">
+                            {event.event_type}
+                          </Badge>
+                          <time className="text-muted-foreground font-mono text-[10px]">
+                            {new Date(event.created_at).toLocaleString()}
+                          </time>
+                        </div>
+                        <p className="font-medium">{event.message}</p>
+                        {event.actor && <p className="text-muted-foreground font-mono text-[10px]">{event.actor}</p>}
+                      </li>
+                    ))
+                  )}
+                </ol>
+              </div>
+
+              {canUpdate && (
+                <div className="space-y-4 border-t pt-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="alert-note">{t('observability.addNote')}</Label>
+                    <Textarea
+                      id="alert-note"
+                      rows={3}
+                      value={noteText}
+                      onChange={e => setNoteText(e.target.value)}
+                      placeholder={t('observability.notePlaceholder')}
+                    />
+                    <Button size="sm" variant="outline" disabled={actionPending || !noteText.trim()} onClick={handleAddNote}>
+                      {postNote.isPending && <Loader2 className="me-2 h-3.5 w-3.5 animate-spin" />}
+                      {t('observability.addNote')}
+                    </Button>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    {sheetStatus === 'open' && (
+                      <Button size="sm" variant="outline" disabled={actionPending} onClick={() => runAction('acknowledge')}>
+                        {t('observability.ack')}
+                      </Button>
+                    )}
+                    {(sheetStatus === 'open' || sheetStatus === 'acked') && (
+                      <Button size="sm" variant="secondary" disabled={actionPending} onClick={() => runAction('resolve')}>
+                        {t('observability.resolve')}
+                      </Button>
+                    )}
+                    {sheetStatus === 'resolved' && (
+                      <Button size="sm" variant="outline" disabled={actionPending} onClick={() => runAction('reopen')}>
+                        {t('observability.reopen')}
+                      </Button>
+                    )}
+                    {sheetAlert.node_id != null && (
+                      <Button size="sm" variant="destructive" disabled={actionPending} onClick={() => runAction('restart_node')}>
+                        {t('observability.restartNode')}
+                      </Button>
+                    )}
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <Label>{t('observability.severity')}</Label>
+                      <Select value={severityInput} onValueChange={v => setSeverityInput(v as AlertSeverity)}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="info">{t('observability.severityLevels.info')}</SelectItem>
+                          <SelectItem value="warning">{t('observability.severityLevels.warning')}</SelectItem>
+                          <SelectItem value="critical">{t('observability.severityLevels.critical')}</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="mt-1"
+                        disabled={actionPending}
+                        onClick={() => runAction('set_severity', { severity: severityInput })}
+                      >
+                        {t('observability.setSeverity')}
+                      </Button>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="alert-assignee">{t('observability.assignee')}</Label>
+                      <Input
+                        id="alert-assignee"
+                        value={assigneeInput}
+                        onChange={e => setAssigneeInput(e.target.value)}
+                        placeholder={t('observability.assigneePlaceholder')}
+                      />
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="mt-1"
+                        disabled={actionPending}
+                        onClick={() => runAction('set_assignee', { assignee: assigneeInput.trim() })}
+                      >
+                        {t('observability.setAssignee')}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : null}
+        </SheetContent>
+      </Sheet>
     </div>
   )
 }

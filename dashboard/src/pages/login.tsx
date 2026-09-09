@@ -8,13 +8,14 @@ import { LoaderButton } from '@/components/ui/loader-button'
 import { PasswordInput } from '@/components/ui/password-input'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { getCurrentAdmin, useAdminMiniAppToken, useAdminToken, useCreateOwner, useDeleteOwner, useResetOwnerPassword, useUpgradeOwner } from '@/service/api'
-import { useAdminTokenMfa } from '@/service/api/security'
+import { getMfaWebauthnOptions, useAdminTokenMfa } from '@/service/api/security'
 import { $fetch } from '@/service/http'
 import { getAuthToken, removeAuthToken, setAuthToken } from '@/utils/authStorage'
 import { queryClient } from '@/utils/query-client'
 import { zodResolver } from '@hookform/resolvers/zod'
+import { startAuthentication } from '@simplewebauthn/browser'
 import { retrieveRawInitData } from '@telegram-apps/sdk'
-import { ArrowLeft, CircleAlertIcon, KeyRound, LogInIcon, RotateCcw, ShieldCheck, Trash2, UserRoundKey } from 'lucide-react'
+import { ArrowLeft, CircleAlertIcon, KeyRound, LogInIcon, RotateCcw, ShieldCheck, Trash2, Usb, UserRoundKey } from 'lucide-react'
 import { FC, useEffect, useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
@@ -188,6 +189,9 @@ export const Login: FC = () => {
   }, [navigate, isTelegram])
 
   const [mfaToken, setMfaToken] = useState<string | null>(null)
+  const [totpAvailable, setTotpAvailable] = useState(true)
+  const [webauthnAvailable, setWebauthnAvailable] = useState(false)
+  const [webauthnPending, setWebauthnPending] = useState(false)
   const mfaLogin = useAdminTokenMfa()
 
   const {
@@ -209,6 +213,8 @@ export const Login: FC = () => {
       onSuccess(data) {
         if (data.mfa_required && data.mfa_token) {
           setMfaToken(data.mfa_token)
+          setTotpAvailable(data.totp_available ?? true)
+          setWebauthnAvailable(Boolean(data.webauthn_available))
           resetMfaForm()
           return
         }
@@ -274,8 +280,32 @@ export const Login: FC = () => {
     }
   }
 
+  const handleWebauthnMfa = async () => {
+    if (!mfaToken) return
+    setWebauthnPending(true)
+    try {
+      const optionsRes = await getMfaWebauthnOptions({ mfa_token: mfaToken })
+      const assertion = await startAuthentication({ optionsJSON: optionsRes.options as any })
+      const data = await mfaLogin.mutateAsync({
+        mfa_token: mfaToken,
+        webauthn_challenge_token: optionsRes.challenge_token,
+        webauthn_response: assertion as unknown as Record<string, unknown>,
+      })
+      if (data.access_token) {
+        setAuthToken(data.access_token)
+        navigate('/', { replace: true })
+      }
+    } catch (err: any) {
+      toast.error(err?.data?.detail || err?.message || t('login.mfaFailed'))
+    } finally {
+      setWebauthnPending(false)
+    }
+  }
+
   const cancelMfa = () => {
     setMfaToken(null)
+    setTotpAvailable(true)
+    setWebauthnAvailable(false)
     resetMfaForm()
   }
 
@@ -493,33 +523,50 @@ export const Login: FC = () => {
 
             {view === 'login' ? (
               mfaToken ? (
-                <form onSubmit={handleMfaSubmit(handleMfaLogin)} autoComplete="one-time-code" className="space-y-3">
-                  <p className="text-muted-foreground text-sm">{t('login.mfaPrompt')}</p>
-                  <Input
-                    className="h-12"
-                    placeholder={t('login.mfaCode')}
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
-                    {...registerMfa('code')}
-                    error={t(mfaErrors?.code?.message as string)}
-                  />
-                  {mfaLogin.error && (
-                    <Alert className="mt-2" variant="destructive">
-                      <CircleAlertIcon size="18px" />
-                      <AlertDescription>{(mfaLogin.error as any)?.data?.detail || t('login.mfaFailed')}</AlertDescription>
-                    </Alert>
+                <div className="space-y-3">
+                  {totpAvailable && (
+                    <form onSubmit={handleMfaSubmit(handleMfaLogin)} autoComplete="one-time-code" className="space-y-3">
+                      <p className="text-muted-foreground text-sm">{t('login.mfaPrompt')}</p>
+                      <Input
+                        className="h-12"
+                        placeholder={t('login.mfaCode')}
+                        inputMode="numeric"
+                        autoComplete="one-time-code"
+                        {...registerMfa('code')}
+                        error={t(mfaErrors?.code?.message as string)}
+                      />
+                      {mfaLogin.error && !webauthnPending && (
+                        <Alert className="mt-2" variant="destructive">
+                          <CircleAlertIcon size="18px" />
+                          <AlertDescription>{(mfaLogin.error as any)?.data?.detail || t('login.mfaFailed')}</AlertDescription>
+                        </Alert>
+                      )}
+                      <LoaderButton isLoading={mfaLogin.isPending && !webauthnPending} type="submit" className="flex h-12 w-full items-center gap-2">
+                        <ShieldCheck size="18px" />
+                        <span>{t('login.mfaVerify')}</span>
+                      </LoaderButton>
+                    </form>
                   )}
-                  <div className="flex flex-col gap-2 pt-2">
-                    <LoaderButton isLoading={mfaLogin.isPending} type="submit" className="flex h-12 w-full items-center gap-2">
-                      <ShieldCheck size="18px" />
-                      <span>{t('login.mfaVerify')}</span>
-                    </LoaderButton>
-                    <Button type="button" variant="outline" className="flex h-11 w-full items-center gap-2" onClick={cancelMfa}>
-                      <ArrowLeft className="h-4 w-4" />
-                      <span>{t('login.backToLogin')}</span>
-                    </Button>
-                  </div>
-                </form>
+                  {webauthnAvailable && (
+                    <div className="space-y-2">
+                      {!totpAvailable && <p className="text-muted-foreground text-sm">{t('login.mfaSecurityKeyPrompt')}</p>}
+                      <LoaderButton
+                        type="button"
+                        variant={totpAvailable ? 'outline' : 'default'}
+                        isLoading={webauthnPending}
+                        className="flex h-12 w-full items-center gap-2"
+                        onClick={handleWebauthnMfa}
+                      >
+                        <Usb size="18px" />
+                        <span>{t('login.mfaUseSecurityKey')}</span>
+                      </LoaderButton>
+                    </div>
+                  )}
+                  <Button type="button" variant="outline" className="flex h-11 w-full items-center gap-2" onClick={cancelMfa}>
+                    <ArrowLeft className="h-4 w-4" />
+                    <span>{t('login.backToLogin')}</span>
+                  </Button>
+                </div>
               ) : (
               <form onSubmit={handleSubmit(handleLogin)} autoComplete="on" className="space-y-3">
                 <Input className="h-12" placeholder={t('username')} autoComplete="username" {...register('username')} error={t(errors?.username?.message as string)} />

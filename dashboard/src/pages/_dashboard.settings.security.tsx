@@ -19,14 +19,19 @@ import useDirDetection from '@/hooks/use-dir-detection'
 import { useAdmin } from '@/hooks/use-admin'
 import { cn } from '@/lib/utils'
 import {
+  getWebauthnRegisterOptions,
   useAdminSessions,
   useConfirmTotp,
+  useDeleteWebauthnCredential,
   useDisableTotp,
+  useRegisterWebauthn,
   useRevokeAdminSession,
   useRevokeOtherAdminSessions,
   useSetupTotp,
+  useWebauthnCredentials,
 } from '@/service/api/security'
-import { KeyRound, Loader2, ShieldCheck, Trash2 } from 'lucide-react'
+import { startRegistration } from '@simplewebauthn/browser'
+import { KeyRound, Loader2, ShieldCheck, Trash2, Usb } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -37,11 +42,14 @@ export default function SecuritySettings() {
   const { admin } = useAdmin()
   const totpEnabled = Boolean(admin?.totp_enabled)
   const { data: sessionsData, isLoading: sessionsLoading } = useAdminSessions()
+  const { data: webauthnData, isLoading: webauthnLoading } = useWebauthnCredentials()
   const setupTotp = useSetupTotp()
   const confirmTotp = useConfirmTotp()
   const disableTotp = useDisableTotp()
   const revokeSession = useRevokeAdminSession()
   const revokeOthers = useRevokeOtherAdminSessions()
+  const registerWebauthn = useRegisterWebauthn()
+  const deleteWebauthn = useDeleteWebauthnCredential()
 
   const [setupSecret, setSetupSecret] = useState<string | null>(null)
   const [otpauthUrl, setOtpauthUrl] = useState<string | null>(null)
@@ -49,6 +57,8 @@ export default function SecuritySettings() {
   const [disableCode, setDisableCode] = useState('')
   const [disablePassword, setDisablePassword] = useState('')
   const [revokeOthersOpen, setRevokeOthersOpen] = useState(false)
+  const [keyNickname, setKeyNickname] = useState('')
+  const [registeringKey, setRegisteringKey] = useState(false)
 
   const handleSetup = async () => {
     try {
@@ -100,6 +110,34 @@ export default function SecuritySettings() {
       toast.success(t('security.otherSessionsRevoked'))
     } catch (error: any) {
       toast.error(error?.data?.detail || t('security.sessionRevokeFailed'))
+    }
+  }
+
+  const handleRegisterSecurityKey = async () => {
+    setRegisteringKey(true)
+    try {
+      const optionsRes = await getWebauthnRegisterOptions()
+      const credential = await startRegistration({ optionsJSON: optionsRes.options as any })
+      await registerWebauthn.mutateAsync({
+        challenge_token: optionsRes.challenge_token,
+        credential: credential as unknown as Record<string, unknown>,
+        nickname: keyNickname.trim() || undefined,
+      })
+      setKeyNickname('')
+      toast.success(t('security.webauthnRegistered'))
+    } catch (error: any) {
+      toast.error(error?.data?.detail || error?.message || t('security.webauthnRegisterFailed'))
+    } finally {
+      setRegisteringKey(false)
+    }
+  }
+
+  const handleDeleteSecurityKey = async (credentialId: number) => {
+    try {
+      await deleteWebauthn.mutateAsync(credentialId)
+      toast.success(t('security.webauthnDeleted'))
+    } catch (error: any) {
+      toast.error(error?.data?.detail || t('security.webauthnDeleteFailed'))
     }
   }
 
@@ -184,6 +222,77 @@ export default function SecuritySettings() {
               </Button>
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Usb className="h-5 w-5" />
+            {t('security.webauthnTitle')}
+          </CardTitle>
+          <CardDescription>{t('security.webauthnDescription')}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+            <div className="flex-1 space-y-1">
+              <Label htmlFor="key-nickname">{t('security.webauthnNickname')}</Label>
+              <Input
+                id="key-nickname"
+                value={keyNickname}
+                onChange={e => setKeyNickname(e.target.value)}
+                placeholder={t('security.webauthnNicknamePlaceholder')}
+              />
+            </div>
+            <Button onClick={handleRegisterSecurityKey} disabled={registeringKey || registerWebauthn.isPending}>
+              {(registeringKey || registerWebauthn.isPending) && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
+              {t('security.webauthnRegister')}
+            </Button>
+          </div>
+
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>{t('security.webauthnNickname')}</TableHead>
+                <TableHead>{t('security.columns.created')}</TableHead>
+                <TableHead>{t('security.webauthnLastUsed')}</TableHead>
+                <TableHead>{t('security.columns.actions')}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {webauthnLoading ? (
+                <TableRow>
+                  <TableCell colSpan={4}>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  </TableCell>
+                </TableRow>
+              ) : (webauthnData?.credentials?.length ?? 0) === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={4} className="text-muted-foreground">
+                    {t('security.webauthnEmpty')}
+                  </TableCell>
+                </TableRow>
+              ) : (
+                webauthnData?.credentials.map(cred => (
+                  <TableRow key={cred.id}>
+                    <TableCell>{cred.nickname}</TableCell>
+                    <TableCell>{new Date(cred.created_at).toLocaleString()}</TableCell>
+                    <TableCell>{cred.last_used_at ? new Date(cred.last_used_at).toLocaleString() : '—'}</TableCell>
+                    <TableCell>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={deleteWebauthn.isPending}
+                        onClick={() => handleDeleteSecurityKey(cred.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
         </CardContent>
       </Card>
 

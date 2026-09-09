@@ -659,7 +659,7 @@ class Node(Base, CreatedAtUTCMixin):
         back_populates="node", cascade="all, delete-orphan", init=False
     )
     core_config: Mapped[CoreConfig | None] = relationship("CoreConfig", init=False)
-    core_bindings: Mapped[list["NodeCoreBinding"]] = relationship(
+    core_bindings: Mapped[list[NodeCoreBinding]] = relationship(
         "NodeCoreBinding",
         back_populates="node",
         cascade="all, delete-orphan",
@@ -765,7 +765,7 @@ class NodeCoreBinding(Base, IdMixin):
     sort_order: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     is_primary: Mapped[bool] = mapped_column(default=False, server_default="0")
     node: Mapped[Node] = relationship("Node", back_populates="core_bindings", init=False)
-    core_config: Mapped["CoreConfig"] = relationship("CoreConfig", init=False)
+    core_config: Mapped[CoreConfig] = relationship("CoreConfig", init=False)
 
 
 class NodeUserUsage(Base, IdMixin):
@@ -1019,6 +1019,43 @@ class ObservabilityAlertEvent(Base, CreatedAtUTCMixin):
     resolved_at: Mapped[dt | None] = mapped_column(DateTime(timezone=True), default=None)
     resolved_by: Mapped[str | None] = mapped_column(String(64), default=None)
     note: Mapped[str | None] = mapped_column(String(500), default=None)
+    severity: Mapped[str] = mapped_column(String(16), nullable=False, default="warning", server_default="warning")
+    assignee: Mapped[str | None] = mapped_column(String(64), default=None)
+
+
+class ObservabilityAlertTimelineEvent(Base, CreatedAtUTCMixin):
+    __tablename__ = "observability_alert_timeline_events"
+    __table_args__ = (
+        Index("ix_observability_alert_timeline_events_alert_id", "alert_id"),
+        Index("ix_observability_alert_timeline_events_created_at", "created_at"),
+    )
+
+    alert_id: Mapped[int] = fk_id_column("observability_alert_events.id", ondelete="CASCADE")
+    event_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    message: Mapped[str] = mapped_column(String(1000), nullable=False)
+    actor: Mapped[str | None] = mapped_column(String(64), default=None)
+    from_status: Mapped[str | None] = mapped_column(String(16), default=None)
+    to_status: Mapped[str | None] = mapped_column(String(16), default=None)
+    payload: Mapped[dict | None] = mapped_column(PostgresJSONB, default=None)
+
+
+class AdminWebAuthnCredential(Base, CreatedAtUTCMixin):
+    __tablename__ = "admin_webauthn_credentials"
+    __table_args__ = (
+        UniqueConstraint("credential_id", name="uq_admin_webauthn_credentials_credential_id"),
+        Index("ix_admin_webauthn_credentials_admin_id", "admin_id"),
+    )
+
+    admin_id: Mapped[int] = fk_id_column("admins.id", ondelete="CASCADE")
+    credential_id: Mapped[str] = mapped_column(String(512), nullable=False)
+    public_key: Mapped[str] = mapped_column(Text, nullable=False)
+    sign_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    nickname: Mapped[str] = mapped_column(
+        String(128), nullable=False, default="Security key", server_default="Security key"
+    )
+    transports: Mapped[list | None] = mapped_column(PostgresJSONB, default=None)
+    aaguid: Mapped[str | None] = mapped_column(String(64), default=None)
+    last_used_at: Mapped[dt | None] = mapped_column(DateTime(timezone=True), default=None)
 
 
 class Settings(Base, IdMixin):

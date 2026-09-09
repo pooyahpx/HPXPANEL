@@ -20,8 +20,35 @@ export interface AdminSessionsResponse {
   sessions: AdminSessionItem[]
 }
 
-export const adminTokenMfa = (body: { mfa_token: string; code: string }) =>
+export interface WebAuthnOptionsResponse {
+  challenge_token: string
+  options: Record<string, unknown>
+}
+
+export interface WebAuthnCredential {
+  id: number
+  nickname: string
+  created_at: string
+  last_used_at?: string | null
+  aaguid?: string | null
+}
+
+export interface WebAuthnCredentialsResponse {
+  credentials: WebAuthnCredential[]
+}
+
+export interface AdminTokenMfaRequest {
+  mfa_token: string
+  code?: string
+  webauthn_challenge_token?: string
+  webauthn_response?: Record<string, unknown>
+}
+
+export const adminTokenMfa = (body: AdminTokenMfaRequest) =>
   fetcher<Token>('/api/admin/token/mfa', { method: 'POST', body })
+
+export const getMfaWebauthnOptions = (body: { mfa_token: string }) =>
+  fetcher<WebAuthnOptionsResponse>('/api/admin/token/mfa/webauthn/options', { method: 'POST', body })
 
 export const setupTotp = () => fetcher<TOTPSetupResponse>('/api/admin/security/totp/setup', { method: 'POST' })
 
@@ -37,6 +64,21 @@ export const revokeAdminSession = (sessionId: number) =>
   fetcher<void>(`/api/admin/security/sessions/${sessionId}`, { method: 'DELETE' })
 
 export const revokeOtherAdminSessions = () => fetcher<void>('/api/admin/security/sessions', { method: 'DELETE' })
+
+export const listWebauthnCredentials = () =>
+  fetcher<WebAuthnCredentialsResponse>('/api/admin/security/webauthn/credentials')
+
+export const getWebauthnRegisterOptions = () =>
+  fetcher<WebAuthnOptionsResponse>('/api/admin/security/webauthn/register/options', { method: 'POST' })
+
+export const verifyWebauthnRegistration = (body: {
+  challenge_token: string
+  credential: Record<string, unknown>
+  nickname?: string | null
+}) => fetcher<WebAuthnCredential>('/api/admin/security/webauthn/register/verify', { method: 'POST', body })
+
+export const deleteWebauthnCredential = (credentialId: number) =>
+  fetcher<void>(`/api/admin/security/webauthn/credentials/${credentialId}`, { method: 'DELETE' })
 
 export const useAdminTokenMfa = () =>
   useMutation({
@@ -87,6 +129,32 @@ export const useRevokeOtherAdminSessions = () => {
     mutationFn: revokeOtherAdminSessions,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'security', 'sessions'] })
+    },
+  })
+}
+
+export const useWebauthnCredentials = () =>
+  useQuery({
+    queryKey: ['admin', 'security', 'webauthn'],
+    queryFn: listWebauthnCredentials,
+  })
+
+export const useRegisterWebauthn = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: verifyWebauthnRegistration,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'security', 'webauthn'] })
+    },
+  })
+}
+
+export const useDeleteWebauthnCredential = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: deleteWebauthnCredential,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'security', 'webauthn'] })
     },
   })
 }

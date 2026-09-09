@@ -216,6 +216,9 @@ class AuthSettings(EnvSettings):
     sudo_username: str = Field(default="", validation_alias="SUDO_USERNAME")
     sudo_password: str = Field(default="", validation_alias="SUDO_PASSWORD")
     sudoers: dict[str, str] = Field(default_factory=dict)
+    webauthn_rp_id: str = Field(default="", validation_alias="WEBAUTHN_RP_ID")
+    webauthn_rp_name: str = Field(default="HPXPANEL", validation_alias="WEBAUTHN_RP_NAME")
+    webauthn_origin: str = Field(default="", validation_alias="WEBAUTHN_ORIGIN")
 
     @model_validator(mode="after")
     def build_sudoers(self) -> AuthSettings:

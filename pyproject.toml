@@ -45,6 +45,7 @@ dependencies = [
     "pasarguard-node-bridge>=0.9.0",
     "pip-system-certs>=5.3",
     "nats-py>=2.15.0",
+    "webauthn>=2.0.0",
 ]
 
 [tool.ruff]

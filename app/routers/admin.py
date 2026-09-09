@@ -16,6 +16,14 @@ from app.db.crud.admin_session import (
     revoke_admin_session,
     revoke_all_admin_sessions,
 )
+from app.db.crud.admin_webauthn import (
+    count_webauthn_credentials,
+    create_webauthn_credential,
+    delete_webauthn_credential,
+    get_webauthn_credential_by_credential_id,
+    list_webauthn_credentials,
+    touch_webauthn_credential,
+)
 from app.models.admin import (
     AdminCreate,
     AdminDetails,
@@ -36,6 +44,11 @@ from app.models.admin import (
     RemoveAdminsResponse,
     Token,
     TOTPSetupResponse,
+    WebAuthnCredentialResponse,
+    WebAuthnCredentialsResponse,
+    WebAuthnMfaOptionsRequest,
+    WebAuthnOptionsResponse,
+    WebAuthnRegisterVerifyRequest,
     verify_password,
 )
 from app.models.stats import UserUsageStatsList
@@ -52,6 +65,12 @@ from app.utils.jwt import (
     get_secret_key,
 )
 from app.utils.request import get_client_ip
+from app.utils.webauthn_mfa import (
+    build_authentication_options,
+    build_registration_options,
+    verify_authentication,
+    verify_registration,
+)
 from config import rate_limit_settings
 
 from .authentication import (
@@ -124,9 +143,18 @@ async def admin_token(
             status_code=403, detail="your account has been disabled", headers={"WWW-Authenticate": "Bearer"}
         )
 
-    if db_admin.totp_enabled and db_admin.id is not None:
+    webauthn_count = 0
+    if db_admin.id is not None:
+        webauthn_count = await count_webauthn_credentials(db, db_admin.id)
+    if (db_admin.totp_enabled or webauthn_count > 0) and db_admin.id is not None:
         mfa_token = await create_mfa_challenge_token(db_admin.id, db_admin.username)
-        return Token(access_token="", mfa_required=True, mfa_token=mfa_token)
+        return Token(
+            access_token="",
+            mfa_required=True,
+            mfa_token=mfa_token,
+            totp_available=bool(db_admin.totp_enabled),
+            webauthn_available=webauthn_count > 0,
+        )
 
     asyncio.create_task(notification.admin_login(db_admin.username, client_ip, True))
     return await _issue_admin_token(db, admin_id=db_admin.id, username=form_data.username, request=request)
@@ -134,7 +162,7 @@ async def admin_token(
 
 @router.post("/token/mfa", response_model=Token)
 async def admin_token_mfa(request: Request, body: MFATokenRequest, db: AsyncSession = Depends(get_db)):
-    """Complete MFA challenge and issue a session token."""
+    """Complete MFA challenge (TOTP or WebAuthn) and issue a session token."""
     await rate_limiter.enforce_client_and_identity(
         request,
         "admin-mfa",
@@ -148,21 +176,72 @@ async def admin_token_mfa(request: Request, body: MFATokenRequest, db: AsyncSess
         raise HTTPException(status_code=401, detail="Invalid or expired MFA token")
 
     db_admin = await get_admin_by_id_crud(db, challenge["admin_id"], load_users=False, load_usage_logs=False)
-    if not db_admin or not db_admin.totp_enabled or not db_admin.totp_secret:
+    if not db_admin:
         raise HTTPException(status_code=401, detail="MFA is not available for this admin")
 
-    secret_key = await get_secret_key()
-    try:
-        totp_secret = decrypt_secret(db_admin.totp_secret, secret_key)
-    except Exception:
-        raise HTTPException(status_code=401, detail="Invalid MFA configuration")
+    request_host = request.headers.get("host")
+    request_origin = request.headers.get("origin")
 
-    if not _verify_totp_code(totp_secret, body.code):
-        asyncio.create_task(notification.admin_login(db_admin.username, client_ip, False))
-        raise HTTPException(status_code=401, detail="Invalid MFA code")
+    if body.webauthn_challenge_token and body.webauthn_response:
+        credential_id = body.webauthn_response.get("id")
+        if not isinstance(credential_id, str):
+            raise HTTPException(status_code=401, detail="Invalid WebAuthn response")
+        cred = await get_webauthn_credential_by_credential_id(db, credential_id)
+        if cred is None or cred.admin_id != db_admin.id:
+            raise HTTPException(status_code=401, detail="Unknown security key")
+        try:
+            new_sign_count = verify_authentication(
+                admin_id=db_admin.id,
+                challenge_token=body.webauthn_challenge_token,
+                credential=body.webauthn_response,
+                credential_id=cred.credential_id,
+                public_key=cred.public_key,
+                sign_count=int(cred.sign_count or 0),
+                request_host=request_host,
+                request_origin=request_origin,
+            )
+        except Exception:
+            asyncio.create_task(notification.admin_login(db_admin.username, client_ip, False))
+            raise HTTPException(status_code=401, detail="Invalid WebAuthn assertion")
+        await touch_webauthn_credential(db, cred, sign_count=new_sign_count)
+    else:
+        if not db_admin.totp_enabled or not db_admin.totp_secret or not body.code:
+            raise HTTPException(status_code=401, detail="MFA is not available for this admin")
+        secret_key = await get_secret_key()
+        try:
+            totp_secret = decrypt_secret(db_admin.totp_secret, secret_key)
+        except Exception:
+            raise HTTPException(status_code=401, detail="Invalid MFA configuration")
+        if not _verify_totp_code(totp_secret, body.code):
+            asyncio.create_task(notification.admin_login(db_admin.username, client_ip, False))
+            raise HTTPException(status_code=401, detail="Invalid MFA code")
 
     asyncio.create_task(notification.admin_login(db_admin.username, client_ip, True))
     return await _issue_admin_token(db, admin_id=db_admin.id, username=db_admin.username, request=request)
+
+
+@router.post("/token/mfa/webauthn/options", response_model=WebAuthnOptionsResponse)
+async def admin_token_mfa_webauthn_options(
+    request: Request,
+    body: WebAuthnMfaOptionsRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Generate WebAuthn authentication options for an MFA challenge."""
+    challenge = await get_mfa_challenge_payload(body.mfa_token)
+    if not challenge:
+        raise HTTPException(status_code=401, detail="Invalid or expired MFA token")
+    db_admin = await get_admin_by_id_crud(db, challenge["admin_id"], load_users=False, load_usage_logs=False)
+    if not db_admin:
+        raise HTTPException(status_code=401, detail="MFA is not available for this admin")
+    credentials = await list_webauthn_credentials(db, db_admin.id)
+    if not credentials:
+        raise HTTPException(status_code=400, detail="No security keys registered")
+    challenge_token, options = build_authentication_options(
+        admin_id=db_admin.id,
+        credential_ids=[cred.credential_id for cred in credentials],
+        request_host=request.headers.get("host"),
+    )
+    return WebAuthnOptionsResponse(challenge_token=challenge_token, options=options)
 
 
 @router.post("/miniapp/token", responses={409: responses._409})
@@ -270,6 +349,98 @@ async def disable_totp(
     await db.commit()
     await db.refresh(db_admin)
     return build_admin_details(db_admin)
+
+
+@router.get("/security/webauthn/credentials", response_model=WebAuthnCredentialsResponse)
+async def list_webauthn_security_keys(
+    db: AsyncSession = Depends(get_db),
+    admin: AdminDetails = Depends(get_current),
+):
+    if admin.id is None:
+        raise HTTPException(status_code=400, detail="WebAuthn is not available for env admins")
+    rows = await list_webauthn_credentials(db, admin.id)
+    return WebAuthnCredentialsResponse(
+        credentials=[
+            WebAuthnCredentialResponse(
+                id=row.id,
+                nickname=row.nickname,
+                created_at=row.created_at,
+                last_used_at=row.last_used_at,
+                aaguid=row.aaguid,
+            )
+            for row in rows
+        ]
+    )
+
+
+@router.post("/security/webauthn/register/options", response_model=WebAuthnOptionsResponse)
+async def webauthn_register_options(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    admin: AdminDetails = Depends(get_current),
+):
+    if admin.id is None:
+        raise HTTPException(status_code=400, detail="WebAuthn is not available for env admins")
+    existing = await list_webauthn_credentials(db, admin.id)
+    challenge_token, options = build_registration_options(
+        admin_id=admin.id,
+        username=admin.username,
+        existing_credential_ids=[row.credential_id for row in existing],
+        request_host=request.headers.get("host"),
+    )
+    return WebAuthnOptionsResponse(challenge_token=challenge_token, options=options)
+
+
+@router.post("/security/webauthn/register/verify", response_model=WebAuthnCredentialResponse)
+async def webauthn_register_verify(
+    request: Request,
+    body: WebAuthnRegisterVerifyRequest,
+    db: AsyncSession = Depends(get_db),
+    admin: AdminDetails = Depends(get_current),
+):
+    if admin.id is None:
+        raise HTTPException(status_code=400, detail="WebAuthn is not available for env admins")
+    try:
+        verified = verify_registration(
+            admin_id=admin.id,
+            challenge_token=body.challenge_token,
+            credential=body.credential,
+            request_host=request.headers.get("host"),
+            request_origin=request.headers.get("origin"),
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"WebAuthn registration failed: {exc}") from exc
+
+    row = await create_webauthn_credential(
+        db,
+        admin_id=admin.id,
+        credential_id=verified["credential_id"],
+        public_key=verified["public_key"],
+        sign_count=verified["sign_count"],
+        nickname=(body.nickname or "Security key").strip() or "Security key",
+        transports=verified.get("transports"),
+        aaguid=verified.get("aaguid"),
+    )
+    return WebAuthnCredentialResponse(
+        id=row.id,
+        nickname=row.nickname,
+        created_at=row.created_at,
+        last_used_at=row.last_used_at,
+        aaguid=row.aaguid,
+    )
+
+
+@router.delete("/security/webauthn/credentials/{credential_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def webauthn_delete_credential(
+    credential_id: int,
+    db: AsyncSession = Depends(get_db),
+    admin: AdminDetails = Depends(get_current),
+):
+    if admin.id is None:
+        raise HTTPException(status_code=400, detail="WebAuthn is not available for env admins")
+    deleted = await delete_webauthn_credential(db, admin_id=admin.id, credential_pk=credential_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Security key not found")
 
 
 @router.get("/security/sessions", response_model=AdminSessionsResponse)

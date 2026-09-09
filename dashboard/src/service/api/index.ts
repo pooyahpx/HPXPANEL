@@ -1297,6 +1297,8 @@ export interface Token {
   token_type?: string
   mfa_required?: boolean
   mfa_token?: string | null
+  totp_available?: boolean
+  webauthn_available?: boolean
 }
 
 export type TelegramPanelUrl = string | null

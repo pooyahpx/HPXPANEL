@@ -3,8 +3,14 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import NodeUserUsage, ObservabilityAlertEvent, SystemStat, User
-from app.models.observability import AlertEventStatus, ObservabilityAlertEventResponse, SystemStatsHistoryPoint
+from app.db.models import NodeUserUsage, ObservabilityAlertEvent, ObservabilityAlertTimelineEvent, SystemStat, User
+from app.models.observability import (
+    AlertEventStatus,
+    AlertTimelineEventType,
+    ObservabilityAlertEventResponse,
+    ObservabilityAlertTimelineEventResponse,
+    SystemStatsHistoryPoint,
+)
 from app.models.stats import Period
 
 
@@ -105,7 +111,14 @@ async def get_system_stats_history(
     return points
 
 
-def _alert_event_to_response(event: ObservabilityAlertEvent, node_name: str | None = None) -> ObservabilityAlertEventResponse:
+def _alert_event_to_response(
+    event: ObservabilityAlertEvent,
+    node_name: str | None = None,
+    *,
+    timeline: list | None = None,
+) -> ObservabilityAlertEventResponse:
+    from app.models.observability import AlertSeverity
+
     return ObservabilityAlertEventResponse(
         id=event.id,
         scope=event.scope,
@@ -116,13 +129,77 @@ def _alert_event_to_response(event: ObservabilityAlertEvent, node_name: str | No
         threshold=event.threshold,
         message=event.message,
         status=AlertEventStatus(event.status),
+        severity=AlertSeverity(event.severity or AlertSeverity.warning.value),
+        assignee=event.assignee,
         acked_at=event.acked_at,
         acked_by=event.acked_by,
         resolved_at=event.resolved_at,
         resolved_by=event.resolved_by,
         note=event.note,
         created_at=event.created_at,
+        timeline=timeline or [],
     )
+
+
+def _timeline_to_response(row: ObservabilityAlertTimelineEvent) -> ObservabilityAlertTimelineEventResponse:
+    return ObservabilityAlertTimelineEventResponse(
+        id=row.id,
+        alert_id=row.alert_id,
+        created_at=row.created_at,
+        actor=row.actor,
+        event_type=AlertTimelineEventType(row.event_type),
+        from_status=AlertEventStatus(row.from_status) if row.from_status else None,
+        to_status=AlertEventStatus(row.to_status) if row.to_status else None,
+        message=row.message,
+        payload=row.payload,
+    )
+
+
+async def append_alert_timeline_event(
+    db: AsyncSession,
+    *,
+    alert_id: int,
+    event_type: str | AlertTimelineEventType,
+    message: str,
+    actor: str | None = None,
+    from_status: str | None = None,
+    to_status: str | None = None,
+    payload: dict | None = None,
+    commit: bool = False,
+) -> ObservabilityAlertTimelineEvent:
+    event_type_value = event_type.value if isinstance(event_type, AlertTimelineEventType) else event_type
+    row = ObservabilityAlertTimelineEvent(
+        alert_id=alert_id,
+        actor=actor,
+        event_type=event_type_value,
+        from_status=from_status,
+        to_status=to_status,
+        message=message[:1000],
+        payload=payload,
+    )
+    bind = await db.connection()
+    if bind.dialect.name == "sqlite":
+        next_id = (
+            await db.execute(select(func.coalesce(func.max(ObservabilityAlertTimelineEvent.id), 0) + 1))
+        ).scalar_one()
+        row.id = int(next_id)
+    db.add(row)
+    if commit:
+        await db.commit()
+        await db.refresh(row)
+    else:
+        await db.flush()
+    return row
+
+
+async def list_alert_timeline_events(db: AsyncSession, alert_id: int) -> list[ObservabilityAlertTimelineEventResponse]:
+    stmt = (
+        select(ObservabilityAlertTimelineEvent)
+        .where(ObservabilityAlertTimelineEvent.alert_id == alert_id)
+        .order_by(ObservabilityAlertTimelineEvent.created_at.asc(), ObservabilityAlertTimelineEvent.id.asc())
+    )
+    rows = (await db.execute(stmt)).scalars().all()
+    return [_timeline_to_response(row) for row in rows]
 
 
 async def list_alert_events(
@@ -154,6 +231,22 @@ async def get_alert_event(db: AsyncSession, alert_id: int) -> ObservabilityAlert
     return await db.get(ObservabilityAlertEvent, alert_id)
 
 
+async def get_alert_event_detail(db: AsyncSession, alert_id: int) -> ObservabilityAlertEventResponse | None:
+    from app.db.models import Node
+
+    stmt = (
+        select(ObservabilityAlertEvent, Node.name)
+        .outerjoin(Node, Node.id == ObservabilityAlertEvent.node_id)
+        .where(ObservabilityAlertEvent.id == alert_id)
+    )
+    row = (await db.execute(stmt)).one_or_none()
+    if row is None:
+        return None
+    event, node_name = row
+    timeline = await list_alert_timeline_events(db, alert_id)
+    return _alert_event_to_response(event, node_name, timeline=timeline)
+
+
 async def update_alert_event_status(
     db: AsyncSession,
     alert_id: int,
@@ -167,6 +260,7 @@ async def update_alert_event_status(
         return None
 
     status_value = status.value if isinstance(status, AlertEventStatus) else status
+    previous_status = event.status
     now = datetime.now(UTC)
     event.status = status_value
     if note is not None:
@@ -187,6 +281,99 @@ async def update_alert_event_status(
         event.resolved_at = None
         event.resolved_by = None
 
+    if previous_status != status_value:
+        await append_alert_timeline_event(
+            db,
+            alert_id=event.id,
+            event_type=AlertTimelineEventType.status_changed,
+            actor=actor_username,
+            from_status=previous_status,
+            to_status=status_value,
+            message=f"Status changed from {previous_status} to {status_value}",
+        )
+    if note:
+        await append_alert_timeline_event(
+            db,
+            alert_id=event.id,
+            event_type=AlertTimelineEventType.note_added,
+            actor=actor_username,
+            message=note,
+        )
+
+    await db.commit()
+    await db.refresh(event)
+    return event
+
+
+async def add_alert_note(
+    db: AsyncSession,
+    alert_id: int,
+    *,
+    message: str,
+    actor_username: str,
+) -> ObservabilityAlertEvent | None:
+    event = await get_alert_event(db, alert_id)
+    if event is None:
+        return None
+    event.note = message[:500]
+    await append_alert_timeline_event(
+        db,
+        alert_id=event.id,
+        event_type=AlertTimelineEventType.note_added,
+        actor=actor_username,
+        message=message,
+    )
+    await db.commit()
+    await db.refresh(event)
+    return event
+
+
+async def update_alert_severity(
+    db: AsyncSession,
+    alert_id: int,
+    *,
+    severity: str,
+    actor_username: str,
+) -> ObservabilityAlertEvent | None:
+    event = await get_alert_event(db, alert_id)
+    if event is None:
+        return None
+    previous = event.severity
+    event.severity = severity
+    await append_alert_timeline_event(
+        db,
+        alert_id=event.id,
+        event_type=AlertTimelineEventType.severity_changed,
+        actor=actor_username,
+        message=f"Severity changed from {previous} to {severity}",
+        payload={"from": previous, "to": severity},
+    )
+    await db.commit()
+    await db.refresh(event)
+    return event
+
+
+async def update_alert_assignee(
+    db: AsyncSession,
+    alert_id: int,
+    *,
+    assignee: str | None,
+    actor_username: str,
+) -> ObservabilityAlertEvent | None:
+    event = await get_alert_event(db, alert_id)
+    if event is None:
+        return None
+    previous = event.assignee
+    event.assignee = assignee
+    label = assignee or "(unassigned)"
+    await append_alert_timeline_event(
+        db,
+        alert_id=event.id,
+        event_type=AlertTimelineEventType.assignee_changed,
+        actor=actor_username,
+        message=f"Assignee changed from {previous or '(none)'} to {label}",
+        payload={"from": previous, "to": assignee},
+    )
     await db.commit()
     await db.refresh(event)
     return event
@@ -222,6 +409,7 @@ async def record_alert_event(
     threshold: float,
     message: str,
     node_id: int | None = None,
+    severity: str = "warning",
 ) -> ObservabilityAlertEvent:
     event = ObservabilityAlertEvent(
         scope=scope,
@@ -231,16 +419,25 @@ async def record_alert_event(
         threshold=threshold,
         message=message,
         status=AlertEventStatus.open.value,
+        severity=severity,
     )
     # Original alert_events migration used BIGINT PK; SQLite only autoincrements
     # INTEGER PRIMARY KEY, so assign the next id explicitly on sqlite.
     bind = await db.connection()
     if bind.dialect.name == "sqlite":
-        next_id = (
-            await db.execute(select(func.coalesce(func.max(ObservabilityAlertEvent.id), 0) + 1))
-        ).scalar_one()
+        next_id = (await db.execute(select(func.coalesce(func.max(ObservabilityAlertEvent.id), 0) + 1))).scalar_one()
         event.id = int(next_id)
     db.add(event)
+    await db.flush()
+    await append_alert_timeline_event(
+        db,
+        alert_id=event.id,
+        event_type=AlertTimelineEventType.created,
+        actor=None,
+        to_status=AlertEventStatus.open.value,
+        message=message,
+        payload={"metric": metric, "value": value, "threshold": threshold},
+    )
     await db.commit()
     await db.refresh(event)
     return event

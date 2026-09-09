@@ -3,6 +3,22 @@ import { fetcher } from '@/service/http'
 
 export type ProtocolHealthStatus = 'healthy' | 'degraded' | 'down' | 'unknown'
 export type AlertEventStatus = 'open' | 'acked' | 'resolved'
+export type AlertSeverity = 'info' | 'warning' | 'critical'
+export type AlertTimelineEventType =
+  | 'created'
+  | 'status_changed'
+  | 'note_added'
+  | 'severity_changed'
+  | 'assignee_changed'
+  | 'action_run'
+export type AlertPlaybookAction =
+  | 'acknowledge'
+  | 'resolve'
+  | 'reopen'
+  | 'add_note'
+  | 'set_severity'
+  | 'set_assignee'
+  | 'restart_node'
 
 export interface ProtocolHealth {
   protocol: string
@@ -53,6 +69,18 @@ export interface MasterObservabilityCard {
   protocols: ProtocolHealth[]
 }
 
+export interface ObservabilityAlertTimelineEvent {
+  id: number
+  alert_id: number
+  created_at: string
+  actor?: string | null
+  event_type: AlertTimelineEventType
+  from_status?: AlertEventStatus | null
+  to_status?: AlertEventStatus | null
+  message: string
+  payload?: Record<string, unknown> | null
+}
+
 export interface ObservabilityAlertEvent {
   id: number
   scope: string
@@ -63,17 +91,37 @@ export interface ObservabilityAlertEvent {
   threshold: number
   message: string
   status: AlertEventStatus
+  severity?: AlertSeverity
+  assignee?: string | null
   acked_at?: string | null
   acked_by?: string | null
   resolved_at?: string | null
   resolved_by?: string | null
   note?: string | null
   created_at: string
+  timeline?: ObservabilityAlertTimelineEvent[]
 }
 
 export interface ObservabilityAlertEventUpdate {
   status: AlertEventStatus
   note?: string | null
+}
+
+export interface ObservabilityAlertNoteCreate {
+  message: string
+}
+
+export interface ObservabilityAlertActionRequest {
+  action: AlertPlaybookAction
+  note?: string | null
+  severity?: AlertSeverity | null
+  assignee?: string | null
+}
+
+export interface ObservabilityAlertActionResponse {
+  alert: ObservabilityAlertEvent
+  result: string
+  detail: string
 }
 
 export interface ObservabilitySummary {
@@ -102,6 +150,14 @@ export interface SystemStatsHistory {
   stats: SystemStatsHistoryPoint[]
 }
 
+const invalidateObservability = (qc: ReturnType<typeof useQueryClient>, alertId?: number) => {
+  qc.invalidateQueries({ queryKey: ['observability', 'summary'] })
+  qc.invalidateQueries({ queryKey: ['observability', 'alerts'] })
+  if (alertId != null) {
+    qc.invalidateQueries({ queryKey: ['observability', 'alert', alertId] })
+  }
+}
+
 export const getObservabilitySummary = () => fetcher<ObservabilitySummary>('/api/observability/summary')
 
 export const getObservabilityHistory = (params?: { node_id?: number; hours?: number }) =>
@@ -110,8 +166,17 @@ export const getObservabilityHistory = (params?: { node_id?: number; hours?: num
 export const getObservabilityAlerts = (params?: { status?: AlertEventStatus; limit?: number }) =>
   fetcher<ObservabilityAlertEvent[]>('/api/observability/alerts', { params })
 
+export const getObservabilityAlert = (alertId: number) =>
+  fetcher<ObservabilityAlertEvent>(`/api/observability/alerts/${alertId}`)
+
 export const patchObservabilityAlert = (alertId: number, body: ObservabilityAlertEventUpdate) =>
   fetcher<ObservabilityAlertEvent>(`/api/observability/alerts/${alertId}`, { method: 'PATCH', body })
+
+export const postObservabilityAlertNote = (alertId: number, body: ObservabilityAlertNoteCreate) =>
+  fetcher<ObservabilityAlertEvent>(`/api/observability/alerts/${alertId}/notes`, { method: 'POST', body })
+
+export const postObservabilityAlertAction = (alertId: number, body: ObservabilityAlertActionRequest) =>
+  fetcher<ObservabilityAlertActionResponse>(`/api/observability/alerts/${alertId}/actions`, { method: 'POST', body })
 
 export const useObservabilitySummary = (options?: { enabled?: boolean; refetchInterval?: number | false }) =>
   useQuery({
@@ -144,14 +209,43 @@ export const useObservabilityAlerts = (
     staleTime: 5_000,
   })
 
+export const useObservabilityAlert = (alertId: number | null, options?: { enabled?: boolean }) =>
+  useQuery({
+    queryKey: ['observability', 'alert', alertId],
+    queryFn: () => getObservabilityAlert(alertId!),
+    enabled: alertId != null && (options?.enabled ?? true),
+    staleTime: 2_000,
+  })
+
 export const usePatchObservabilityAlert = () => {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ alertId, body }: { alertId: number; body: ObservabilityAlertEventUpdate }) =>
       patchObservabilityAlert(alertId, body),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['observability', 'summary'] })
-      qc.invalidateQueries({ queryKey: ['observability', 'alerts'] })
+    onSuccess: (_data, vars) => {
+      invalidateObservability(qc, vars.alertId)
+    },
+  })
+}
+
+export const usePostObservabilityAlertNote = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ alertId, body }: { alertId: number; body: ObservabilityAlertNoteCreate }) =>
+      postObservabilityAlertNote(alertId, body),
+    onSuccess: (_data, vars) => {
+      invalidateObservability(qc, vars.alertId)
+    },
+  })
+}
+
+export const usePostObservabilityAlertAction = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ alertId, body }: { alertId: number; body: ObservabilityAlertActionRequest }) =>
+      postObservabilityAlertAction(alertId, body),
+    onSuccess: (_data, vars) => {
+      invalidateObservability(qc, vars.alertId)
     },
   })
 }

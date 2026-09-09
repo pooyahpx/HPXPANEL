@@ -6,7 +6,7 @@ from enum import Enum
 from typing import Literal
 
 import bcrypt
-from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator, model_validator
 
 from app.db.models import AdminStatus
 from app.models.admin_role import RoleAccess, RoleFeatures, RoleHWIDSettings, RoleLimits, RolePermissions
@@ -72,6 +72,8 @@ class Token(BaseModel):
     token_type: str = "bearer"
     mfa_required: bool = False
     mfa_token: str | None = None
+    totp_available: bool = False
+    webauthn_available: bool = False
 
 
 class AdminBase(BaseModel):
@@ -376,12 +378,51 @@ class MFADisableRequest(BaseModel):
 
 class MFATokenRequest(BaseModel):
     mfa_token: str
-    code: str = Field(min_length=6, max_length=8)
+    code: str | None = Field(default=None, min_length=6, max_length=8)
+    webauthn_challenge_token: str | None = None
+    webauthn_response: dict | None = None
+
+    @model_validator(mode="after")
+    def require_one_factor(self):
+        has_totp = bool(self.code and self.code.strip())
+        has_webauthn = bool(self.webauthn_challenge_token and self.webauthn_response)
+        if not has_totp and not has_webauthn:
+            raise ValueError("Provide a TOTP code or a WebAuthn assertion")
+        return self
 
 
 class TOTPSetupResponse(BaseModel):
     secret: str
     otpauth_url: str
+
+
+class WebAuthnOptionsResponse(BaseModel):
+    challenge_token: str
+    options: dict
+
+
+class WebAuthnRegisterVerifyRequest(BaseModel):
+    challenge_token: str
+    credential: dict
+    nickname: str | None = Field(default="Security key", max_length=128)
+
+
+class WebAuthnCredentialResponse(BaseModel):
+    id: int
+    nickname: str
+    created_at: dt
+    last_used_at: dt | None = None
+    aaguid: str | None = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class WebAuthnCredentialsResponse(BaseModel):
+    credentials: list[WebAuthnCredentialResponse]
+
+
+class WebAuthnMfaOptionsRequest(BaseModel):
+    mfa_token: str
 
 
 class AdminSessionResponse(BaseModel):

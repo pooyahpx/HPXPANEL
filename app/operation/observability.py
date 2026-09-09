@@ -11,21 +11,32 @@ from app.db import AsyncSession
 from app.db.crud.node import get_nodes
 from app.db.crud.observability import (
     _alert_event_to_response,
+    add_alert_note,
+    append_alert_timeline_event,
     count_total_users,
+    get_alert_event_detail,
     get_online_users_by_node,
     get_recent_alert_events,
     list_alert_events,
+    list_alert_timeline_events,
+    update_alert_assignee,
     update_alert_event_status,
+    update_alert_severity,
 )
-from app.db.models import HpxPulse, HpxPulseStatus, Node, NodeStatus
+from app.db.models import HpxPulse, HpxPulseStatus, Node, NodeStatus, ObservabilityAlertEvent
 from app.models.admin import AdminDetails
 from app.models.node import NodeListQuery
 from app.models.observability import (
     AlertEventStatus,
+    AlertPlaybookAction,
+    AlertTimelineEventType,
     MasterObservabilityCard,
     NodeObservabilityCard,
+    ObservabilityAlertActionRequest,
+    ObservabilityAlertActionResponse,
     ObservabilityAlertEventResponse,
     ObservabilityAlertEventUpdate,
+    ObservabilityAlertNoteCreate,
     ObservabilitySummaryResponse,
     ProtocolHealth,
     ProtocolHealthStatus,
@@ -241,7 +252,105 @@ class ObservabilityOperation(BaseOperation):
         if event.node_id is not None:
             node = await db.get(Node, event.node_id)
             node_name = node.name if node else None
-        return _alert_event_to_response(event, node_name)
+        timeline = await list_alert_timeline_events(db, event.id)
+        return _alert_event_to_response(event, node_name, timeline=timeline)
+
+    async def get_alert(self, db: AsyncSession, alert_id: int) -> ObservabilityAlertEventResponse:
+        detail = await get_alert_event_detail(db, alert_id)
+        if detail is None:
+            await self.raise_error(message="Alert not found", code=404)
+        assert detail is not None
+        return detail
+
+    async def add_note(
+        self,
+        db: AsyncSession,
+        admin: AdminDetails,
+        alert_id: int,
+        payload: ObservabilityAlertNoteCreate,
+    ) -> ObservabilityAlertEventResponse:
+        event = await add_alert_note(
+            db,
+            alert_id,
+            message=payload.message,
+            actor_username=admin.username,
+        )
+        if event is None:
+            await self.raise_error(message="Alert not found", code=404)
+        return await self.get_alert(db, alert_id)
+
+    async def run_alert_action(
+        self,
+        db: AsyncSession,
+        admin: AdminDetails,
+        alert_id: int,
+        payload: ObservabilityAlertActionRequest,
+    ) -> ObservabilityAlertActionResponse:
+        event = await db.get(ObservabilityAlertEvent, alert_id)
+        if event is None:
+            await self.raise_error(message="Alert not found", code=404)
+        assert event is not None
+
+        detail = ""
+        if payload.action == AlertPlaybookAction.acknowledge:
+            await update_alert_event_status(
+                db, alert_id, status=AlertEventStatus.acked, note=payload.note, actor_username=admin.username
+            )
+            detail = "Alert acknowledged"
+        elif payload.action == AlertPlaybookAction.resolve:
+            await update_alert_event_status(
+                db, alert_id, status=AlertEventStatus.resolved, note=payload.note, actor_username=admin.username
+            )
+            detail = "Alert resolved"
+        elif payload.action == AlertPlaybookAction.reopen:
+            await update_alert_event_status(
+                db, alert_id, status=AlertEventStatus.open, note=payload.note, actor_username=admin.username
+            )
+            detail = "Alert reopened"
+        elif payload.action == AlertPlaybookAction.add_note:
+            if not payload.note:
+                await self.raise_error(message="note is required", code=400)
+            await add_alert_note(db, alert_id, message=payload.note or "", actor_username=admin.username)
+            detail = "Note added"
+        elif payload.action == AlertPlaybookAction.set_severity:
+            if payload.severity is None:
+                await self.raise_error(message="severity is required", code=400)
+            await update_alert_severity(db, alert_id, severity=payload.severity.value, actor_username=admin.username)
+            detail = f"Severity set to {payload.severity.value}"
+        elif payload.action == AlertPlaybookAction.set_assignee:
+            await update_alert_assignee(db, alert_id, assignee=payload.assignee, actor_username=admin.username)
+            detail = f"Assignee set to {payload.assignee or '(none)'}"
+        elif payload.action == AlertPlaybookAction.restart_node:
+            if event.node_id is None:
+                await self.raise_error(message="Alert has no linked node for restart playbook", code=400)
+            try:
+                await self._node_operation.restart_node(db, event.node_id, admin)
+                detail = f"Node {event.node_id} reconnect triggered"
+                await append_alert_timeline_event(
+                    db,
+                    alert_id=alert_id,
+                    event_type=AlertTimelineEventType.action_run,
+                    actor=admin.username,
+                    message=detail,
+                    payload={"action": "restart_node", "node_id": event.node_id, "ok": True},
+                    commit=True,
+                )
+            except Exception as exc:
+                await append_alert_timeline_event(
+                    db,
+                    alert_id=alert_id,
+                    event_type=AlertTimelineEventType.action_run,
+                    actor=admin.username,
+                    message=f"restart_node failed: {exc}",
+                    payload={"action": "restart_node", "node_id": event.node_id, "ok": False},
+                    commit=True,
+                )
+                await self.raise_error(message=f"Playbook restart_node failed: {exc}", code=400)
+        else:
+            await self.raise_error(message="Unknown action", code=400)
+
+        alert = await self.get_alert(db, alert_id)
+        return ObservabilityAlertActionResponse(alert=alert, result="ok", detail=detail)
 
     async def _safe_outbound_latency(self, node_id: int) -> dict[str, int]:
         try:

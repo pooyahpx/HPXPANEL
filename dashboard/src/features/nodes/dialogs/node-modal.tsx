@@ -582,15 +582,21 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
                     name="core_config_ids"
                     render={({ field }) => {
                       const selected = field.value || []
-                      const selectedCores = (cores || []).filter(c => selected.includes(c.id))
+                      const coreById = new Map((cores || []).map(c => [c.id, c]))
+                      const selectedCores = selected.map(id => coreById.get(id)).filter(Boolean) as CoreSimple[]
                       const hasXray = selectedCores.some(c => c.type === 'xray')
                       const toggleCore = (coreId: number, coreType: string | undefined, checked: boolean) => {
                         if (checked) {
+                          let next: number[]
                           if (coreType === 'xray' && hasXray && !selected.includes(coreId)) {
-                            toast.error(t('nodeModal.oneXrayOnly', { defaultValue: 'Only one Xray core can be bound to a node' }))
+                            // Swap Xray core (only one allowed); keep WireGuard/OpenVPN bindings.
+                            const withoutXray = selected.filter(id => coreById.get(id)?.type !== 'xray')
+                            next = [coreId, ...withoutXray]
+                          } else if (selected.includes(coreId)) {
                             return
+                          } else {
+                            next = [...selected, coreId]
                           }
-                          const next = [...selected, coreId]
                           field.onChange(next)
                           form.setValue('core_config_id', next[0], { shouldValidate: true })
                           return
@@ -606,7 +612,12 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
                       return (
                         <FormItem>
                           <FormLabel>{t('nodeModal.coreConfigs', { defaultValue: 'Cores' })}</FormLabel>
-                          <p className="text-muted-foreground text-xs">{t('nodeModal.multiCoreHint', { defaultValue: 'Bind multiple cores (e.g. Xray + WireGuard). First selected is primary.' })}</p>
+                          <p className="text-muted-foreground text-xs">
+                            {t('nodeModal.multiCoreHint', {
+                              defaultValue:
+                                'Bind multiple cores (e.g. Xray + WireGuard). First selected is primary. Selecting another Xray core replaces the current one.',
+                            })}
+                          </p>
                           <div className="border-border mt-2 max-h-48 space-y-2 overflow-y-auto border p-3">
                             {isLoadingCores ? (
                               <div className="text-muted-foreground flex items-center gap-2 text-sm">
@@ -616,18 +627,13 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
                             ) : (
                               cores?.map((core: CoreSimple) => {
                                 const checked = selected.includes(core.id)
-                                const disableXray = core.type === 'xray' && hasXray && !checked
                                 return (
                                   <label
                                     key={core.id}
-                                    className={cn(
-                                      'hover:bg-muted/40 flex cursor-pointer items-center gap-3 rounded-md px-2 py-2',
-                                      disableXray && 'opacity-50',
-                                    )}
+                                    className="hover:bg-muted/40 flex cursor-pointer items-center gap-3 rounded-md px-2 py-2"
                                   >
                                     <Checkbox
                                       checked={checked}
-                                      disabled={disableXray}
                                       onCheckedChange={value => toggleCore(core.id, core.type, !!value)}
                                     />
                                     <span className="min-w-0 flex-1 truncate text-sm font-medium">{core.name}</span>

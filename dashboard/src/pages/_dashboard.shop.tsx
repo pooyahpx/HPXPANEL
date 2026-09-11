@@ -16,6 +16,7 @@ import { useAdmin } from '@/hooks/use-admin'
 import useDirDetection from '@/hooks/use-dir-detection'
 import { cn } from '@/lib/utils'
 import {
+  CreateBudgetLedgerEntry,
   ShopOrder,
   ShopOrderStatus,
   ShopPlan,
@@ -33,7 +34,19 @@ import {
   useUpdateShopPlan,
 } from '@/service/api/shop'
 import { hasPermission } from '@/utils/rbac'
-import { Check, ImageIcon, Plus, RefreshCw, ShoppingBag, Trash2, X } from 'lucide-react'
+import {
+  ArrowDownRight,
+  ArrowUpRight,
+  Check,
+  ImageIcon,
+  Plus,
+  Receipt,
+  RefreshCw,
+  ShoppingBag,
+  Trash2,
+  Wallet,
+  X,
+} from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -47,6 +60,46 @@ const formatBytes = (bytes: number) => {
 }
 
 const formatPrice = (price: number) => new Intl.NumberFormat(undefined).format(price)
+
+const formatAccountingDate = (value?: string | null) => {
+  if (!value) return '—'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(date)
+}
+
+const accountingTypeTone = (entryType: string) => {
+  const type = entryType.toLowerCase()
+  if (type.includes('refund') || type.includes('credit') || type.includes('top')) {
+    return 'border-emerald-500/35 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
+  }
+  if (type.includes('charge') || type.includes('debit')) {
+    return 'border-rose-500/35 bg-rose-500/10 text-rose-700 dark:text-rose-400'
+  }
+  return 'border-border/60 bg-muted/40 text-muted-foreground'
+}
+
+const summarizeAccounting = (entries: CreateBudgetLedgerEntry[]) => {
+  let charged = 0
+  let refunded = 0
+  let gb = 0
+  let days = 0
+  for (const entry of entries) {
+    const amount = Math.abs(entry.amount_toman || 0)
+    const type = (entry.entry_type || '').toLowerCase()
+    if (type.includes('refund') || type.includes('credit') || type.includes('top') || entry.amount_toman > 0) {
+      refunded += amount
+    } else {
+      charged += amount
+    }
+    gb += entry.billable_gb || 0
+    days += entry.billable_days || 0
+  }
+  return { charged, refunded, gb, days, net: charged - refunded, count: entries.length }
+}
 
 const statusTone = (status: ShopOrderStatus) => {
   switch (status) {
@@ -130,6 +183,7 @@ export default function ShopPage() {
   const [cardNote, setCardNote] = useState('')
   const [cardNumber, setCardNumber] = useState('')
   const [cardHolder, setCardHolder] = useState('')
+  const [accountingFilter, setAccountingFilter] = useState<'all' | 'charge' | 'credit'>('all')
 
   const { data: config, isLoading: configLoading, refetch: refetchConfig } = useShopConfig(canView)
   const { data: stats, isLoading: statsLoading, refetch: refetchStats } = useShopStats(canView)
@@ -194,6 +248,17 @@ export default function ShopPage() {
     ],
     [stats, t],
   )
+
+  const accountingEntries = accountingData?.entries ?? []
+  const accountingSummary = useMemo(() => summarizeAccounting(accountingEntries), [accountingEntries])
+  const filteredAccounting = useMemo(() => {
+    if (accountingFilter === 'all') return accountingEntries
+    return accountingEntries.filter(entry => {
+      const type = (entry.entry_type || '').toLowerCase()
+      const isCredit = type.includes('refund') || type.includes('credit') || type.includes('top') || entry.amount_toman > 0
+      return accountingFilter === 'credit' ? isCredit : !isCredit
+    })
+  }, [accountingEntries, accountingFilter])
 
   const refreshAll = () => {
     refetchConfig()
@@ -505,58 +570,214 @@ export default function ShopPage() {
 
           <TabsContent value="accounting" className="mt-0 space-y-5">
             {accountingLoading ? (
-              <Skeleton className="h-72 w-full rounded-xl" />
-            ) : !(accountingData?.entries?.length) ? (
+              <div className="space-y-4">
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  {[0, 1, 2, 3].map(i => (
+                    <Skeleton key={i} className="h-28 rounded-xl" />
+                  ))}
+                </div>
+                <Skeleton className="h-72 w-full rounded-xl" />
+              </div>
+            ) : !(accountingEntries.length) ? (
               <EmptyState
-                icon={ShoppingBag}
+                icon={Wallet}
                 title={t('shop.accountingEmpty', { defaultValue: 'No budget transactions yet' })}
                 description={t('shop.accountingEmptyHint', {
-                  defaultValue: 'Charges appear here when budgeted admins create users.',
+                  defaultValue: 'Charges appear when budgeted admins create or upgrade users (GB/days).',
                 })}
               />
             ) : (
-              <Card className="border-border/60 overflow-hidden">
-                <CardContent className="p-0">
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="hover:bg-transparent">
-                          <TableHead className="w-14 px-4 py-3.5">#</TableHead>
-                          <TableHead className="px-4 py-3.5">{t('shop.accountingAdmin', { defaultValue: 'Admin' })}</TableHead>
-                          <TableHead className="px-4 py-3.5">{t('shop.accountingType', { defaultValue: 'Type' })}</TableHead>
-                          <TableHead className="px-4 py-3.5">{t('shop.accountingAmount', { defaultValue: 'Amount' })}</TableHead>
-                          <TableHead className="px-4 py-3.5">{t('shop.user')}</TableHead>
-                          <TableHead className="px-4 py-3.5">{t('shop.accountingUsage', { defaultValue: 'GB / Days' })}</TableHead>
-                          <TableHead className="px-4 py-3.5">{t('shop.accountingBalance', { defaultValue: 'Balance after' })}</TableHead>
-                          <TableHead className="px-4 py-3.5">{t('shop.accountingDetail', { defaultValue: 'Detail' })}</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {accountingData.entries.map(entry => (
-                          <TableRow key={entry.id}>
-                            <TableCell className="px-4 py-3 font-mono text-xs">{entry.id}</TableCell>
-                            <TableCell className="px-4 py-3">{entry.admin_username || entry.admin_id}</TableCell>
-                            <TableCell className="px-4 py-3">{entry.entry_type}{entry.pricing_mode ? ` · ${entry.pricing_mode}` : ''}</TableCell>
-                            <TableCell className="px-4 py-3 tabular-nums">
-                              {formatPrice(entry.amount_toman)} {t('shop.toman')}
-                            </TableCell>
-                            <TableCell className="px-4 py-3 font-mono text-xs">{entry.username || '—'}</TableCell>
-                            <TableCell className="px-4 py-3 tabular-nums">
-                              {entry.billable_gb} / {entry.billable_days}
-                            </TableCell>
-                            <TableCell className="px-4 py-3 tabular-nums">
-                              {formatPrice(entry.balance_after)}
-                            </TableCell>
-                            <TableCell className="text-muted-foreground max-w-[220px] truncate px-4 py-3 text-xs">
-                              {entry.detail || '—'}
-                            </TableCell>
+              <>
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  <Card className="border-border/60 overflow-hidden bg-gradient-to-br from-rose-500/10 via-card to-card">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-muted-foreground text-[11px] font-medium tracking-[0.12em] uppercase">
+                        {t('shop.accountingCharged', { defaultValue: 'Charged' })}
+                      </CardTitle>
+                      <ArrowDownRight className="size-4 text-rose-500" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-semibold tracking-tight tabular-nums text-rose-700 dark:text-rose-400">
+                        {formatPrice(accountingSummary.charged)}
+                      </div>
+                      <p className="text-muted-foreground mt-1 text-xs">{t('shop.toman')}</p>
+                    </CardContent>
+                  </Card>
+                  <Card className="border-border/60 overflow-hidden bg-gradient-to-br from-emerald-500/10 via-card to-card">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-muted-foreground text-[11px] font-medium tracking-[0.12em] uppercase">
+                        {t('shop.accountingCredited', { defaultValue: 'Credited' })}
+                      </CardTitle>
+                      <ArrowUpRight className="size-4 text-emerald-500" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-semibold tracking-tight tabular-nums text-emerald-700 dark:text-emerald-400">
+                        {formatPrice(accountingSummary.refunded)}
+                      </div>
+                      <p className="text-muted-foreground mt-1 text-xs">{t('shop.toman')}</p>
+                    </CardContent>
+                  </Card>
+                  <Card className="border-border/60 overflow-hidden bg-gradient-to-br from-sky-500/10 via-card to-card">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-muted-foreground text-[11px] font-medium tracking-[0.12em] uppercase">
+                        {t('shop.accountingUsage', { defaultValue: 'GB / Days' })}
+                      </CardTitle>
+                      <Receipt className="size-4 text-sky-500" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-semibold tracking-tight tabular-nums">
+                        {formatPrice(accountingSummary.gb)} / {formatPrice(accountingSummary.days)}
+                      </div>
+                      <p className="text-muted-foreground mt-1 text-xs">
+                        {t('shop.accountingLedgerCount', {
+                          defaultValue: '{{count}} entries',
+                          count: accountingData?.total ?? accountingSummary.count,
+                        })}
+                      </p>
+                    </CardContent>
+                  </Card>
+                  <Card className="border-border/60 overflow-hidden bg-gradient-to-br from-amber-500/10 via-card to-card">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-muted-foreground text-[11px] font-medium tracking-[0.12em] uppercase">
+                        {t('shop.accountingNet', { defaultValue: 'Net charged' })}
+                      </CardTitle>
+                      <Wallet className="size-4 text-amber-500" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-semibold tracking-tight tabular-nums">
+                        {formatPrice(accountingSummary.net)}
+                      </div>
+                      <p className="text-muted-foreground mt-1 text-xs">{t('shop.toman')}</p>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  {(
+                    [
+                      ['all', t('shop.allOrders')],
+                      ['charge', t('shop.accountingCharged', { defaultValue: 'Charged' })],
+                      ['credit', t('shop.accountingCredited', { defaultValue: 'Credited' })],
+                    ] as const
+                  ).map(([key, label]) => (
+                    <Button
+                      key={key}
+                      size="sm"
+                      variant={accountingFilter === key ? 'default' : 'outline'}
+                      onClick={() => setAccountingFilter(key)}
+                    >
+                      {label}
+                    </Button>
+                  ))}
+                </div>
+
+                <Card className="border-border/60 overflow-hidden shadow-sm">
+                  <CardHeader className="border-border/50 border-b bg-muted/20 py-4">
+                    <CardTitle className="text-base">
+                      {t('shop.accountingLedger', { defaultValue: 'Budget ledger' })}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="hover:bg-transparent">
+                            <TableHead className="w-14 px-4 py-3.5">#</TableHead>
+                            <TableHead className="px-4 py-3.5">
+                              {t('shop.accountingWhen', { defaultValue: 'When' })}
+                            </TableHead>
+                            <TableHead className="px-4 py-3.5">
+                              {t('shop.accountingAdmin', { defaultValue: 'Admin' })}
+                            </TableHead>
+                            <TableHead className="px-4 py-3.5">
+                              {t('shop.accountingType', { defaultValue: 'Type' })}
+                            </TableHead>
+                            <TableHead className="px-4 py-3.5">
+                              {t('shop.accountingAmount', { defaultValue: 'Amount' })}
+                            </TableHead>
+                            <TableHead className="px-4 py-3.5">{t('shop.user')}</TableHead>
+                            <TableHead className="px-4 py-3.5">
+                              {t('shop.accountingUsage', { defaultValue: 'GB / Days' })}
+                            </TableHead>
+                            <TableHead className="px-4 py-3.5">
+                              {t('shop.accountingBalance', { defaultValue: 'Balance after' })}
+                            </TableHead>
+                            <TableHead className="px-4 py-3.5">
+                              {t('shop.accountingDetail', { defaultValue: 'Detail' })}
+                            </TableHead>
                           </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </CardContent>
-              </Card>
+                        </TableHeader>
+                        <TableBody>
+                          {filteredAccounting.length === 0 ? (
+                            <TableRow>
+                              <TableCell colSpan={9} className="text-muted-foreground px-4 py-10 text-center text-sm">
+                                {t('shop.accountingFilterEmpty', { defaultValue: 'No entries for this filter.' })}
+                              </TableCell>
+                            </TableRow>
+                          ) : (
+                            filteredAccounting.map(entry => {
+                              const isCredit =
+                                (entry.entry_type || '').toLowerCase().includes('refund') ||
+                                (entry.entry_type || '').toLowerCase().includes('credit') ||
+                                (entry.entry_type || '').toLowerCase().includes('top') ||
+                                entry.amount_toman > 0
+                              return (
+                                <TableRow key={entry.id} className="align-middle">
+                                  <TableCell className="px-4 py-3.5 font-mono text-xs">{entry.id}</TableCell>
+                                  <TableCell className="text-muted-foreground px-4 py-3.5 text-xs whitespace-nowrap">
+                                    {formatAccountingDate(entry.created_at)}
+                                  </TableCell>
+                                  <TableCell className="px-4 py-3.5 font-medium">
+                                    {entry.admin_username || entry.admin_id}
+                                  </TableCell>
+                                  <TableCell className="px-4 py-3.5">
+                                    <div className="flex flex-wrap items-center gap-1.5">
+                                      <Badge variant="outline" className={cn('font-normal', accountingTypeTone(entry.entry_type))}>
+                                        {entry.entry_type}
+                                      </Badge>
+                                      {entry.pricing_mode ? (
+                                        <Badge variant="secondary" className="font-normal">
+                                          {entry.pricing_mode}
+                                          {entry.tier_gb ? ` · ${entry.tier_gb}GB` : ''}
+                                        </Badge>
+                                      ) : null}
+                                    </div>
+                                  </TableCell>
+                                  <TableCell
+                                    className={cn(
+                                      'px-4 py-3.5 tabular-nums font-medium',
+                                      isCredit
+                                        ? 'text-emerald-700 dark:text-emerald-400'
+                                        : 'text-rose-700 dark:text-rose-400',
+                                    )}
+                                  >
+                                    {isCredit ? '+' : '−'}
+                                    {formatPrice(Math.abs(entry.amount_toman))} {t('shop.toman')}
+                                  </TableCell>
+                                  <TableCell className="px-4 py-3.5 font-mono text-xs">{entry.username || '—'}</TableCell>
+                                  <TableCell className="px-4 py-3.5 tabular-nums">
+                                    <span className="inline-flex items-center gap-1 rounded-md bg-muted/50 px-2 py-1 text-xs">
+                                      {entry.billable_gb} GB
+                                      <span className="text-muted-foreground">·</span>
+                                      {entry.billable_days}d
+                                    </span>
+                                  </TableCell>
+                                  <TableCell className="px-4 py-3.5 tabular-nums font-medium">
+                                    {formatPrice(entry.balance_after)}
+                                  </TableCell>
+                                  <TableCell className="text-muted-foreground max-w-[240px] truncate px-4 py-3.5 text-xs" title={entry.detail || undefined}>
+                                    {entry.detail || '—'}
+                                  </TableCell>
+                                </TableRow>
+                              )
+                            })
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </CardContent>
+                </Card>
+              </>
             )}
           </TabsContent>
 

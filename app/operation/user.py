@@ -109,7 +109,12 @@ from app.operation.permissions import (
     is_scope_all,
 )
 from app.settings import hwid_settings, subscription_settings
-from app.utils.admin_create_budget import quote_from_user_payload
+from app.utils.admin_create_budget import (
+    budget_snapshot_after_modify,
+    budget_snapshot_from_db_user,
+    quote_delta_from_payloads,
+    quote_from_user_payload,
+)
 from app.utils.helpers import (
     fix_datetime_timezone,
     is_absolute_url,
@@ -491,9 +496,32 @@ class UserOperation(BaseOperation):
             except ValueError as exc:
                 await self.raise_error(message=str(exc), code=400, db=db)
 
+        charged_creates = await self._charge_create_budget_for_create_payloads(
+            db,
+            admin,
+            users_to_create,
+            db_admin=db_admin,
+            detail_prefix="bulk create",
+        )
+
         try:
             db_users = await create_users_bulk(db, users_to_create, groups, db_admin, commit=commit)
         except ValueError as exc:  # WireGuard subnet exhausted
+            if charged_creates and db_admin is not None:
+                for prev_payload, prev_quote, prev_cost in charged_creates:
+                    await charge_admin_create_budget(
+                        db,
+                        db_admin.id,
+                        -prev_cost,
+                        entry_type="refund",
+                        actor_admin_id=db_admin.id,
+                        username=getattr(prev_payload, "username", None),
+                        billable_gb=int(prev_quote.gb),
+                        billable_days=int(prev_quote.days),
+                        pricing_mode=prev_quote.pricing_mode,
+                        tier_gb=prev_quote.tier_gb,
+                        detail=f"refund: {exc}",
+                    )
             await self.raise_error(message=str(exc), code=400, db=db)
         for db_user in db_users:
             await self._finalize_openvpn_proxy_settings(db, db_user, groups, commit=commit)
@@ -781,6 +809,224 @@ class UserOperation(BaseOperation):
             return
         if admin.role.access.require_template:
             await self.raise_error(message="Manual user create/modify is not allowed for your role", code=403, db=db)
+
+    async def _resolve_budget_admin(self, db: AsyncSession, admin: AdminDetails):
+        """Load DB admin row used for create-budget charging (None if N/A)."""
+        if admin.is_owner:
+            return None
+        db_admin = await get_admin(db, admin.username, load_users=False, load_usage_logs=False)
+        if db_admin is None or not bool(db_admin.create_budget_enabled):
+            return None
+        return db_admin
+
+    async def _charge_create_budget_delta(
+        self,
+        db: AsyncSession,
+        admin: AdminDetails,
+        *,
+        old_payload,
+        new_payload,
+        username: str,
+        user_id: int | None = None,
+        detail: str,
+        db_admin=None,
+        raise_on_insufficient: bool = True,
+    ) -> tuple[int, int, object | None, bool]:
+        """Charge increase-only create-budget delta.
+
+        Returns (cost, remaining, quote, charged_ok).
+        charged_ok is False when budget was insufficient and raise_on_insufficient=False.
+        """
+        if db_admin is None:
+            db_admin = await self._resolve_budget_admin(db, admin)
+        elif admin.is_owner or not bool(getattr(db_admin, "create_budget_enabled", False)):
+            return 0, 0, None, True
+        if db_admin is None:
+            return 0, 0, None, True
+
+        quote = quote_delta_from_payloads(
+            old_payload,
+            new_payload,
+            price_per_gb=int(db_admin.create_budget_price_per_gb or 0),
+            price_per_day=int(db_admin.create_budget_price_per_day or 0),
+            tiers=getattr(db_admin, "create_budget_price_tiers", None),
+        )
+        cost = int(quote.amount)
+        if cost <= 0:
+            return 0, int(db_admin.create_budget_toman or 0), quote, True
+
+        try:
+            remaining = await charge_admin_create_budget(
+                db,
+                db_admin.id,
+                cost,
+                entry_type="charge",
+                actor_admin_id=db_admin.id,
+                user_id=user_id,
+                username=username,
+                billable_gb=int(quote.gb),
+                billable_days=int(quote.days),
+                price_per_gb=int(db_admin.create_budget_price_per_gb or 0),
+                price_per_day=int(db_admin.create_budget_price_per_day or 0),
+                pricing_mode=quote.pricing_mode,
+                tier_gb=quote.tier_gb,
+                detail=detail,
+            )
+        except ValueError:
+            if raise_on_insufficient:
+                await self.raise_error(
+                    message=(
+                        f"Insufficient create budget: need {cost} toman, "
+                        f"have {int(db_admin.create_budget_toman or 0)} toman"
+                    ),
+                    code=402,
+                    db=db,
+                )
+            return cost, int(db_admin.create_budget_toman or 0), quote, False
+
+        asyncio.create_task(
+            _notify_admin_create_budget_charged(
+                admin,
+                username=username,
+                gb=int(quote.gb),
+                days=int(quote.days),
+                amount=cost,
+                remaining=remaining,
+                telegram_id=getattr(db_admin, "telegram_id", None),
+                pricing_mode=quote.pricing_mode,
+                notify_owner=True,
+            )
+        )
+        return cost, remaining, quote, True
+
+    async def _charge_create_budget_for_create_payloads(
+        self,
+        db: AsyncSession,
+        admin: AdminDetails,
+        payloads: list,
+        *,
+        db_admin=None,
+        detail_prefix: str = "create user",
+    ) -> list[tuple[object, object, int]]:
+        """Charge full create quotes for one or more payloads. Returns [(payload, quote, cost), ...]."""
+        if db_admin is None:
+            db_admin = await self._resolve_budget_admin(db, admin)
+        elif admin.is_owner or not bool(getattr(db_admin, "create_budget_enabled", False)):
+            return []
+        if db_admin is None:
+            return []
+
+        charged: list[tuple[object, object, int]] = []
+        for payload in payloads:
+            quote = quote_from_user_payload(
+                payload,
+                price_per_gb=int(db_admin.create_budget_price_per_gb or 0),
+                price_per_day=int(db_admin.create_budget_price_per_day or 0),
+                tiers=getattr(db_admin, "create_budget_price_tiers", None),
+            )
+            cost = int(quote.amount)
+            if cost <= 0:
+                continue
+            try:
+                remaining = await charge_admin_create_budget(
+                    db,
+                    db_admin.id,
+                    cost,
+                    entry_type="charge",
+                    actor_admin_id=db_admin.id,
+                    username=getattr(payload, "username", None),
+                    billable_gb=int(quote.gb),
+                    billable_days=int(quote.days),
+                    price_per_gb=int(db_admin.create_budget_price_per_gb or 0),
+                    price_per_day=int(db_admin.create_budget_price_per_day or 0),
+                    pricing_mode=quote.pricing_mode,
+                    tier_gb=quote.tier_gb,
+                    detail=f"{detail_prefix} {getattr(payload, 'username', '')}".strip(),
+                )
+            except ValueError:
+                for prev_payload, prev_quote, prev_cost in charged:
+                    await charge_admin_create_budget(
+                        db,
+                        db_admin.id,
+                        -prev_cost,
+                        entry_type="refund",
+                        actor_admin_id=db_admin.id,
+                        username=getattr(prev_payload, "username", None),
+                        billable_gb=int(prev_quote.gb),
+                        billable_days=int(prev_quote.days),
+                        pricing_mode=prev_quote.pricing_mode,
+                        tier_gb=prev_quote.tier_gb,
+                        detail="refund: insufficient budget mid-bulk",
+                    )
+                await self.raise_error(
+                    message=(
+                        f"Insufficient create budget: need {cost} toman, "
+                        f"have {int(db_admin.create_budget_toman or 0)} toman"
+                    ),
+                    code=402,
+                    db=db,
+                )
+            charged.append((payload, quote, cost))
+            asyncio.create_task(
+                _notify_admin_create_budget_charged(
+                    admin,
+                    username=str(getattr(payload, "username", "") or ""),
+                    gb=int(quote.gb),
+                    days=int(quote.days),
+                    amount=cost,
+                    remaining=remaining,
+                    telegram_id=getattr(db_admin, "telegram_id", None),
+                    pricing_mode=quote.pricing_mode,
+                    notify_owner=True,
+                )
+            )
+        return charged
+
+    async def _predict_next_plan_budget_payload(self, db_user):
+        """Estimate billable fields after next-plan activation (before mutating)."""
+        from types import SimpleNamespace
+
+        next_plan = db_user.next_plan
+        if next_plan is None:
+            return None
+        remaining_traffic = max(0, (db_user.data_limit or 0) - (db_user.used_traffic or 0))
+        add_remaining = bool(getattr(next_plan, "add_remaining_traffic", False))
+
+        if next_plan.user_template_id is None:
+            data_limit = (next_plan.data_limit or 0) + (remaining_traffic if add_remaining else 0)
+            expire = (
+                dt.now(UTC) + td(seconds=int(next_plan.expire))
+                if next_plan.expire
+                else None
+            )
+            return SimpleNamespace(
+                status=UserStatus.active,
+                data_limit=data_limit,
+                expire=expire,
+                on_hold_expire_duration=None,
+            )
+
+        await next_plan.awaitable_attrs.user_template
+        tmpl = next_plan.user_template
+        data_limit = (tmpl.data_limit or 0) + (remaining_traffic if add_remaining else 0)
+        if tmpl.status is UserStatus.on_hold:
+            return SimpleNamespace(
+                status=UserStatus.on_hold,
+                data_limit=data_limit,
+                expire=None,
+                on_hold_expire_duration=tmpl.expire_duration,
+            )
+        expire = (
+            dt.now(UTC) + td(seconds=int(tmpl.expire_duration))
+            if tmpl.expire_duration
+            else None
+        )
+        return SimpleNamespace(
+            status=UserStatus.active,
+            data_limit=data_limit,
+            expire=expire,
+            on_hold_expire_duration=None,
+        )
 
     async def create_user(
         self, db: AsyncSession, new_user: UserCreate, admin: AdminDetails, *, skip_role_limits: bool = False
@@ -1165,6 +1411,15 @@ class UserOperation(BaseOperation):
 
         validated_groups = await self._prepare_modified_user(
             db, db_user, modified_user, admin, skip_role_limits=skip_role_limits
+        )
+        await self._charge_create_budget_delta(
+            db,
+            admin,
+            old_payload=budget_snapshot_from_db_user(db_user),
+            new_payload=budget_snapshot_after_modify(db_user, modified_user),
+            username=db_user.username,
+            user_id=db_user.id,
+            detail=f"edit user {db_user.username}",
         )
         return await self._apply_modified_user(db, db_user, modified_user, admin, validated_groups=validated_groups)
 
@@ -1564,6 +1819,18 @@ class UserOperation(BaseOperation):
     async def _active_next_plan(self, db: AsyncSession, db_user: User, admin: AdminDetails) -> UserResponse:
         if db_user is None or db_user.next_plan is None:
             await self.raise_error(message="User doesn't have next plan", code=404)
+
+        new_payload = await self._predict_next_plan_budget_payload(db_user)
+        if new_payload is not None:
+            await self._charge_create_budget_delta(
+                db,
+                admin,
+                old_payload=budget_snapshot_from_db_user(db_user),
+                new_payload=new_payload,
+                username=db_user.username,
+                user_id=db_user.id,
+                detail=f"next plan {db_user.username}",
+            )
 
         old_status = db_user.status
         db_user = await reset_user_by_next(
@@ -2009,6 +2276,16 @@ class UserOperation(BaseOperation):
         modify_user = self.apply_settings(modify_user, user_template)
         validated_groups = await self._prepare_modified_user(db, db_user, modify_user, admin, skip_role_limits=True)
 
+        await self._charge_create_budget_delta(
+            db,
+            admin,
+            old_payload=budget_snapshot_from_db_user(db_user),
+            new_payload=budget_snapshot_after_modify(db_user, modify_user),
+            username=db_user.username,
+            user_id=db_user.id,
+            detail=f"template edit {db_user.username}",
+        )
+
         if user_template.reset_usages:
             suppress_reset_status_change = (
                 user_template.status == UserStatus.on_hold and original_status != UserStatus.active
@@ -2144,6 +2421,41 @@ class UserOperation(BaseOperation):
             )
             prepared_updates.append((db_user, modify_user, validated_groups, original_status, emit_reset_status_change))
 
+        # Charge all budget deltas first so we fail before mutating users.
+        charged_refunds: list[tuple[int, object, int, str]] = []
+        db_budget_admin = await self._resolve_budget_admin(db, admin)
+        if db_budget_admin is not None:
+            try:
+                for db_user, modified_user_model, _, _, _ in prepared_updates:
+                    cost, _, quote, charged_ok = await self._charge_create_budget_delta(
+                        db,
+                        admin,
+                        old_payload=budget_snapshot_from_db_user(db_user),
+                        new_payload=budget_snapshot_after_modify(db_user, modified_user_model),
+                        username=db_user.username,
+                        user_id=db_user.id,
+                        detail=f"bulk template edit {db_user.username}",
+                        db_admin=db_budget_admin,
+                    )
+                    if charged_ok and cost > 0 and quote is not None:
+                        charged_refunds.append((db_budget_admin.id, quote, cost, db_user.username))
+            except Exception:
+                for admin_id, quote, cost, username in charged_refunds:
+                    await charge_admin_create_budget(
+                        db,
+                        admin_id,
+                        -cost,
+                        entry_type="refund",
+                        actor_admin_id=admin_id,
+                        username=username,
+                        billable_gb=int(quote.gb),
+                        billable_days=int(quote.days),
+                        pricing_mode=quote.pricing_mode,
+                        tier_gb=quote.tier_gb,
+                        detail=f"refund: bulk template budget failed ({username})",
+                    )
+                raise
+
         modified_user_ids: list[int] = []
         try:
             for db_user, modified_user_model, validated_groups, _, _ in prepared_updates:
@@ -2170,6 +2482,20 @@ class UserOperation(BaseOperation):
             await db.commit()
         except Exception:
             await db.rollback()
+            for admin_id, quote, cost, username in charged_refunds:
+                await charge_admin_create_budget(
+                    db,
+                    admin_id,
+                    -cost,
+                    entry_type="refund",
+                    actor_admin_id=admin_id,
+                    username=username,
+                    billable_gb=int(quote.gb),
+                    billable_days=int(quote.days),
+                    pricing_mode=quote.pricing_mode,
+                    tier_gb=quote.tier_gb,
+                    detail=f"refund: bulk template failed ({username})",
+                )
             raise
 
         modified_db_users = await self._load_users_by_ids(db, modified_user_ids)

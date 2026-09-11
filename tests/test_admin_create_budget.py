@@ -80,3 +80,21 @@ def test_quote_without_expire_still_charges_gb():
     assert quote.gb == 5
     assert quote.days == 0
     assert quote.amount == 100_000
+
+
+def test_quote_delta_increase_only():
+    from types import SimpleNamespace
+
+    from app.utils.admin_create_budget import quote_delta_from_payloads
+
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    old = SimpleNamespace(status="active", data_limit=1 * 1024**3, expire=now + timedelta(days=30), on_hold_expire_duration=None)
+    new = SimpleNamespace(status="active", data_limit=100 * 1024**3, expire=now + timedelta(days=30), on_hold_expire_duration=None)
+    delta = quote_delta_from_payloads(old, new, price_per_gb=10_000, price_per_day=1_000, now=now)
+    assert delta.amount == 99 * 10_000
+    assert delta.gb == 99
+    assert delta.days == 0
+
+    # Decrease → no refund
+    down = quote_delta_from_payloads(new, old, price_per_gb=10_000, price_per_day=1_000, now=now)
+    assert down.amount == 0

@@ -33,6 +33,40 @@ user_operator = UserOperation(operator_type=OperatorType.SYSTEM)
 async def change_status(db: AsyncSession, db_user: User, status: UserStatus):
     next_plan_activated = bool(db_user.next_plan) and status != UserStatus.active
     if next_plan_activated:
+        from app.db.crud.admin import build_admin_details, get_admin_by_id
+        from app.utils.admin_create_budget import budget_snapshot_from_db_user
+
+        if db_user.admin_id is not None:
+            db_admin = await get_admin_by_id(
+                db, db_user.admin_id, load_users=False, load_usage_logs=False, load_role=True
+            )
+            if db_admin is not None and bool(db_admin.create_budget_enabled):
+                billing_admin = build_admin_details(db_admin)
+                if not billing_admin.is_owner:
+                    new_payload = await user_operator._predict_next_plan_budget_payload(db_user)
+                    if new_payload is not None:
+                        _cost, _remaining, _quote, charged_ok = await user_operator._charge_create_budget_delta(
+                            db,
+                            billing_admin,
+                            old_payload=budget_snapshot_from_db_user(db_user),
+                            new_payload=new_payload,
+                            username=db_user.username,
+                            user_id=db_user.id,
+                            detail=f"auto next plan {db_user.username}",
+                            db_admin=db_admin,
+                            raise_on_insufficient=False,
+                        )
+                        if not charged_ok:
+                            logger.warning(
+                                'Skipped next plan for user "%s": insufficient create budget for admin "%s"',
+                                db_user.username,
+                                billing_admin.username,
+                            )
+                            user = await user_operator.update_user(db_user)
+                            asyncio.create_task(notification.user_status_change(user, SYSTEM_ADMIN))
+                            logger.info(f'User "{user.username}" status changed to {status.value}')
+                            return
+
         db_user = await reset_user_by_next(
             db,
             db_user,

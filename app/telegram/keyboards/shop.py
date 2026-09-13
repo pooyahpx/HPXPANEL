@@ -27,6 +27,9 @@ class ShopAction(str, Enum):
     home = "home"
     plans = "plans"
     buy = "buy"
+    renew = "renew"
+    renew_pick = "rnp"
+    renew_buy = "rnb"
     my_orders = "orders"
     lang = "lang"
     support = "support"
@@ -37,6 +40,7 @@ class ShopAction(str, Enum):
 class ShopKeyboardCallback(CallbackData, prefix="shop"):
     action: ShopAction
     plan_id: int = 0
+    user_id: int = 0
 
 
 class ShopHomeKeyboard(InlineKeyboardBuilder):
@@ -47,15 +51,16 @@ class ShopHomeKeyboard(InlineKeyboardBuilder):
         super().__init__(*args, **kwargs)
         cb = ShopKeyboardCallback
         self.button(text=t(lang, "btn_plans"), callback_data=cb(action=ShopAction.plans))
+        self.button(text=t(lang, "btn_renew"), callback_data=cb(action=ShopAction.renew))
         if show_test:
             self.button(text=t(lang, "btn_test"), callback_data=cb(action=ShopAction.test))
         self.button(text=t(lang, "btn_my_orders"), callback_data=cb(action=ShopAction.my_orders))
         self.button(text=t(lang, "btn_support"), callback_data=cb(action=ShopAction.support))
         self.button(text=t(lang, "btn_lang"), callback_data=cb(action=ShopAction.lang))
         if show_test:
-            self.adjust(1, 1, 2, 1)
+            self.adjust(2, 1, 2, 1)
         else:
-            self.adjust(1, 2, 1)
+            self.adjust(2, 2, 1)
 
 
 class ShopPlansKeyboard(InlineKeyboardBuilder):
@@ -68,6 +73,48 @@ class ShopPlansKeyboard(InlineKeyboardBuilder):
             label = f"{plan.name} · {format_price(plan.price_toman)}T"
             self.button(text=label, callback_data=cb(action=ShopAction.buy, plan_id=plan.id))
         self.button(text=t(lang, "btn_back"), callback_data=cb(action=ShopAction.home))
+        n = len(plans)
+        if n:
+            self.adjust(*([1] * n), 1)
+        else:
+            self.adjust(1)
+
+
+class ShopRenewAccountsKeyboard(InlineKeyboardBuilder):
+    """Buyer picks which existing account to renew."""
+
+    def __init__(self, lang: str, accounts: list[tuple], *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        cb = ShopKeyboardCallback
+        for user, _order in accounts:
+            status = getattr(getattr(user, "status", None), "value", str(getattr(user, "status", "") or ""))
+            label = f"🔄 {user.username}"
+            if status:
+                label = f"{label} · {status}"
+            if len(label) > 48:
+                label = label[:45] + "…"
+            self.button(text=label, callback_data=cb(action=ShopAction.renew_pick, user_id=int(user.id)))
+        self.button(text=t(lang, "btn_back"), callback_data=cb(action=ShopAction.home))
+        n = len(accounts)
+        if n:
+            self.adjust(*([1] * n), 1)
+        else:
+            self.adjust(1)
+
+
+class ShopRenewPlansKeyboard(InlineKeyboardBuilder):
+    """Plan list for renewing a specific account."""
+
+    def __init__(self, lang: str, plans: list[ShopPlan], user_id: int, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        cb = ShopKeyboardCallback
+        for plan in plans:
+            label = f"{plan.name} · {format_price(plan.price_toman)}T"
+            self.button(
+                text=label,
+                callback_data=cb(action=ShopAction.renew_buy, plan_id=plan.id, user_id=user_id),
+            )
+        self.button(text=t(lang, "btn_back"), callback_data=cb(action=ShopAction.renew))
         n = len(plans)
         if n:
             self.adjust(*([1] * n), 1)

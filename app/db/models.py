@@ -1386,6 +1386,9 @@ class CreateBudgetLedger(Base):
     pricing_mode: Mapped[str | None] = mapped_column(String(16), nullable=True, default=None)
     tier_gb: Mapped[int | None] = mapped_column(Integer, nullable=True, default=None)
     detail: Mapped[str | None] = mapped_column(String(500), nullable=True, default=None)
+    settled_with_owner: Mapped[bool] = mapped_column(default=False, server_default="0")
+    settled_at: Mapped[dt | None] = mapped_column(DateTime(timezone=True), nullable=True, default=None)
+    settled_by_admin_id: Mapped[int | None] = mapped_column(SqliteCompatibleBigInteger, nullable=True, default=None)
     created_at: Mapped[dt] = mapped_column(
         DateTime(timezone=True), nullable=False, default_factory=lambda: dt.now(UTC), init=False
     )
@@ -1437,3 +1440,5 @@ class ShopOrder(Base, CreatedAtUTCMixin):
     receipt_file_id: Mapped[str | None] = mapped_column(String(256), default=None)
     created_user_id: Mapped[int | None] = fk_id_column("users.id", ondelete="SET NULL", default=None)
     note: Mapped[str | None] = mapped_column(String(500), default=None)
+    order_kind: Mapped[str] = mapped_column(String(16), default="purchase", server_default="purchase")  # purchase|renewal
+    renew_user_id: Mapped[int | None] = fk_id_column("users.id", ondelete="SET NULL", default=None)

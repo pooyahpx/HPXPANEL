@@ -4,6 +4,11 @@ from enum import Enum
 from pydantic import BaseModel, ConfigDict, Field
 
 
+class ShopOrderKindLiteral(str, Enum):
+    purchase = "purchase"
+    renewal = "renewal"
+
+
 class ShopOrderStatusLiteral(str, Enum):
     pending = "pending"
     approved = "approved"
@@ -90,6 +95,9 @@ class ShopOrderResponse(BaseModel):
     buyer_telegram_id: int
     buyer_username: str | None = None
     status: ShopOrderStatusLiteral
+    order_kind: ShopOrderKindLiteral = ShopOrderKindLiteral.purchase
+    renew_user_id: int | None = None
+    renew_username: str | None = None
     receipt_file_id: str | None = None
     has_receipt: bool = False
     created_user_id: int | None = None
@@ -120,6 +128,7 @@ class ShopStatsResponse(BaseModel):
     orders_pending: int = 0
     orders_approved: int = 0
     orders_rejected: int = 0
+    orders_renewed: int = 0
 
 
 class ShopApproveResponse(BaseModel):
@@ -145,6 +154,9 @@ class CreateBudgetLedgerEntry(BaseModel):
     pricing_mode: str | None = None
     tier_gb: int | None = None
     detail: str | None = None
+    settled_with_owner: bool = False
+    settled_at: dt | None = None
+    settled_by_admin_id: int | None = None
     created_at: dt | None = None
 
     model_config = ConfigDict(from_attributes=True)
@@ -153,3 +165,7 @@ class CreateBudgetLedgerEntry(BaseModel):
 class CreateBudgetLedgerListResponse(BaseModel):
     entries: list[CreateBudgetLedgerEntry]
     total: int
+
+
+class CreateBudgetSettleRequest(BaseModel):
+    settled: bool = True

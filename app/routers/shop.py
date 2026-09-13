@@ -6,7 +6,9 @@ from app.db import AsyncSession, get_db
 from app.db.models import ShopOrderStatus
 from app.models.admin import AdminDetails
 from app.models.shop import (
+    CreateBudgetLedgerEntry,
     CreateBudgetLedgerListResponse,
+    CreateBudgetSettleRequest,
     ShopApproveResponse,
     ShopConfigResponse,
     ShopConfigUpdate,
@@ -95,12 +97,18 @@ async def delete_shop_plan(
 @router.get("/orders", response_model=ShopOrderListResponse)
 async def list_shop_orders(
     status_filter: Annotated[ShopOrderStatus | None, Query(alias="status")] = None,
+    order_kind: Annotated[str | None, Query()] = None,
     offset: Annotated[int, Query(ge=0)] = 0,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     db: AsyncSession = Depends(get_db),
     admin: AdminDetails = Depends(require_permission("users", "read")),
 ):
-    return await shop_operator.list_orders(db, admin, status=status_filter, offset=offset, limit=limit)
+    kind = (order_kind or "").strip().lower() or None
+    if kind and kind not in ("purchase", "renewal"):
+        kind = None
+    return await shop_operator.list_orders(
+        db, admin, status=status_filter, order_kind=kind, offset=offset, limit=limit
+    )
 
 
 @router.get("/orders/{order_id}/receipt", responses={404: responses._404})
@@ -142,6 +150,7 @@ async def reject_shop_order(
 @router.get("/accounting", response_model=CreateBudgetLedgerListResponse)
 async def list_create_budget_accounting(
     admin_id: Annotated[int | None, Query()] = None,
+    settled: Annotated[bool | None, Query()] = None,
     offset: Annotated[int, Query(ge=0)] = 0,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     db: AsyncSession = Depends(get_db),
@@ -149,5 +158,17 @@ async def list_create_budget_accounting(
 ):
     """Create-budget accounting ledger (owner: all/filter; admin: own only)."""
     return await shop_operator.list_create_budget_accounting(
-        db, admin, admin_id=admin_id, offset=offset, limit=limit
+        db, admin, admin_id=admin_id, settled=settled, offset=offset, limit=limit
     )
+
+
+@router.post("/accounting/{entry_id}/settle", response_model=CreateBudgetLedgerEntry)
+async def settle_create_budget_entry(
+    entry_id: int,
+    payload: CreateBudgetSettleRequest | None = None,
+    db: AsyncSession = Depends(get_db),
+    admin: AdminDetails = Depends(require_permission("users", "update")),
+):
+    """Mark a create-budget ledger row as settled (or unsettled) with the owner."""
+    settled = True if payload is None else bool(payload.settled)
+    return await shop_operator.settle_create_budget_entry(db, admin, entry_id, settled=settled)

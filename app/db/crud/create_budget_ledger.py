@@ -27,6 +27,7 @@ async def add_create_budget_ledger_entry(
     pricing_mode: str | None = None,
     tier_gb: int | None = None,
     detail: str | None = None,
+    settled_with_owner: bool = False,
     commit: bool = True,
 ) -> CreateBudgetLedger:
     from sqlalchemy import func
@@ -46,6 +47,7 @@ async def add_create_budget_ledger_entry(
         pricing_mode=pricing_mode,
         tier_gb=tier_gb,
         detail=(detail[:500] if detail else None),
+        settled_with_owner=bool(settled_with_owner),
     )
     if getattr(row, "created_at", None) is None:
         row.created_at = datetime.now(UTC)
@@ -68,6 +70,7 @@ async def list_create_budget_ledger(
     db: AsyncSession,
     *,
     admin_id: int | None = None,
+    settled: bool | None = None,
     offset: int = 0,
     limit: int = 50,
 ) -> tuple[list[CreateBudgetLedger], int]:
@@ -76,6 +79,8 @@ async def list_create_budget_ledger(
     filters = []
     if admin_id is not None:
         filters.append(CreateBudgetLedger.admin_id == admin_id)
+    if settled is not None:
+        filters.append(CreateBudgetLedger.settled_with_owner.is_(bool(settled)))
 
     count_stmt = select(func.count(CreateBudgetLedger.id))
     if filters:
@@ -88,6 +93,29 @@ async def list_create_budget_ledger(
     stmt = stmt.offset(max(0, offset)).limit(max(1, min(limit, 200)))
     rows = list((await db.execute(stmt)).scalars().all())
     return rows, total
+
+
+async def get_create_budget_ledger_entry(db: AsyncSession, entry_id: int) -> CreateBudgetLedger | None:
+    return await db.get(CreateBudgetLedger, entry_id)
+
+
+async def set_create_budget_ledger_settled(
+    db: AsyncSession,
+    entry: CreateBudgetLedger,
+    *,
+    settled: bool,
+    settled_by_admin_id: int | None,
+) -> CreateBudgetLedger:
+    entry.settled_with_owner = bool(settled)
+    if settled:
+        entry.settled_at = datetime.now(UTC)
+        entry.settled_by_admin_id = settled_by_admin_id
+    else:
+        entry.settled_at = None
+        entry.settled_by_admin_id = None
+    await db.commit()
+    await db.refresh(entry)
+    return entry
 
 
 async def get_admin_usernames_map(db: AsyncSession, admin_ids: set[int]) -> dict[int, str]:

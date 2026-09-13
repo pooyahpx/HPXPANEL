@@ -889,7 +889,7 @@ async def pending_orders(event: types.CallbackQuery, db: AsyncSession, admin: Ad
         plan = await get_shop_plan(db, order.plan_id)
         caption = t(
             lang,
-            "admin_new_order",
+            "admin_new_renewal" if (getattr(order, "order_kind", None) or "purchase") == "renewal" else "admin_new_order",
             id=order.id,
             buyer=order.buyer_username or str(order.buyer_telegram_id),
             plan=plan.name if plan else "?",
@@ -915,85 +915,25 @@ async def approve_order(event: types.CallbackQuery, callback_data: ShopAdminKeyb
     if not order or order.admin_id != admin.id or order.status != ShopOrderStatus.pending:
         await event.answer("!", show_alert=True)
         return
-    plan = await get_shop_plan(db, order.plan_id)
-    if not plan:
-        await event.answer("!", show_alert=True)
-        return
 
-    username = f"tg{order.buyer_telegram_id}_{secrets.token_hex(2)}"
-    expire = None
-    if plan.expire_days and plan.expire_days > 0:
-        expire = dt.now(UTC) + td(days=plan.expire_days)
+    from app.operation.shop import ShopOperation
 
-    db_admin = await get_admin_by_id(db, admin.id, load_users=False, load_usage_logs=False)
-    admin_details = build_admin_details(db_admin, include_loaded_metrics=False)
-
-    new_user = UserCreate(
-        username=username,
-        status=UserStatus.active,
-        data_limit=plan.data_limit or None,
-        expire=expire,
-        group_ids=list(plan.group_ids or []),
-        ip_limit=plan.ip_limit,
-        hwid_limit=plan.hwid_limit,
-        note=f"shop order #{order.id}",
-    )
+    shop_op = ShopOperation(OperatorType.TELEGRAM)
     try:
-        user = await user_operator.create_user(db, new_user, admin_details, skip_role_limits=True)
+        result = await shop_op.approve_order(db, admin, order.id)
     except Exception as exc:
-        await event.answer(str(exc)[:180], show_alert=True)
+        detail = getattr(exc, "detail", None) or str(exc)
+        await event.answer(str(detail)[:180], show_alert=True)
         return
 
-    await update_order_status(db, order, ShopOrderStatus.approved, created_user_id=user.id)
-    await event.answer(t(lang, "admin_approved", username=user.username))
+    is_renewal = (getattr(order, "order_kind", None) or "purchase") == "renewal"
+    ok_key = "admin_renewed" if is_renewal else "admin_approved"
+    await event.answer(t(lang, ok_key, username=result.username))
     try:
-        await event.message.edit_caption(caption=(event.message.caption or "") + f"\n\n✅ {user.username}")
+        mark = "🔄" if is_renewal else "✅"
+        await event.message.edit_caption(caption=(event.message.caption or "") + f"\n\n{mark} {result.username}")
     except TelegramBadRequest:
         pass
-
-    buyer_lang = (await get_telegram_lang(db, order.buyer_telegram_id)) or "fa"
-    from app.telegram import get_bot
-
-    bot = get_bot()
-    if bot:
-        text = rich(
-            buyer_lang,
-            "order_approved",
-            id=order.id,
-            username=user.username,
-            url=user.subscription_url,
-        )
-        try:
-            await bot.send_message(order.buyer_telegram_id, text)
-            from app.telegram.utils.qr import subscription_qr_file
-
-            await bot.send_photo(order.buyer_telegram_id, subscription_qr_file(user.subscription_url, user.username))
-        except Exception:
-            try:
-                await bot.send_message(order.buyer_telegram_id, text)
-            except Exception:
-                pass
-
-        buyer_label = order.buyer_username or str(order.buyer_telegram_id)
-        await notify_owner_order_approved(
-            db=db,
-            bot=bot,
-            approver=admin,
-            order_id=order.id,
-            buyer_label=buyer_label,
-            plan_name=plan.name,
-            username=user.username,
-        )
-        from app.telegram.utils.sub_delivery import record_sub_delivery
-
-        await record_sub_delivery(
-            db,
-            user_id=user.id,
-            buyer_telegram_id=order.buyer_telegram_id,
-            source_type="order",
-            source_id=order.id,
-            panel_username=user.username,
-        )
 
 
 @router.callback_query(ShopAdminKeyboard.Callback.filter(ShopAdminAction.reject == F.action))

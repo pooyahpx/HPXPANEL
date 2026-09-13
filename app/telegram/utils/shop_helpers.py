@@ -264,6 +264,7 @@ async def notify_all_admins_order(
     price: str,
     file_id: str,
     reply_markup_factory,
+    renewal: bool = False,
 ) -> None:
     """Notify every linked panel admin about a new shop order."""
     notified_ids: set[int] = set()
@@ -274,7 +275,7 @@ async def notify_all_admins_order(
         admin_lang = (await get_telegram_lang(db, chat_id)) or "fa"
         caption = t(
             admin_lang,
-            "admin_new_order",
+            "admin_new_renewal" if renewal else "admin_new_order",
             id=order_id,
             buyer=buyer_label,
             plan=plan_name,
@@ -335,6 +336,7 @@ async def notify_owner_order_approved(
     buyer_label: str,
     plan_name: str,
     username: str,
+    renewal: bool = False,
 ) -> None:
     if bot is None or approver.is_owner:
         return
@@ -342,9 +344,10 @@ async def notify_owner_order_approved(
     if owner is None or not owner.telegram_id or owner.telegram_id == approver.telegram_id:
         return
     owner_lang = (await get_telegram_lang(db, owner.telegram_id)) or "fa"
+    key = "admin_order_renewed_by_other" if renewal else "admin_order_approved_by_other"
     text = rich(
         owner_lang,
-        "admin_order_approved_by_other",
+        key,
         id=order_id,
         admin=approver.username,
         buyer=buyer_label,

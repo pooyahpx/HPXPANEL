@@ -34,6 +34,7 @@ from app.models.shop import (
     ShopCard,
     ShopConfigResponse,
     ShopConfigUpdate,
+    ShopOrderKindLiteral,
     ShopOrderListResponse,
     ShopOrderResponse,
     ShopPlanCreate,
@@ -41,7 +42,7 @@ from app.models.shop import (
     ShopPlanUpdate,
     ShopStatsResponse,
 )
-from app.models.user import UserCreate
+from app.models.user import UserCreate, UserModify
 from app.operation import BaseOperation, OperatorType
 from app.operation.user import UserOperation
 
@@ -113,6 +114,18 @@ async def _order_response(db: AsyncSession, order: ShopOrder) -> ShopOrderRespon
     if order.created_user_id:
         user = await get_user_by_id(db, order.created_user_id, load_admin=False, load_next_plan=False, load_usage_logs=False, load_groups=False)
         created_username = user.username if user else None
+    renew_username = None
+    renew_user_id = getattr(order, "renew_user_id", None)
+    if renew_user_id:
+        renew_user = await get_user_by_id(
+            db, renew_user_id, load_admin=False, load_next_plan=False, load_usage_logs=False, load_groups=False
+        )
+        renew_username = renew_user.username if renew_user else None
+    kind_raw = getattr(order, "order_kind", None) or "purchase"
+    try:
+        order_kind = ShopOrderKindLiteral(kind_raw)
+    except ValueError:
+        order_kind = ShopOrderKindLiteral.purchase
     return ShopOrderResponse(
         id=order.id,
         plan_id=order.plan_id,
@@ -120,6 +133,9 @@ async def _order_response(db: AsyncSession, order: ShopOrder) -> ShopOrderRespon
         buyer_telegram_id=order.buyer_telegram_id,
         buyer_username=order.buyer_username,
         status=order.status,
+        order_kind=order_kind,
+        renew_user_id=renew_user_id,
+        renew_username=renew_username,
         receipt_file_id=order.receipt_file_id,
         has_receipt=bool(order.receipt_file_id),
         created_user_id=order.created_user_id,
@@ -208,11 +224,14 @@ class ShopOperation(BaseOperation):
         admin: AdminDetails,
         *,
         status: ShopOrderStatus | None = None,
+        order_kind: str | None = None,
         offset: int = 0,
         limit: int = 50,
     ) -> ShopOrderListResponse:
         shop_admin = await self._resolve_shop_admin(db, admin)
-        orders, total = await list_orders_for_admin(db, shop_admin.id, status=status, offset=offset, limit=limit)
+        orders, total = await list_orders_for_admin(
+            db, shop_admin.id, status=status, order_kind=order_kind, offset=offset, limit=limit
+        )
         return ShopOrderListResponse(
             orders=[await _order_response(db, order) for order in orders],
             total=total,
@@ -283,6 +302,14 @@ class ShopOperation(BaseOperation):
         if plan is None:
             await self.raise_error("Plan not found", 404, db)
 
+        order_kind = (getattr(order, "order_kind", None) or "purchase").lower()
+        if order_kind == "renewal" or order.renew_user_id:
+            return await self._approve_renewal_order(db, shop_admin, order, plan)
+        return await self._approve_purchase_order(db, shop_admin, order, plan)
+
+    async def _approve_purchase_order(
+        self, db: AsyncSession, shop_admin: AdminDetails, order: ShopOrder, plan: ShopPlan
+    ) -> ShopApproveResponse:
         username = f"tg{order.buyer_telegram_id}_{secrets.token_hex(2)}"
         expire = None
         if plan.expire_days and plan.expire_days > 0:
@@ -304,7 +331,54 @@ class ShopOperation(BaseOperation):
             await self.raise_error(str(exc)[:180], 400, db)
 
         order = await update_order_status(db, order, ShopOrderStatus.approved, created_user_id=user.id)
-        await self._notify_buyer_approved(db, shop_admin, order, plan, user)
+        await self._notify_buyer_approved(db, shop_admin, order, plan, user, renewal=False)
+        return ShopApproveResponse(
+            order=await _order_response(db, order),
+            username=user.username,
+            subscription_url=getattr(user, "subscription_url", None),
+        )
+
+    async def _approve_renewal_order(
+        self, db: AsyncSession, shop_admin: AdminDetails, order: ShopOrder, plan: ShopPlan
+    ) -> ShopApproveResponse:
+        user_id = order.renew_user_id or order.created_user_id
+        if not user_id:
+            await self.raise_error("Renewal target user missing", 400, db)
+
+        db_user = await get_user_by_id(
+            db, int(user_id), load_admin=False, load_next_plan=False, load_usage_logs=False, load_groups=True
+        )
+        if db_user is None:
+            await self.raise_error("User to renew not found", 404, db)
+
+        expire = None
+        if plan.expire_days and plan.expire_days > 0:
+            expire = dt.now(UTC) + td(days=plan.expire_days)
+
+        modify = UserModify(
+            status=UserStatus.active,
+            data_limit=int(plan.data_limit or 0),
+            expire=expire,
+            group_ids=list(plan.group_ids or []) or None,
+            ip_limit=plan.ip_limit,
+            hwid_limit=plan.hwid_limit,
+            note=f"shop renewal #{order.id}",
+        )
+        try:
+            user = await self.user_operator._modify_user(db, db_user, modify, shop_admin, skip_role_limits=True)
+            # Re-load after modify for reset
+            db_user = await get_user_by_id(
+                db, int(user_id), load_admin=False, load_next_plan=False, load_usage_logs=False, load_groups=False
+            )
+            if db_user is not None:
+                user = await self.user_operator._reset_user_data_usage(
+                    db, db_user, shop_admin, emit_status_change_notification=False
+                )
+        except Exception as exc:
+            await self.raise_error(str(exc)[:180], 400, db)
+
+        order = await update_order_status(db, order, ShopOrderStatus.approved, created_user_id=user.id)
+        await self._notify_buyer_approved(db, shop_admin, order, plan, user, renewal=True)
         return ShopApproveResponse(
             order=await _order_response(db, order),
             username=user.username,
@@ -330,7 +404,9 @@ class ShopOperation(BaseOperation):
         await self._notify_buyer_rejected(db, order)
         return await _order_response(db, order)
 
-    async def _notify_buyer_approved(self, db: AsyncSession, admin: AdminDetails, order: ShopOrder, plan: ShopPlan, user) -> None:
+    async def _notify_buyer_approved(
+        self, db: AsyncSession, admin: AdminDetails, order: ShopOrder, plan: ShopPlan, user, *, renewal: bool = False
+    ) -> None:
         try:
             from app.telegram import get_bot
             from app.telegram.utils.i18n import rich
@@ -341,9 +417,10 @@ class ShopOperation(BaseOperation):
             buyer_lang = (await get_telegram_lang(db, order.buyer_telegram_id)) or "fa"
             bot = get_bot()
             if bot:
+                msg_key = "order_renewed" if renewal else "order_approved"
                 text = rich(
                     buyer_lang,
-                    "order_approved",
+                    msg_key,
                     id=order.id,
                     username=user.username,
                     url=user.subscription_url,
@@ -367,13 +444,14 @@ class ShopOperation(BaseOperation):
                     buyer_label=order.buyer_username or str(order.buyer_telegram_id),
                     plan_name=plan.name,
                     username=user.username,
+                    renewal=renewal,
                 )
 
             await record_sub_delivery(
                 db,
                 user_id=user.id,
                 buyer_telegram_id=order.buyer_telegram_id,
-                source_type="order",
+                source_type="renewal" if renewal else "order",
                 source_id=order.id,
                 panel_username=user.username,
             )
@@ -399,6 +477,7 @@ class ShopOperation(BaseOperation):
         admin: AdminDetails,
         *,
         admin_id: int | None = None,
+        settled: bool | None = None,
         offset: int = 0,
         limit: int = 50,
     ) -> CreateBudgetLedgerListResponse:
@@ -415,7 +494,7 @@ class ShopOperation(BaseOperation):
             target_admin_id = int(admin.id)
 
         rows, total = await list_create_budget_ledger(
-            db, admin_id=target_admin_id, offset=offset, limit=limit
+            db, admin_id=target_admin_id, settled=settled, offset=offset, limit=limit
         )
         names = await get_admin_usernames_map(db, {int(r.admin_id) for r in rows})
         entries = [
@@ -436,8 +515,62 @@ class ShopOperation(BaseOperation):
                 pricing_mode=r.pricing_mode,
                 tier_gb=r.tier_gb,
                 detail=r.detail,
+                settled_with_owner=bool(getattr(r, "settled_with_owner", False)),
+                settled_at=getattr(r, "settled_at", None),
+                settled_by_admin_id=getattr(r, "settled_by_admin_id", None),
                 created_at=r.created_at,
             )
             for r in rows
         ]
         return CreateBudgetLedgerListResponse(entries=entries, total=total)
+
+    async def settle_create_budget_entry(
+        self,
+        db: AsyncSession,
+        admin: AdminDetails,
+        entry_id: int,
+        *,
+        settled: bool = True,
+    ) -> CreateBudgetLedgerEntry:
+        from app.db.crud.create_budget_ledger import (
+            get_admin_usernames_map,
+            get_create_budget_ledger_entry,
+            set_create_budget_ledger_settled,
+        )
+
+        if not admin.is_owner:
+            raise HTTPException(status_code=403, detail="Only owner can settle budget ledger entries")
+
+        entry = await get_create_budget_ledger_entry(db, entry_id)
+        if entry is None:
+            await self.raise_error("Ledger entry not found", 404, db)
+
+        entry = await set_create_budget_ledger_settled(
+            db,
+            entry,
+            settled=settled,
+            settled_by_admin_id=admin.id,
+        )
+        names = await get_admin_usernames_map(db, {int(entry.admin_id)})
+        return CreateBudgetLedgerEntry(
+            id=entry.id,
+            admin_id=entry.admin_id,
+            admin_username=names.get(int(entry.admin_id)),
+            entry_type=entry.entry_type,
+            amount_toman=entry.amount_toman,
+            balance_after=entry.balance_after,
+            actor_admin_id=entry.actor_admin_id,
+            user_id=entry.user_id,
+            username=entry.username,
+            billable_gb=entry.billable_gb,
+            billable_days=entry.billable_days,
+            price_per_gb=entry.price_per_gb,
+            price_per_day=entry.price_per_day,
+            pricing_mode=entry.pricing_mode,
+            tier_gb=entry.tier_gb,
+            detail=entry.detail,
+            settled_with_owner=bool(entry.settled_with_owner),
+            settled_at=entry.settled_at,
+            settled_by_admin_id=entry.settled_by_admin_id,
+            created_at=entry.created_at,
+        )

@@ -11,6 +11,7 @@ from app.db.crud.shop import (
     has_test_claimed,
     list_active_plans,
     list_buyer_orders,
+    list_buyer_renewable_accounts,
     mark_test_claimed,
     set_telegram_lang,
 )
@@ -26,6 +27,8 @@ from app.telegram.keyboards.shop import (
     ShopKeyboard,
     ShopOrderAdminKeyboard,
     ShopPlansKeyboard,
+    ShopRenewAccountsKeyboard,
+    ShopRenewPlansKeyboard,
 )
 from app.telegram.utils import forms
 from app.telegram.utils.i18n import format_bytes, format_price, rich, t
@@ -277,7 +280,108 @@ async def buy_plan(event: types.CallbackQuery, callback_data: ShopKeyboard.Callb
     text += build_pay_card_section(lang, config)
 
     await state.set_state(forms.ShopBuy.waiting_receipt)
-    await state.update_data(plan_id=plan.id, admin_id=config.admin_id, lang=lang)
+    await state.update_data(plan_id=plan.id, admin_id=config.admin_id, lang=lang, order_kind="purchase", renew_user_id=None)
+    await event.message.edit_text(text)
+
+    from app.telegram import get_bot
+
+    bot = get_bot()
+    if bot:
+        await send_card_photos(bot, event.from_user.id, config)
+
+    tip = await event.message.answer(t(lang, "send_receipt"))
+    await add_to_messages_to_delete(state, tip)
+    await event.answer()
+
+
+@router.callback_query(ShopKeyboard.Callback.filter(ShopAction.renew == F.action))
+async def renew_home(event: types.CallbackQuery, db: AsyncSession):
+    lang = await _lang(db, event.from_user.id)
+    config = await get_enabled_shop_config(db)
+    if not config or not config.enabled:
+        await event.message.edit_text(t(lang, "shop_disabled"), reply_markup=ShopHomeKeyboard(lang).as_markup())
+        await event.answer()
+        return
+    accounts = await list_buyer_renewable_accounts(
+        db, buyer_telegram_id=event.from_user.id, admin_id=config.admin_id
+    )
+    if not accounts:
+        await event.message.edit_text(
+            t(lang, "renew_empty"),
+            reply_markup=await _home_markup(db, lang, event.from_user.id, config),
+        )
+        await event.answer()
+        return
+    await event.message.edit_text(
+        rich(lang, "renew_pick_account"),
+        reply_markup=ShopRenewAccountsKeyboard(lang, accounts).as_markup(),
+    )
+    await event.answer()
+
+
+@router.callback_query(ShopKeyboard.Callback.filter(ShopAction.renew_pick == F.action))
+async def renew_pick_account(event: types.CallbackQuery, callback_data: ShopKeyboard.Callback, db: AsyncSession):
+    lang = await _lang(db, event.from_user.id)
+    config = await get_enabled_shop_config(db)
+    if not config or not config.enabled or not callback_data.user_id:
+        await event.answer(t(lang, "shop_disabled"), show_alert=True)
+        return
+    accounts = await list_buyer_renewable_accounts(
+        db, buyer_telegram_id=event.from_user.id, admin_id=config.admin_id
+    )
+    if not any(int(user.id) == int(callback_data.user_id) for user, _ in accounts):
+        await event.answer(t(lang, "renew_invalid"), show_alert=True)
+        return
+    plans = await list_active_plans(db, config.admin_id)
+    text = rich(lang, "renew_pick_plan")
+    if not plans:
+        text += f"\n\n{t(lang, 'shop_empty')}"
+    await event.message.edit_text(
+        text,
+        reply_markup=ShopRenewPlansKeyboard(lang, plans, user_id=int(callback_data.user_id)).as_markup(),
+    )
+    await event.answer()
+
+
+@router.callback_query(ShopKeyboard.Callback.filter(ShopAction.renew_buy == F.action))
+async def renew_buy_plan(
+    event: types.CallbackQuery, callback_data: ShopKeyboard.Callback, db: AsyncSession, state: FSMContext
+):
+    lang = await _lang(db, event.from_user.id)
+    config = await get_enabled_shop_config(db)
+    plan = await get_shop_plan(db, callback_data.plan_id)
+    if not config or not config.enabled or not plan or not plan.is_active or not callback_data.user_id:
+        await event.answer(t(lang, "shop_disabled"), show_alert=True)
+        return
+
+    accounts = await list_buyer_renewable_accounts(
+        db, buyer_telegram_id=event.from_user.id, admin_id=config.admin_id
+    )
+    target = next((user for user, _ in accounts if int(user.id) == int(callback_data.user_id)), None)
+    if target is None:
+        await event.answer(t(lang, "renew_invalid"), show_alert=True)
+        return
+
+    days = t(lang, "days_unlimited") if not plan.expire_days else str(plan.expire_days)
+    text = rich(
+        lang,
+        "renew_pay_title",
+        username=target.username,
+        name=plan.name,
+        data=format_bytes(plan.data_limit),
+        days=days,
+        price=format_price(plan.price_toman),
+    )
+    text += build_pay_card_section(lang, config)
+
+    await state.set_state(forms.ShopBuy.waiting_receipt)
+    await state.update_data(
+        plan_id=plan.id,
+        admin_id=config.admin_id,
+        lang=lang,
+        order_kind="renewal",
+        renew_user_id=int(target.id),
+    )
     await event.message.edit_text(text)
 
     from app.telegram import get_bot
@@ -359,6 +463,8 @@ async def receive_receipt(event: types.Message, db: AsyncSession, state: FSMCont
         return
 
     file_id = event.photo[-1].file_id
+    order_kind = data.get("order_kind") or "purchase"
+    renew_user_id = data.get("renew_user_id")
     order = await create_shop_order(
         db,
         plan_id=plan.id,
@@ -366,9 +472,12 @@ async def receive_receipt(event: types.Message, db: AsyncSession, state: FSMCont
         buyer_telegram_id=event.from_user.id,
         buyer_username=event.from_user.username,
         receipt_file_id=file_id,
+        order_kind=order_kind,
+        renew_user_id=int(renew_user_id) if renew_user_id else None,
     )
     await state.clear()
-    await event.answer(t(lang, "order_created", id=order.id))
+    created_key = "renew_order_created" if order_kind == "renewal" else "order_created"
+    await event.answer(t(lang, created_key, id=order.id))
 
     # Notify all linked panel admins
     from app.telegram import get_bot
@@ -388,6 +497,7 @@ async def receive_receipt(event: types.Message, db: AsyncSession, state: FSMCont
                 price=format_price(plan.price_toman),
                 file_id=file_id,
                 reply_markup_factory=lambda admin_lang: ShopOrderAdminKeyboard(admin_lang, order).as_markup(),
+                renewal=order_kind == "renewal",
             )
         except Exception:
             pass

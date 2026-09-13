@@ -293,7 +293,12 @@ async def create_shop_order(
     buyer_telegram_id: int,
     buyer_username: str | None,
     receipt_file_id: str,
+    order_kind: str = "purchase",
+    renew_user_id: int | None = None,
 ) -> ShopOrder:
+    kind = (order_kind or "purchase").strip().lower()
+    if kind not in ("purchase", "renewal"):
+        kind = "purchase"
     order = ShopOrder(
         plan_id=plan_id,
         admin_id=admin_id,
@@ -301,6 +306,8 @@ async def create_shop_order(
         buyer_username=buyer_username,
         receipt_file_id=receipt_file_id,
         status=ShopOrderStatus.pending,
+        order_kind=kind,
+        renew_user_id=renew_user_id if kind == "renewal" else None,
     )
     await _assign_sqlite_pk(db, ShopOrder, order)
     db.add(order)
@@ -327,12 +334,15 @@ async def list_orders_for_admin(
     admin_id: int,
     *,
     status: ShopOrderStatus | None = None,
+    order_kind: str | None = None,
     offset: int = 0,
     limit: int = 50,
 ) -> tuple[list[ShopOrder], int]:
     filters = [ShopOrder.admin_id == admin_id]
     if status is not None:
         filters.append(ShopOrder.status == status)
+    if order_kind:
+        filters.append(ShopOrder.order_kind == order_kind)
     base = select(ShopOrder).where(*filters)
     total = int((await db.execute(select(func.count()).select_from(base.subquery()))).scalar_one() or 0)
     stmt = base.order_by(ShopOrder.id.desc()).offset(offset).limit(limit)
@@ -347,6 +357,38 @@ async def list_buyer_orders(db: AsyncSession, buyer_telegram_id: int, limit: int
         .limit(limit)
     )
     return list((await db.execute(stmt)).scalars().all())
+
+
+async def list_buyer_renewable_accounts(
+    db: AsyncSession,
+    *,
+    buyer_telegram_id: int,
+    admin_id: int,
+) -> list[tuple[User, ShopOrder]]:
+    """Approved purchase/renewal orders for this buyer that still map to an existing panel user."""
+    stmt = (
+        select(ShopOrder)
+        .where(
+            ShopOrder.buyer_telegram_id == buyer_telegram_id,
+            ShopOrder.admin_id == admin_id,
+            ShopOrder.status == ShopOrderStatus.approved,
+            ShopOrder.created_user_id.isnot(None),
+        )
+        .order_by(ShopOrder.id.desc())
+    )
+    orders = list((await db.execute(stmt)).scalars().all())
+    seen: set[int] = set()
+    result: list[tuple[User, ShopOrder]] = []
+    for order in orders:
+        user_id = order.created_user_id
+        if user_id is None or user_id in seen:
+            continue
+        user = await db.get(User, user_id)
+        if user is None:
+            continue
+        seen.add(user_id)
+        result.append((user, order))
+    return result
 
 
 async def update_order_status(
@@ -415,6 +457,20 @@ async def get_shop_bot_stats(db: AsyncSession, admin_id: int) -> dict[str, int]:
         "orders_pending": await _order_count(ShopOrderStatus.pending),
         "orders_approved": await _order_count(ShopOrderStatus.approved),
         "orders_rejected": await _order_count(ShopOrderStatus.rejected),
+        "orders_renewed": int(
+            (
+                await db.execute(
+                    select(func.count())
+                    .select_from(ShopOrder)
+                    .where(
+                        ShopOrder.admin_id == admin_id,
+                        ShopOrder.status == ShopOrderStatus.approved,
+                        ShopOrder.order_kind == "renewal",
+                    )
+                )
+            ).scalar_one()
+            or 0
+        ),
     }
 
 

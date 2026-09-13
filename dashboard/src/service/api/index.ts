@@ -1402,6 +1402,14 @@ export interface SystemResourceStats {
   disk_used?: SystemResourceStatsDiskUsed
   cpu_cores?: SystemResourceStatsCpuCores
   cpu_usage?: SystemResourceStatsCpuUsage
+  hostname?: string | null
+  os_name?: string | null
+  os_version?: string | null
+  kernel?: string | null
+  cpu_model?: string | null
+  cpu_freq_mhz?: number | null
+  virtualization?: string | null
+  server_uptime_seconds?: number | null
 }
 
 export type SystemPermissionsReadAnyOf = { [key: string]: PermissionScope | number }

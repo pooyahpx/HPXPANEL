@@ -11,7 +11,7 @@ from app.db.models import UserStatus
 from app.models.admin import AdminDetails
 from app.models.system import InboundSummary, SystemResourceStats, SystemStats, SystemUsersStats
 from app.operation.permissions import PermissionDenied, enforce_permission, is_scope_all
-from app.utils.system import cpu_usage, disk_usage, get_uptime, memory_usage
+from app.utils.system import cpu_usage, disk_usage, get_uptime, host_identity, memory_usage
 
 from . import BaseOperation
 
@@ -24,8 +24,11 @@ class SystemOperation(BaseOperation):
         cpu_task = asyncio.create_task(asyncio.to_thread(cpu_usage))
         disk_task = asyncio.create_task(asyncio.to_thread(disk_usage))
         uptime_task = asyncio.create_task(asyncio.to_thread(get_uptime))
+        host_task = asyncio.create_task(asyncio.to_thread(host_identity))
 
-        mem, cpu, disk, uptime_seconds = await asyncio.gather(mem_task, cpu_task, disk_task, uptime_task)
+        mem, cpu, disk, uptime_seconds, host = await asyncio.gather(
+            mem_task, cpu_task, disk_task, uptime_task, host_task
+        )
 
         return SystemResourceStats(
             version=__version__,
@@ -36,6 +39,14 @@ class SystemOperation(BaseOperation):
             disk_used=disk.used,
             cpu_cores=cpu.cores,
             cpu_usage=cpu.percent,
+            hostname=host.hostname,
+            os_name=host.os_name,
+            os_version=host.os_version,
+            kernel=host.kernel,
+            cpu_model=host.cpu_model,
+            cpu_freq_mhz=host.cpu_freq_mhz,
+            virtualization=host.virtualization,
+            server_uptime_seconds=host.server_uptime_seconds,
         )
 
     @staticmethod

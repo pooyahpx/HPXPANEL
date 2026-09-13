@@ -9,13 +9,22 @@ class InboundSummary(BaseModel):
 
 class SystemResourceStats(BaseModel):
     version: str
-    uptime_seconds: int
+    uptime_seconds: int  # panel process uptime
     mem_total: int | None = None
     mem_used: int | None = None
     disk_total: int | None = None
     disk_used: int | None = None
     cpu_cores: int | None = None
     cpu_usage: float | None = None
+    # Host identity (mother-server topology card)
+    hostname: str | None = None
+    os_name: str | None = None
+    os_version: str | None = None
+    kernel: str | None = None
+    cpu_model: str | None = None
+    cpu_freq_mhz: float | None = None
+    virtualization: str | None = None
+    server_uptime_seconds: int | None = None  # OS boot uptime
 
 
 class SystemUsersStats(BaseModel):

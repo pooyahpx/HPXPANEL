@@ -1,5 +1,6 @@
 import AdminStatisticsCard from '@/features/dashboard/components/admin-statistics-card'
 import DashboardStatistics from '@/features/dashboard/components/dashboard-statistics'
+import ServerTopologyCard from '@/features/dashboard/components/server-topology-card'
 import SetupChecklistCard from '@/features/dashboard/components/setup-checklist-card'
 import WorkersHealthCard from '@/features/dashboard/components/workers-health-card'
 import AdminFilterCombobox from '@/components/common/admin-filter-combobox'
@@ -62,6 +63,7 @@ const Dashboard = () => {
   const canCreateTemplates = hasPermission(currentAdmin, 'templates', 'create')
   const canCreateCores = hasPermission(currentAdmin, 'cores', 'create')
   const canReadNodeStats = hasPermission(currentAdmin, 'nodes', 'stats')
+  const canReadNodes = hasPermission(currentAdmin, 'nodes', 'read')
   const { t } = useTranslation()
 
   const [selectedAdmin, setSelectedAdmin] = useState<DashboardAdmin | undefined>(totalAdmin)
@@ -246,6 +248,14 @@ const Dashboard = () => {
               canCreateCore={canCreateCores}
               canCreateHost={canCreateHosts}
               canCreateUser={canCreateUsers}
+            />
+          </div>
+          <div className="animate-slide-up transform-gpu" style={{ animationDuration: '500ms', animationDelay: '80ms', animationFillMode: 'both' }}>
+            <ServerTopologyCard
+              resourceData={systemResourceStatsData}
+              usersData={systemUsersStatsData}
+              canReadNodes={canReadNodes}
+              canReadNodeStats={canReadNodeStats}
             />
           </div>
           <div className="animate-slide-up transform-gpu" style={{ animationDuration: '500ms', animationDelay: '100ms', animationFillMode: 'both' }}>

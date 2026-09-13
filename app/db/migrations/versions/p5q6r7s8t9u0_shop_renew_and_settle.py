@@ -22,24 +22,28 @@ def upgrade() -> None:
         "shop_orders",
         sa.Column("order_kind", sa.String(length=16), nullable=False, server_default="purchase"),
     )
-    op.add_column(
-        "shop_orders",
-        sa.Column("renew_user_id", SqliteCompatibleBigInteger(), nullable=True),
-    )
-    op.create_index("ix_shop_orders_order_kind", "shop_orders", ["order_kind"])
-    op.create_index("ix_shop_orders_renew_user_id", "shop_orders", ["renew_user_id"])
-    try:
-        op.create_foreign_key(
-            "fk_shop_orders_renew_user_id_users",
+
+    bind = op.get_bind()
+    if bind.dialect.name == "sqlite":
+        with op.batch_alter_table("shop_orders") as batch_op:
+            batch_op.add_column(sa.Column("renew_user_id", SqliteCompatibleBigInteger(), nullable=True))
+            batch_op.create_foreign_key(
+                "fk_shop_orders_renew_user_id_users",
+                "users",
+                ["renew_user_id"],
+                ["id"],
+                ondelete="SET NULL",
+            )
+    else:
+        op.add_column(
             "shop_orders",
-            "users",
-            ["renew_user_id"],
-            ["id"],
-            ondelete="SET NULL",
+            sa.Column(
+                "renew_user_id",
+                SqliteCompatibleBigInteger(),
+                sa.ForeignKey("users.id", ondelete="SET NULL", name="fk_shop_orders_renew_user_id_users"),
+                nullable=True,
+            ),
         )
-    except Exception:
-        # SQLite / dialects without easy FK alter — index is enough for app use
-        pass
 
     op.add_column(
         "create_budget_ledger",
@@ -53,20 +57,19 @@ def upgrade() -> None:
         "create_budget_ledger",
         sa.Column("settled_by_admin_id", SqliteCompatibleBigInteger(), nullable=True),
     )
-    op.create_index("ix_create_budget_ledger_settled", "create_budget_ledger", ["settled_with_owner"])
 
 
 def downgrade() -> None:
-    op.drop_index("ix_create_budget_ledger_settled", table_name="create_budget_ledger")
     op.drop_column("create_budget_ledger", "settled_by_admin_id")
     op.drop_column("create_budget_ledger", "settled_at")
     op.drop_column("create_budget_ledger", "settled_with_owner")
 
-    op.drop_index("ix_shop_orders_renew_user_id", table_name="shop_orders")
-    op.drop_index("ix_shop_orders_order_kind", table_name="shop_orders")
-    try:
+    bind = op.get_bind()
+    if bind.dialect.name == "sqlite":
+        with op.batch_alter_table("shop_orders") as batch_op:
+            batch_op.drop_constraint("fk_shop_orders_renew_user_id_users", type_="foreignkey")
+            batch_op.drop_column("renew_user_id")
+    else:
         op.drop_constraint("fk_shop_orders_renew_user_id_users", "shop_orders", type_="foreignkey")
-    except Exception:
-        pass
-    op.drop_column("shop_orders", "renew_user_id")
+        op.drop_column("shop_orders", "renew_user_id")
     op.drop_column("shop_orders", "order_kind")

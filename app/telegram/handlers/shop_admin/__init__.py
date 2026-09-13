@@ -1,12 +1,8 @@
-import secrets
-from datetime import UTC, datetime as dt, timedelta as td
-
 from aiogram import F, Router, types
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.crud.admin import build_admin_details, get_admin_by_id
 from app.db.crud.shop import (
     create_shop_plan,
     delete_shop_plan,
@@ -22,11 +18,9 @@ from app.db.crud.shop import (
     update_shop_plan,
     upsert_shop_config,
 )
-from app.db.models import ShopOrderStatus, UserStatus
+from app.db.models import ShopOrderStatus
 from app.models.admin import AdminDetails
-from app.models.user import UserCreate
 from app.operation import OperatorType
-from app.operation.user import UserOperation
 from app.telegram.keyboards.shop import (
     ShopAdminAction,
     ShopAdminCardsKeyboard,
@@ -45,14 +39,12 @@ from app.telegram.utils.shop_helpers import (
     cards_summary,
     format_groups_hint,
     normalize_group_ids,
-    notify_owner_order_approved,
     parse_optional_limit,
     shop_cards,
     test_config_summary,
     welcome_note_preview,
 )
 
-user_operator = UserOperation(OperatorType.TELEGRAM)
 router = Router(name="shop_admin")
 router.message.filter(IsAdminFilter())
 router.callback_query.filter(IsAdminFilter())

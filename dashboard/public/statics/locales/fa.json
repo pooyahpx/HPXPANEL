@@ -859,7 +859,12 @@
     "uptime": "آپتایم",
     "nodesBranch": "{{count}} نود",
     "noNodes": "هنوز نودی نیست — سرور مادر تنها اجرا می‌شود.",
-    "nodeStatsPending": "متریک زنده در دسترس نیست"
+    "nodeStatsPending": "متریک زنده در دسترس نیست",
+    "location": "لوکیشن",
+    "locationUnknown": "نامشخص",
+    "datacenter": "دیتاسنتر",
+    "panelLocation": "لوکیشن پنل",
+    "panelHost": "هاست پنل"
   },
   "core": "هسته‌ها",
   "apply": "تایید",
@@ -2108,6 +2113,9 @@
   },
   "statistics.system": "سیستم",
   "statistics.totalTraffic": "کل ترافیک",
+  "statistics.lifetimeTraffic": "مجموع کل",
+  "statistics.download": "دانلود",
+  "statistics.upload": "آپلود",
   "statistics.ramUsage": "مصرف رم",
   "statistics.cpuUsage": "مصرف پردازنده",
   "statistics.diskUsage": "مصرف دیسک",

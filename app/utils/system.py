@@ -44,6 +44,7 @@ class HostIdentity:
     cpu_freq_mhz: float | None
     virtualization: str | None
     server_uptime_seconds: int
+    timezone: str | None = None
 
 
 def cpu_usage() -> CPUStat:
@@ -171,9 +172,51 @@ def _detect_virtualization() -> str | None:
     return None
 
 
+def _detect_timezone() -> str | None:
+    path = "/etc/timezone"
+    if os.path.isfile(path):
+        try:
+            with open(path, encoding="utf-8", errors="ignore") as fh:
+                value = fh.read().strip()
+            if value:
+                return value
+        except OSError:
+            pass
+
+    try:
+        result = subprocess.run(
+            ["timedatectl", "show", "-p", "Timezone", "--value"],
+            capture_output=True,
+            text=True,
+            timeout=1.5,
+            check=False,
+        )
+        value = (result.stdout or "").strip()
+        if value:
+            return value
+    except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
+        pass
+
+    try:
+        link = os.readlink("/etc/localtime")
+        marker = "/zoneinfo/"
+        if marker in link:
+            return link.split(marker, 1)[1]
+    except OSError:
+        pass
+
+    try:
+        import time as _time
+
+        name = _time.tzname[0] if _time.tzname else None
+        return name or None
+    except Exception:
+        return None
+
+
 @lru_cache(maxsize=1)
-def _cached_static_host_fields() -> tuple[str, str | None, str | None, str | None, str | None, str | None]:
-    """Hostname/OS/kernel/cpu/virt change rarely — cache for process lifetime."""
+def _cached_static_host_fields() -> tuple[str, str | None, str | None, str | None, str | None, str | None, str | None]:
+    """Hostname/OS/kernel/cpu/virt/timezone change rarely — cache for process lifetime."""
     try:
         hostname = socket.gethostname() or platform.node() or "panel"
     except OSError:
@@ -189,11 +232,12 @@ def _cached_static_host_fields() -> tuple[str, str | None, str | None, str | Non
     kernel = uname.release or None
     cpu_model = _read_cpu_model()
     virtualization = _detect_virtualization()
-    return hostname, os_name, os_version, kernel, cpu_model, virtualization
+    timezone = _detect_timezone()
+    return hostname, os_name, os_version, kernel, cpu_model, virtualization, timezone
 
 
 def host_identity() -> HostIdentity:
-    hostname, os_name, os_version, kernel, cpu_model, virtualization = _cached_static_host_fields()
+    hostname, os_name, os_version, kernel, cpu_model, virtualization, timezone = _cached_static_host_fields()
     freq_mhz: float | None = None
     try:
         freq = psutil.cpu_freq()
@@ -211,6 +255,7 @@ def host_identity() -> HostIdentity:
         cpu_freq_mhz=freq_mhz,
         virtualization=virtualization,
         server_uptime_seconds=get_server_uptime(),
+        timezone=timezone,
     )
 
 

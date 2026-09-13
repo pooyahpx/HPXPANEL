@@ -25,6 +25,7 @@ class SystemResourceStats(BaseModel):
     cpu_freq_mhz: float | None = None
     virtualization: str | None = None
     server_uptime_seconds: int | None = None  # OS boot uptime
+    timezone: str | None = None
 
 
 class SystemUsersStats(BaseModel):

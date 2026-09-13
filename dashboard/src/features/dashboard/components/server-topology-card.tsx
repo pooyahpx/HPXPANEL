@@ -13,7 +13,8 @@ import {
   useRealtimeNodesStats,
 } from '@/service/api'
 import { formatBytes } from '@/utils/formatByte'
-import { Box, Cpu, Globe, HardDrive, MemoryStick, Network, Server, Shield, Zap } from 'lucide-react'
+import { displayCountryName, resolveInfraLocation, resolveLocationFromTimezone, type InfraLocation } from '@/utils/infra-location'
+import { Box, Building2, Cpu, Globe, HardDrive, MapPin, MemoryStick, Network, Server, Shield, Zap } from 'lucide-react'
 import { useMemo, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
@@ -87,22 +88,38 @@ const SpecRow = ({
   accent?: string
   mono?: boolean
 }) => (
-  <div className="group flex items-start gap-3 rounded-xl px-1 py-1.5 transition-colors hover:bg-white/[0.03]">
+  <div className="group flex items-start gap-3 rounded-xl px-1 py-2 transition-colors hover:bg-white/[0.03]">
     <div className={cn('mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/5 bg-white/[0.04]', accent)}>
       <Icon className="h-3.5 w-3.5" />
     </div>
     <div className="min-w-0 flex-1">
       <p className="text-muted-foreground text-[10px] font-semibold tracking-[0.16em] uppercase">{label}</p>
-      <p className={cn('text-foreground mt-0.5 truncate text-sm font-medium', mono && 'font-mono text-[13px]')}>{value}</p>
+      <div className={cn('text-foreground mt-0.5 text-sm font-medium', mono && 'font-mono text-[13px]')}>{value}</div>
     </div>
   </div>
 )
 
-const UsageBar = ({ label, percent, color }: { label: string; percent: number; color: string }) => (
+const LocationValue = ({ location, locale }: { location: InfraLocation; locale?: string }) => {
+  const name = displayCountryName(location, locale)
+  if (!name && !location.flag) {
+    return <span className="text-muted-foreground">—</span>
+  }
+  return (
+    <span className="inline-flex items-center gap-2">
+      {name && <span>{name}</span>}
+      {location.flag && <span className="text-base leading-none" aria-hidden>{location.flag}</span>}
+    </span>
+  )
+}
+
+const UsageBar = ({ label, percent, color, detail }: { label: string; percent: number; color: string; detail?: string }) => (
   <div className="space-y-1.5">
-    <div className="flex items-center justify-between text-[11px]">
+    <div className="flex items-center justify-between gap-2 text-[11px]">
       <span className="text-muted-foreground">{label}</span>
-      <span className="font-mono tabular-nums">{percent.toFixed(0)}%</span>
+      <span className="font-mono tabular-nums">
+        {detail ? `${detail} · ` : ''}
+        {percent.toFixed(0)}%
+      </span>
     </div>
     <div className="bg-muted/40 h-1.5 overflow-hidden rounded-full">
       <div className={cn('h-full rounded-full transition-all duration-700', color)} style={{ width: `${Math.min(100, Math.max(0, percent))}%` }} />
@@ -110,49 +127,76 @@ const UsageBar = ({ label, percent, color }: { label: string; percent: number; c
   </div>
 )
 
-const NodeLeafCard = ({ node, stats }: { node: NodeResponse; stats?: NodeRealtimeStats | null }) => {
+const NodeLeafCard = ({ node, stats, locale }: { node: NodeResponse; stats?: NodeRealtimeStats | null; locale?: string }) => {
   const { t } = useTranslation()
   const tone = statusTone(node.status)
+  const location = resolveInfraLocation(node.name, node.address)
+  const country = displayCountryName(location, locale)
   const cpu = Math.min(100, Math.max(0, Number(stats?.cpu_usage) || 0))
   const memTotal = Number(stats?.mem_total) || 0
   const memUsed = Number(stats?.mem_used) || 0
   const memPct = memTotal > 0 ? (memUsed / memTotal) * 100 : 0
 
   return (
-    <Card className="group border-border/60 bg-card/70 relative overflow-hidden backdrop-blur-sm transition-all duration-300 hover:-translate-y-0.5 hover:border-primary/35 hover:shadow-[0_12px_40px_-20px_hsl(var(--primary)/0.45)]">
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/50 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
-      <CardContent className="space-y-3 p-4">
-        <div className="flex items-start justify-between gap-2">
+    <Card className="group border-border/50 bg-card/80 relative h-full overflow-hidden backdrop-blur-sm transition-all duration-300 hover:-translate-y-1 hover:border-primary/40 hover:shadow-[0_18px_50px_-28px_hsl(var(--primary)/0.55)]">
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent opacity-70" />
+      <CardContent className="flex h-full flex-col gap-4 p-5">
+        <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <span className={cn('h-2 w-2 shrink-0 rounded-full shadow-[0_0_8px_currentColor]', tone.dot)} />
-              <h4 className="truncate text-sm font-semibold">{node.name}</h4>
+            <div className="flex items-center gap-2.5">
+              <span className={cn('h-2.5 w-2.5 shrink-0 rounded-full shadow-[0_0_10px_currentColor]', tone.dot)} />
+              <h4 className="truncate text-[15px] font-semibold tracking-tight">{node.name}</h4>
             </div>
-            <p className="text-muted-foreground mt-1 truncate font-mono text-[11px]">
+            <p className="text-muted-foreground mt-1.5 truncate font-mono text-[11px]">
               {node.address}
               {node.port ? `:${node.port}` : ''}
             </p>
           </div>
-          <Badge variant="outline" className={cn('shrink-0 border-0 bg-white/[0.04] text-[10px] capitalize', tone.text)}>
+          <Badge variant="outline" className={cn('shrink-0 border-0 bg-white/[0.04] px-2.5 py-1 text-[10px] capitalize', tone.text)}>
             {t(`nodes.${node.status}`, { defaultValue: node.status })}
           </Badge>
         </div>
 
+        <div className="border-border/40 space-y-2.5 rounded-xl border bg-black/15 px-3.5 py-3">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-muted-foreground inline-flex items-center gap-1.5 text-[10px] font-semibold tracking-[0.14em] uppercase">
+              <MapPin className="h-3 w-3" />
+              {t('serverTopology.location', { defaultValue: 'Location' })}
+            </span>
+            <span className="inline-flex items-center gap-1.5 text-sm font-medium">
+              {country || t('serverTopology.locationUnknown', { defaultValue: 'Unknown' })}
+              {location.flag && <span className="text-base leading-none">{location.flag}</span>}
+            </span>
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-muted-foreground inline-flex items-center gap-1.5 text-[10px] font-semibold tracking-[0.14em] uppercase">
+              <Building2 className="h-3 w-3" />
+              {t('serverTopology.datacenter', { defaultValue: 'Datacenter' })}
+            </span>
+            <span className="truncate text-sm font-medium">{location.datacenter || '—'}</span>
+          </div>
+        </div>
+
         {stats ? (
-          <div className="space-y-2.5">
+          <div className="mt-auto space-y-3">
             <UsageBar label="CPU" percent={cpu} color={tone.bar} />
-            <UsageBar label="RAM" percent={memPct} color="bg-sky-500" />
-            <div className="text-muted-foreground grid grid-cols-2 gap-2 font-mono text-[10px]">
+            <UsageBar
+              label="RAM"
+              percent={memPct}
+              color="bg-sky-500"
+              detail={memTotal > 0 ? `${formatBytes(memUsed, 1)}/${formatBytes(memTotal, 1)}` : undefined}
+            />
+            <div className="text-muted-foreground flex items-center justify-between gap-3 border-t border-white/5 pt-3 font-mono text-[11px]">
               <span>
-                {t('serverTopology.cores', { defaultValue: 'Cores' })}: {stats.cpu_cores || '—'}
+                {t('serverTopology.cores', { defaultValue: 'Cores' })} · {stats.cpu_cores || '—'}
               </span>
               <span>
-                {t('serverTopology.uptime', { defaultValue: 'Uptime' })}: {formatCompactUptime(stats.uptime)}
+                {t('serverTopology.uptime', { defaultValue: 'Uptime' })} · {formatCompactUptime(stats.uptime)}
               </span>
             </div>
           </div>
         ) : (
-          <p className="text-muted-foreground text-xs">{t('serverTopology.nodeStatsPending', { defaultValue: 'Live metrics unavailable' })}</p>
+          <p className="text-muted-foreground mt-auto text-xs">{t('serverTopology.nodeStatsPending', { defaultValue: 'Live metrics unavailable' })}</p>
         )}
       </CardContent>
     </Card>
@@ -160,8 +204,9 @@ const NodeLeafCard = ({ node, stats }: { node: NodeResponse; stats?: NodeRealtim
 }
 
 const ServerTopologyCard = ({ resourceData, usersData, canReadNodes = false, canReadNodeStats = false }: ServerTopologyCardProps) => {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const dir = useDirDetection()
+  const locale = i18n.resolvedLanguage || i18n.language
 
   const { data: nodesPayload, isLoading: nodesLoading } = useGetNodes(
     { limit: 100 },
@@ -196,6 +241,12 @@ const ServerTopologyCard = ({ resourceData, usersData, canReadNodes = false, can
     ? t('serverTopology.virtualizedYes', { type: resourceData.virtualization.toUpperCase(), defaultValue: 'Yes ({{type}})' })
     : t('serverTopology.virtualizedNo', { defaultValue: 'Bare metal / Unknown' })
 
+  const motherLocation = useMemo(() => {
+    const fromHost = resolveInfraLocation(resourceData?.hostname)
+    if (fromHost.countryCode || fromHost.datacenter) return fromHost
+    return resolveLocationFromTimezone(resourceData?.timezone)
+  }, [resourceData?.hostname, resourceData?.timezone])
+
   const cpuPct = Math.min(100, Math.max(0, Number(resourceData?.cpu_usage) || 0))
   const memPct =
     resourceData?.mem_total && resourceData.mem_total > 0 ? ((Number(resourceData.mem_used) || 0) / Number(resourceData.mem_total)) * 100 : 0
@@ -215,9 +266,9 @@ const ServerTopologyCard = ({ resourceData, usersData, canReadNodes = false, can
         <CardContent className="space-y-4 p-5">
           <Skeleton className="h-16 w-full rounded-2xl" />
           <Skeleton className="mx-auto h-8 w-1 rounded-full" />
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {[0, 1, 2].map(i => (
-              <Skeleton key={i} className="h-36 rounded-xl" />
+              <Skeleton key={i} className="h-48 rounded-2xl" />
             ))}
           </div>
         </CardContent>
@@ -227,7 +278,7 @@ const ServerTopologyCard = ({ resourceData, usersData, canReadNodes = false, can
 
   return (
     <section className="w-full" dir={dir} aria-label={t('serverTopology.title', { defaultValue: 'Server topology' })}>
-      <div className="mb-3 flex items-end justify-between gap-3">
+      <div className="mb-4 flex items-end justify-between gap-3">
         <div>
           <p className="text-muted-foreground text-[11px] font-semibold tracking-[0.18em] uppercase">
             {t('serverTopology.eyebrow', { defaultValue: 'Infrastructure' })}
@@ -247,10 +298,9 @@ const ServerTopologyCard = ({ resourceData, usersData, canReadNodes = false, can
       </div>
 
       <div className="relative flex flex-col items-center">
-        {/* Mother */}
         <Card
           className={cn(
-            'border-border/70 relative w-full max-w-2xl overflow-hidden shadow-[0_24px_80px_-40px_rgba(0,0,0,0.65)]',
+            'border-border/70 relative w-full max-w-3xl overflow-hidden shadow-[0_24px_80px_-40px_rgba(0,0,0,0.65)]',
             'bg-gradient-to-br from-card via-card to-card/80',
           )}
         >
@@ -291,8 +341,20 @@ const ServerTopologyCard = ({ resourceData, usersData, canReadNodes = false, can
               </div>
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-[1.15fr_0.85fr]">
+            <div className="grid gap-5 sm:grid-cols-[1.2fr_0.8fr]">
               <div className="grid gap-1 sm:grid-cols-2">
+                <SpecRow
+                  icon={MapPin}
+                  label={t('serverTopology.panelLocation', { defaultValue: 'Panel location' })}
+                  value={<LocationValue location={motherLocation} locale={locale} />}
+                  accent="text-emerald-300"
+                />
+                <SpecRow
+                  icon={Building2}
+                  label={t('serverTopology.datacenter', { defaultValue: 'Datacenter' })}
+                  value={motherLocation.datacenter || t('serverTopology.panelHost', { defaultValue: 'Panel host' })}
+                  accent="text-teal-300"
+                />
                 <SpecRow
                   icon={Shield}
                   label={t('serverTopology.panelUptime', { defaultValue: 'Panel uptime' })}
@@ -330,81 +392,72 @@ const ServerTopologyCard = ({ resourceData, usersData, canReadNodes = false, can
                 <SpecRow icon={Cpu} label={t('serverTopology.cpu', { defaultValue: 'CPU' })} value={resourceData.cpu_model || '—'} accent="text-rose-300" />
                 <SpecRow icon={HardDrive} label={t('serverTopology.cores', { defaultValue: 'Cores' })} value={coresLine} accent="text-orange-300" />
                 <SpecRow icon={MemoryStick} label={t('serverTopology.ram', { defaultValue: 'RAM' })} value={ramLine} accent="text-cyan-300" mono />
-                <SpecRow
-                  icon={Box}
-                  label={t('serverTopology.kernel', { defaultValue: 'Kernel' })}
-                  value={resourceData.kernel || '—'}
-                  accent="text-lime-300"
-                  mono
-                />
-                <SpecRow
-                  icon={Server}
-                  label={t('serverTopology.virtualized', { defaultValue: 'Virtualized' })}
-                  value={virtLine}
-                  accent="text-fuchsia-300"
-                />
+                <SpecRow icon={Box} label={t('serverTopology.kernel', { defaultValue: 'Kernel' })} value={resourceData.kernel || '—'} accent="text-lime-300" mono />
+                <SpecRow icon={Server} label={t('serverTopology.virtualized', { defaultValue: 'Virtualized' })} value={virtLine} accent="text-fuchsia-300" />
               </div>
 
-              <div className="border-border/50 flex flex-col justify-center gap-4 rounded-2xl border bg-black/20 p-4">
-                <UsageBar label={t('serverTopology.cpuLoad', { defaultValue: 'CPU load' })} percent={cpuPct} color="bg-rose-500" />
-                <UsageBar label={t('serverTopology.ramLoad', { defaultValue: 'Memory' })} percent={memPct} color="bg-sky-500" />
-                <div className="text-muted-foreground grid grid-cols-2 gap-2 border-t border-white/5 pt-3 font-mono text-[10px]">
-                  <div>
-                    <p className="uppercase tracking-wider">{t('serverTopology.disk', { defaultValue: 'Disk' })}</p>
-                    <p className="text-foreground mt-1 text-xs">
-                      {resourceData.disk_used != null && resourceData.disk_total != null
-                        ? `${formatBytes(Number(resourceData.disk_used), 1)} / ${formatBytes(Number(resourceData.disk_total), 1)}`
-                        : '—'}
-                    </p>
-                  </div>
-                  <div className="text-end sm:hidden">
-                    <p className="uppercase tracking-wider">{t('serverTopology.version', { defaultValue: 'Panel' })}</p>
-                    <p className="text-foreground mt-1 text-xs">v{resourceData.version}</p>
-                  </div>
+              <div className="border-border/50 flex flex-col justify-center gap-5 rounded-2xl border bg-black/20 p-4">
+                <UsageBar
+                  label={t('serverTopology.cpuLoad', { defaultValue: 'CPU load' })}
+                  percent={cpuPct}
+                  color="bg-rose-500"
+                />
+                <UsageBar
+                  label={t('serverTopology.ramLoad', { defaultValue: 'Memory' })}
+                  percent={memPct}
+                  color="bg-sky-500"
+                  detail={
+                    resourceData.mem_used != null && resourceData.mem_total != null
+                      ? `${formatBytes(Number(resourceData.mem_used), 1)}/${formatBytes(Number(resourceData.mem_total), 1)}`
+                      : undefined
+                  }
+                />
+                <div className="text-muted-foreground border-t border-white/5 pt-3 font-mono text-[10px]">
+                  <p className="uppercase tracking-wider">{t('serverTopology.disk', { defaultValue: 'Disk' })}</p>
+                  <p className="text-foreground mt-1 text-xs">
+                    {resourceData.disk_used != null && resourceData.disk_total != null
+                      ? `${formatBytes(Number(resourceData.disk_used), 1)} / ${formatBytes(Number(resourceData.disk_total), 1)}`
+                      : '—'}
+                  </p>
                 </div>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Tree connector + nodes */}
         {canReadNodes && (nodesLoading || nodes.length > 0) && (
           <>
-            <div className="relative flex h-10 w-full flex-col items-center" aria-hidden>
+            <div className="relative flex h-12 w-full flex-col items-center" aria-hidden>
               <div className="bg-gradient-to-b from-primary/60 to-primary/20 h-full w-px" />
               <div className="border-primary/30 absolute bottom-0 h-3 w-3 rounded-full border bg-background shadow-[0_0_12px_hsl(var(--primary)/0.45)]" />
             </div>
 
             {nodes.length > 0 && (
-              <div className="relative mb-4 w-full max-w-5xl">
-                <div className="border-primary/25 absolute start-[8%] end-[8%] top-0 hidden h-px border-t border-dashed sm:block" aria-hidden />
-                <div className="mb-3 flex items-center justify-center gap-2">
-                  <Badge variant="outline" className="bg-background/80 text-[10px] tracking-wider uppercase">
+              <div className="relative mb-2 w-full max-w-6xl">
+                <div className="mb-5 flex items-center justify-center">
+                  <Badge variant="outline" className="bg-background/90 px-3 py-1 text-[10px] tracking-wider uppercase">
                     {t('serverTopology.nodesBranch', { count: nodes.length, defaultValue: '{{count}} nodes' })}
                   </Badge>
                 </div>
                 <div
                   className={cn(
-                    'grid gap-3',
-                    nodes.length === 1 && 'mx-auto max-w-sm grid-cols-1',
+                    'grid gap-5 sm:gap-6',
+                    nodes.length === 1 && 'mx-auto max-w-md grid-cols-1',
                     nodes.length === 2 && 'mx-auto max-w-3xl grid-cols-1 sm:grid-cols-2',
-                    nodes.length >= 3 && 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3',
+                    nodes.length >= 3 && 'grid-cols-1 sm:grid-cols-2 xl:grid-cols-3',
                   )}
                 >
                   {nodes.map(node => (
-                    <div key={node.id} className="relative">
-                      <div className="bg-gradient-to-b from-primary/30 to-transparent absolute start-1/2 -top-4 hidden h-4 w-px -translate-x-1/2 sm:block" aria-hidden />
-                      <NodeLeafCard node={node} stats={statsById.get(node.id)} />
-                    </div>
+                    <NodeLeafCard key={node.id} node={node} stats={statsById.get(node.id)} locale={locale} />
                   ))}
                 </div>
               </div>
             )}
 
             {nodesLoading && nodes.length === 0 && (
-              <div className="grid w-full max-w-5xl gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid w-full max-w-6xl gap-5 sm:grid-cols-2 xl:grid-cols-3">
                 {[0, 1, 2].map(i => (
-                  <Skeleton key={i} className="h-40 rounded-xl" />
+                  <Skeleton key={i} className="h-56 rounded-2xl" />
                 ))}
               </div>
             )}
@@ -412,7 +465,7 @@ const ServerTopologyCard = ({ resourceData, usersData, canReadNodes = false, can
         )}
 
         {canReadNodes && !nodesLoading && nodes.length === 0 && (
-          <p className="text-muted-foreground mt-4 text-center text-sm">
+          <p className="text-muted-foreground mt-5 text-center text-sm">
             {t('serverTopology.noNodes', { defaultValue: 'No nodes yet — mother server is running solo.' })}
           </p>
         )}

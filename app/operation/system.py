@@ -47,6 +47,7 @@ class SystemOperation(BaseOperation):
             cpu_freq_mhz=host.cpu_freq_mhz,
             virtualization=host.virtualization,
             server_uptime_seconds=host.server_uptime_seconds,
+            timezone=host.timezone,
         )
 
     @staticmethod

@@ -1862,7 +1862,12 @@
     "uptime": "Uptime",
     "nodesBranch": "{{count}} nodes",
     "noNodes": "No nodes yet — mother server is running solo.",
-    "nodeStatsPending": "Live metrics unavailable"
+    "nodeStatsPending": "Live metrics unavailable",
+    "location": "Location",
+    "locationUnknown": "Unknown",
+    "datacenter": "Datacenter",
+    "panelLocation": "Panel location",
+    "panelHost": "Panel host"
   },
   "arrayInput": {
     "addPlaceholder": "Type and press Enter to add...",
@@ -2596,6 +2601,9 @@
   },
   "statistics.system": "System",
   "statistics.totalTraffic": "Total Traffic",
+  "statistics.lifetimeTraffic": "Lifetime total",
+  "statistics.download": "Download",
+  "statistics.upload": "Upload",
   "statistics.ramUsage": "RAM Usage",
   "statistics.cpuUsage": "CPU Usage",
   "statistics.diskUsage": "Disk Usage",

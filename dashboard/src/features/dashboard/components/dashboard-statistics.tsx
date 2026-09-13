@@ -3,8 +3,8 @@ import useDirDetection from '@/hooks/use-dir-detection'
 import { cn } from '@/lib/utils'
 import { SystemResourceStats, SystemUsersStats } from '@/service/api'
 import { formatBytes } from '@/utils/formatByte'
-import { formatDuration } from '@/utils/formatDuration'
-import { Clock3, Cpu, Database, Download, HardDrive, MemoryStick, Upload } from 'lucide-react'
+import { Cpu, Database, Download, HardDrive, MemoryStick, Upload } from 'lucide-react'
+import { type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { CircularProgress } from '@/components/ui/circular-progress'
 import { Card, CardContent } from '@/components/ui/card'
@@ -14,34 +14,15 @@ const DashboardStatistics = ({ resourceData, usersData }: { resourceData: System
   const { t } = useTranslation()
   const dir = useDirDetection()
 
-  // Show skeleton loader while data is being fetched
   if (!resourceData && !usersData) {
     return (
-      <div className={cn('grid h-full w-full gap-3 sm:gap-4 lg:gap-6', 'grid-cols-1 sm:grid-cols-2', dir === 'rtl' && 'lg:grid-flow-col-reverse')}>
-        {[...Array(6)].map((_, i) => (
-          <Card key={i} className={cn('h-full overflow-hidden border', (i === 4 || i === 5) && 'sm:col-span-2')}>
-            <CardContent className="flex h-full flex-col justify-between p-4 sm:p-5 lg:p-6">
-              <div className="mb-2 flex items-start justify-between sm:mb-3">
-                <div className="flex items-center gap-2 sm:gap-3">
-                  <Skeleton className="h-7 w-7 rounded-lg sm:h-9 sm:w-9" />
-                  <Skeleton className="h-4 w-24 sm:h-5" />
-                </div>
-              </div>
-              {i === 5 ? (
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-3 lg:grid-cols-3">
-                  {[...Array(3)].map((_, metricIndex) => (
-                    <div key={metricIndex} className="bg-background/60 rounded-lg border p-3 sm:p-4">
-                      <Skeleton className="mb-2 h-4 w-24 sm:h-5 sm:w-28" />
-                      <Skeleton className="h-8 w-20 sm:h-10 sm:w-24" />
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="flex items-end justify-between gap-2">
-                  <Skeleton className="h-8 w-20 sm:h-10 sm:w-32 lg:h-12 lg:w-40" />
-                  <Skeleton className="h-6 w-16 sm:h-7 sm:w-20" />
-                </div>
-              )}
+      <div className={cn('grid h-full w-full gap-4 sm:gap-5', 'grid-cols-1 sm:grid-cols-2 xl:grid-cols-4')}>
+        {[...Array(4)].map((_, i) => (
+          <Card key={i} className="h-full overflow-hidden border">
+            <CardContent className="flex h-full flex-col justify-between gap-4 p-5">
+              <Skeleton className="h-5 w-28" />
+              <Skeleton className="h-10 w-32" />
+              <Skeleton className="h-2 w-full rounded-full" />
             </CardContent>
           </Card>
         ))}
@@ -51,271 +32,156 @@ const DashboardStatistics = ({ resourceData, usersData }: { resourceData: System
 
   const getTotalTrafficValue = () => {
     if (!usersData) return 0
-
-    // For master server stats - use total traffic
     return Number(usersData.incoming_bandwidth) + Number(usersData.outgoing_bandwidth)
   }
 
-  const getIncomingBandwidth = () => {
-    if (!usersData) return 0
-    return Number(usersData.incoming_bandwidth) || 0
-  }
+  const getIncomingBandwidth = () => (usersData ? Number(usersData.incoming_bandwidth) || 0 : 0)
+  const getOutgoingBandwidth = () => (usersData ? Number(usersData.outgoing_bandwidth) || 0 : 0)
 
-  const getOutgoingBandwidth = () => {
-    if (!usersData) return 0
-    return Number(usersData.outgoing_bandwidth) || 0
-  }
-
-  const getMemoryUsage = () => {
+  const memory = (() => {
     if (!resourceData) return { used: 0, total: 0, percentage: 0 }
-
     const memUsed = Number(resourceData.mem_used) || 0
     const memTotal = Number(resourceData.mem_total) || 0
     const percentage = memTotal > 0 ? (memUsed / memTotal) * 100 : 0
-
     return { used: memUsed, total: memTotal, percentage }
-  }
+  })()
 
-  const getDiskUsage = () => {
+  const disk = (() => {
     if (!resourceData) return { used: 0, total: 0, percentage: 0 }
-
     const diskUsed = Number(resourceData.disk_used) || 0
     const diskTotal = Number(resourceData.disk_total) || 0
     const percentage = diskTotal > 0 ? (diskUsed / diskTotal) * 100 : 0
-
     return { used: diskUsed, total: diskTotal, percentage }
-  }
+  })()
 
-  const getCpuInfo = () => {
+  const cpu = (() => {
     if (!resourceData) return { usage: 0, cores: 0 }
-
     let cpuUsage = Number(resourceData.cpu_usage) || 0
     const cpuCores = Number(resourceData.cpu_cores) || 0
-
-    // CPU usage is already in percentage (0-100), no need to multiply
-    // Just ensure it's within reasonable bounds
     cpuUsage = Math.min(Math.max(cpuUsage, 0), 100)
+    return { usage: Math.round(cpuUsage * 10) / 10, cores: cpuCores }
+  })()
 
-    return { usage: Math.round(cpuUsage * 10) / 10, cores: cpuCores } // Round to 1 decimal place
-  }
-
-  const memory = getMemoryUsage()
-  const disk = getDiskUsage()
-  const cpu = getCpuInfo()
   const memoryPercent = Math.min(Math.max(memory.percentage, 0), 100)
   const diskPercent = Math.min(Math.max(disk.percentage, 0), 100)
-  const uptime = resourceData ? formatDuration(resourceData.uptime_seconds, t) : null
+
+  const StatCard = ({
+    delay,
+    icon: Icon,
+    title,
+    children,
+  }: {
+    delay: string
+    icon: typeof Cpu
+    title: string
+  children: ReactNode
+}) => (
+    <div className="animate-fade-in h-full w-full" style={{ animationDuration: '600ms', animationDelay: delay }}>
+      <Card dir={dir} className="group border-border/60 relative h-full w-full overflow-hidden rounded-xl transition-all duration-300 hover:border-primary/30 hover:shadow-lg">
+        <div className="from-primary/10 absolute inset-0 bg-gradient-to-br to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100 dark:from-primary/5" />
+        <CardContent className="relative z-10 flex h-full flex-col gap-4 p-5">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-2.5">
+              <div className="bg-primary/10 rounded-lg p-2">
+                <Icon className="text-primary h-4 w-4" />
+              </div>
+              <p className="text-muted-foreground truncate text-xs font-semibold tracking-wide uppercase sm:text-[13px]">{title}</p>
+            </div>
+          </div>
+          {children}
+        </CardContent>
+      </Card>
+    </div>
+  )
+
+  const Meter = ({ percent, color }: { percent: number; color: string }) => (
+    <div className="bg-muted/50 h-2 w-full overflow-hidden rounded-full">
+      <div className={cn('h-full rounded-full transition-all duration-700', color)} style={{ width: `${Math.min(100, Math.max(0, percent))}%` }} />
+    </div>
+  )
 
   return (
-    <div
-      className={cn(
-        'grid h-full w-full gap-3 sm:gap-4 lg:gap-6',
-        // Responsive grid: 1 column on mobile, 2 on tablet, 4 on desktop
-        'grid-cols-1 sm:grid-cols-2',
-        dir === 'rtl' && 'lg:grid-flow-col-reverse',
-      )}
-    >
-      {/* CPU Usage */}
-      <div className="animate-fade-in h-full w-full" style={{ animationDuration: '600ms', animationDelay: '50ms' }}>
-        <Card dir={dir} className="group relative h-full w-full overflow-hidden rounded-lg border transition-all duration-300 hover:shadow-lg">
-          <div
-            className={cn(
-              'from-primary/10 absolute inset-0 bg-gradient-to-r to-transparent opacity-0 transition-opacity duration-500',
-              'dark:from-primary/5 dark:to-transparent',
-              'group-hover:opacity-100',
-            )}
-          />
-          <CardContent className="relative z-10 flex h-full flex-col justify-between p-4 sm:p-5 lg:p-6">
-            <div className="mb-2 flex items-start justify-between sm:mb-3">
-              <div className="flex items-center gap-2 sm:gap-3">
-                <div className="bg-primary/10 rounded-lg p-1.5 sm:p-2">
-                  <Cpu className="text-primary h-4 w-4 sm:h-5 sm:w-5" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-muted-foreground truncate text-xs font-medium sm:text-sm">{t('statistics.cpuUsage')}</p>
-                </div>
-              </div>
-              <CircularProgress value={cpu.usage} size={38} strokeWidth={4} showValue={false} className="shrink-0 opacity-90" />
-            </div>
-
-            <div className="flex items-end justify-between gap-2">
-              <div className="flex min-w-0 flex-1 items-center gap-1 sm:gap-2">
-                <span dir="ltr" className="truncate text-xl font-bold transition-all duration-300 sm:text-2xl lg:text-3xl">
-                  {cpu.usage}%
-                </span>
-              </div>
-
+    <div className="flex w-full flex-col gap-4 sm:gap-5">
+      <div className={cn('grid h-full w-full gap-4 sm:gap-5', 'grid-cols-1 sm:grid-cols-2 xl:grid-cols-4')}>
+        <StatCard delay="50ms" icon={Cpu} title={t('statistics.cpuUsage')}>
+          <div className="flex items-end justify-between gap-3">
+            <div>
+              <p dir="ltr" className="text-3xl font-bold tracking-tight tabular-nums">
+                {cpu.usage}%
+              </p>
               {cpu.cores > 0 && (
-                <div className="bg-muted/50 text-muted-foreground flex shrink-0 items-center gap-1 rounded-md px-1.5 py-1 text-xs sm:px-2 sm:text-sm">
-                  <Cpu className="text-primary h-3 w-3" />
-                  <span className="font-medium whitespace-nowrap">
-                    {cpu.cores} {t('statistics.cores')}
-                  </span>
-                </div>
+                <p className="text-muted-foreground mt-1 text-xs">
+                  {cpu.cores} {t('statistics.cores')}
+                </p>
               )}
             </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Memory Usage */}
-      <div className="animate-fade-in h-full w-full" style={{ animationDuration: '600ms', animationDelay: '150ms' }}>
-        <Card dir={dir} className="group relative h-full w-full overflow-hidden rounded-lg border transition-all duration-300 hover:shadow-lg">
-          <div
-            className={cn(
-              'from-primary/10 absolute inset-0 bg-gradient-to-r to-transparent opacity-0 transition-opacity duration-500',
-              'dark:from-primary/5 dark:to-transparent',
-              'group-hover:opacity-100',
-            )}
-          />
-          <CardContent className="relative z-10 flex h-full flex-col justify-between p-4 sm:p-5 lg:p-6">
-            <div className="mb-2 flex items-start justify-between sm:mb-3">
-              <div className="flex items-center gap-2 sm:gap-3">
-                <div className="bg-primary/10 rounded-lg p-1.5 sm:p-2">
-                  <MemoryStick className="text-primary h-4 w-4 sm:h-5 sm:w-5" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-muted-foreground truncate text-xs font-medium sm:text-sm">{t('statistics.ramUsage')}</p>
-                </div>
-              </div>
-              <CircularProgress value={memoryPercent} size={38} strokeWidth={4} showValue={false} className="shrink-0 opacity-90" />
-            </div>
-
-            <div className="flex items-end justify-between gap-2">
-              <span dir="ltr" className="truncate text-lg font-bold transition-all duration-300 sm:text-xl lg:text-2xl">
-                <span className="whitespace-nowrap">
-                  {formatBytes(memory.used, 1, false, false, 'GB')}/{formatBytes(memory.total, 1, true, false, 'GB')}
-                </span>
-              </span>
-              <span dir="ltr" className="bg-muted/60 text-muted-foreground rounded-md px-1.5 py-1 text-xs font-medium whitespace-nowrap sm:px-2">
-                {memoryPercent.toFixed(1)}%
-              </span>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Disk Usage */}
-      <div className="animate-fade-in h-full w-full" style={{ animationDuration: '600ms', animationDelay: '250ms' }}>
-        <Card dir={dir} className="group relative h-full w-full overflow-hidden rounded-lg border transition-all duration-300 hover:shadow-lg">
-          <div
-            className={cn(
-              'from-primary/10 absolute inset-0 bg-gradient-to-r to-transparent opacity-0 transition-opacity duration-500',
-              'dark:from-primary/5 dark:to-transparent',
-              'group-hover:opacity-100',
-            )}
-          />
-          <CardContent className="relative z-10 flex h-full flex-col justify-between p-4 sm:p-5 lg:p-6">
-            <div className="mb-2 flex items-start justify-between sm:mb-3">
-              <div className="flex items-center gap-2 sm:gap-3">
-                <div className="bg-primary/10 rounded-lg p-1.5 sm:p-2">
-                  <HardDrive className="text-primary h-4 w-4 sm:h-5 sm:w-5" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-muted-foreground truncate text-xs font-medium sm:text-sm">{t('statistics.diskUsage')}</p>
-                </div>
-              </div>
-              <CircularProgress value={diskPercent} size={38} strokeWidth={4} showValue={false} className="shrink-0 opacity-90" />
-            </div>
-
-            <div className="flex items-end justify-between gap-2">
-              <span dir="ltr" className="truncate text-lg font-bold transition-all duration-300 sm:text-xl lg:text-2xl">
-                <span className="whitespace-nowrap">
-                  {formatBytes(disk.used, 1, false, false, 'GB')}/{formatBytes(disk.total, 1, true, false, 'GB')}
-                </span>
-              </span>
-              <span dir="ltr" className="bg-muted/60 text-muted-foreground rounded-md px-1.5 py-1 text-xs font-medium whitespace-nowrap sm:px-2">
-                {diskPercent.toFixed(1)}%
-              </span>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {usersData && (
-        <>
-          {/* Total Traffic with Incoming/Outgoing Details */}
-          <div className="animate-fade-in h-full w-full" style={{ animationDuration: '600ms', animationDelay: '350ms' }}>
-            <Card dir={dir} className="group relative h-full w-full overflow-hidden rounded-lg border transition-all duration-300 hover:shadow-lg">
-              <div
-                className={cn(
-                  'from-primary/10 absolute inset-0 bg-gradient-to-r to-transparent opacity-0 transition-opacity duration-500',
-                  'dark:from-primary/5 dark:to-transparent',
-                  'group-hover:opacity-100',
-                )}
-              />
-              <CardContent className="relative z-10 flex h-full flex-col justify-between p-4 sm:p-5 lg:p-6">
-                <div className="mb-2 flex items-start justify-between sm:mb-3">
-                  <div className="flex items-center gap-2 sm:gap-3">
-                    <div className="bg-primary/10 rounded-lg p-1.5 sm:p-2">
-                      <Database className="text-primary h-4 w-4 sm:h-5 sm:w-5" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-muted-foreground truncate text-xs font-medium sm:text-sm">{t('statistics.totalTraffic')}</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-end justify-between gap-2">
-                  <div className="flex min-w-0 flex-1 items-center gap-1 sm:gap-2">
-                    <span dir="ltr" className="truncate text-lg font-bold transition-all duration-300 sm:text-xl lg:text-2xl">
-                      {formatBytes(getTotalTrafficValue() || 0, 1)}
-                    </span>
-                  </div>
-
-                  {/* Incoming/Outgoing Details */}
-                  <div className="flex shrink-0 items-center gap-2 text-xs">
-                    <div className="bg-muted/50 flex items-center gap-1 rounded-md px-1.5 py-1 text-green-600 dark:text-green-400">
-                      <Download className="h-3 w-3" />
-                      <span dir="ltr" className="font-medium">
-                        {formatBytes(getIncomingBandwidth() || 0, 1)}
-                      </span>
-                    </div>
-                    <div className="bg-muted/50 flex items-center gap-1 rounded-md px-1.5 py-1 text-blue-600 dark:text-blue-400">
-                      <Upload className="h-3 w-3" />
-                      <span dir="ltr" className="font-medium">
-                        {formatBytes(getOutgoingBandwidth() || 0, 1)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <CircularProgress value={cpu.usage} size={46} strokeWidth={4} showValue={false} className="shrink-0 opacity-90" />
           </div>
-        </>
-      )}
+          <Meter percent={cpu.usage} color="bg-rose-500" />
+        </StatCard>
 
-      {/* Panel Uptime */}
-      <div className="animate-fade-in h-full w-full sm:col-span-2" style={{ animationDuration: '600ms', animationDelay: '450ms' }}>
-        <Card dir={dir} className="group relative h-full w-full overflow-hidden rounded-lg border transition-all duration-300 hover:shadow-lg">
-          <div
-            className={cn(
-              'from-primary/10 absolute inset-0 bg-gradient-to-r to-transparent opacity-0 transition-opacity duration-500',
-              'dark:from-primary/5 dark:to-transparent',
-              'group-hover:opacity-100',
-            )}
-          />
-          <CardContent className="relative z-10 flex h-full flex-col justify-between p-4 sm:p-5 lg:p-6">
-            <div className="mb-2 flex items-start justify-between sm:mb-3">
-              <div className="flex items-center gap-2 sm:gap-3">
-                <div className="bg-primary/10 rounded-lg p-1.5 sm:p-2">
-                  <Clock3 className="text-primary h-4 w-4 sm:h-5 sm:w-5" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-muted-foreground truncate text-xs font-medium sm:text-sm">{t('statistics.uptime')}</p>
-                </div>
+        <StatCard delay="120ms" icon={MemoryStick} title={t('statistics.ramUsage')}>
+          <div className="flex items-end justify-between gap-3">
+            <div className="min-w-0">
+              <p dir="ltr" className="truncate text-2xl font-bold tracking-tight tabular-nums sm:text-3xl">
+                {formatBytes(memory.used, 1, false, false, 'GB')}
+                <span className="text-muted-foreground text-base font-medium">/{formatBytes(memory.total, 1, true, false, 'GB')}</span>
+              </p>
+              <p className="text-muted-foreground mt-1 text-xs tabular-nums">{memoryPercent.toFixed(1)}%</p>
+            </div>
+            <CircularProgress value={memoryPercent} size={46} strokeWidth={4} showValue={false} className="shrink-0 opacity-90" />
+          </div>
+          <Meter percent={memoryPercent} color="bg-sky-500" />
+        </StatCard>
+
+        <StatCard delay="190ms" icon={HardDrive} title={t('statistics.diskUsage')}>
+          <div className="flex items-end justify-between gap-3">
+            <div className="min-w-0">
+              <p dir="ltr" className="truncate text-2xl font-bold tracking-tight tabular-nums sm:text-3xl">
+                {formatBytes(disk.used, 1, false, false, 'GB')}
+                <span className="text-muted-foreground text-base font-medium">/{formatBytes(disk.total, 1, true, false, 'GB')}</span>
+              </p>
+              <p className="text-muted-foreground mt-1 text-xs tabular-nums">{diskPercent.toFixed(1)}%</p>
+            </div>
+            <CircularProgress value={diskPercent} size={46} strokeWidth={4} showValue={false} className="shrink-0 opacity-90" />
+          </div>
+          <Meter percent={diskPercent} color="bg-amber-500" />
+        </StatCard>
+
+        {usersData && (
+          <StatCard delay="260ms" icon={Database} title={t('statistics.totalTraffic')}>
+            <div>
+              <p dir="ltr" className="text-3xl font-bold tracking-tight tabular-nums">
+                {formatBytes(getTotalTrafficValue() || 0, 1)}
+              </p>
+              <p className="text-muted-foreground mt-1 text-xs">{t('statistics.lifetimeTraffic', { defaultValue: 'Lifetime total' })}</p>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="bg-muted/40 rounded-lg px-3 py-2">
+                <p className="text-muted-foreground flex items-center gap-1 text-[10px] font-semibold tracking-wider uppercase">
+                  <Download className="h-3 w-3 text-emerald-400" />
+                  {t('statistics.download', { defaultValue: 'Download' })}
+                </p>
+                <p dir="ltr" className="mt-1 text-sm font-semibold tabular-nums text-emerald-400">
+                  {formatBytes(getIncomingBandwidth() || 0, 1)}
+                </p>
+              </div>
+              <div className="bg-muted/40 rounded-lg px-3 py-2">
+                <p className="text-muted-foreground flex items-center gap-1 text-[10px] font-semibold tracking-wider uppercase">
+                  <Upload className="h-3 w-3 text-sky-400" />
+                  {t('statistics.upload', { defaultValue: 'Upload' })}
+                </p>
+                <p dir="ltr" className="mt-1 text-sm font-semibold tabular-nums text-sky-400">
+                  {formatBytes(getOutgoingBandwidth() || 0, 1)}
+                </p>
               </div>
             </div>
-
-            <div className="flex items-end justify-between gap-2">
-              <span className="truncate text-lg leading-tight font-bold transition-all duration-300 sm:text-xl lg:text-2xl">{uptime}</span>
-            </div>
-          </CardContent>
-        </Card>
+          </StatCard>
+        )}
       </div>
 
       {usersData && (
-        <div className={cn('animate-fade-in h-full w-full', 'sm:col-span-2')} style={{ animationDuration: '600ms', animationDelay: '550ms' }}>
+        <div className="animate-fade-in w-full" style={{ animationDuration: '600ms', animationDelay: '320ms' }}>
           <UserStatsBars data={usersData} />
         </div>
       )}

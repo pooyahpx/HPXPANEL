@@ -1410,6 +1410,7 @@ export interface SystemResourceStats {
   cpu_freq_mhz?: number | null
   virtualization?: string | null
   server_uptime_seconds?: number | null
+  timezone?: string | null
 }
 
 export type SystemPermissionsReadAnyOf = { [key: string]: PermissionScope | number }

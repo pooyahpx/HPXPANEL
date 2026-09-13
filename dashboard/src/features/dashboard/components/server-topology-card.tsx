@@ -14,6 +14,7 @@ import {
 } from '@/service/api'
 import { formatBytes } from '@/utils/formatByte'
 import { displayCountryName, resolveInfraLocation, resolveLocationFromTimezone, type InfraLocation } from '@/utils/infra-location'
+import { useResolvedInfraLocations } from '@/hooks/use-resolved-infra-locations'
 import { Box, Building2, Cpu, Globe, HardDrive, MapPin, MemoryStick, Network, Server, Shield, Zap } from 'lucide-react'
 import { useMemo, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -113,24 +114,33 @@ const LocationValue = ({ location, locale }: { location: InfraLocation; locale?:
 }
 
 const UsageBar = ({ label, percent, color, detail }: { label: string; percent: number; color: string; detail?: string }) => (
-  <div className="space-y-1.5">
+  <div className="space-y-2">
     <div className="flex items-center justify-between gap-2 text-[11px]">
-      <span className="text-muted-foreground">{label}</span>
+      <span className="text-muted-foreground font-medium tracking-wide uppercase">{label}</span>
       <span className="font-mono tabular-nums">
         {detail ? `${detail} · ` : ''}
         {percent.toFixed(0)}%
       </span>
     </div>
-    <div className="bg-muted/40 h-1.5 overflow-hidden rounded-full">
+    <div className="bg-muted/40 h-2 overflow-hidden rounded-full">
       <div className={cn('h-full rounded-full transition-all duration-700', color)} style={{ width: `${Math.min(100, Math.max(0, percent))}%` }} />
     </div>
   </div>
 )
 
-const NodeLeafCard = ({ node, stats, locale }: { node: NodeResponse; stats?: NodeRealtimeStats | null; locale?: string }) => {
+const NodeLeafCard = ({
+  node,
+  stats,
+  locale,
+  location,
+}: {
+  node: NodeResponse
+  stats?: NodeRealtimeStats | null
+  locale?: string
+  location: InfraLocation
+}) => {
   const { t } = useTranslation()
   const tone = statusTone(node.status)
-  const location = resolveInfraLocation(node.name, node.address)
   const country = displayCountryName(location, locale)
   const cpu = Math.min(100, Math.max(0, Number(stats?.cpu_usage) || 0))
   const memTotal = Number(stats?.mem_total) || 0
@@ -140,14 +150,14 @@ const NodeLeafCard = ({ node, stats, locale }: { node: NodeResponse; stats?: Nod
   return (
     <Card className="group border-border/50 bg-card/80 relative h-full overflow-hidden backdrop-blur-sm transition-all duration-300 hover:-translate-y-1 hover:border-primary/40 hover:shadow-[0_18px_50px_-28px_hsl(var(--primary)/0.55)]">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent opacity-70" />
-      <CardContent className="flex h-full flex-col gap-4 p-5">
-        <div className="flex items-start justify-between gap-3">
+      <CardContent className="flex h-full flex-col gap-5 p-5 sm:p-6">
+        <div className="border-border/40 flex items-start justify-between gap-3 border-b pb-4">
           <div className="min-w-0">
             <div className="flex items-center gap-2.5">
               <span className={cn('h-2.5 w-2.5 shrink-0 rounded-full shadow-[0_0_10px_currentColor]', tone.dot)} />
               <h4 className="truncate text-[15px] font-semibold tracking-tight">{node.name}</h4>
             </div>
-            <p className="text-muted-foreground mt-1.5 truncate font-mono text-[11px]">
+            <p className="text-muted-foreground mt-2 truncate font-mono text-[11px]">
               {node.address}
               {node.port ? `:${node.port}` : ''}
             </p>
@@ -157,20 +167,21 @@ const NodeLeafCard = ({ node, stats, locale }: { node: NodeResponse; stats?: Nod
           </Badge>
         </div>
 
-        <div className="border-border/40 space-y-2.5 rounded-xl border bg-black/15 px-3.5 py-3">
-          <div className="flex items-center justify-between gap-2">
+        <div className="border-border/40 space-y-3.5 rounded-2xl border bg-black/15 px-4 py-4">
+          <div className="flex items-center justify-between gap-3">
             <span className="text-muted-foreground inline-flex items-center gap-1.5 text-[10px] font-semibold tracking-[0.14em] uppercase">
-              <MapPin className="h-3 w-3" />
+              <MapPin className="h-3.5 w-3.5" />
               {t('serverTopology.location', { defaultValue: 'Location' })}
             </span>
-            <span className="inline-flex items-center gap-1.5 text-sm font-medium">
+            <span className="inline-flex items-center gap-2 text-sm font-medium">
               {country || t('serverTopology.locationUnknown', { defaultValue: 'Unknown' })}
               {location.flag && <span className="text-base leading-none">{location.flag}</span>}
             </span>
           </div>
-          <div className="flex items-center justify-between gap-2">
+          <div className="border-border/30 border-t" />
+          <div className="flex items-center justify-between gap-3">
             <span className="text-muted-foreground inline-flex items-center gap-1.5 text-[10px] font-semibold tracking-[0.14em] uppercase">
-              <Building2 className="h-3 w-3" />
+              <Building2 className="h-3.5 w-3.5" />
               {t('serverTopology.datacenter', { defaultValue: 'Datacenter' })}
             </span>
             <span className="truncate text-sm font-medium">{location.datacenter || '—'}</span>
@@ -178,7 +189,7 @@ const NodeLeafCard = ({ node, stats, locale }: { node: NodeResponse; stats?: Nod
         </div>
 
         {stats ? (
-          <div className="mt-auto space-y-3">
+          <div className="mt-auto space-y-4 pt-1">
             <UsageBar label="CPU" percent={cpu} color={tone.bar} />
             <UsageBar
               label="RAM"
@@ -186,7 +197,7 @@ const NodeLeafCard = ({ node, stats, locale }: { node: NodeResponse; stats?: Nod
               color="bg-sky-500"
               detail={memTotal > 0 ? `${formatBytes(memUsed, 1)}/${formatBytes(memTotal, 1)}` : undefined}
             />
-            <div className="text-muted-foreground flex items-center justify-between gap-3 border-t border-white/5 pt-3 font-mono text-[11px]">
+            <div className="text-muted-foreground flex items-center justify-between gap-3 border-t border-white/5 pt-4 font-mono text-[11px]">
               <span>
                 {t('serverTopology.cores', { defaultValue: 'Cores' })} · {stats.cpu_cores || '—'}
               </span>
@@ -226,6 +237,7 @@ const ServerTopologyCard = ({ resourceData, usersData, canReadNodes = false, can
   })
 
   const nodes = nodesPayload?.nodes ?? []
+  const locationsById = useResolvedInfraLocations(nodes)
   const connectedCount = nodes.filter(n => n.status === NodeStatus.connected).length
   const brand = resolveOsBrand(resourceData?.os_name)
   const osLine = [resourceData?.os_name, resourceData?.os_version].filter(Boolean).join(' ')
@@ -448,7 +460,13 @@ const ServerTopologyCard = ({ resourceData, usersData, canReadNodes = false, can
                   )}
                 >
                   {nodes.map(node => (
-                    <NodeLeafCard key={node.id} node={node} stats={statsById.get(node.id)} locale={locale} />
+                    <NodeLeafCard
+                      key={node.id}
+                      node={node}
+                      stats={statsById.get(node.id)}
+                      locale={locale}
+                      location={locationsById.get(String(node.id)) || resolveInfraLocation(node.name, node.address)}
+                    />
                   ))}
                 </div>
               </div>

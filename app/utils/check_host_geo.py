@@ -109,11 +109,13 @@ async def lookup_check_host_ip(host: str, *, force: bool = False) -> CheckHostIp
 
     try:
         timeout = aiohttp.ClientTimeout(total=12)
-        async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.get(url, params={"host": target}, headers=headers) as response:
-                response.raise_for_status()
-                html = await response.text()
-                info = _parse_check_host_html(target, html)
+        async with (
+            aiohttp.ClientSession(timeout=timeout) as session,
+            session.get(url, params={"host": target}, headers=headers) as response,
+        ):
+            response.raise_for_status()
+            html = await response.text()
+            info = _parse_check_host_html(target, html)
     except Exception:
         return cached[1] if cached else None
 

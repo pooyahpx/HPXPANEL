@@ -18,6 +18,7 @@ class AdminPanelAction(str, Enum):
     shop_manage = "shop_manage"
     promote_admin = "promote_admin"
     demote_admin = "demote_admin"
+    delete_admin = "delete_admin"
     manage_permissions = "manage_permissions"
     perm_roles = "perm_roles"
     perm_pick_admin = "perm_pick_admin"

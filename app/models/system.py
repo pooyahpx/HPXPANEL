@@ -28,6 +28,18 @@ class SystemResourceStats(BaseModel):
     timezone: str | None = None
 
 
+class IpGeoLookup(BaseModel):
+    """IP geolocation/datacenter lookup (check-host.net)."""
+
+    ip: str
+    country: str | None = None
+    country_code: str | None = None
+    city: str | None = None
+    isp: str | None = None
+    asn: str | None = None
+    source: str = "check-host.net"
+
+
 class SystemUsersStats(BaseModel):
     total_user: int
     online_users: int

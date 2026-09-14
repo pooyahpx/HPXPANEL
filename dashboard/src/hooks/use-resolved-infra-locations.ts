@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
+import { getSystemIpGeo } from '@/service/api/ip-geo'
 import {
+  countryFromCode,
   isPublicIp,
-  lookupIpGeo,
-  mergeInfraLocations,
-  resolveInfraLocation,
   type InfraLocation,
 } from '@/utils/infra-location'
 
@@ -13,35 +12,34 @@ type Locatable = {
   address?: string | null
 }
 
+const emptyLocation = (): InfraLocation => ({
+  countryCode: null,
+  countryEn: null,
+  countryFa: null,
+  flag: null,
+  datacenter: null,
+})
+
+/** Resolve node location/datacenter from IP via check-host.net (panel backend). */
 export const useResolvedInfraLocations = <T extends Locatable>(items: T[]) => {
-  const nameBased = useMemo(() => {
-    const map = new Map<string, InfraLocation>()
-    for (const item of items) {
-      map.set(String(item.id), resolveInfraLocation(item.name, item.address))
-    }
-    return map
-  }, [items])
+  const [byId, setById] = useState<Record<string, InfraLocation>>({})
 
-  const [geoBased, setGeoBased] = useState<Record<string, InfraLocation>>({})
-
-  const geoLookupKey = useMemo(() => {
+  const lookupKey = useMemo(() => {
     return items
-      .filter(item => {
-        const current = nameBased.get(String(item.id))
-        const needsCountry = !current?.countryCode
-        const needsDc = !current?.datacenter
-        return (needsCountry || needsDc) && isPublicIp(item.address)
-      })
+      .filter(item => isPublicIp(item.address))
       .map(item => `${item.id}:${item.address!.trim()}`)
       .sort()
       .join('|')
-  }, [items, nameBased])
+  }, [items])
 
   useEffect(() => {
     let cancelled = false
-    if (!geoLookupKey) return
+    if (!lookupKey) {
+      setById({})
+      return
+    }
 
-    const targets = geoLookupKey.split('|').map(entry => {
+    const targets = lookupKey.split('|').map(entry => {
       const [id, ...ipParts] = entry.split(':')
       return { id, ip: ipParts.join(':') }
     })
@@ -49,44 +47,43 @@ export const useResolvedInfraLocations = <T extends Locatable>(items: T[]) => {
     const run = async () => {
       const entries = await Promise.all(
         targets.map(async target => {
-          const geo = await lookupIpGeo(target.ip)
-          return geo ? ([target.id, geo] as const) : null
+          try {
+            const geo = await getSystemIpGeo(target.ip)
+            const base = countryFromCode(geo.country_code)
+            if (!base.countryCode && geo.country) {
+              base.countryEn = geo.country
+              base.countryCode = geo.country_code?.toUpperCase() || null
+            } else if (geo.country) {
+              base.countryEn = geo.country
+            }
+            base.city = geo.city || null
+            base.datacenter = (geo.isp || '').trim() || null
+            return [target.id, base] as const
+          } catch {
+            return [target.id, emptyLocation()] as const
+          }
         }),
       )
       if (cancelled) return
-      setGeoBased(prev => {
-        const next = { ...prev }
-        let changed = false
-        for (const entry of entries) {
-          if (!entry) continue
-          const [id, geo] = entry
-          const existing = next[id]
-          if (
-            existing?.countryCode === geo.countryCode &&
-            existing?.datacenter === geo.datacenter &&
-            existing?.flag === geo.flag
-          ) {
-            continue
-          }
-          next[id] = geo
-          changed = true
-        }
-        return changed ? next : prev
-      })
+      const next: Record<string, InfraLocation> = {}
+      for (const [id, location] of entries) {
+        next[id] = location
+      }
+      setById(next)
     }
 
     void run()
     return () => {
       cancelled = true
     }
-  }, [geoLookupKey])
+  }, [lookupKey])
 
   return useMemo(() => {
     const map = new Map<string, InfraLocation>()
     for (const item of items) {
       const id = String(item.id)
-      map.set(id, mergeInfraLocations(nameBased.get(id), geoBased[id]))
+      map.set(id, byId[id] || emptyLocation())
     }
     return map
-  }, [items, nameBased, geoBased])
+  }, [items, byId])
 }

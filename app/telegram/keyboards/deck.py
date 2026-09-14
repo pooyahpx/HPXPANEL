@@ -106,6 +106,11 @@ class DeckPanel(InlineKeyboardBuilder):
             )
             rows.append(2)
             self.button(
+                text=t(lang, "btn_delete_admin"),
+                callback_data=panel_cb(action=AdminPanelAction.delete_admin),
+            )
+            rows.append(1)
+            self.button(
                 text=t(lang, "btn_manage_create_budget"),
                 callback_data=panel_cb(action=AdminPanelAction.manage_create_budget),
             )

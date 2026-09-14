@@ -153,15 +153,43 @@ async def promote_admin_username(event: Message, db: AsyncSession, state: FSMCon
 async def demote_admin(event: CallbackQuery, db: AsyncSession, admin: AdminDetails, callback_data: AdminPanel.Callback):
     lang = await _lang(db, event.from_user.id)
 
+    async def _render_linked_list(*, notice: str | None = None) -> None:
+        linked = [a for a in await list_admins_with_telegram(db) if a.role_id != 1]
+        if not linked:
+            text = t(lang, "demote_empty")
+            if notice:
+                text = f"{notice}\n\n{text}"
+            try:
+                await event.message.edit_text(text)
+            except TelegramBadRequest:
+                await event.message.answer(text)
+            return
+
+        kb = InlineKeyboardBuilder()
+        for panel_admin in linked:
+            kb.button(
+                text=f"🔌 {panel_admin.username} ({panel_admin.telegram_id})",
+                callback_data=AdminPanel.Callback(action=AdminPanelAction.demote_admin, id=panel_admin.id),
+            )
+        kb.button(text=t(lang, "btn_back"), callback_data=AdminPanel.Callback(action=AdminPanelAction.refresh))
+        kb.adjust(1)
+        text = notice or t(lang, "demote_pick_admin")
+        try:
+            await event.message.edit_text(text, reply_markup=kb.as_markup())
+        except TelegramBadRequest:
+            await event.message.answer(text, reply_markup=kb.as_markup())
+
     if callback_data.id:
         panel_admin = await get_admin_by_id(db, callback_data.id, load_users=False, load_usage_logs=False)
         if panel_admin is None or panel_admin.telegram_id is None:
             await event.answer(t(lang, "demote_not_found"), show_alert=True)
+            await _render_linked_list()
             return
         if panel_admin.role_id == 1:
             await event.answer(t(lang, "demote_owner_forbidden"), show_alert=True)
             return
 
+        username = panel_admin.username
         try:
             await admin_operator.modify_admin_by_id(
                 db,
@@ -173,22 +201,68 @@ async def demote_admin(event: CallbackQuery, db: AsyncSession, admin: AdminDetai
             await event.answer(t(lang, "demote_fail", error=str(exc)), show_alert=True)
             return
 
-        await event.answer(rich(lang, "demote_ok", username=panel_admin.username))
+        await event.answer(t(lang, "demote_ok", username=username), show_alert=True)
+        await _render_linked_list(notice=t(lang, "demote_list_updated"))
         return
 
-    linked = [a for a in await list_admins_with_telegram(db) if a.role_id != 1]
-    if not linked:
-        await event.answer(t(lang, "demote_empty"), show_alert=True)
+    await _render_linked_list()
+    await event.answer()
+
+
+@router.callback_query(IsOwnerFilter(), AdminPanel.Callback.filter(AdminPanelAction.delete_admin == F.action))
+async def delete_admin(event: CallbackQuery, db: AsyncSession, admin: AdminDetails, callback_data: AdminPanel.Callback):
+    lang = await _lang(db, event.from_user.id)
+    from app.db.crud.admin import get_admins_simple
+    from app.models.admin import AdminSimpleListQuery
+
+    async def _render_delete_list(*, notice: str | None = None) -> None:
+        rows, _ = await get_admins_simple(db, AdminSimpleListQuery(all=True), include_owner=False)
+        if not rows:
+            text = t(lang, "delete_empty")
+            if notice:
+                text = f"{notice}\n\n{text}"
+            try:
+                await event.message.edit_text(text)
+            except TelegramBadRequest:
+                await event.message.answer(text)
+            return
+
+        kb = InlineKeyboardBuilder()
+        for admin_id, username in rows:
+            kb.button(
+                text=f"🗑 {username}",
+                callback_data=AdminPanel.Callback(action=AdminPanelAction.delete_admin, id=admin_id),
+            )
+        kb.button(text=t(lang, "btn_back"), callback_data=AdminPanel.Callback(action=AdminPanelAction.refresh))
+        kb.adjust(1)
+        text = notice or t(lang, "delete_pick_admin")
+        try:
+            await event.message.edit_text(text, reply_markup=kb.as_markup())
+        except TelegramBadRequest:
+            await event.message.answer(text, reply_markup=kb.as_markup())
+
+    if callback_data.id:
+        panel_admin = await get_admin_by_id(db, callback_data.id, load_users=False, load_usage_logs=False)
+        if panel_admin is None:
+            await event.answer(t(lang, "delete_not_found"), show_alert=True)
+            await _render_delete_list()
+            return
+        if panel_admin.role_id == 1:
+            await event.answer(t(lang, "delete_owner_forbidden"), show_alert=True)
+            return
+
+        username = panel_admin.username
+        try:
+            await admin_operator.remove_admin_by_id(db, panel_admin.id, admin)
+        except Exception as exc:
+            await event.answer(t(lang, "delete_fail", error=str(exc)), show_alert=True)
+            return
+
+        await event.answer(t(lang, "delete_ok", username=username), show_alert=True)
+        await _render_delete_list(notice=t(lang, "delete_list_updated"))
         return
 
-    kb = InlineKeyboardBuilder()
-    for panel_admin in linked:
-        kb.button(
-            text=f"{panel_admin.username} ({panel_admin.telegram_id})",
-            callback_data=AdminPanel.Callback(action=AdminPanelAction.demote_admin, id=panel_admin.id),
-        )
-    kb.adjust(1)
-    await event.message.answer(t(lang, "demote_pick_admin"), reply_markup=kb.as_markup())
+    await _render_delete_list()
     await event.answer()
 
 

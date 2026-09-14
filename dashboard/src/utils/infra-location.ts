@@ -4,6 +4,7 @@ export type InfraLocation = {
   countryFa: string | null
   flag: string | null
   datacenter: string | null
+  city?: string | null
 }
 
 type CountryMeta = {

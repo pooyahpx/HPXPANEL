@@ -11,6 +11,7 @@ from app.models.admin import AdminDetails
 from app.models.settings import Telegram
 from app.models.system import (
     InboundSummary,
+    IpGeoLookup,
     SystemResourceStats,
     SystemStats,
     SystemUsersStats,
@@ -18,6 +19,7 @@ from app.models.system import (
     WorkerHealth,
     WorkersHealth,
 )
+from app.utils.check_host_geo import lookup_check_host_ip
 from app.nats import is_nats_enabled
 from app.nats.node_rpc import node_nats_client
 from app.nats.scheduler_rpc import scheduler_nats_client
@@ -56,6 +58,26 @@ async def get_system_resource_stats(
 ):
     """Fetch system resource stats without user metrics."""
     return await system_operator.get_system_resource_stats()
+
+
+@router.get("/system/ip-geo", response_model=IpGeoLookup)
+async def get_system_ip_geo(
+    host: str,
+    _: AdminDetails = Depends(require_permission("nodes", "read")),
+):
+    """Resolve country / ISP for a node IP using check-host.net."""
+    info = await lookup_check_host_ip(host)
+    if info is None:
+        raise HTTPException(status_code=404, detail="IP geolocation not found")
+    return IpGeoLookup(
+        ip=info.ip,
+        country=info.country,
+        country_code=info.country_code,
+        city=info.city,
+        isp=info.isp,
+        asn=info.asn,
+        source=info.source,
+    )
 
 
 @router.get("/system/users", response_model=SystemUsersStats)

@@ -173,9 +173,11 @@ const NodeLeafCard = ({
               <MapPin className="h-3.5 w-3.5" />
               {t('serverTopology.location', { defaultValue: 'Location' })}
             </span>
-            <span className="inline-flex items-center gap-2 text-sm font-medium">
-              {country || t('serverTopology.locationUnknown', { defaultValue: 'Unknown' })}
-              {location.flag && <span className="text-base leading-none">{location.flag}</span>}
+            <span className="inline-flex max-w-[60%] items-center justify-end gap-2 text-sm font-medium">
+              <span className="truncate text-end">
+                {[location.city, country].filter(Boolean).join(', ') || t('serverTopology.locationUnknown', { defaultValue: 'Unknown' })}
+              </span>
+              {location.flag && <span className="shrink-0 text-base leading-none">{location.flag}</span>}
             </span>
           </div>
           <div className="border-border/30 border-t" />
@@ -184,7 +186,9 @@ const NodeLeafCard = ({
               <Building2 className="h-3.5 w-3.5" />
               {t('serverTopology.datacenter', { defaultValue: 'Datacenter' })}
             </span>
-            <span className="truncate text-sm font-medium">{location.datacenter || '—'}</span>
+            <span className="max-w-[60%] truncate text-end text-sm font-medium" title={location.datacenter || undefined}>
+              {location.datacenter || '—'}
+            </span>
           </div>
         </div>
 
@@ -465,7 +469,7 @@ const ServerTopologyCard = ({ resourceData, usersData, canReadNodes = false, can
                       node={node}
                       stats={statsById.get(node.id)}
                       locale={locale}
-                      location={locationsById.get(String(node.id)) || resolveInfraLocation(node.name, node.address)}
+                      location={locationsById.get(String(node.id)) || { countryCode: null, countryEn: null, countryFa: null, flag: null, datacenter: null }}
                     />
                   ))}
                 </div>

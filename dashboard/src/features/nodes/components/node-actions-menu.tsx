@@ -388,6 +388,11 @@ export default function NodeActionsMenu({
         nodeId: node.id,
       })
       toast.success(t('nodeModal.updateNodeSuccess', { defaultValue: 'Node updated successfully' }))
+      try {
+        await reconnectNodeMutation.mutateAsync({ nodeId: node.id })
+      } catch {
+        // Backend already schedules reconnect; ignore UI reconnect failures.
+      }
       queryClient.invalidateQueries({ queryKey: ['/api/nodes'] })
       queryClient.invalidateQueries({ queryKey: ['/api/nodes/simple'] })
       queryClient.invalidateQueries({ queryKey: [`/api/node/${node.id}`] })

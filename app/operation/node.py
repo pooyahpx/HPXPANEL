@@ -631,7 +631,10 @@ class NodeOperation(BaseOperation):
 
     async def update_node(self, db: AsyncSession, node_id: int) -> dict:
         await self.get_validated_node(db, node_id)
-        return await self._update_node_api_impl(node_id)
+        result = await self._update_node_api_impl(node_id)
+        # Pull/recreate restarts the node process; reconnect so node_version refreshes.
+        asyncio.create_task(self._connect_single_node_background(node_id))
+        return result
 
     async def update_core(self, db: AsyncSession, node_id: int, node_core_update: NodeCoreUpdate) -> dict:
         await self.get_validated_node(db, node_id)
@@ -1044,7 +1047,15 @@ class NodeOperation(BaseOperation):
         try:
             response = await node.update_node()
         except NodeAPIError as e:
-            await self.raise_error(message=e.detail, code=e.code)
+            detail = e.detail
+            if e.code == 503:
+                detail = (
+                    f"{e.detail}. "
+                    "Open the node's API Port and ensure hpx-node-serviced is installed "
+                    "(re-run the node installer, or: hpx-node update). "
+                    "Panel Update Node talks to https://<node>:<api_port>/node/update."
+                )
+            await self.raise_error(message=detail, code=e.code)
         return response.json()
 
     async def _update_node_api_remote(self, node_id: int) -> dict:

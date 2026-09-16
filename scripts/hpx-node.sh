@@ -42,6 +42,9 @@ BUILD_FROM_SOURCE=0
 ASSUME_YES=0
 QUIET="${QUIET:-0}"
 PORTS_FROM_CLI=0
+NO_UPDATE_SERVICE=0
+SERVICED_BIN="${SERVICED_BIN:-/usr/local/bin/hpx-node-serviced}"
+GH_RELEASES_API="${GH_RELEASES_API:-https://api.github.com/repos/pooyahpx/HPXNODE/releases}"
 
 XRAY_ON=1; OVPN_ON=1; WG_ON=1; IKEV2_ON=1
 
@@ -384,11 +387,8 @@ Commands:
   (none) / menu     Interactive menu
   install           Install / reinstall (use -y for no prompts)
   list              List all node instances on this server
-  install-cli       Install / refresh hpx-node and hpxnode CLI wrappers
-  update | restart | status | logs | info
+  update | restart | status | logs
   uninstall
-
-info               Show Address / ports / API key / Server CA (alias: hpxnode)
 
 Install options:
   --name <id>        Instance name for multi-node on one server
@@ -400,9 +400,12 @@ Install options:
   --image <ref>      pull image (default: ${IMAGE})
   --build            build from source instead of pull
   --branch <name> | --repo <url>
+  --no-update-service  (update) skip restarting hpx-node-serviced
   -y, --yes          non-interactive install
   -q, --quiet
   -h, --help
+
+Note: open both Node Port and API Port in the firewall (panel Update Node uses API Port).
 
 Multi-node examples (same server, different gRPC ports — sell as separate panel nodes):
   sudo bash install.sh install -y --name shop1 --service-port 62051
@@ -437,6 +440,7 @@ parse_install_args() {
       --build) BUILD_FROM_SOURCE=1; shift ;;
       --branch) BRANCH="$2"; shift 2 ;;
       --repo) REPO="$2"; shift 2 ;;
+      --no-update-service) NO_UPDATE_SERVICE=1; shift ;;
       -y|--yes) ASSUME_YES=1; shift ;;
       -q|--quiet) QUIET=1; shift ;;
       -h|--help) usage; exit 0 ;;
@@ -554,45 +558,6 @@ write_compose() {
 compose_up() { dc up -d $([ "$BUILD_FROM_SOURCE" = 1 ] && echo --build); }
 pull_image() { dc pull; }
 
-load_config_from_compose() {
-  apply_instance
-  [ -f "$COMPOSE_FILE" ] || die "no install found at $COMPOSE_FILE (try --name <id>)"
-
-  API_KEY="$(grep -E '^\s+API_KEY:' "$COMPOSE_FILE" | head -1 | sed -E 's/.*API_KEY:[[:space:]]*"?([^"]*)"?/\1/')"
-  SERVICE_PORT="$(grep -E '^\s+SERVICE_PORT:' "$COMPOSE_FILE" | head -1 | awk '{print $2}')"
-  API_PORT="$(grep -E '^\s+PANEL_API_PORT:' "$COMPOSE_FILE" | head -1 | awk '{print $2}')"
-
-  XRAY_ON=1
-  OVPN_ON=1
-  WG_ON=1
-  IKEV2_ON=1
-  grep -q 'HPX_NODE_DISABLE_XRAY' "$COMPOSE_FILE" && XRAY_ON=0
-  grep -q 'HPX_NODE_DISABLE_OPENVPN' "$COMPOSE_FILE" && OVPN_ON=0
-  grep -q 'HPX_NODE_DISABLE_WIREGUARD' "$COMPOSE_FILE" && WG_ON=0
-  grep -q 'HPX_NODE_DISABLE_IKEV2' "$COMPOSE_FILE" && IKEV2_ON=0
-
-  BUILD_FROM_SOURCE=0
-  grep -q 'build:' "$COMPOSE_FILE" && BUILD_FROM_SOURCE=1
-}
-
-save_credentials_file() {
-  local ca="" cert_file="$DATA_DIR/certs/ssl_cert.pem"
-  [ -s "$cert_file" ] && ca="$(cat "$cert_file")"
-  mkdir -p "$DATA_DIR"
-  {
-    echo "# HPX node — paste into HPXPANEL -> Nodes"
-    echo "# Re-show anytime: hpxnode"
-    echo "Address: $(curl -fsS4 --max-time 5 https://api.ipify.org 2>/dev/null || echo '<server-ip>')"
-    echo "Node port: ${SERVICE_PORT}"
-    echo "API port: ${API_PORT}"
-    echo "API key: ${API_KEY}"
-    echo
-    echo "Server CA:"
-    [ -n "$ca" ] && echo "$ca" || echo "(not ready yet — run: hpxnode)"
-  } >"$DATA_DIR/register-in-panel.txt"
-  chmod 600 "$DATA_DIR/register-in-panel.txt" 2>/dev/null || true
-}
-
 print_summary() {
   local ca="" i cert_file="$DATA_DIR/certs/ssl_cert.pem"
   echo
@@ -621,10 +586,11 @@ print_summary() {
   echo -e "  Backends    : ${c_bld}${backends# }${c_off}"
   echo -e "  ${c_bld}Address${c_off}     : ${c_cyn}${c_bld}${ip}${c_off}"
   echo -e "  ${c_bld}Node port${c_off}   : ${c_cyn}${c_bld}${SERVICE_PORT}${c_off}   ${c_dim}(panel: Node Port)${c_off}"
-  echo -e "  ${c_bld}API port${c_off}    : ${c_cyn}${c_bld}${API_PORT}${c_off}   ${c_dim}(panel: API Port)${c_off}"
+  echo -e "  ${c_bld}API port${c_off}    : ${c_cyn}${c_bld}${API_PORT}${c_off}   ${c_dim}(panel: API Port — management HTTPS)${c_off}"
   echo -e "  ${c_yel}${c_bld}API key${c_off}     : ${c_bld}${API_KEY}${c_off}"
   echo -e "  Data        : ${DATA_DIR}"
   echo -e "  Compose     : ${COMPOSE_FILE}"
+  echo -e "  Serviced    : ${SERVICED_BIN}  ${c_dim}(unit: $(serviced_unit_name))${c_off}"
   echo
   echo -e "  ${c_dim}In HPXPANEL create a node with the same Address / Node Port / API Port / API key.${c_off}"
   echo -e "  ${c_dim}More instances on this host: install -y --name other --service-port <free-port>${c_off}"
@@ -636,15 +602,11 @@ print_summary() {
     echo "$ca"
   else
     warn "Server CA not ready yet — run:"
-    echo -e "  ${c_dim}hpxnode${c_off}  ${c_dim}or${c_off}  cat ${cert_file}"
+    echo -e "  ${c_dim}cat ${cert_file}${c_off}"
   fi
   echo
-  save_credentials_file
-  echo -e "  ${c_dim}Saved to:${c_off} ${DATA_DIR}/register-in-panel.txt"
-  echo -e "  ${c_dim}Show again:${c_off} ${c_bld}hpxnode${c_off}"
-  echo
   echo -e "  ${c_dim}Logs:${c_off}  sudo ${SERVICE} logs   ${c_dim}or${c_off}  $COMPOSE_CMD -f ${COMPOSE_FILE} logs -f"
-  warn "Open SERVICE_PORT (${SERVICE_PORT}) and your VPN ports on any cloud firewall."
+  warn "Open Node Port (${SERVICE_PORT}) and API Port (${API_PORT}) in the firewall (same as panel fields), plus your VPN ports."
   hr
 }
 
@@ -675,12 +637,6 @@ exec bash -c "\$(curl -fsSL ${REPO}/raw/main/scripts/install.sh)" @ "\$@"
 EOF
   chmod +x /usr/local/bin/hpx-node 2>/dev/null || true
 
-  cat > /usr/local/bin/hpxnode <<EOF
-#!/usr/bin/env bash
-exec /usr/local/bin/hpx-node info "\$@"
-EOF
-  chmod +x /usr/local/bin/hpxnode 2>/dev/null || true
-
   # Per-instance shortcut: hpx-node-shop1 status
   if [ -n "$NODE_NAME" ]; then
     cat > "/usr/local/bin/${SERVICE}" <<EOF
@@ -691,15 +647,154 @@ EOF
   fi
 }
 
-install_cli_command() {
-  require_root
-  parse_install_args "$@"
-  apply_instance
-  if [ -f "$COMPOSE_FILE" ]; then
-    load_config_from_compose
+serviced_unit_name() {
+  echo "${SERVICE}-serviced.service"
+}
+
+serviced_arch() {
+  case "$(uname -m)" in
+    x86_64|amd64) echo "amd64" ;;
+    aarch64|arm64) echo "arm64" ;;
+    *) return 1 ;;
+  esac
+}
+
+# Prefer matching image tag (e.g. :v0.6.0), else latest GitHub release tag.
+resolve_serviced_release_tag() {
+  local tag=""
+  if [[ "$IMAGE" =~ :v[0-9]+\.[0-9]+ ]]; then
+    tag="${IMAGE##*:}"
+    tag="${tag%%@*}"
   fi
-  install_cli_wrapper
-  log "CLI ready: hpx-node, hpxnode"
+  if [ -z "$tag" ] && has curl; then
+    tag="$(curl -fsSL "${GH_RELEASES_API}/latest" 2>/dev/null \
+      | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)"
+  fi
+  if [ -z "$tag" ]; then
+    tag="v0.6.0"
+  fi
+  echo "$tag"
+}
+
+write_serviced_env() {
+  mkdir -p "$INSTALL_DIR"
+  resolve_api_port
+  [ -n "$API_KEY" ] || die "API_KEY is required to write serviced env"
+  cat > "$INSTALL_DIR/.env" <<EOF
+APP_NAME=${SERVICE}
+API_KEY=${API_KEY}
+API_PORT=${API_PORT}
+SSL_CERT_FILE=${DATA_DIR}/certs/ssl_cert.pem
+SSL_KEY_FILE=${DATA_DIR}/certs/ssl_key.pem
+ENV_FILE=${INSTALL_DIR}/.env
+EOF
+  chmod 600 "$INSTALL_DIR/.env"
+  log "Wrote management API env → ${INSTALL_DIR}/.env (API_PORT=${API_PORT})"
+}
+
+download_serviced_binary() {
+  local arch tag asset url tmp dir
+  arch="$(serviced_arch)" || { warn "Unsupported arch for hpx-node-serviced: $(uname -m)"; return 1; }
+  tag="$(resolve_serviced_release_tag)"
+  asset="hpx-node-serviced_${tag}_linux_${arch}.tar.gz"
+  url="https://github.com/pooyahpx/HPXNODE/releases/download/${tag}/${asset}"
+  tmp="$(mktemp -d)"
+  dir="$tmp"
+  echo "Downloading ${asset}..."
+  if ! curl -fsSL "$url" -o "$tmp/$asset"; then
+    rm -rf "$tmp"
+    return 1
+  fi
+  tar -xzf "$tmp/$asset" -C "$dir"
+  if [ ! -f "$dir/hpx-node-serviced" ]; then
+    # archive may nest one directory
+    local found
+    found="$(find "$dir" -type f -name 'hpx-node-serviced' | head -1)"
+    [ -n "$found" ] || { rm -rf "$tmp"; return 1; }
+    install -m 755 "$found" "$SERVICED_BIN"
+  else
+    install -m 755 "$dir/hpx-node-serviced" "$SERVICED_BIN"
+  fi
+  rm -rf "$tmp"
+  return 0
+}
+
+install_serviced_unit() {
+  local unit unit_path
+  unit="$(serviced_unit_name)"
+  unit_path="/etc/systemd/system/${unit}"
+  cat > "$unit_path" <<EOF
+[Unit]
+Description=HPX Node management API (${SERVICE})
+Documentation=${REPO}
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+Environment=ENV_FILE=${INSTALL_DIR}/.env
+EnvironmentFile=-${INSTALL_DIR}/.env
+ExecStart=${SERVICED_BIN}
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  systemctl daemon-reload
+  systemctl enable "$unit"
+  systemctl restart "$unit" || systemctl start "$unit" || true
+  log "Enabled systemd unit ${unit} (listening on API_PORT=${API_PORT})"
+}
+
+restart_serviced_unit() {
+  local unit
+  unit="$(serviced_unit_name)"
+  if [ -f "/etc/systemd/system/${unit}" ] || systemctl list-unit-files "$unit" 2>/dev/null | grep -q "$unit"; then
+    systemctl restart "$unit" && log "Restarted ${unit}" || warn "Could not restart ${unit}"
+  fi
+}
+
+install_serviced() {
+  write_serviced_env
+  # Wait briefly for TLS certs from the container (serviced needs them).
+  local i cert="$DATA_DIR/certs/ssl_cert.pem" key="$DATA_DIR/certs/ssl_key.pem"
+  for i in $(seq 1 30); do
+    [ -s "$cert" ] && [ -s "$key" ] && break
+    sleep 1
+  done
+  if [ ! -s "$cert" ] || [ ! -s "$key" ]; then
+    warn "TLS certs not ready yet at ${DATA_DIR}/certs — serviced will retry via systemd Restart=on-failure"
+  fi
+
+  if [ -x "$SERVICED_BIN" ] || download_serviced_binary; then
+    :
+  else
+    warn "Could not download hpx-node-serviced from GitHub releases."
+    warn "Panel \"Update Node\" will fail (HTTP 503) until ${SERVICED_BIN} is installed."
+    warn "After a release is published, re-run: sudo hpx-node update"
+    return 0
+  fi
+  install_serviced_unit
+}
+
+load_env_from_compose_if_needed() {
+  [ -f "$COMPOSE_FILE" ] || return 0
+  if [ -z "$API_KEY" ]; then
+    API_KEY="$(grep -E '^\s*API_KEY:' "$COMPOSE_FILE" 2>/dev/null | head -1 | sed -E 's/.*API_KEY:[[:space:]]*"?([^"]*)"?/\1/' | tr -d '\r')"
+  fi
+  if [ -z "$API_PORT" ]; then
+    API_PORT="$(grep -E '^\s*PANEL_API_PORT:' "$COMPOSE_FILE" 2>/dev/null | head -1 | awk '{print $2}' | tr -d '\r')"
+  fi
+  # Prefer existing .env values when compose parse fails.
+  if [ -z "$API_KEY" ] && [ -f "$INSTALL_DIR/.env" ]; then
+    API_KEY="$(grep -E '^API_KEY=' "$INSTALL_DIR/.env" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '\r')"
+  fi
+  if [ -z "$API_PORT" ] && [ -f "$INSTALL_DIR/.env" ]; then
+    API_PORT="$(grep -E '^API_PORT=' "$INSTALL_DIR/.env" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '\r')"
+  fi
+  resolve_api_port
 }
 
 run_install() {
@@ -736,8 +831,9 @@ run_install() {
       fi
     fi
   fi
-  run_step      "Starting HPX node container" compose_up
+  run_step_live "Starting HPX node container" compose_up
   run_step      "Installing hpx-node CLI"     install_cli_wrapper
+  run_step_live_soft "Installing hpx-node-serviced (Update Node API)" install_serviced || true
   print_summary
 }
 
@@ -747,11 +843,6 @@ install_command() {
   prompt_panel_ports
   resolve_api_port
   run_install
-}
-
-info_command() {
-  load_config_from_compose
-  print_summary
 }
 
 list_command() {
@@ -778,6 +869,7 @@ update_command() {
   require_root; apply_instance
   detect_compose || install_docker
   [ -f "$COMPOSE_FILE" ] || die "no install found at $COMPOSE_FILE (try --name <id>)"
+  load_env_from_compose_if_needed
   : > "$STEP_LOG"
   echo -e "${c_bld}Updating ${SERVICE}${c_off}"
   if grep -q "build:" "$COMPOSE_FILE"; then
@@ -786,6 +878,22 @@ update_command() {
     run_step_live "Pulling latest image" pull_image
   fi
   run_step_live "Recreating container" bash -c "cd '$INSTALL_DIR' && $COMPOSE_CMD -p '$SERVICE' -f '$COMPOSE_FILE' up -d"
+  # Refresh CLI + serviced env; optionally restart management API unit.
+  install_cli_wrapper
+  if [ -n "${API_KEY:-}" ]; then
+    write_serviced_env || true
+  fi
+  if [ ! -x "$SERVICED_BIN" ]; then
+    download_serviced_binary || warn "hpx-node-serviced still missing — Update Node from panel will not work until it is installed."
+  fi
+  if [ "$NO_UPDATE_SERVICE" = 1 ]; then
+    log "Skipping serviced restart (--no-update-service)"
+  else
+    if [ -x "$SERVICED_BIN" ]; then
+      [ -f "/etc/systemd/system/$(serviced_unit_name)" ] || install_serviced_unit
+      restart_serviced_unit
+    fi
+  fi
   log "Updated ($(docker inspect -f '{{.State.Status}}' "$SERVICE" 2>/dev/null))"
 }
 
@@ -801,8 +909,15 @@ uninstall_command() {
   require_root; apply_instance
   detect_compose || true
   warn "Removing HPX node container (${SERVICE})"
+  local unit
+  unit="$(serviced_unit_name)"
+  if systemctl list-unit-files "$unit" 2>/dev/null | grep -q "$unit" || [ -f "/etc/systemd/system/${unit}" ]; then
+    systemctl disable --now "$unit" 2>/dev/null || true
+    rm -f "/etc/systemd/system/${unit}"
+    systemctl daemon-reload 2>/dev/null || true
+  fi
   [ -f "$COMPOSE_FILE" ] && dc down 2>/dev/null || docker rm -f "$SERVICE" 2>/dev/null || true
-  rm -f "$COMPOSE_FILE"
+  rm -f "$COMPOSE_FILE" "$INSTALL_DIR/.env"
   if [ "$ASSUME_YES" = 1 ] || ask_yn "Also remove data (certs + generated configs) in $DATA_DIR?"; then rm -rf "$DATA_DIR"; fi
   [ -n "$NODE_NAME" ] && rm -f "/usr/local/bin/${SERVICE}" 2>/dev/null || true
   log "Uninstalled $SERVICE"
@@ -836,7 +951,7 @@ main() {
   local cmd="menu"
   case "${1:-}" in
     menu) cmd="menu"; shift ;;
-    install|install-cli|update|uninstall|restart|status|logs|info|list) cmd="$1"; shift ;;
+    install|update|uninstall|restart|status|logs|list) cmd="$1"; shift ;;
     -h|--help) usage; exit 0 ;;
     "") cmd="install" ;;
     -*) cmd="install" ;;
@@ -846,14 +961,12 @@ main() {
   case "$cmd" in
     menu)      menu_command ;;
     install)   install_command "$@" ;;
-    install-cli) install_cli_command "$@" ;;
     list)      list_command ;;
     update)    parse_install_args "$@"; update_command ;;
     uninstall) parse_install_args "$@"; uninstall_command ;;
     restart)   parse_install_args "$@"; restart_command ;;
     status)    parse_install_args "$@"; status_command ;;
     logs)      parse_install_args "$@"; logs_command ;;
-    info)      parse_install_args "$@"; info_command ;;
   esac
 }
 

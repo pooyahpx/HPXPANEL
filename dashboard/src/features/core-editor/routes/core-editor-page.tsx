@@ -21,7 +21,7 @@ import { CredentialVpnCoreEditor } from '@/features/core-editor/components/crede
 import { validateOpenVPNConfig, validateOpenVPNConfigWarnings } from '@/features/core-editor/kit/openvpn-config'
 import { validateIpsecConfig } from '@/features/core-editor/kit/ipsec-config'
 import type { DashboardCoreKind } from '@/features/core-editor/kit/core-kind'
-import { isCredentialVpnKind, isWgFamilyKind } from '@/features/core-editor/kit/core-kind'
+import { apiCoreTypeToKind, isCredentialVpnKind, isWgFamilyKind } from '@/features/core-editor/kit/core-kind'
 import {
   credentialVpnConfigToPersist,
   validateCredentialVpnConfig,
@@ -592,8 +592,7 @@ export default function CoreEditorPage() {
             <Select
               value={kind}
               onValueChange={value => {
-                const nextKind: DashboardCoreKind =
-                  value === 'wg' || value === 'ikev2' || value === 'l2tp' || value === 'openvpn' ? value : 'xray'
+                const nextKind = apiCoreTypeToKind(value as DashboardCoreKind)
                 if (isNew) {
                   setSearchParams(
                     prev => {
@@ -609,15 +608,23 @@ export default function CoreEditorPage() {
                 switchKind(nextKind)
               }}
             >
-              <SelectTrigger className="h-10 w-28 shrink-0 px-2 sm:w-[180px] sm:px-3" aria-label={t('coreConfigModal.backendType', { defaultValue: 'Backend type' })}>
+              <SelectTrigger className="h-10 w-36 shrink-0 px-2 sm:w-[220px] sm:px-3" aria-label={t('coreConfigModal.backendType', { defaultValue: 'Backend type' })}>
                 <SelectValue placeholder={t('coreConfigModal.backendType', { defaultValue: 'Type' })} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="xray">Xray</SelectItem>
-                <SelectItem value="wg">WireGuard</SelectItem>
+                <SelectItem value="xray">{t('coreTypes.xray')}</SelectItem>
+                <SelectItem value="wg">{t('coreTypes.wg')}</SelectItem>
+                <SelectItem value="wg_c">{t('coreTypes.wg_c')}</SelectItem>
+                <SelectItem value="amneziawg">{t('coreTypes.amneziawg')}</SelectItem>
+                <SelectItem value="openvpn">{t('coreTypes.openvpn')}</SelectItem>
                 <SelectItem value="ikev2">{t('coreTypes.ikev2')}</SelectItem>
                 <SelectItem value="l2tp">{t('coreTypes.l2tp')}</SelectItem>
-                <SelectItem value="openvpn">{t('coreTypes.openvpn')}</SelectItem>
+                <SelectItem value="pptp">{t('coreTypes.pptp')}</SelectItem>
+                <SelectItem value="openconnect">{t('coreTypes.openconnect')}</SelectItem>
+                <SelectItem value="sstp">{t('coreTypes.sstp')}</SelectItem>
+                <SelectItem value="ssh">{t('coreTypes.ssh')}</SelectItem>
+                <SelectItem value="gre">{t('coreTypes.gre')}</SelectItem>
+                <SelectItem value="mtproto">{t('coreTypes.mtproto')}</SelectItem>
               </SelectContent>
             </Select>
           </div>

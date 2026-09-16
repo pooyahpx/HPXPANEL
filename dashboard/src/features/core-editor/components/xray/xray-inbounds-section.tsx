@@ -23,6 +23,7 @@ import { InboundFallbacksEditor } from '@/features/core-editor/components/xray/i
 import { useSectionHeaderAddPulseEffect, type SectionHeaderAddPulse } from '@/features/core-editor/hooks/use-section-header-add-pulse'
 import { useXrayPersistModifyGuard } from '@/features/core-editor/hooks/use-xray-persist-modify-guard'
 import { createInboundDialogSchema, realityInboundZodTriggerFieldNames } from '@/features/core-editor/kit/inbound-dialog-schema'
+import { EXTRA_INBOUND_PROTOCOLS, isExtraInboundProtocol, type ExtraInboundProtocol } from '@/features/core-editor/kit/extra-inbound-protocols'
 import { getInboundSecuritySelectOptions, getInboundTransportSelectOptions, transportCompatibleWithReality } from '@/features/core-editor/kit/inbound-form-options'
 import { profileDuplicateTagMessage, profileTagHasDuplicateUsage } from '@/features/core-editor/kit/profile-tag-uniqueness'
 import { remapIndexAfterArrayMove } from '@/features/core-editor/kit/remap-index-after-move'
@@ -625,7 +626,58 @@ function generateMixedAccountCredentials(): { user: string; pass: string } {
   }
 }
 
-const INBOUND_PROTOCOL_PREFERRED_ORDER: readonly string[] = ['vless', 'vmess', 'trojan', 'shadowsocks', 'hysteria', 'mixed', 'tunnel', 'socks', 'http', 'tun']
+const INBOUND_PROTOCOL_PREFERRED_ORDER: readonly string[] = [
+  'vless',
+  'vmess',
+  'trojan',
+  'shadowsocks',
+  'hysteria',
+  'anytls',
+  'tuic',
+  'naive',
+  'mixed',
+  'tunnel',
+  'socks',
+  'http',
+  'tun',
+]
+
+function createExtraInbound(protocol: ExtraInboundProtocol, base: { tag: string; listen?: string; port?: number | string }): Inbound {
+  const tag = base.tag?.trim() || protocol
+  const listen = base.listen?.trim() || '0.0.0.0'
+  const port = typeof base.port === 'number' ? base.port : Number(String(base.port ?? '443').split(',')[0]) || 443
+  const settings =
+    protocol === 'anytls'
+      ? { clients: [] as unknown[], paddingScheme: [] as string[] }
+      : protocol === 'tuic'
+        ? { clients: [] as unknown[], congestion_control: 'bbr' }
+        : { users: [] as unknown[] }
+  return {
+    protocol: 'unmanaged',
+    tag,
+    raw: {
+      tag,
+      listen,
+      port,
+      protocol,
+      settings,
+      streamSettings: {
+        network: 'tcp',
+        security: 'tls',
+        tlsSettings: { serverName: '', alpn: ['h2', 'http/1.1'] },
+      },
+    },
+  } as Inbound
+}
+
+function displayedInboundProtocol(inbound: Inbound | undefined): string | null {
+  if (!inbound) return null
+  if (inbound.protocol === 'unmanaged') {
+    const rawProtocol = (inbound as { raw?: { protocol?: unknown } }).raw?.protocol
+    if (typeof rawProtocol === 'string' && rawProtocol.trim()) return rawProtocol.trim()
+  }
+  return inbound.protocol
+}
 
 function sortInboundProtocolsForUi(protocols: readonly string[]): string[] {
   const preferredSet = new Set(INBOUND_PROTOCOL_PREFERRED_ORDER)
@@ -985,8 +1037,19 @@ export function XrayInboundsSection({ headerAddPulse, headerAddEpoch }: XrayInbo
     if (inbound?.protocol === 'dokodemo-door' && !visibleProtocols.includes('dokodemo-door')) {
       visibleProtocols.push('dokodemo-door')
     }
+    for (const protocol of EXTRA_INBOUND_PROTOCOLS) {
+      if (!visibleProtocols.includes(protocol)) visibleProtocols.push(protocol)
+    }
+    // When editing an unmanaged Extra inbound, surface its real protocol name.
+    const rawProtocol =
+      inbound?.protocol === 'unmanaged' && inbound && typeof (inbound as { raw?: { protocol?: unknown } }).raw?.protocol === 'string'
+        ? String((inbound as { raw: { protocol: string } }).raw.protocol)
+        : null
+    if (rawProtocol && isExtraInboundProtocol(rawProtocol) && !visibleProtocols.includes(rawProtocol)) {
+      visibleProtocols.push(rawProtocol)
+    }
     return sortInboundProtocolsForUi(visibleProtocols)
-  }, [caps, inbound?.protocol])
+  }, [caps, inbound])
   const tunnelCommittedPortMapRows = useMemo(() => {
     if (!inbound || !isTunnelInboundProtocol(inbound.protocol)) return []
     return readTunnelPortMapRowsFromInbound(inbound)
@@ -1103,7 +1166,36 @@ export function XrayInboundsSection({ headerAddPulse, headerAddEpoch }: XrayInbo
     const p = profileRef.current
     if (!p) return
     const row = dialogMode === 'add' && draftInbound ? draftInbound : p.inbounds[selected]
-    if (!row || row.protocol === 'unmanaged') return
+    if (!row) return
+    if (row.protocol === 'unmanaged') {
+      const raw = (row as { raw?: Record<string, unknown> }).raw ?? {}
+      form.reset({
+        protocol: displayedInboundProtocol(row) ?? 'unmanaged',
+        tag: String(raw.tag ?? row.tag ?? ''),
+        listen: listenAddressForForm(typeof raw.listen === 'string' ? raw.listen : undefined),
+        port: raw.port !== undefined ? String(raw.port) : '',
+        vlessEncryptionMethod: 'none',
+        encryption: 'none',
+        decryption: '',
+        vlessFlow: '',
+        shadowsocksMethod: CORE_EDITOR_SHADOWSOCKS_ENCRYPTION_METHODS[0].value,
+        shadowsocksPassword: '',
+        shadowsocksNetwork: 'tcp,udp',
+        transport: 'tcp',
+        security: 'tls',
+        tunnelRewriteAddress: '',
+        tunnelRewritePort: '',
+        tunnelAllowedNetwork: 'tcp,udp',
+        tunnelFollowRedirect: 'true',
+        tunName: '',
+        tunMtu: '',
+        wgSecretKey: '',
+        wgMtu: '',
+        hysteriaObfsEnabled: 'false',
+        hysteriaObfsPassword: '',
+      })
+      return
+    }
 
     const security = getInboundSecurityRecord(row)
     const sniffing = 'sniffing' in row && row.sniffing && typeof row.sniffing === 'object' && !Array.isArray(row.sniffing) ? (row.sniffing as Record<string, unknown>) : null
@@ -1266,7 +1358,7 @@ export function XrayInboundsSection({ headerAddPulse, headerAddEpoch }: XrayInbo
         header: () => t('coreEditor.col.protocol', { defaultValue: 'Protocol' }),
         cell: ({ row }) => (
           <span className="border-primary bg-primary text-primary-foreground inline-flex items-center border px-2.5 py-1 font-mono text-[10px] font-bold tracking-[0.12em] uppercase shadow-[2px_2px_0_hsl(var(--pixel-border))]">
-            {formatInboundProtocolForUi(row.original.protocol, t)}
+            {formatInboundProtocolForUi(displayedInboundProtocol(row.original) ?? row.original.protocol, t)}
           </span>
         ),
       },
@@ -2589,17 +2681,20 @@ export function XrayInboundsSection({ headerAddPulse, headerAddEpoch }: XrayInbo
                         dir="ltr"
                         value={field.value}
                         onValueChange={v => {
-                          const protocol = v as Parameters<typeof createDefaultInboundForProtocol>[0]['protocol']
+                          const protocol = v
                           field.onChange(protocol)
+                          const base = kitArgsPreservingListenPort(inbound)
                           const next = applyInboundEditorCreationDefaults(
-                            createDefaultInboundForProtocol({
-                              protocol,
-                              ...kitArgsPreservingListenPort(inbound),
-                              clientDefaults: 'empty',
-                            }),
+                            isExtraInboundProtocol(protocol)
+                              ? createExtraInbound(protocol, base)
+                              : createDefaultInboundForProtocol({
+                                  protocol: protocol as Parameters<typeof createDefaultInboundForProtocol>[0]['protocol'],
+                                  ...base,
+                                  clientDefaults: 'empty',
+                                }),
                           )
                           replaceEffectiveInbound(next)
-                          form.setValue('protocol', next.protocol)
+                          form.setValue('protocol', displayedInboundProtocol(next) ?? next.protocol)
                           form.setValue('tag', next.tag ?? '')
                           form.setValue('listen', 'listen' in next ? listenAddressForForm(next.listen) : '')
                           form.setValue('port', 'port' in next && next.port !== undefined ? String(next.port) : '')
@@ -4316,17 +4411,20 @@ export function XrayInboundsSection({ headerAddPulse, headerAddEpoch }: XrayInbo
                         dir="ltr"
                         value={field.value}
                         onValueChange={v => {
-                          const protocol = v as Parameters<typeof createDefaultInboundForProtocol>[0]['protocol']
+                          const protocol = v
                           field.onChange(protocol)
+                          const base = kitArgsPreservingListenPort(inbound)
                           const next = applyInboundEditorCreationDefaults(
-                            createDefaultInboundForProtocol({
-                              protocol,
-                              ...kitArgsPreservingListenPort(inbound),
-                              clientDefaults: 'empty',
-                            }),
+                            isExtraInboundProtocol(protocol)
+                              ? createExtraInbound(protocol, base)
+                              : createDefaultInboundForProtocol({
+                                  protocol: protocol as Parameters<typeof createDefaultInboundForProtocol>[0]['protocol'],
+                                  ...base,
+                                  clientDefaults: 'empty',
+                                }),
                           )
                           replaceEffectiveInbound(next)
-                          form.setValue('protocol', next.protocol)
+                          form.setValue('protocol', displayedInboundProtocol(next) ?? next.protocol)
                           form.setValue('tag', next.tag ?? '')
                           form.setValue('listen', 'listen' in next ? listenAddressForForm(next.listen) : '')
                           form.setValue('port', 'port' in next && next.port !== undefined ? String(next.port) : '')
@@ -4730,17 +4828,20 @@ export function XrayInboundsSection({ headerAddPulse, headerAddEpoch }: XrayInbo
                         dir="ltr"
                         value={field.value}
                         onValueChange={v => {
-                          const protocol = v as Parameters<typeof createDefaultInboundForProtocol>[0]['protocol']
+                          const protocol = v
                           field.onChange(protocol)
+                          const base = kitArgsPreservingListenPort(inbound)
                           const next = applyInboundEditorCreationDefaults(
-                            createDefaultInboundForProtocol({
-                              protocol,
-                              ...kitArgsPreservingListenPort(inbound),
-                              clientDefaults: 'empty',
-                            }),
+                            isExtraInboundProtocol(protocol)
+                              ? createExtraInbound(protocol, base)
+                              : createDefaultInboundForProtocol({
+                                  protocol: protocol as Parameters<typeof createDefaultInboundForProtocol>[0]['protocol'],
+                                  ...base,
+                                  clientDefaults: 'empty',
+                                }),
                           )
                           replaceEffectiveInbound(next)
-                          form.setValue('protocol', next.protocol)
+                          form.setValue('protocol', displayedInboundProtocol(next) ?? next.protocol)
                           form.setValue('tag', next.tag ?? '')
                           form.setValue('listen', 'listen' in next ? listenAddressForForm(next.listen) : '')
                           form.setValue('port', 'port' in next && next.port !== undefined ? String(next.port) : '')

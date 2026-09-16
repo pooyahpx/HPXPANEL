@@ -1,6 +1,7 @@
 import { getInboundFormCapabilities } from '@pasarguard/xray-config-kit'
 import type { TFunction } from 'i18next'
 import { z } from 'zod'
+import { EXTRA_INBOUND_PROTOCOLS } from '@/features/core-editor/kit/extra-inbound-protocols'
 import { isValidXrayPortList } from '@/features/core-editor/kit/xray-port-list-validation'
 type Caps = ReturnType<typeof getInboundFormCapabilities>
 
@@ -60,7 +61,7 @@ export function validateRealityServerNamesFormRaw(raw: unknown, t: TFunction): s
 
 /** Basics validated like host port/remark: required fields + numeric port range. Dynamic form keys pass through. */
 export function createInboundDialogSchema(caps: Caps, t: TFunction) {
-  const allowedProtocols = caps.protocolOrder.filter(p => caps.protocols[p])
+  const allowedProtocols = [...caps.protocolOrder.filter(p => caps.protocols[p]), ...EXTRA_INBOUND_PROTOCOLS]
   const protocolLabel = t('coreEditor.field.protocol', { defaultValue: 'Protocol' })
   const tagLabel = t('coreEditor.field.tag', { defaultValue: 'Tag' })
 

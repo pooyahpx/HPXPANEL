@@ -14,7 +14,7 @@ interface NodeReleaseResult {
 }
 
 const GITHUB_API_URL = 'https://api.github.com/repos/pooyahpx/HPXNODE/releases/latest'
-const CACHE_KEY = 'pg_node_release'
+const CACHE_KEY = 'pg_node_release_v2'
 const CACHE_DURATION = 10 * 60 * 1000
 
 /** Semantic-ish compare for node versions (e.g. 0.5.2 vs 0.6.0). Returns -1 / 0 / 1. */
@@ -41,8 +41,8 @@ export function compareNodeVersions(current: string, latest: string): number {
   return 0
 }
 
-/** Panel Update Node needs hpx-node-serviced (HPXNODE ≥ 0.6.0) on the API Port. */
-export const MIN_HOST_AGENT_VERSION = '0.6.0'
+/** Panel Update Node needs management API on API Port (HPXNODE ≥ 0.6.2 in-container). */
+export const MIN_HOST_AGENT_VERSION = '0.6.2'
 
 export function needsHostAgentForUpdate(nodeVersion: string | null | undefined): boolean {
   if (!nodeVersion) return false
@@ -50,7 +50,7 @@ export function needsHostAgentForUpdate(nodeVersion: string | null | undefined):
 }
 
 export const HOST_AGENT_UPDATE_COMMAND =
-  'sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXNODE/raw/main/scripts/install.sh)" @ update -y'
+  'sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXNODE/raw/v0.6.2/scripts/install.sh)" @ update -y'
 
 function getCached(): CachedRelease | null {
   try {
@@ -101,12 +101,12 @@ async function fetchLatestNodeRelease(): Promise<{ version: string; url: string 
 
 export function useNodeReleases(): NodeReleaseResult {
   const { data, isLoading } = useQuery({
-    queryKey: ['github-node-release-check'],
+    queryKey: ['github-node-release-check-v2'],
     queryFn: fetchLatestNodeRelease,
     staleTime: CACHE_DURATION,
     gcTime: CACHE_DURATION * 2,
     refetchOnWindowFocus: false,
-    refetchOnMount: false,
+    refetchOnMount: true,
     refetchInterval: CACHE_DURATION,
     retry: 1,
   })

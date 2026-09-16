@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 # Pinned so panel-driven updates land on a known good host installer.
-HOST_UPDATE_SCRIPT_URL = "https://github.com/pooyahpx/HPXNODE/raw/v0.6.1/scripts/install.sh"
+HOST_UPDATE_SCRIPT_URL = "https://github.com/pooyahpx/HPXNODE/raw/v0.6.2/scripts/install.sh"
 
 HOST_UPDATE_REMOTE_SCRIPT = f"""set -euo pipefail
 URL='{HOST_UPDATE_SCRIPT_URL}'

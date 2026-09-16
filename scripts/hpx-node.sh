@@ -545,12 +545,18 @@ write_compose() {
     echo "      PANEL_API_PORT: ${API_PORT}"
     echo "      SERVICE_PROTOCOL: \"grpc\""
     echo "      HPX_NODE_WG_HOST_ROUTING: \"1\""
+    echo "      HPX_INSTALL_DIR: \"${INSTALL_DIR}\""
+    echo "      HPX_SERVICE_NAME: \"${SERVICE}\""
+    echo "      HPX_COMPOSE_FILE: \"${COMPOSE_FILE}\""
+    echo "      APP_NAME: \"hpx-node\""
     [ "$XRAY_ON"  -eq 0 ] && echo "      HPX_NODE_DISABLE_XRAY: \"1\""
     [ "$OVPN_ON"  -eq 0 ] && echo "      HPX_NODE_DISABLE_OPENVPN: \"1\""
     [ "$WG_ON"    -eq 0 ] && echo "      HPX_NODE_DISABLE_WIREGUARD: \"1\""
     [ "$IKEV2_ON" -eq 0 ] && echo "      HPX_NODE_DISABLE_IKEV2: \"1\""
     echo "    volumes:"
     echo "      - /lib/modules:/lib/modules:ro"
+    echo "      - /var/run/docker.sock:/var/run/docker.sock"
+    echo "      - ${INSTALL_DIR}:${INSTALL_DIR}"
     echo "      - ${DATA_DIR}:${CONTAINER_DATA}"
   } > "$COMPOSE_FILE"
 }
@@ -779,6 +785,16 @@ install_serviced() {
   install_serviced_unit
 }
 
+# Prefer in-container management API; disable legacy host unit to avoid API Port bind conflicts.
+stop_legacy_host_serviced() {
+  local unit
+  unit="$(serviced_unit_name)"
+  if systemctl list-unit-files "$unit" 2>/dev/null | grep -q "$unit" || [ -f "/etc/systemd/system/${unit}" ]; then
+    systemctl disable --now "$unit" 2>/dev/null || true
+    log "Stopped legacy host unit ${unit} (Update Node API runs in-container)"
+  fi
+}
+
 load_env_from_compose_if_needed() {
   [ -f "$COMPOSE_FILE" ] || return 0
   if [ -z "$API_KEY" ]; then
@@ -833,7 +849,9 @@ run_install() {
   fi
   run_step_live "Starting HPX node container" compose_up
   run_step      "Installing hpx-node CLI"     install_cli_wrapper
-  run_step_live_soft "Installing hpx-node-serviced (Update Node API)" install_serviced || true
+  # Management API runs inside the container on PANEL_API_PORT (docker.sock mounted).
+  # Stop any legacy host systemd serviced so it does not steal the API Port.
+  stop_legacy_host_serviced || true
   print_summary
 }
 
@@ -872,23 +890,18 @@ update_command() {
   load_env_from_compose_if_needed
   : > "$STEP_LOG"
   echo -e "${c_bld}Updating ${SERVICE}${c_off}"
+  # Refresh compose so older installs gain docker.sock + in-container Update Node API.
+  run_step "Refreshing docker-compose.yml" write_compose
   if grep -q "build:" "$COMPOSE_FILE"; then
     run_step_live "Rebuilding image" bash -c "cd '$INSTALL_DIR' && $COMPOSE_CMD -p '$SERVICE' -f '$COMPOSE_FILE' build --pull"
   else
     run_step_live "Pulling latest image" pull_image
   fi
   run_step_live "Recreating container" bash -c "cd '$INSTALL_DIR' && $COMPOSE_CMD -p '$SERVICE' -f '$COMPOSE_FILE' up -d"
-  # Always ensure management API (Update Node) is present after image recreate.
   install_cli_wrapper
-  if [ -n "${API_KEY:-}" ]; then
-    write_serviced_env || true
-  fi
-  if [ "$NO_UPDATE_SERVICE" = 1 ]; then
-    log "Skipping serviced install/restart (--no-update-service)"
-  else
-    install_serviced || warn "hpx-node-serviced install incomplete — Panel Update Node needs API Port + serviced"
-  fi
+  stop_legacy_host_serviced || true
   log "Updated ($(docker inspect -f '{{.State.Status}}' "$SERVICE" 2>/dev/null))"
+  log "Panel Update Node uses API Port ${API_PORT} — open it in the firewall if needed"
 }
 
 need_compose() {

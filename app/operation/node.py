@@ -1085,7 +1085,11 @@ class NodeOperation(BaseOperation):
         except NodeAPIError as e:
             detail = e.detail
             if e.code == 503:
-                detail = f"{e.detail}. Node update service is not reachable on the API Port."
+                detail = (
+                    f"{e.detail}. "
+                    "Open API Port in the firewall, then on the node host run: "
+                    'sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXNODE/raw/v0.6.2/scripts/install.sh)" @ update -y'
+                )
             await self.raise_error(message=detail, code=e.code)
         return response.json()
 

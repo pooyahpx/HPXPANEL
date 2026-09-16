@@ -1140,8 +1140,13 @@ async def modify_user(
             expire=modify.next_plan.expire,
             add_remaining_traffic=modify.next_plan.add_remaining_traffic,
         )
-    elif db_user.next_plan is not None:
-        await db.delete(db_user.next_plan)
+    else:
+        # Always await — caller may have loaded the user with load_next_plan=False
+        # (e.g. shop renewal approve); sync access raises MissingGreenlet.
+        next_plan = await db_user.awaitable_attrs.next_plan
+        if next_plan is not None:
+            await db.delete(next_plan)
+            db_user.next_plan = None
 
     db_user.edit_at = datetime.now(UTC)
 

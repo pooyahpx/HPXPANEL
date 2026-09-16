@@ -346,7 +346,7 @@ class ShopOperation(BaseOperation):
             await self.raise_error("Renewal target user missing", 400, db)
 
         db_user = await get_user_by_id(
-            db, int(user_id), load_admin=False, load_next_plan=False, load_usage_logs=False, load_groups=True
+            db, int(user_id), load_admin=True, load_next_plan=True, load_usage_logs=True, load_groups=True
         )
         if db_user is None:
             await self.raise_error("User to renew not found", 404, db)
@@ -366,9 +366,9 @@ class ShopOperation(BaseOperation):
         )
         try:
             user = await self.user_operator._modify_user(db, db_user, modify, shop_admin, skip_role_limits=True)
-            # Re-load after modify for reset
+            # Re-load after modify for reset (include next_plan — reset deletes it safely)
             db_user = await get_user_by_id(
-                db, int(user_id), load_admin=False, load_next_plan=False, load_usage_logs=False, load_groups=False
+                db, int(user_id), load_admin=True, load_next_plan=True, load_usage_logs=True, load_groups=True
             )
             if db_user is not None:
                 user = await self.user_operator._reset_user_data_usage(

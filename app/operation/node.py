@@ -37,6 +37,7 @@ from app.models.node import (
     NodeCoreUpdate,
     NodeCreate,
     NodeGeoFilesUpdate,
+    NodeHostUpdate,
     NodeListQuery,
     NodeModify,
     NodeNotification,
@@ -52,6 +53,7 @@ from app.models.node import (
     UserIPList,
     UserIPListAll,
 )
+from app.node.host_ssh_update import run_host_update_via_ssh
 from app.models.stats import (
     NodeOutboundsLatencyResponse,
     NodeRealtimeStats,
@@ -636,6 +638,26 @@ class NodeOperation(BaseOperation):
         asyncio.create_task(self._connect_single_node_background(node_id))
         return result
 
+    async def host_update_via_ssh(self, db: AsyncSession, node_id: int, payload: NodeHostUpdate) -> dict:
+        """Run host installer over SSH (pulls image + installs serviced), then reconnect."""
+        db_node = await self.get_validated_node(db, node_id)
+        try:
+            log = await asyncio.to_thread(
+                run_host_update_via_ssh,
+                host=db_node.address,
+                port=payload.ssh_port,
+                username=payload.ssh_username,
+                password=payload.ssh_password,
+                private_key=payload.ssh_private_key,
+            )
+        except ValueError as exc:
+            await self.raise_error(message=str(exc), code=400)
+        except RuntimeError as exc:
+            await self.raise_error(message=str(exc), code=502)
+
+        asyncio.create_task(self._connect_single_node_background(node_id))
+        return {"detail": "Host update completed", "log": log[-4000:] if log else ""}
+
     async def update_core(self, db: AsyncSession, node_id: int, node_core_update: NodeCoreUpdate) -> dict:
         await self.get_validated_node(db, node_id)
         return await self._update_core_impl(node_id, node_core_update)
@@ -1051,10 +1073,8 @@ class NodeOperation(BaseOperation):
             if e.code == 503:
                 detail = (
                     f"{e.detail}. "
-                    "Update Node needs hpx-node-serviced on the node's API Port "
-                    "(HPXNODE ≥ 0.6.0). On the node host run: "
-                    'sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXNODE/raw/main/scripts/install.sh)" @ update -y '
-                    "— then open the API Port firewall and retry Update Node."
+                    "Host agent (hpx-node-serviced) is not reachable on the API Port. "
+                    "Enter SSH credentials so the panel can update the host automatically."
                 )
             await self.raise_error(message=detail, code=e.code)
         return response.json()

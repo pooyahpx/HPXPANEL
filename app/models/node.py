@@ -526,6 +526,23 @@ class NodeCoreUpdate(BaseModel):
     core_version: str = Field(default="latest", pattern=r"^(latest|v?\d+\.\d+\.\d+)$", examples=["v25.8.31"])
 
 
+class NodeHostUpdate(BaseModel):
+    """One-shot SSH credentials so the panel can run host ``hpx-node update`` itself."""
+
+    ssh_username: str = Field(default="root", min_length=1, max_length=64)
+    ssh_port: int = Field(default=22, ge=1, le=65535)
+    ssh_password: str | None = Field(default=None, max_length=256)
+    ssh_private_key: str | None = Field(default=None, max_length=16384)
+
+    @model_validator(mode="after")
+    def require_password_or_key(self):
+        has_password = bool(self.ssh_password and self.ssh_password.strip())
+        has_key = bool(self.ssh_private_key and self.ssh_private_key.strip())
+        if has_password == has_key:
+            raise ValueError("Provide exactly one of ssh_password or ssh_private_key")
+        return self
+
+
 class NodeGeoFilesUpdate(BaseModel):
     region: GeoFilseRegion = Field(default=GeoFilseRegion.iran, examples=["iran"])
 

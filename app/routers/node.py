@@ -16,6 +16,7 @@ from app.models.node import (
     NodeCoreUpdate,
     NodeCreate,
     NodeGeoFilesUpdate,
+    NodeHostUpdate,
     NodeListQuery,
     NodeModify,
     NodeResponse,
@@ -234,6 +235,17 @@ async def update_node(
     _: AdminDetails = Depends(require_permission("nodes", "update_core")),
 ):
     return await node_operator.update_node(db=db, node_id=node_id)
+
+
+@router.post("/{node_id}/host_update")
+async def host_update_node(
+    node_id: int,
+    payload: NodeHostUpdate,
+    db: AsyncSession = Depends(get_db),
+    _: AdminDetails = Depends(require_permission("nodes", "update_core")),
+):
+    """Update the node host over SSH (installs serviced + pulls latest image)."""
+    return await node_operator.host_update_via_ssh(db=db, node_id=node_id, payload=payload)
 
 
 @router.post("/{node_id}/core_update")

@@ -329,7 +329,7 @@ curl -fsSL https://raw.githubusercontent.com/pooyahpx/HPXPANEL/main/scripts/hpx-
 | ۲. (اختیاری) SSL | `hpxpanel ssl` |
 | ۳. نصب نود | `hpxpanel install-node` — یا روی **سرور جدا** (پیشنهاد production) |
 | ۴. دیدن اطلاعات نود | `hpxnode` |
-| ۵. ثبت در پنل | **Nodes → Create** — Address، Node port، API port، API key، Server CA |
+| ۵. ثبت در پنل | **Nodes → Create** — Address، **Node port**، **API port**، API key، Server CA (هر دو پورت را در فایروال باز کن) |
 | ۶. Core و Host | از UI — Xray / WireGuard / VPN core، بعد Host و کاربر |
 
 | مورد | مسیر |
@@ -416,6 +416,35 @@ sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXPANEL/raw/main/scripts
 hpx-node list
 ```
 
+### Update Node (دکمه پنل)
+
+| فیلد در فرم نود | نقش |
+| --- | --- |
+| **Node Port** (پیش‌فرض `62050`) | gRPC — وضعیت **CONNECTED** |
+| **API Port** (پیش‌فرض `62051`) | HTTPS مدیریت — **Update Node** |
+
+**CONNECTED بودن ≠ کار کردن Update.** Update به **API Port** وصل می‌شود. نودهای **0.5.2** (و بعضی نصب‌های اولیه 0.6.0) هنوز API آپدیت روی آن پورت ندارند.
+
+**یک‌بار روی هر سرور نود** (برای ارتقا از 0.5.2):
+
+```bash
+sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXNODE/raw/v0.6.2/scripts/install.sh)" @ update -y
+```
+
+فایروال **API Port** را باز کن، در پنل **Reconnect** بزن — `NODE VERSION` باید **0.6.2+** شود. بعد از آن Update Node با یک کلیک کار می‌کند.
+
+اختیاری: پنل خودش همان دستور را با SSH بزند (بدون دیالوگ پسورد). یک‌بار در `.env` پنل:
+
+```env
+NODE_SSH_USERNAME=root
+NODE_SSH_PORT=22
+NODE_SSH_PASSWORD=رمز_روت_نود
+# یا:
+# NODE_SSH_PRIVATE_KEY_PATH=/path/to/id_ed25519
+```
+
+سپس `hpxpanel restart`. مستندات کامل نود: [pooyahpx/HPXNODE](https://github.com/pooyahpx/HPXNODE).
+
 ### HPX Copilot (دستیار AI)
 
 دکمه ✨ در داشبورد. پیش‌فرض: **Groq** (رایگان).
@@ -441,6 +470,7 @@ Copilot context زنده پنل را می‌خواند و می‌تواند لی
 | --- | --- |
 | خطای `socat` / `apt` در نصب | `apt-get update && apt-get install -y socat` و دوباره نصب |
 | `hpxnode: command not found` | `hpxpanel update` |
+| **Update Node** → not reachable / API Port | نود هنوز &lt; **0.6.2** یا API Port بسته است. روی **سرور نود**: `sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXNODE/raw/v0.6.2/scripts/install.sh)" @ update -y` — فایروال API Port — Reconnect. اختیاری در `.env` پنل: `NODE_SSH_PASSWORD` / `NODE_SSH_PRIVATE_KEY` |
 | OpenVPN `Authentication Failed` | پروفایل را دوباره دانلود کن؛ احراز هویت با **certificate** است نه یوزر/پسورد |
 | Pulse از ایران به پنل نمی‌رسد | `PANEL_PUBLIC_URL=https://دامنه` در `.env`، پنل روی **443** |
 | پورت ۸۰۰۰ اشغال | پورت دیگر در installer یا `UVICORN_PORT` در `.env` |

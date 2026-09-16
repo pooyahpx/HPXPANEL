@@ -393,7 +393,7 @@ One shared IPsec identity workflow. Core editors for crypto, PSK, and network.
 | 2. (Optional) SSL | `hpxpanel ssl` |
 | 3. Install edge node | `hpxpanel install-node` — or on a **separate** VPS (recommended for production) |
 | 4. Show node credentials | `hpxnode` |
-| 5. Register node | **HPXPANEL → Nodes → Create** — paste Address, Node port, API port, API key, Server CA |
+| 5. Register node | **HPXPANEL → Nodes → Create** — paste Address, **Node port**, **API port**, API key, Server CA (open both ports in the firewall) |
 | 6. Cores + hosts | Panel UI — create Xray / WireGuard / VPN core, then Hosts and users |
 
 | What | Where |
@@ -482,6 +482,36 @@ sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXPANEL/raw/main/scripts
 hpx-node list
 ```
 
+### Update Node (panel button)
+
+| Port in node form | Role |
+| --- | --- |
+| **Node Port** (default `62050`) | gRPC — shows **CONNECTED** |
+| **API Port** (default `62051`) | Management HTTPS — **Update Node** |
+
+**CONNECTED ≠ Update works.** Update talks to **API Port**. Nodes on **0.5.2** (and some early 0.6.0 installs) have no management API there yet.
+
+**One-time upgrade on each node host** (required for 0.5.2 → current):
+
+```bash
+sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXNODE/raw/v0.6.2/scripts/install.sh)" @ update -y
+```
+
+Open **API Port** in the firewall, **Reconnect** in the panel — `NODE VERSION` should be **0.6.2+**. Then **Update Node** is one click.
+
+Optional: let the panel run that host update over SSH automatically (no UI password prompt) by setting once in panel `.env` and restarting:
+
+```env
+NODE_SSH_USERNAME=root
+NODE_SSH_PORT=22
+NODE_SSH_PASSWORD=your-root-password
+# or:
+# NODE_SSH_PRIVATE_KEY_PATH=/path/to/id_ed25519
+# NODE_SSH_PRIVATE_KEY=-----BEGIN OPENSSH PRIVATE KEY-----...
+```
+
+Full node docs: [pooyahpx/HPXNODE](https://github.com/pooyahpx/HPXNODE).
+
 ### HPX Copilot (AI assistant)
 
 Sparkles button in the dashboard. Default provider: **Groq** (free tier).
@@ -509,6 +539,7 @@ Other providers: `openai`, `openrouter`, `ollama` — see comments in `.env.exam
 | --- | --- |
 | `socat` / `apt-get` failed during install | `apt-get update && apt-get install -y socat` then re-run install |
 | `hpxnode: command not found` | `hpxpanel update` |
+| **Update Node** → “not reachable” / API Port | Node still &lt; **0.6.2**, or API Port closed. On the **node host**: `sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXNODE/raw/v0.6.2/scripts/install.sh)" @ update -y` — open API Port — Reconnect. Optional panel `.env`: `NODE_SSH_PASSWORD` / `NODE_SSH_PRIVATE_KEY` |
 | OpenVPN `Authentication Failed` | Re-download `.ovpn` from the panel; node uses **client certificates**, not username/password. Run `hpxpanel update` on panel + node |
 | Pulse agent unreachable from Iran | Set `PANEL_PUBLIC_URL=https://your-domain` in `.env`, expose panel on **443**, `sudo hpx-pulse-agent set-panel-url …` |
 | Port `8000` in use | Installer prompts for another port, or set `UVICORN_PORT` in `.env` |

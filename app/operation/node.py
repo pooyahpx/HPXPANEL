@@ -53,7 +53,6 @@ from app.models.node import (
     UserIPList,
     UserIPListAll,
 )
-from app.node.host_ssh_update import run_host_update_via_ssh
 from app.models.stats import (
     NodeOutboundsLatencyResponse,
     NodeRealtimeStats,
@@ -65,6 +64,7 @@ from app.models.stats import (
 )
 from app.nats.node_rpc import node_nats_client
 from app.node import core_users, node_manager
+from app.node.host_ssh_update import run_host_update_auto, run_host_update_via_ssh
 from app.operation import BaseOperation, OperatorType
 from app.services.openvpn.monitoring import _normalize_online_stats
 from app.utils.logger import get_logger
@@ -632,8 +632,22 @@ class NodeOperation(BaseOperation):
             await self.raise_error(code=400, message=f"Deletion failed due to server error: {e!s}")
 
     async def update_node(self, db: AsyncSession, node_id: int) -> dict:
-        await self.get_validated_node(db, node_id)
-        result = await self._update_node_api_impl(node_id)
+        db_node = await self.get_validated_node(db, node_id)
+        try:
+            result = await self._update_node_api_impl(node_id)
+        except HTTPException as exc:
+            if exc.status_code != 503:
+                raise
+            # Nodes without hpx-node-serviced (e.g. 0.5.2): bootstrap host over SSH
+            # with env credentials or the panel host's SSH keys — no UI prompt.
+            try:
+                log = await asyncio.to_thread(run_host_update_auto, host=db_node.address)
+            except Exception as boot_exc:
+                await self.raise_error(
+                    message=f"{exc.detail} Automatic host update failed: {boot_exc}",
+                    code=503,
+                )
+            result = {"detail": "Node updated", "bootstrap": "ssh", "log": (log or "")[-2000:]}
         # Pull/recreate restarts the node process; reconnect so node_version refreshes.
         asyncio.create_task(self._connect_single_node_background(node_id))
         return result
@@ -1071,10 +1085,7 @@ class NodeOperation(BaseOperation):
         except NodeAPIError as e:
             detail = e.detail
             if e.code == 503:
-                detail = (
-                    f"{e.detail}. "
-                    "Node update service is not reachable on the API Port."
-                )
+                detail = f"{e.detail}. Node update service is not reachable on the API Port."
             await self.raise_error(message=detail, code=e.code)
         return response.json()
 

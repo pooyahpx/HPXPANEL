@@ -375,6 +375,16 @@ class BackupSettings(EnvSettings):
     job_interval: int = Field(default=3600, ge=300, validation_alias="JOB_BACKUP_INTERVAL")
 
 
+class NodeHostSshSettings(EnvSettings):
+    """Optional SSH used by Update Node when hpx-node-serviced is missing (silent bootstrap)."""
+
+    username: str = Field(default="root", validation_alias="NODE_SSH_USERNAME")
+    port: int = Field(default=22, ge=1, le=65535, validation_alias="NODE_SSH_PORT")
+    password: str = Field(default="", validation_alias="NODE_SSH_PASSWORD")
+    private_key: str = Field(default="", validation_alias="NODE_SSH_PRIVATE_KEY")
+    private_key_path: str = Field(default="", validation_alias="NODE_SSH_PRIVATE_KEY_PATH")
+
+
 database_settings = DatabaseSettings()
 server_settings = ServerSettings()
 dashboard_settings = DashboardSettings()
@@ -400,6 +410,7 @@ copilot_settings = CopilotSettings()
 feature_settings = FeatureSettings()
 observability_settings = ObservabilitySettings()
 backup_settings = BackupSettings()
+node_host_ssh_settings = NodeHostSshSettings()
 
 
 def refresh_copilot_settings() -> CopilotSettings:

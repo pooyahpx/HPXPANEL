@@ -1073,8 +1073,7 @@ class NodeOperation(BaseOperation):
             if e.code == 503:
                 detail = (
                     f"{e.detail}. "
-                    "Host agent (hpx-node-serviced) is not reachable on the API Port. "
-                    "Enter SSH credentials so the panel can update the host automatically."
+                    "Node update service is not reachable on the API Port."
                 )
             await self.raise_error(message=detail, code=e.code)
         return response.json()

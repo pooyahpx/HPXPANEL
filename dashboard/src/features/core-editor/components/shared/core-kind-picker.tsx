@@ -5,9 +5,6 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { CORE_KIND_GROUPS, type CoreKindGroupId, type DashboardCoreKind } from '@/features/core-editor/kit/core-kind'
@@ -46,6 +43,7 @@ export type CoreKindPickerProps = {
   align?: 'start' | 'end'
 }
 
+/** Button → one flat restaurant-style list (grouped labels, no nested submenus). */
 export function CoreKindPicker({ value, onChange, disabled, className, align = 'end' }: CoreKindPickerProps) {
   const { t } = useTranslation()
 
@@ -72,56 +70,33 @@ export function CoreKindPicker({ value, onChange, disabled, className, align = '
           <ChevronDown className="h-4 w-4 shrink-0 opacity-60" aria-hidden />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align={align} className="min-w-[220px]" sideOffset={6}>
+      <DropdownMenuContent align={align} className="min-w-[240px] p-1.5" sideOffset={6}>
         <DropdownMenuLabel className="font-mono text-[10px] tracking-[0.14em] uppercase opacity-70">
           {titleLabel}
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        {CORE_KIND_GROUPS.map(group => {
-          if (group.kinds.length === 1) {
-            const kind = group.kinds[0]
-            const selected = value === kind
-            return (
-              <DropdownMenuItem
-                key={kind}
-                disabled={disabled}
-                onSelect={() => onChange(kind)}
-                className={cn(selected && 'bg-primary/10')}
-              >
-                <span className="min-w-0 flex-1 truncate">{kindLabel(kind)}</span>
-                {selected ? <Check className="text-primary h-4 w-4 shrink-0" aria-hidden /> : null}
-              </DropdownMenuItem>
-            )
-          }
-
-          return (
-            <DropdownMenuSub key={group.id}>
-              <DropdownMenuSubTrigger disabled={disabled}>
-                <span className="min-w-0 flex-1 truncate">{groupLabel(group.id)}</span>
-              </DropdownMenuSubTrigger>
-              <DropdownMenuSubContent className="min-w-[200px]">
-                <DropdownMenuLabel className="text-muted-foreground text-xs font-normal">
-                  {groupLabel(group.id)}
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {group.kinds.map(kind => {
-                  const selected = value === kind
-                  return (
-                    <DropdownMenuItem
-                      key={kind}
-                      disabled={disabled}
-                      onSelect={() => onChange(kind)}
-                      className={cn(selected && 'bg-primary/10')}
-                    >
-                      <span className="min-w-0 flex-1 truncate">{kindLabel(kind)}</span>
-                      {selected ? <Check className="text-primary h-4 w-4 shrink-0" aria-hidden /> : null}
-                    </DropdownMenuItem>
-                  )
-                })}
-              </DropdownMenuSubContent>
-            </DropdownMenuSub>
-          )
-        })}
+        {CORE_KIND_GROUPS.map((group, groupIndex) => (
+          <div key={group.id}>
+            {groupIndex > 0 ? <DropdownMenuSeparator /> : null}
+            <DropdownMenuLabel className="text-muted-foreground px-2.5 py-1.5 text-[10px] font-bold tracking-[0.12em] uppercase">
+              {groupLabel(group.id)}
+            </DropdownMenuLabel>
+            {group.kinds.map(kind => {
+              const selected = value === kind
+              return (
+                <DropdownMenuItem
+                  key={kind}
+                  disabled={disabled}
+                  onSelect={() => onChange(kind)}
+                  className={cn('min-h-9 py-1.5', selected && 'bg-primary/10')}
+                >
+                  <span className="min-w-0 flex-1 truncate">{kindLabel(kind)}</span>
+                  {selected ? <Check className="text-primary h-4 w-4 shrink-0" aria-hidden /> : null}
+                </DropdownMenuItem>
+              )
+            })}
+          </div>
+        ))}
       </DropdownMenuContent>
     </DropdownMenu>
   )

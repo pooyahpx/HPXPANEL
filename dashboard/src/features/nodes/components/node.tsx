@@ -7,7 +7,7 @@ import { Separator } from '@/components/ui/separator'
 import { cn } from '@/lib/utils'
 import { CoresSimpleResponse, NodeResponse } from '@/service/api'
 import { useXrayReleases } from '@/hooks/use-xray-releases'
-import { needsHostAgentForUpdate, useNodeReleases } from '@/hooks/use-node-releases'
+import { useNodeReleases } from '@/hooks/use-node-releases'
 import NodeUsageDisplay from './node-usage-display'
 import NodeActionsMenu from './node-actions-menu'
 import UpdateCoreDialog from '@/features/nodes/dialogs/update-core-modal'
@@ -59,7 +59,6 @@ export default function Node({
   const coreUpdateVersion = node.xray_version ?? coreVersion
   const hasCoreUpdate = !!(isXrayBackend && coreUpdateVersion && latestXrayVersion && hasXrayUpdate(coreUpdateVersion))
   const hasNodeVersionUpdate = !!latestNodeVersion && !!node.node_version && hasNodeUpdate(node.node_version)
-  const needsHostAgent = needsHostAgentForUpdate(node.node_version)
 
   const getStatusConfig = () => {
     switch (node.status) {
@@ -243,10 +242,10 @@ export default function Node({
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <div className="inline-flex items-center gap-1.5">
-                            <Server className={cn('h-3.5 w-3.5 shrink-0', hasNodeVersionUpdate || needsHostAgent ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground')} />
+                            <Server className={cn('h-3.5 w-3.5 shrink-0', hasNodeVersionUpdate ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground')} />
                             <span className="text-muted-foreground text-[10px] tracking-wide uppercase">{t('node.coreVersion', { defaultValue: 'Node' })}</span>
-                            <span className={cn('font-mono text-xs font-medium', hasNodeVersionUpdate || needsHostAgent ? 'text-amber-700 dark:text-amber-300' : 'text-foreground')}>{node.node_version}</span>
-                            {(hasNodeVersionUpdate || needsHostAgent) && <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />}
+                            <span className={cn('font-mono text-xs font-medium', hasNodeVersionUpdate ? 'text-amber-700 dark:text-amber-300' : 'text-foreground')}>{node.node_version}</span>
+                            {hasNodeVersionUpdate && <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />}
                           </div>
                         </TooltipTrigger>
                         <TooltipContent side="top" className="max-w-xs">
@@ -263,15 +262,7 @@ export default function Node({
                                   <span className="font-mono font-medium">{latestNodeVersion}</span>
                                 </div>
                               )}
-                              {needsHostAgent && (
-                                <>
-                                  <Separator className="my-1.5" />
-                                  <span className="text-muted-foreground">
-                                    {t('nodeModal.hostAgentRequiredHint', { defaultValue: 'Host update required for Update Node' })}
-                                  </span>
-                                </>
-                              )}
-                              {hasNodeVersionUpdate && !needsHostAgent && (
+                              {hasNodeVersionUpdate && (
                                 <>
                                   <Separator className="my-1.5" />
                                   <span>{t('nodeModal.updateAvailable', { defaultValue: 'Update available' })}</span>
@@ -283,11 +274,6 @@ export default function Node({
                       </Tooltip>
                     )}
                   </div>
-                  {needsHostAgent && (
-                    <p className="text-muted-foreground text-[10px] leading-snug">
-                      {t('nodeModal.hostAgentRequiredHint', { defaultValue: 'Host update required for Update Node' })}
-                    </p>
-                  )}
                 </div>
               )}
             </div>

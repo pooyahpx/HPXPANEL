@@ -12,11 +12,6 @@ import UserOnlineStatsDialog from '@/features/users/dialogs/user-online-stats-mo
 import { OpenVPNMonitoringModal } from '@/features/openvpn/components/openvpn-monitoring-modal'
 import UpdateCoreDialog from '@/features/nodes/dialogs/update-core-modal'
 import UpdateGeofilesDialog from '@/features/nodes/dialogs/update-geofiles-modal'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
-import { hostUpdateNode } from '@/service/node-host-update'
-import { needsHostAgentForUpdate } from '@/hooks/use-node-releases'
 
 interface NodeActionsMenuProps {
   node: NodeResponse
@@ -40,7 +35,6 @@ type NodeActionsMenuState = {
   showOpenVPNMonitoring: boolean
   showUpdateCoreDialog: boolean
   showUpdateGeofilesDialog: boolean
-  showHostAgentRequiredDialog: boolean
 }
 
 const nodeActionsMenuStateStore = new Map<number, NodeActionsMenuState>()
@@ -59,7 +53,6 @@ const createDefaultNodeActionsMenuState = (): NodeActionsMenuState => ({
   showOpenVPNMonitoring: false,
   showUpdateCoreDialog: false,
   showUpdateGeofilesDialog: false,
-  showHostAgentRequiredDialog: false,
 })
 
 const ensureNodeActionsMenuState = (node: NodeResponse): NodeActionsMenuState => {
@@ -80,8 +73,7 @@ const hasOpenNodeDialog = (state: NodeActionsMenuState) =>
   state.showOnlineStats ||
   state.showOpenVPNMonitoring ||
   state.showUpdateCoreDialog ||
-  state.showUpdateGeofilesDialog ||
-  state.showHostAgentRequiredDialog
+  state.showUpdateGeofilesDialog
 
 const notifyNodeActionsGlobalListeners = () => {
   nodeActionsGlobalStateVersion += 1
@@ -187,19 +179,6 @@ const getUpdateNodeErrorMessage = (error: unknown): string => {
   return 'Unknown error'
 }
 
-const isHostAgentUpdateFailure = (error: unknown): boolean => {
-  const err = error as { status?: number; response?: { status?: number } }
-  const status = err?.status ?? err?.response?.status
-  const message = getUpdateNodeErrorMessage(error).toLowerCase()
-  return (
-    status === 503 ||
-    message.includes('service unavailable') ||
-    message.includes('not reachable') ||
-    message.includes('hpx-node-serviced') ||
-    message.includes('host agent')
-  )
-}
-
 const DeleteAlertDialog = ({ node, isOpen, onClose, onConfirm }: { node: NodeResponse; isOpen: boolean; onClose: () => void; onConfirm: () => void }) => {
   const { t } = useTranslation()
   const dir = useDirDetection()
@@ -250,157 +229,6 @@ const ResetUsageAlertDialog = ({ node, isOpen, onClose, onConfirm, isLoading }: 
   )
 }
 
-const HostUpdateSshDialog = ({
-  node,
-  isOpen,
-  onClose,
-  onSuccess,
-}: {
-  node: NodeResponse
-  isOpen: boolean
-  onClose: () => void
-  onSuccess: () => void
-}) => {
-  const { t } = useTranslation()
-  const dir = useDirDetection()
-  const [username, setUsername] = useState('root')
-  const [port, setPort] = useState('22')
-  const [password, setPassword] = useState('')
-  const [privateKey, setPrivateKey] = useState('')
-  const [useKey, setUseKey] = useState(false)
-  const [submitting, setSubmitting] = useState(false)
-
-  useEffect(() => {
-    if (!isOpen) return
-    setUsername('root')
-    setPort('22')
-    setPassword('')
-    setPrivateKey('')
-    setUseKey(false)
-    setSubmitting(false)
-  }, [isOpen, node.id])
-
-  const handleSubmit = async () => {
-    const sshPort = Number(port)
-    if (!Number.isInteger(sshPort) || sshPort < 1 || sshPort > 65535) {
-      toast.error(t('nodeModal.hostUpdateInvalidPort', { defaultValue: 'Enter a valid SSH port' }))
-      return
-    }
-    if (useKey ? !privateKey.trim() : !password) {
-      toast.error(
-        t('nodeModal.hostUpdateMissingAuth', {
-          defaultValue: useKey ? 'Paste the SSH private key' : 'Enter the SSH password',
-        }),
-      )
-      return
-    }
-
-    setSubmitting(true)
-    try {
-      await hostUpdateNode(node.id, {
-        ssh_username: username.trim() || 'root',
-        ssh_port: sshPort,
-        ...(useKey ? { ssh_private_key: privateKey } : { ssh_password: password }),
-      })
-      toast.success(t('nodeModal.hostUpdateSuccess', { defaultValue: 'Node host updated successfully' }))
-      onSuccess()
-      onClose()
-    } catch (error: unknown) {
-      toast.error(
-        t('nodeModal.hostUpdateFailed', {
-          message: getUpdateNodeErrorMessage(error),
-          defaultValue: 'Host update failed: {{message}}',
-        }),
-      )
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  return (
-    <AlertDialog open={isOpen} onOpenChange={open => !open && !submitting && onClose()}>
-      <AlertDialogContent className="max-w-lg">
-        <AlertDialogHeader>
-          <AlertDialogTitle>{t('nodeModal.hostUpdateTitle', { defaultValue: 'Update node host' })}</AlertDialogTitle>
-          <AlertDialogDescription asChild>
-            <div dir={dir} className="space-y-3 text-sm">
-              <p>
-                {t('nodeModal.hostUpdateBody', {
-                  name: node.name,
-                  address: node.address,
-                  defaultValue:
-                    'Enter SSH access for «{{name}}» ({{address}}). The panel will update the host and install the management agent — no manual command needed.',
-                })}
-              </p>
-              <div className="grid gap-3 text-left" dir="ltr">
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="space-y-1.5">
-                    <Label htmlFor={`ssh-user-${node.id}`}>{t('nodeModal.hostUpdateUsername', { defaultValue: 'SSH user' })}</Label>
-                    <Input id={`ssh-user-${node.id}`} value={username} onChange={e => setUsername(e.target.value)} autoComplete="username" disabled={submitting} />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor={`ssh-port-${node.id}`}>{t('nodeModal.hostUpdatePort', { defaultValue: 'SSH port' })}</Label>
-                    <Input id={`ssh-port-${node.id}`} value={port} onChange={e => setPort(e.target.value)} inputMode="numeric" disabled={submitting} />
-                  </div>
-                </div>
-                <div className="flex gap-2">
-                  <Button type="button" size="sm" variant={useKey ? 'outline' : 'default'} disabled={submitting} onClick={() => setUseKey(false)}>
-                    {t('nodeModal.hostUpdateAuthPassword', { defaultValue: 'Password' })}
-                  </Button>
-                  <Button type="button" size="sm" variant={useKey ? 'default' : 'outline'} disabled={submitting} onClick={() => setUseKey(true)}>
-                    {t('nodeModal.hostUpdateAuthKey', { defaultValue: 'Private key' })}
-                  </Button>
-                </div>
-                {useKey ? (
-                  <div className="space-y-1.5">
-                    <Label htmlFor={`ssh-key-${node.id}`}>{t('nodeModal.hostUpdatePrivateKey', { defaultValue: 'Private key' })}</Label>
-                    <Textarea
-                      id={`ssh-key-${node.id}`}
-                      value={privateKey}
-                      onChange={e => setPrivateKey(e.target.value)}
-                      rows={5}
-                      className="font-mono text-xs"
-                      placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"
-                      disabled={submitting}
-                    />
-                  </div>
-                ) : (
-                  <div className="space-y-1.5">
-                    <Label htmlFor={`ssh-pass-${node.id}`}>{t('nodeModal.hostUpdatePassword', { defaultValue: 'SSH password' })}</Label>
-                    <Input
-                      id={`ssh-pass-${node.id}`}
-                      type="password"
-                      value={password}
-                      onChange={e => setPassword(e.target.value)}
-                      autoComplete="current-password"
-                      disabled={submitting}
-                    />
-                  </div>
-                )}
-              </div>
-            </div>
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel disabled={submitting} onClick={onClose}>
-            {t('cancel')}
-          </AlertDialogCancel>
-          <Button type="button" disabled={submitting} onClick={() => void handleSubmit()}>
-            {submitting ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                {t('nodeModal.hostUpdating', { defaultValue: 'Updating host...' })}
-              </>
-            ) : (
-              t('nodeModal.updateNode', { defaultValue: 'Update Node' })
-            )}
-          </Button>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
-  )
-}
-
 export default function NodeActionsMenu({
   node,
   onEdit,
@@ -440,7 +268,7 @@ export default function NodeActionsMenu({
     [node, node.id],
   )
 
-  const { isDeleteDialogOpen, isResetUsageDialogOpen, showOnlineStats, showOpenVPNMonitoring, showUpdateCoreDialog, showUpdateGeofilesDialog, showHostAgentRequiredDialog } = menuState
+  const { isDeleteDialogOpen, isResetUsageDialogOpen, showOnlineStats, showOpenVPNMonitoring, showUpdateCoreDialog, showUpdateGeofilesDialog } = menuState
 
   const setDeleteDialogOpen = useCallback((value: boolean) => setMenuState({ isDeleteDialogOpen: value }), [setMenuState])
   const setResetUsageDialogOpen = useCallback((value: boolean) => setMenuState({ isResetUsageDialogOpen: value }), [setMenuState])
@@ -448,7 +276,6 @@ export default function NodeActionsMenu({
   const setShowOpenVPNMonitoring = useCallback((value: boolean) => setMenuState({ showOpenVPNMonitoring: value }), [setMenuState])
   const setShowUpdateCoreDialog = useCallback((value: boolean) => setMenuState({ showUpdateCoreDialog: value }), [setMenuState])
   const setShowUpdateGeofilesDialog = useCallback((value: boolean) => setMenuState({ showUpdateGeofilesDialog: value }), [setMenuState])
-  const setShowHostAgentRequiredDialog = useCallback((value: boolean) => setMenuState({ showHostAgentRequiredDialog: value }), [setMenuState])
 
   useEffect(() => {
     ensureNodeActionsMenuState(node)
@@ -573,12 +400,6 @@ export default function NodeActionsMenu({
   const handleUpdateNode = async () => {
     if (!canUpdateCore) return
 
-    // Old hosts (< 0.6) need SSH bootstrap — open the form instead of a dead 503.
-    if (needsHostAgentForUpdate(node.node_version)) {
-      setShowHostAgentRequiredDialog(true)
-      return
-    }
-
     setUpdatingNode(true)
     try {
       await updateNodeMutation.mutateAsync({
@@ -594,30 +415,15 @@ export default function NodeActionsMenu({
       queryClient.invalidateQueries({ queryKey: ['/api/nodes/simple'] })
       queryClient.invalidateQueries({ queryKey: [`/api/node/${node.id}`] })
     } catch (error: unknown) {
-      if (isHostAgentUpdateFailure(error)) {
-        setShowHostAgentRequiredDialog(true)
-      } else {
-        toast.error(
-          t('nodeModal.updateNodeFailed', {
-            message: getUpdateNodeErrorMessage(error),
-            defaultValue: 'Failed to update node: {message}',
-          }),
-        )
-      }
+      toast.error(
+        t('nodeModal.updateNodeFailed', {
+          message: getUpdateNodeErrorMessage(error),
+          defaultValue: 'Failed to update node: {{message}}',
+        }),
+      )
     } finally {
       setUpdatingNode(false)
     }
-  }
-
-  const handleHostUpdateSuccess = async () => {
-    try {
-      await reconnectNodeMutation.mutateAsync({ nodeId: node.id })
-    } catch {
-      // ignore
-    }
-    queryClient.invalidateQueries({ queryKey: ['/api/nodes'] })
-    queryClient.invalidateQueries({ queryKey: ['/api/nodes/simple'] })
-    queryClient.invalidateQueries({ queryKey: [`/api/node/${node.id}`] })
   }
 
   return (
@@ -775,16 +581,6 @@ export default function NodeActionsMenu({
           )}
           {canUpdateCore && <UpdateCoreDialog node={node} isOpen={showUpdateCoreDialog} onOpenChange={setShowUpdateCoreDialog} />}
           {canUpdateCore && <UpdateGeofilesDialog node={node} isOpen={showUpdateGeofilesDialog} onOpenChange={setShowUpdateGeofilesDialog} />}
-          {canUpdateCore && (
-            <HostUpdateSshDialog
-              node={node}
-              isOpen={showHostAgentRequiredDialog}
-              onClose={() => setShowHostAgentRequiredDialog(false)}
-              onSuccess={() => {
-                void handleHostUpdateSuccess()
-              }}
-            />
-          )}
         </div>
       )}
     </>

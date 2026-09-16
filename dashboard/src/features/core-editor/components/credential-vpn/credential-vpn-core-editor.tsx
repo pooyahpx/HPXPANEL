@@ -101,7 +101,6 @@ export function CredentialVpnCoreEditor() {
           </div>
         ) : null}
       </div>
-      <p className="text-muted-foreground text-xs">{t('coreEditor.credentialVpn.nodePending')}</p>
     </div>
   )
 }

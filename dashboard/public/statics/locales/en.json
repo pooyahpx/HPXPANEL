@@ -3163,7 +3163,7 @@
       }
     },
     "credentialVpn": {
-      "nodePending": "Panel config is ready. Connecting a node for this backend requires a node bridge that supports it.",
+      "nodePending": "Node bridge backends are supported. Connect this core to a node image that includes the matching daemon packages.",
       "ipsecHint": "Optional IPsec encapsulation for GRE peers.",
       "description": {
         "generic": "Configure this tunnel backend for the panel.",

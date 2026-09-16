@@ -106,6 +106,54 @@ def _serialize_user_for_node(
         proxy_kwargs["wireguard_peer_ips"] = wireguard_settings.get("peer_ips") or []
     if ProxyProtocol.hysteria in allowed_protocols:
         proxy_kwargs["hysteria_auth"] = user_settings.get("hysteria", {}).get("auth")
+    if ProxyProtocol.pptp in allowed_protocols:
+        pptp_settings = user_settings.get("pptp") or {}
+        proxy_kwargs["pptp_username"] = pptp_settings.get("username")
+        proxy_kwargs["pptp_password"] = pptp_settings.get("password")
+    if ProxyProtocol.openconnect in allowed_protocols:
+        oc_settings = user_settings.get("openconnect") or {}
+        proxy_kwargs["openconnect_username"] = oc_settings.get("username")
+        proxy_kwargs["openconnect_password"] = oc_settings.get("password")
+    if ProxyProtocol.sstp in allowed_protocols:
+        sstp_settings = user_settings.get("sstp") or {}
+        proxy_kwargs["sstp_username"] = sstp_settings.get("username")
+        proxy_kwargs["sstp_password"] = sstp_settings.get("password")
+    if ProxyProtocol.ssh in allowed_protocols:
+        ssh_settings = user_settings.get("ssh") or {}
+        proxy_kwargs["ssh_username"] = ssh_settings.get("username")
+        proxy_kwargs["ssh_password"] = ssh_settings.get("password")
+    if ProxyProtocol.wg_c in allowed_protocols:
+        wg_c_settings = user_settings.get("wg_c") or {}
+        proxy_kwargs["wg_c_public_key"] = wg_c_settings.get("public_key")
+        proxy_kwargs["wg_c_peer_ips"] = wg_c_settings.get("peer_ips") or []
+    if ProxyProtocol.amneziawg in allowed_protocols:
+        amnezia_settings = user_settings.get("amneziawg") or {}
+        proxy_kwargs["amneziawg_public_key"] = amnezia_settings.get("public_key")
+        proxy_kwargs["amneziawg_peer_ips"] = amnezia_settings.get("peer_ips") or []
+    if ProxyProtocol.gre in allowed_protocols:
+        proxy_kwargs["gre_peer_ip"] = (user_settings.get("gre") or {}).get("peer_ip") or ""
+    if ProxyProtocol.mtproto in allowed_protocols:
+        proxy_kwargs["mtproto_secret"] = (user_settings.get("mtproto") or {}).get("secret") or ""
+    if ProxyProtocol.anytls in allowed_protocols:
+        proxy_kwargs["anytls_password"] = (user_settings.get("anytls") or {}).get("password") or ""
+    if ProxyProtocol.tuic in allowed_protocols:
+        tuic_settings = user_settings.get("tuic") or {}
+        tuic_id = tuic_settings.get("id")
+        proxy_kwargs["tuic_id"] = str(tuic_id) if tuic_id is not None else ""
+        proxy_kwargs["tuic_password"] = tuic_settings.get("password") or ""
+    if ProxyProtocol.naive in allowed_protocols:
+        naive_settings = user_settings.get("naive") or {}
+        proxy_kwargs["naive_username"] = naive_settings.get("username") or ""
+        proxy_kwargs["naive_password"] = naive_settings.get("password") or ""
+
+    # Drop kwargs the installed bridge create_proxy() does not accept yet.
+    try:
+        import inspect
+
+        accepted = set(inspect.signature(create_proxy).parameters)
+        proxy_kwargs = {key: value for key, value in proxy_kwargs.items() if key in accepted}
+    except TypeError, ValueError:
+        pass
 
     proxy = create_proxy(**proxy_kwargs)
     needs_ipsec_credentials = bool({ProxyProtocol.ikev2, ProxyProtocol.l2tp}.intersection(allowed_protocols))

@@ -138,17 +138,49 @@ def test_proxy_table_includes_new_protocols():
         assert key in dumped
 
 
-def test_backend_type_for_core_new_types_message():
+def test_backend_type_for_core_new_types_resolved():
     from types import SimpleNamespace
 
     from app.operation import node as node_op
 
     class FakeBackend:
-        XRAY = 1
-        WIREGUARD = 2
+        XRAY = 0
+        WIREGUARD = 1
+        OPENVPN = 2
         IKEV2 = 3
         L2TP = 4
-        OPENVPN = 5
+        PPTP = 5
+        OPENCONNECT = 6
+        SSTP = 7
+        WG_C = 8
+        AMNEZIAWG = 9
+        GRE = 10
+        SSH = 11
+        MTPROTO = 12
+
+    fake_service = SimpleNamespace(BackendType=FakeBackend)
+    original = node_op.service
+    node_op.service = fake_service
+    try:
+        assert node_op._backend_type_for_core(CoreType.pptp) == FakeBackend.PPTP
+        assert node_op._backend_type_for_core(CoreType.amneziawg) == FakeBackend.AMNEZIAWG
+        assert node_op._backend_type_for_core(CoreType.ssh) == FakeBackend.SSH
+        assert node_op._backend_type_for_core(CoreType.mtproto) == FakeBackend.MTPROTO
+    finally:
+        node_op.service = original
+
+
+def test_backend_type_for_core_missing_enum_still_errors():
+    from types import SimpleNamespace
+
+    from app.operation import node as node_op
+
+    class FakeBackend:
+        XRAY = 0
+        WIREGUARD = 1
+        IKEV2 = 3
+        L2TP = 4
+        OPENVPN = 2
 
     fake_service = SimpleNamespace(BackendType=FakeBackend)
     original = node_op.service
@@ -156,7 +188,37 @@ def test_backend_type_for_core_new_types_message():
     try:
         with pytest.raises(RuntimeError, match="PPTP"):
             node_op._backend_type_for_core(CoreType.pptp)
-        with pytest.raises(RuntimeError, match="AMNEZIAWG"):
-            node_op._backend_type_for_core(CoreType.amneziawg)
     finally:
         node_op.service = original
+
+
+def test_serialize_new_protocol_credentials_for_node():
+    pytest.importorskip("PasarGuardNodeBridge", reason="node bridge is not installed")
+    from app.models.protocol import ProxyProtocol
+    from app.node.user import _serialize_user_for_node
+
+    proto = _serialize_user_for_node(
+        7,
+        {
+            "pptp": {"username": "pptp-user", "password": "pptp-pass"},
+            "anytls": {"password": "any-pass"},
+            "tuic": {"id": "11111111-1111-1111-1111-111111111111", "password": "tuic-pass"},
+            "wg_c": {"public_key": "wg-pub", "peer_ips": ["10.66.0.2/32"]},
+            "mtproto": {"secret": "mtsecret01234567"},
+        },
+        ["pptp-in", "any-in"],
+        frozenset(
+            {
+                ProxyProtocol.pptp,
+                ProxyProtocol.anytls,
+                ProxyProtocol.tuic,
+                ProxyProtocol.wg_c,
+                ProxyProtocol.mtproto,
+            }
+        ),
+    )
+    assert proto.proxies.pptp.username == "pptp-user"
+    assert proto.proxies.anytls.password == "any-pass"
+    assert proto.proxies.tuic.password == "tuic-pass"
+    assert proto.proxies.wg_c.public_key == "wg-pub"
+    assert proto.proxies.mtproto.secret == "mtsecret01234567"

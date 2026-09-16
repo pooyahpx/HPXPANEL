@@ -80,6 +80,14 @@ def _backend_type_for_core(core_type: CoreType):
         CoreType.ikev2: "IKEV2",
         CoreType.l2tp: "L2TP",
         CoreType.openvpn: "OPENVPN",
+        CoreType.pptp: "PPTP",
+        CoreType.openconnect: "OPENCONNECT",
+        CoreType.sstp: "SSTP",
+        CoreType.wg_c: "WG_C",
+        CoreType.amneziawg: "AMNEZIAWG",
+        CoreType.gre: "GRE",
+        CoreType.ssh: "SSH",
+        CoreType.mtproto: "MTPROTO",
     }
     name = names.get(core_type)
     if name is None:
@@ -88,8 +96,8 @@ def _backend_type_for_core(core_type: CoreType):
     backend_type = getattr(service.BackendType, name, None)
     if backend_type is None:
         raise RuntimeError(
-            f"Installed node bridge does not support the {name} backend; "
-            "install a bridge release with IKEv2/L2TP support"
+            f"Installed node bridge does not support the {name} backend yet; "
+            "panel config is stored — upgrade the node bridge to connect this core"
         )
     return backend_type
 

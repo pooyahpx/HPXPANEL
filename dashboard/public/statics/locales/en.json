@@ -2929,9 +2929,17 @@
   "coreTypes": {
     "xray": "Xray",
     "wg": "WireGuard",
+    "wg_c": "WireGuard (Kernel)",
+    "amneziawg": "AmneziaWG",
     "ikev2": "IKEv2/IPsec",
     "l2tp": "L2TP/IPsec",
-    "openvpn": "OpenVPN"
+    "openvpn": "OpenVPN",
+    "pptp": "PPTP",
+    "openconnect": "OpenConnect",
+    "sstp": "SSTP",
+    "ssh": "SSH",
+    "gre": "GRE",
+    "mtproto": "MTProto"
   },
   "coreConfigModal": {
     "addConfig": "Create Core Configuration",
@@ -3152,6 +3160,34 @@
         "ca_cert": "-----BEGIN CERTIFICATE-----",
         "server_cert": "-----BEGIN CERTIFICATE-----",
         "server_key": "-----BEGIN PRIVATE KEY-----"
+      }
+    },
+    "credentialVpn": {
+      "nodePending": "Panel config is ready. Connecting a node for this backend requires a node bridge that supports it.",
+      "ipsecHint": "Optional IPsec encapsulation for GRE peers.",
+      "description": {
+        "generic": "Configure this tunnel backend for the panel.",
+        "pptp": "PPTP server settings (legacy clients).",
+        "openconnect": "OpenConnect / AnyConnect-compatible server settings.",
+        "sstp": "SSTP server settings over TLS.",
+        "ssh": "SSH gateway for dynamic SOCKS-style access.",
+        "gre": "GRE site-to-site tunnel settings.",
+        "mtproto": "MTProto proxy for Telegram clients."
+      },
+      "fields": {
+        "inbound_tag": "Inbound tag",
+        "server_addr": "Server address",
+        "port": "Port",
+        "pool": "Client address pool",
+        "dns": "DNS servers",
+        "protocol": "Protocol mode",
+        "banner": "Banner",
+        "peer_addr": "Peer address",
+        "local_addr": "Local address",
+        "fou_port": "FOU port",
+        "ipsec": "IPsec encapsulation",
+        "secret": "Secret",
+        "mode": "Mode"
       }
     },
     "openvpn": {

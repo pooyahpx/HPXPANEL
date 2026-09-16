@@ -10,9 +10,17 @@ from nats.js.kv import KeyValue
 
 from app import on_shutdown, on_startup
 from app.core.abstract_core import AbstractCore
+from app.core.amneziawg import AmneziaWGConfig
+from app.core.gre import GREConfig
 from app.core.ikev2 import IKEv2Config
 from app.core.l2tp import L2TPConfig
+from app.core.mtproto import MtprotoConfig
+from app.core.openconnect import OpenConnectConfig
 from app.core.openvpn import OpenVPNConfig
+from app.core.pptp import PPTPConfig
+from app.core.ssh import SSHConfig
+from app.core.sstp import SSTPConfig
+from app.core.wg_c import WireGuardCConfig
 from app.core.wireguard import WireGuardConfig
 from app.core.xray import XRayConfig
 from app.db import GetDB
@@ -36,6 +44,14 @@ class CoreManager:
         CoreType.ikev2: IKEv2Config,
         CoreType.l2tp: L2TPConfig,
         CoreType.openvpn: OpenVPNConfig,
+        CoreType.pptp: PPTPConfig,
+        CoreType.openconnect: OpenConnectConfig,
+        CoreType.sstp: SSTPConfig,
+        CoreType.wg_c: WireGuardCConfig,
+        CoreType.amneziawg: AmneziaWGConfig,
+        CoreType.gre: GREConfig,
+        CoreType.ssh: SSHConfig,
+        CoreType.mtproto: MtprotoConfig,
     }
 
     def __init__(self):

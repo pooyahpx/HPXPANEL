@@ -17,8 +17,15 @@ import { XrayCoreEditor } from '@/features/core-editor/components/xray/xray-core
 import { profileToPersistedConfig } from '@/features/core-editor/kit/xray-adapter'
 import { getWireGuardPersistConfig } from '@/features/core-editor/kit/wireguard-adapter'
 import { OpenVPNCoreEditor } from '@/features/core-editor/components/openvpn/openvpn-core-editor'
+import { CredentialVpnCoreEditor } from '@/features/core-editor/components/credential-vpn/credential-vpn-core-editor'
 import { validateOpenVPNConfig, validateOpenVPNConfigWarnings } from '@/features/core-editor/kit/openvpn-config'
+import { validateIpsecConfig } from '@/features/core-editor/kit/ipsec-config'
 import type { DashboardCoreKind } from '@/features/core-editor/kit/core-kind'
+import { isCredentialVpnKind, isWgFamilyKind } from '@/features/core-editor/kit/core-kind'
+import {
+  credentialVpnConfigToPersist,
+  validateCredentialVpnConfig,
+} from '@/features/core-editor/kit/credential-vpn-config'
 import { selectCoreEditorHasActualChanges } from '@/features/core-editor/kit/core-editor-change-state'
 import { useCoreEditorStore } from '@/features/core-editor/state/core-editor-store'
 import type { IpsecCoreSection, WgCoreSection, XrayCoreSection } from '@/features/core-editor/state/core-editor-store'
@@ -35,7 +42,7 @@ import useDirDetection from '@/hooks/use-dir-detection'
 type LoadingCoreKind = DashboardCoreKind
 
 function loadingSectionPageHeaderProps(coreKind?: LoadingCoreKind): { title: string; description?: string } {
-  if (coreKind === 'wg') {
+  if (isWgFamilyKind(coreKind)) {
     return {
       title: 'coreEditor.section.interface',
       description: 'coreEditor.sectionDesc.wgInterface',
@@ -47,7 +54,7 @@ function loadingSectionPageHeaderProps(coreKind?: LoadingCoreKind): { title: str
       description: 'coreEditor.sectionDesc.inbounds',
     }
   }
-  if (coreKind === 'ikev2' || coreKind === 'l2tp' || coreKind === 'openvpn') {
+  if (coreKind === 'ikev2' || coreKind === 'l2tp' || coreKind === 'openvpn' || isCredentialVpnKind(coreKind)) {
     return {
       title: 'coreEditor.section.configuration',
       description: `coreEditor.sectionDesc.${coreKind}`,
@@ -201,6 +208,7 @@ export default function CoreEditorPage() {
   const wgDraft = useCoreEditorStore(s => s.wgDraft)
   const ipsecDraft = useCoreEditorStore(s => s.ipsecDraft)
   const openvpnDraft = useCoreEditorStore(s => s.openvpnDraft)
+  const credentialVpnDraft = useCoreEditorStore(s => s.credentialVpnDraft)
   const xrayImportWarnings = useCoreEditorStore(s => s.xrayImportWarnings)
   const activeSection = useCoreEditorStore(s => s.activeSection)
 
@@ -228,8 +236,22 @@ export default function CoreEditorPage() {
   useEffect(() => {
     if (isNew) {
       const requestedKind = searchParams.get('kind')
-      const k: DashboardCoreKind =
-        requestedKind === 'wg' || requestedKind === 'ikev2' || requestedKind === 'l2tp' || requestedKind === 'openvpn' ? requestedKind : 'xray'
+      const allowed = new Set([
+        'xray',
+        'wg',
+        'wg_c',
+        'amneziawg',
+        'ikev2',
+        'l2tp',
+        'openvpn',
+        'pptp',
+        'openconnect',
+        'sstp',
+        'ssh',
+        'gre',
+        'mtproto',
+      ])
+      const k: DashboardCoreKind = requestedKind && allowed.has(requestedKind) ? (requestedKind as DashboardCoreKind) : 'xray'
       const currentName = useCoreEditorStore.getState().coreName
       initNew(k, currentName)
     }
@@ -257,8 +279,13 @@ export default function CoreEditorPage() {
   }, [isNew, kind, validId])
 
   const mapNativeConfigIssues = useCallback(
-    (source: 'ipsec' | 'openvpn', issues: Array<{ path: string; messageKey: string }>): ValidationListItem[] => {
-      const prefix = source === 'openvpn' ? 'coreEditor.openvpn.fields' : 'coreEditor.ipsec.fields'
+    (source: 'ipsec' | 'openvpn' | 'credentialVpn', issues: Array<{ path: string; messageKey: string }>): ValidationListItem[] => {
+      const prefix =
+        source === 'openvpn'
+          ? 'coreEditor.openvpn.fields'
+          : source === 'credentialVpn'
+            ? 'coreEditor.credentialVpn.fields'
+            : 'coreEditor.ipsec.fields'
       return issues.map(issue => ({
         source,
         issue: {
@@ -275,7 +302,7 @@ export default function CoreEditorPage() {
 
   const preSaveIssues = useMemo((): ValidationListItem[] => {
     if (!hydrated) return []
-    if (kind === 'wg' && wgDraft) {
+    if (isWgFamilyKind(kind) && wgDraft) {
       const r = getWireGuardPersistConfig(wgDraft)
       if (!r.ok && 'draftIssues' in r) {
         return (r.draftIssues ?? []).map(issue => ({ source: 'wireguard' as const, issue }))
@@ -294,8 +321,11 @@ export default function CoreEditorPage() {
         ...mapNativeConfigIssues('openvpn', validateOpenVPNConfigWarnings(openvpnDraft)),
       ]
     }
+    if (isCredentialVpnKind(kind) && credentialVpnDraft) {
+      return mapNativeConfigIssues('credentialVpn', validateCredentialVpnConfig(kind, credentialVpnDraft))
+    }
     return []
-  }, [hydrated, kind, wgDraft, xrayProfile, ipsecDraft, openvpnDraft, xrayPersistValidationItems, mapNativeConfigIssues])
+  }, [hydrated, kind, wgDraft, xrayProfile, ipsecDraft, openvpnDraft, credentialVpnDraft, xrayPersistValidationItems, mapNativeConfigIssues])
 
   const handleBack = useCallback(() => {
     if (hasActualChanges) {
@@ -327,7 +357,7 @@ export default function CoreEditorPage() {
     }
     setSaving(true)
     try {
-      if (kind === 'wg') {
+      if (isWgFamilyKind(kind)) {
         if (!wgDraft) return
         const result = getWireGuardPersistConfig(wgDraft)
         if (!result.ok) {
@@ -341,7 +371,7 @@ export default function CoreEditorPage() {
           const res = await createMutation.mutateAsync({
             data: {
               name,
-              type: 'wg',
+              type: kind as never,
               config: cfg,
               exclude_inbound_tags: [],
               fallbacks_inbound_tags: [],
@@ -357,7 +387,7 @@ export default function CoreEditorPage() {
             coreId: numericId,
             data: {
               name,
-              type: 'wg',
+              type: kind as never,
               config: cfg,
               exclude_inbound_tags: [],
               fallbacks_inbound_tags: [],
@@ -408,6 +438,36 @@ export default function CoreEditorPage() {
           name,
           type: 'openvpn' as never,
           config: openvpnDraft,
+          exclude_inbound_tags: [],
+          fallbacks_inbound_tags: [],
+        }
+        if (isNew) {
+          const res = await createMutation.mutateAsync({ data })
+          toast.success(t('coreConfigModal.createSuccess', { name }))
+          markClean()
+          queryClient.invalidateQueries({ queryKey: ['/api/cores'] })
+          queryClient.invalidateQueries({ queryKey: ['/api/cores/simple'] })
+          navigate(`/nodes/cores/${res.id}`, { replace: true })
+        } else if (validId) {
+          await modifyMutation.mutateAsync({
+            coreId: numericId,
+            data,
+            params: { restart_nodes: restartNodes },
+          })
+          toast.success(t('coreConfigModal.editSuccess', { name }))
+          markClean()
+          queryClient.invalidateQueries({ queryKey: ['/api/cores'] })
+          queryClient.invalidateQueries({ queryKey: ['/api/cores/simple'] })
+          queryClient.invalidateQueries({ queryKey: getGetCoreConfigQueryKey(numericId) })
+        }
+        return
+      }
+
+      if (isCredentialVpnKind(kind) && credentialVpnDraft) {
+        const data = {
+          name,
+          type: kind as never,
+          config: credentialVpnConfigToPersist(kind, credentialVpnDraft),
           exclude_inbound_tags: [],
           fallbacks_inbound_tags: [],
         }
@@ -579,7 +639,7 @@ export default function CoreEditorPage() {
   )
 
   const sectionHeaderConfig = useMemo(() => {
-    if (kind === 'wg') {
+    if (isWgFamilyKind(kind)) {
       const section = activeSection as WgCoreSection
       return {
         interface: {
@@ -592,7 +652,7 @@ export default function CoreEditorPage() {
         },
       }[section]
     }
-    if (kind === 'ikev2' || kind === 'l2tp' || kind === 'openvpn') {
+    if (kind === 'ikev2' || kind === 'l2tp' || kind === 'openvpn' || isCredentialVpnKind(kind)) {
       const section = activeSection as IpsecCoreSection
       return {
         configuration: {
@@ -699,12 +759,14 @@ export default function CoreEditorPage() {
         main={
           <div className="space-y-6">
             <ValidationSummary items={configValidationAttempted || !isNew ? preSaveIssues : []} />
-            {kind === 'wg' ? (
+            {isWgFamilyKind(kind) ? (
               <WireGuardCoreEditor />
             ) : kind === 'ikev2' || kind === 'l2tp' ? (
               <IpsecCoreEditor />
             ) : kind === 'openvpn' ? (
               <OpenVPNCoreEditor />
+            ) : isCredentialVpnKind(kind) ? (
+              <CredentialVpnCoreEditor />
             ) : (
               <XrayCoreEditor headerAddPulse={headerAddPulse} headerAddEpoch={headerAddEpoch} />
             )}

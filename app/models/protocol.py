@@ -11,6 +11,17 @@ class ProxyProtocol(IntEnum):
     ikev2 = 7
     l2tp = 8
     openvpn = 9
+    anytls = 10
+    tuic = 11
+    naive = 12
+    pptp = 13
+    openconnect = 14
+    sstp = 15
+    wg_c = 16
+    amneziawg = 17
+    gre = 18
+    ssh = 19
+    mtproto = 20
 
     @classmethod
     def from_value(cls, value: str) -> ProxyProtocol | None:

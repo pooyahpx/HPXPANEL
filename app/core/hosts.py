@@ -75,7 +75,7 @@ async def _prepare_subscription_inbound_data(
             fms = final_mask_settings.model_dump(by_alias=True)
         finalmask_link = json.dumps(fms, separators=(",", ":"))
 
-    if protocol == "wireguard":
+    if protocol in ("wireguard", "wg_c", "amneziawg"):
         wg_over: WireGuardHostOverrides | None = host.wireguard_overrides
         if wg_over is None:
             wg_over = WireGuardHostOverrides()
@@ -121,6 +121,37 @@ async def _prepare_subscription_inbound_data(
             wireguard_mtu=mtu,
             wireguard_reserved=reserved,
             wireguard_dns=dns,
+            fragment_settings=host.fragment_settings.model_dump() if host.fragment_settings else None,
+            noise_settings=host.noise_settings.model_dump() if host.noise_settings else None,
+            finalmask=final_mask_settings,
+            finalmask_link=finalmask_link,
+            priority=host.priority,
+            status=list(host.status) if host.status else None,
+            subscription_templates=host.subscription_templates.model_dump(exclude_none=True)
+            if host.subscription_templates
+            else None,
+        )
+
+    if protocol in (
+        "pptp",
+        "openconnect",
+        "sstp",
+        "ssh",
+        "ikev2",
+        "l2tp",
+        "gre",
+        "mtproto",
+    ):
+        return SubscriptionInboundData(
+            remark=host.remark,
+            inbound_tag=host.inbound_tag,
+            protocol=protocol,
+            address=list(host.address) if host.address else ["{SERVER_IP}"],
+            port=[host.port] if host.port else [inbound_config.get("port") or 0],
+            network=inbound_config.get("network", network),
+            tls_config=TLSConfig(),
+            transport_config=TCPTransportConfig(path="", host=[]),
+            mux_settings=None,
             fragment_settings=host.fragment_settings.model_dump() if host.fragment_settings else None,
             noise_settings=host.noise_settings.model_dump() if host.noise_settings else None,
             finalmask=final_mask_settings,

@@ -421,7 +421,16 @@ class XRayConfig(dict):
 
     def _read_inbound(self, inbound: dict):
         """Read an inbound and its settings."""
-        if inbound["protocol"] not in ("vmess", "vless", "trojan", "shadowsocks", "hysteria"):
+        if inbound["protocol"] not in (
+            "vmess",
+            "vless",
+            "trojan",
+            "shadowsocks",
+            "hysteria",
+            "anytls",
+            "tuic",
+            "naive",
+        ):
             return
 
         if inbound["tag"] in self.exclude_inbound_tags:
@@ -455,6 +464,8 @@ class XRayConfig(dict):
 
             if inbound["protocol"] == "hysteria" and security != "tls":
                 raise ValueError(f"{inbound['tag']} hysteria inbound requires TLS")
+            if inbound["protocol"] in ("anytls", "tuic", "naive") and security not in ("tls", "reality"):
+                raise ValueError(f"{inbound['tag']} {inbound['protocol']} inbound requires TLS or REALITY")
 
             if settings["is_fallback"] is True:
                 for fallback in settings["fallbacks"]:

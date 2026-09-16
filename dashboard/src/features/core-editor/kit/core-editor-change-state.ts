@@ -1,4 +1,5 @@
 import type { CoreEditorStoreState } from '@/features/core-editor/state/core-editor-store'
+import { credentialVpnConfigToPersist, isCredentialVpnKind, isWgFamilyKind } from '@/features/core-editor/kit/credential-vpn-config'
 import { profileToPersistedConfig } from '@/features/core-editor/kit/xray-adapter'
 import { draftToPersistedConfig } from '@/features/core-editor/kit/wireguard-adapter'
 
@@ -31,7 +32,7 @@ function currentConfigString(s: CoreEditorStoreState): string {
       return `__invalid_monaco_json__:${s.monacoJson}`
     }
   }
-  if (s.kind === 'wg' && s.wgDraft) {
+  if (isWgFamilyKind(s.kind) && s.wgDraft) {
     const draft = s.wgDraft
     return safeConfigString('wg_current_config', () => draftToPersistedConfig(draft))
   }
@@ -45,11 +46,14 @@ function currentConfigString(s: CoreEditorStoreState): string {
   if (s.kind === 'openvpn' && s.openvpnDraft) {
     return stableStringify(s.openvpnDraft)
   }
+  if (isCredentialVpnKind(s.kind) && s.credentialVpnDraft) {
+    return stableStringify(credentialVpnConfigToPersist(s.kind, s.credentialVpnDraft))
+  }
   return ''
 }
 
 function baselineConfigString(s: CoreEditorStoreState): string {
-  if (s.kind === 'wg' && s.wgBaseline) {
+  if (isWgFamilyKind(s.kind) && s.wgBaseline) {
     const draft = s.wgBaseline
     return safeConfigString('wg_baseline_config', () => draftToPersistedConfig(draft))
   }
@@ -62,6 +66,9 @@ function baselineConfigString(s: CoreEditorStoreState): string {
   }
   if (s.kind === 'openvpn' && s.openvpnBaseline) {
     return stableStringify(s.openvpnBaseline)
+  }
+  if (isCredentialVpnKind(s.kind) && s.credentialVpnBaseline) {
+    return stableStringify(credentialVpnConfigToPersist(s.kind, s.credentialVpnBaseline))
   }
   return ''
 }

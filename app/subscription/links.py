@@ -55,6 +55,18 @@ class StandardLinks(BaseSubscription):
             "shadowsocks": self._build_shadowsocks,
             "hysteria": self._build_hysteria,
             "wireguard": self._build_wireguard,
+            "wg_c": self._build_wireguard,
+            "amneziawg": self._build_amneziawg,
+            "anytls": self._build_anytls,
+            "tuic": self._build_tuic,
+            "naive": self._build_naive,
+            "pptp": self._build_credential_vpn,
+            "openconnect": self._build_credential_vpn,
+            "sstp": self._build_credential_vpn,
+            "ssh": self._build_credential_vpn,
+            "ikev2": self._build_credential_vpn,
+            "l2tp": self._build_credential_vpn,
+            "mtproto": self._build_mtproto,
         }
 
     def add_link(self, link):
@@ -339,6 +351,79 @@ class StandardLinks(BaseSubscription):
         if not components:
             return ""
         return components["uri"]
+
+    def _build_amneziawg(self, remark: str, address: str, inbound: SubscriptionInboundData, settings: dict) -> str:
+        components = self._build_wireguard_components(remark, address, inbound, settings)
+        if not components:
+            return ""
+        uri = components["uri"]
+        # Preserve Amnezia obfuscation params as query extras for clients that understand them.
+        extras = {
+            "jc": settings.get("jc"),
+            "jmin": settings.get("jmin"),
+            "jmax": settings.get("jmax"),
+            "s1": settings.get("s1"),
+            "s2": settings.get("s2"),
+            "h1": settings.get("h1"),
+            "h2": settings.get("h2"),
+            "h3": settings.get("h3"),
+            "h4": settings.get("h4"),
+        }
+        extras = {k: v for k, v in extras.items() if v is not None}
+        if not extras:
+            return uri
+        sep = "&" if "?" in uri.split("#", 1)[0] else "?"
+        base, _, fragment = uri.partition("#")
+        return f"{base}{sep}{urlparse.urlencode(extras)}#{fragment}"
+
+    def _build_anytls(self, remark: str, address: str, inbound: SubscriptionInboundData, settings: dict) -> str:
+        payload = {
+            "security": inbound.tls_config.tls if inbound.tls_config.tls else "tls",
+            "type": inbound.network or "tcp",
+        }
+        if inbound.tls_config.tls in ("tls", "reality"):
+            self._apply_tls_settings(payload, inbound.tls_config, inbound.fragment_settings)
+        payload = self._normalize_and_remove_none_values(payload)
+        password = urlparse.quote(settings["password"], safe="")
+        return (
+            f"anytls://{password}@{address}:{inbound.port}"
+            f"?{urlparse.urlencode(payload, quote_via=urlparse.quote)}#{urlparse.quote(remark)}"
+        )
+
+    def _build_tuic(self, remark: str, address: str, inbound: SubscriptionInboundData, settings: dict) -> str:
+        payload = {
+            "security": inbound.tls_config.tls if inbound.tls_config.tls else "tls",
+            "alpn": "h3",
+            "congestion_control": "bbr",
+            "udp_relay_mode": "native",
+        }
+        if inbound.tls_config.tls in ("tls", "reality"):
+            self._apply_tls_settings(payload, inbound.tls_config, inbound.fragment_settings)
+        payload = self._normalize_and_remove_none_values(payload)
+        uuid = str(settings.get("id") or "")
+        password = urlparse.quote(settings.get("password") or "", safe="")
+        return (
+            f"tuic://{uuid}:{password}@{address}:{inbound.port}"
+            f"?{urlparse.urlencode(payload, quote_via=urlparse.quote)}#{urlparse.quote(remark)}"
+        )
+
+    def _build_naive(self, remark: str, address: str, inbound: SubscriptionInboundData, settings: dict) -> str:
+        user = urlparse.quote(settings.get("username") or "", safe="")
+        password = urlparse.quote(settings.get("password") or "", safe="")
+        scheme = "https" if (inbound.tls_config.tls or "tls") != "none" else "http"
+        return f"naive+{scheme}://{user}:{password}@{address}:{inbound.port}#{urlparse.quote(remark)}"
+
+    def _build_credential_vpn(self, remark: str, address: str, inbound: SubscriptionInboundData, settings: dict) -> str:
+        user = urlparse.quote(settings.get("username") or "", safe="")
+        password = urlparse.quote(settings.get("password") or "", safe="")
+        scheme = inbound.protocol or "vpn"
+        port = inbound.port or 0
+        return f"{scheme}://{user}:{password}@{address}:{port}#{urlparse.quote(remark)}"
+
+    def _build_mtproto(self, remark: str, address: str, inbound: SubscriptionInboundData, settings: dict) -> str:
+        secret = settings.get("secret") or ""
+        port = inbound.port or 443
+        return f"tg://proxy?server={address}&port={port}&secret={urlparse.quote(secret)}#{urlparse.quote(remark)}"
 
     # ========== Helper Methods ==========
 

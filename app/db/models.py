@@ -929,6 +929,13 @@ class CoreType(str, Enum):
     ikev2 = "ikev2"
     l2tp = "l2tp"
     openvpn = "openvpn"
+    pptp = "pptp"
+    openconnect = "openconnect"
+    sstp = "sstp"
+    wg_c = "wg_c"
+    amneziawg = "amneziawg"
+    gre = "gre"
+    ssh = "ssh"
     mtproto = "mtproto"
     singbox = "singbox"
 

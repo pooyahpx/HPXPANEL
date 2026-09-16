@@ -210,7 +210,7 @@ export default function Cores({ cores, onDuplicateCore, onDeleteCore, canCreate 
       { label: t('core.totalCores', { defaultValue: 'Total cores' }), value: coresList.length },
       { label: 'Xray', value: typeCounts.xray || 0 },
       { label: 'WireGuard', value: typeCounts.wg || 0 },
-      { label: t('core.otherTypes', { defaultValue: 'Other' }), value: (typeCounts.ikev2 || 0) + (typeCounts.l2tp || 0) + (typeCounts.openvpn || 0) },
+      { label: t('core.otherTypes', { defaultValue: 'Other' }), value: (typeCounts.ikev2 || 0) + (typeCounts.l2tp || 0) + (typeCounts.openvpn || 0) + (typeCounts.pptp || 0) + (typeCounts.openconnect || 0) + (typeCounts.sstp || 0) + (typeCounts.ssh || 0) + (typeCounts.gre || 0) + (typeCounts.mtproto || 0) + (typeCounts.wg_c || 0) + (typeCounts.amneziawg || 0) },
     ]
   }, [coresList, t])
 

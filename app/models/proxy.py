@@ -50,6 +50,37 @@ class OpenVPNSettings(BaseModel):
     client_key: str = ""
 
 
+class CredentialVpnSettings(BaseModel):
+    """Shared username/password credentials for classic VPN and SSH backends."""
+
+    username: str = Field(default_factory=random_password, min_length=1)
+    password: str = Field(default_factory=random_password, min_length=1)
+
+
+class AnyTLSSettings(BaseModel):
+    password: str = Field(default_factory=random_password, min_length=1)
+
+
+class TUICSettings(BaseModel):
+    id: UUID = Field(default_factory=uuid4)
+    password: str = Field(default_factory=random_password, min_length=1)
+
+
+class NaiveSettings(BaseModel):
+    username: str = Field(default_factory=random_password, min_length=1)
+    password: str = Field(default_factory=random_password, min_length=1)
+
+
+class MtprotoSettings(BaseModel):
+    secret: str = Field(default_factory=random_password, min_length=16)
+
+
+class GreSettings(BaseModel):
+    """Per-user GRE peer identity (endpoint is usually core-level)."""
+
+    peer_ip: str = ""
+
+
 class WireGuardPeerIPs(BaseModel):
     peer_ips: list[str] = Field(default_factory=list)
 
@@ -110,6 +141,48 @@ class WireGuardSettings(BaseModel):
         return self
 
 
+class AmneziaWGSettings(BaseModel):
+    private_key: str | None = None
+    public_key: str | None = None
+    peer_ips: list[str] = Field(default_factory=list)
+    jc: int = 4
+    jmin: int = 40
+    jmax: int = 70
+    s1: int = 0
+    s2: int = 0
+    h1: int = 1
+    h2: int = 2
+    h3: int = 3
+    h4: int = 4
+
+    @field_validator("private_key", mode="before")
+    @classmethod
+    def validate_private_key(cls, value):
+        if value in (None, ""):
+            return None
+        return validate_wireguard_key(value, "private_key")
+
+    @field_validator("public_key", mode="before")
+    @classmethod
+    def validate_public_key(cls, value):
+        if value in (None, ""):
+            return None
+        if isinstance(value, str):
+            return value.strip()
+        return value
+
+    @field_validator("peer_ips", mode="before")
+    @classmethod
+    def validate_peer_ips(cls, value):
+        return WireGuardPeerIPs.model_validate({"peer_ips": value}).peer_ips
+
+    @model_validator(mode="after")
+    def handle_keys(self):
+        if self.private_key and not self.public_key:
+            self.public_key = get_wireguard_public_key(self.private_key)
+        return self
+
+
 class ProxyTable(BaseModel):
     vmess: VMessSettings = Field(default_factory=VMessSettings)
     vless: VlessSettings = Field(default_factory=VlessSettings)
@@ -119,6 +192,17 @@ class ProxyTable(BaseModel):
     hysteria: HysteriaSettings = Field(default_factory=HysteriaSettings)
     ikev2: IKEv2Settings = Field(default_factory=IKEv2Settings)
     openvpn: OpenVPNSettings = Field(default_factory=OpenVPNSettings)
+    anytls: AnyTLSSettings = Field(default_factory=AnyTLSSettings)
+    tuic: TUICSettings = Field(default_factory=TUICSettings)
+    naive: NaiveSettings = Field(default_factory=NaiveSettings)
+    pptp: CredentialVpnSettings = Field(default_factory=CredentialVpnSettings)
+    openconnect: CredentialVpnSettings = Field(default_factory=CredentialVpnSettings)
+    sstp: CredentialVpnSettings = Field(default_factory=CredentialVpnSettings)
+    ssh: CredentialVpnSettings = Field(default_factory=CredentialVpnSettings)
+    wg_c: WireGuardSettings = Field(default_factory=WireGuardSettings)
+    amneziawg: AmneziaWGSettings = Field(default_factory=AmneziaWGSettings)
+    gre: GreSettings = Field(default_factory=GreSettings)
+    mtproto: MtprotoSettings = Field(default_factory=MtprotoSettings)
 
     @property
     def l2tp(self) -> IKEv2Settings:

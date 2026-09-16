@@ -300,9 +300,13 @@ async def process_host(
         settings["_user_id"] = user_id
 
     # Each WG interface only gets the user's peer IP from its own subnet.
-    if inbound.protocol == "wireguard":
+    if inbound.protocol in ("wireguard", "wg_c", "amneziawg"):
         settings["peer_ips"] = pick_peer_ip_for_inbound(inbound.wireguard_local_address, settings.get("peer_ips") or [])
 
+    # Alias l2tp credentials onto the same settings bag used by ikev2 when needed.
+    if inbound.protocol == "l2tp" and not settings.get("username"):
+        ikev2 = proxies.get("ikev2") or {}
+        settings = {**ikev2, **settings}
     # Update format variables
     format_variables.update({"PROTOCOL": inbound.protocol})
     format_variables.update({"TRANSPORT": inbound.network})

@@ -3,6 +3,14 @@ import type { WireGuardCoreDraft } from '@pasarguard/wireguard-config-kit'
 import { create } from 'zustand'
 import type { CoreResponse } from '@/service/api'
 import { apiCoreTypeToKind, type DashboardCoreKind } from '../kit/core-kind'
+import {
+  createDefaultCredentialVpnConfig,
+  credentialVpnConfigToPersist,
+  isCredentialVpnKind,
+  isWgFamilyKind,
+  normalizeCredentialVpnConfig,
+  type CredentialVpnCoreConfig,
+} from '../kit/credential-vpn-config'
 import { createDefaultIpsecConfig, normalizeIpsecConfig, type IpsecCoreConfig } from '../kit/ipsec-config'
 import { createDefaultOpenVPNConfig, normalizeOpenVPNConfig, type OpenVPNCoreConfig } from '../kit/openvpn-config'
 import { createNewXrayProfile, importRawToProfile, profileToPersistedConfig } from '../kit/xray-adapter'
@@ -30,6 +38,10 @@ function cloneOpenvpn(d: OpenVPNCoreConfig): OpenVPNCoreConfig {
   return JSON.parse(JSON.stringify(d)) as OpenVPNCoreConfig
 }
 
+function cloneCredentialVpn(d: CredentialVpnCoreConfig): CredentialVpnCoreConfig {
+  return JSON.parse(JSON.stringify(d)) as CredentialVpnCoreConfig
+}
+
 export interface PersistedSnapshot {
   kind: DashboardCoreKind
   coreName: string
@@ -39,6 +51,7 @@ export interface PersistedSnapshot {
   wgDraft: WireGuardCoreDraft | null
   ipsecDraft: IpsecCoreConfig | null
   openvpnDraft: OpenVPNCoreConfig | null
+  credentialVpnDraft: CredentialVpnCoreConfig | null
   activeSection: XrayCoreSection | WgCoreSection | IpsecCoreSection | OpenvpnCoreSection
   monacoJson: string
   xrayImportWarnings: string[]
@@ -56,6 +69,7 @@ function captureSnapshot(s: CoreEditorStoreState): PersistedSnapshot {
     wgDraft: s.wgDraft ? cloneWg(s.wgDraft) : null,
     ipsecDraft: s.ipsecDraft ? cloneIpsec(s.ipsecDraft) : null,
     openvpnDraft: s.openvpnDraft ? cloneOpenvpn(s.openvpnDraft) : null,
+    credentialVpnDraft: s.credentialVpnDraft ? cloneCredentialVpn(s.credentialVpnDraft) : null,
     activeSection: s.activeSection,
     monacoJson: s.monacoJson,
     xrayImportWarnings: [...s.xrayImportWarnings],
@@ -66,14 +80,14 @@ function captureSnapshot(s: CoreEditorStoreState): PersistedSnapshot {
 /** Legacy snapshots used `overview`; map to current sections. */
 function normalizePersistedActiveSection(snapshot: PersistedSnapshot): XrayCoreSection | WgCoreSection | IpsecCoreSection | OpenvpnCoreSection {
   const s = snapshot.activeSection as string
-  if (snapshot.kind === 'wg' && s === 'overview') return 'interface'
+  if (isWgFamilyKind(snapshot.kind) && s === 'overview') return 'interface'
   if (snapshot.kind === 'xray' && s === 'overview') return 'bindings'
-  if ((snapshot.kind === 'ikev2' || snapshot.kind === 'l2tp' || snapshot.kind === 'openvpn') && s === 'overview') return 'configuration'
+  if ((snapshot.kind === 'ikev2' || snapshot.kind === 'l2tp' || snapshot.kind === 'openvpn' || isCredentialVpnKind(snapshot.kind)) && s === 'overview') return 'configuration'
   return snapshot.activeSection
 }
 
 function applyPersistedSnapshot(snapshot: PersistedSnapshot): Partial<CoreEditorStoreState> {
-  if (snapshot.kind === 'wg' && snapshot.wgDraft) {
+  if (isWgFamilyKind(snapshot.kind) && snapshot.wgDraft) {
     const d = cloneWg(snapshot.wgDraft)
     return {
       kind: snapshot.kind,
@@ -88,6 +102,8 @@ function applyPersistedSnapshot(snapshot: PersistedSnapshot): Partial<CoreEditor
       ipsecBaseline: null,
       openvpnDraft: null,
       openvpnBaseline: null,
+      credentialVpnDraft: null,
+      credentialVpnBaseline: null,
       activeSection: normalizePersistedActiveSection(snapshot),
       monacoJson: snapshot.monacoJson,
       monacoDirty: false,
@@ -157,6 +173,33 @@ function applyPersistedSnapshot(snapshot: PersistedSnapshot): Partial<CoreEditor
       ipsecBaseline: null,
       openvpnDraft: d,
       openvpnBaseline: cloneOpenvpn(d),
+      credentialVpnDraft: null,
+      credentialVpnBaseline: null,
+      activeSection: normalizePersistedActiveSection(snapshot),
+      monacoJson: snapshot.monacoJson,
+      monacoDirty: false,
+      xrayImportWarnings: [],
+      serverHydratedConfigJson: snapshot.serverHydratedConfigJson ?? null,
+      dirty: false,
+    }
+  }
+  if (isCredentialVpnKind(snapshot.kind) && snapshot.credentialVpnDraft) {
+    const d = cloneCredentialVpn(snapshot.credentialVpnDraft)
+    return {
+      kind: snapshot.kind,
+      coreName: snapshot.coreName,
+      fallbacksInboundTags: [],
+      excludeInboundTags: [],
+      xrayProfile: null,
+      xrayBaseline: null,
+      wgDraft: null,
+      wgBaseline: null,
+      ipsecDraft: null,
+      ipsecBaseline: null,
+      openvpnDraft: null,
+      openvpnBaseline: null,
+      credentialVpnDraft: d,
+      credentialVpnBaseline: cloneCredentialVpn(d),
       activeSection: normalizePersistedActiveSection(snapshot),
       monacoJson: snapshot.monacoJson,
       monacoDirty: false,
@@ -185,6 +228,8 @@ export interface CoreEditorStoreState {
   ipsecBaseline: IpsecCoreConfig | null
   openvpnDraft: OpenVPNCoreConfig | null
   openvpnBaseline: OpenVPNCoreConfig | null
+  credentialVpnDraft: CredentialVpnCoreConfig | null
+  credentialVpnBaseline: CredentialVpnCoreConfig | null
   activeSection: XrayCoreSection | WgCoreSection | IpsecCoreSection | OpenvpnCoreSection
   dirty: boolean
   monacoJson: string
@@ -210,6 +255,8 @@ export interface CoreEditorStoreState {
   updateIpsecDraft: (updater: (d: IpsecCoreConfig) => IpsecCoreConfig) => void
   setOpenvpnDraft: (d: OpenVPNCoreConfig) => void
   updateOpenvpnDraft: (updater: (d: OpenVPNCoreConfig) => OpenVPNCoreConfig) => void
+  setCredentialVpnDraft: (d: CredentialVpnCoreConfig) => void
+  updateCredentialVpnDraft: (updater: (d: CredentialVpnCoreConfig) => CredentialVpnCoreConfig) => void
   markClean: () => void
   discardDraft: () => void
   switchKind: (nextKind: DashboardCoreKind) => void
@@ -219,7 +266,11 @@ export interface CoreEditorStoreState {
 }
 
 const defaultSection = (kind: DashboardCoreKind): XrayCoreSection | WgCoreSection | IpsecCoreSection | OpenvpnCoreSection =>
-  kind === 'wg' ? 'interface' : kind === 'ikev2' || kind === 'l2tp' || kind === 'openvpn' ? 'configuration' : 'inbounds'
+  isWgFamilyKind(kind)
+    ? 'interface'
+    : kind === 'ikev2' || kind === 'l2tp' || kind === 'openvpn' || isCredentialVpnKind(kind)
+      ? 'configuration'
+      : 'inbounds'
 
 export const useCoreEditorStore = create<CoreEditorStoreState>((set, get) => ({
   hydrated: false,
@@ -238,6 +289,8 @@ export const useCoreEditorStore = create<CoreEditorStoreState>((set, get) => ({
   ipsecBaseline: null,
   openvpnDraft: null,
   openvpnBaseline: null,
+  credentialVpnDraft: null,
+  credentialVpnBaseline: null,
   activeSection: 'inbounds',
   dirty: false,
   monacoJson: '{}',
@@ -255,7 +308,7 @@ export const useCoreEditorStore = create<CoreEditorStoreState>((set, get) => ({
     const serverJson = JSON.stringify(core.config)
     const nav =
       preserveNavigation && prev && prev.coreId === core.id ? { activeSection: prev.activeSection, restartNodes: prev.restartNodes } : { activeSection: defaultSection(kind), restartNodes: true }
-    if (kind === 'wg') {
+    if (isWgFamilyKind(kind)) {
       const parsed = wireGuardConfigToDraft(core.config)
       if (!parsed.ok) {
         const fallbackDraft = createNewWireGuardDraft()
@@ -358,9 +411,42 @@ export const useCoreEditorStore = create<CoreEditorStoreState>((set, get) => ({
         ipsecBaseline: null,
         openvpnDraft: draft,
         openvpnBaseline: cloneOpenvpn(draft),
+        credentialVpnDraft: null,
+        credentialVpnBaseline: null,
         activeSection: nav.activeSection,
         dirty: false,
         monacoJson: JSON.stringify(draft, null, 2),
+        monacoDirty: false,
+        xrayImportWarnings: [],
+        serverHydratedConfigJson: serverJson,
+      })
+      set({ persistedSnapshot: captureSnapshot(get()) })
+      return
+    }
+    if (isCredentialVpnKind(kind)) {
+      const draft = normalizeCredentialVpnConfig(kind, core.config)
+      set({
+        hydrated: true,
+        isNew: false,
+        coreId: core.id,
+        coreName: core.name,
+        kind,
+        restartNodes: nav.restartNodes,
+        fallbacksInboundTags: [],
+        excludeInboundTags: [],
+        xrayProfile: null,
+        xrayBaseline: null,
+        wgDraft: null,
+        wgBaseline: null,
+        ipsecDraft: null,
+        ipsecBaseline: null,
+        openvpnDraft: null,
+        openvpnBaseline: null,
+        credentialVpnDraft: draft,
+        credentialVpnBaseline: cloneCredentialVpn(draft),
+        activeSection: nav.activeSection,
+        dirty: false,
+        monacoJson: JSON.stringify(credentialVpnConfigToPersist(kind, draft), null, 2),
         monacoDirty: false,
         xrayImportWarnings: [],
         serverHydratedConfigJson: serverJson,
@@ -398,7 +484,7 @@ export const useCoreEditorStore = create<CoreEditorStoreState>((set, get) => ({
   },
 
   initNew: (kind, name = '') => {
-    if (kind === 'wg') {
+    if (isWgFamilyKind(kind)) {
       const draft = createNewWireGuardDraft()
       set({
         hydrated: true,
@@ -473,9 +559,42 @@ export const useCoreEditorStore = create<CoreEditorStoreState>((set, get) => ({
         ipsecBaseline: null,
         openvpnDraft: draft,
         openvpnBaseline: cloneOpenvpn(draft),
+        credentialVpnDraft: null,
+        credentialVpnBaseline: null,
         activeSection: defaultSection(kind),
         dirty: false,
         monacoJson: JSON.stringify(draft, null, 2),
+        monacoDirty: false,
+        xrayImportWarnings: [],
+        serverHydratedConfigJson: null,
+      })
+      set({ persistedSnapshot: captureSnapshot(get()) })
+      return
+    }
+    if (isCredentialVpnKind(kind)) {
+      const draft = createDefaultCredentialVpnConfig(kind)
+      set({
+        hydrated: true,
+        isNew: true,
+        coreId: null,
+        coreName: name,
+        kind,
+        restartNodes: true,
+        fallbacksInboundTags: [],
+        excludeInboundTags: [],
+        xrayProfile: null,
+        xrayBaseline: null,
+        wgDraft: null,
+        wgBaseline: null,
+        ipsecDraft: null,
+        ipsecBaseline: null,
+        openvpnDraft: null,
+        openvpnBaseline: null,
+        credentialVpnDraft: draft,
+        credentialVpnBaseline: cloneCredentialVpn(draft),
+        activeSection: defaultSection(kind),
+        dirty: false,
+        monacoJson: JSON.stringify(credentialVpnConfigToPersist(kind, draft), null, 2),
         monacoDirty: false,
         xrayImportWarnings: [],
         serverHydratedConfigJson: null,
@@ -600,9 +719,22 @@ export const useCoreEditorStore = create<CoreEditorStoreState>((set, get) => ({
     get().syncMonacoFromDraft()
   },
 
+  setCredentialVpnDraft: credentialVpnDraft => {
+    set({ credentialVpnDraft, dirty: true })
+    get().syncMonacoFromDraft()
+  },
+
+  updateCredentialVpnDraft: updater => {
+    const cur = get().credentialVpnDraft
+    if (!cur) return
+    const next = updater(cloneCredentialVpn(cur))
+    set({ credentialVpnDraft: next, dirty: true })
+    get().syncMonacoFromDraft()
+  },
+
   markClean: () => {
-    const { kind, xrayProfile, wgDraft, ipsecDraft, openvpnDraft } = get()
-    if (kind === 'wg' && wgDraft) {
+    const { kind, xrayProfile, wgDraft, ipsecDraft, openvpnDraft, credentialVpnDraft } = get()
+    if (isWgFamilyKind(kind) && wgDraft) {
       set({ wgBaseline: cloneWg(wgDraft), dirty: false, monacoDirty: false })
     } else if (kind === 'xray' && xrayProfile) {
       set({ xrayBaseline: cloneProfile(xrayProfile), dirty: false, monacoDirty: false })
@@ -610,6 +742,8 @@ export const useCoreEditorStore = create<CoreEditorStoreState>((set, get) => ({
       set({ ipsecBaseline: cloneIpsec(ipsecDraft), dirty: false, monacoDirty: false })
     } else if (kind === 'openvpn' && openvpnDraft) {
       set({ openvpnBaseline: cloneOpenvpn(openvpnDraft), dirty: false, monacoDirty: false })
+    } else if (isCredentialVpnKind(kind) && get().credentialVpnDraft) {
+      set({ credentialVpnBaseline: cloneCredentialVpn(get().credentialVpnDraft!), dirty: false, monacoDirty: false })
     }
     get().syncMonacoFromDraft()
     set({ persistedSnapshot: captureSnapshot(get()) })
@@ -626,10 +760,10 @@ export const useCoreEditorStore = create<CoreEditorStoreState>((set, get) => ({
   switchKind: nextKind => {
     const cur = get().kind
     if (nextKind === cur) return
-    if (nextKind === 'wg') {
+    if (isWgFamilyKind(nextKind)) {
       const draft = createNewWireGuardDraft()
       set({
-        kind: 'wg',
+        kind: nextKind,
         fallbacksInboundTags: [],
         excludeInboundTags: [],
         xrayProfile: null,
@@ -682,9 +816,35 @@ export const useCoreEditorStore = create<CoreEditorStoreState>((set, get) => ({
         ipsecBaseline: null,
         openvpnDraft: draft,
         openvpnBaseline: cloneOpenvpn(draft),
+        credentialVpnDraft: null,
+        credentialVpnBaseline: null,
         activeSection: defaultSection(nextKind),
         dirty: true,
         monacoJson: JSON.stringify(draft, null, 2),
+        monacoDirty: false,
+        xrayImportWarnings: [],
+      })
+      return
+    }
+    if (isCredentialVpnKind(nextKind)) {
+      const draft = createDefaultCredentialVpnConfig(nextKind)
+      set({
+        kind: nextKind,
+        fallbacksInboundTags: [],
+        excludeInboundTags: [],
+        xrayProfile: null,
+        xrayBaseline: null,
+        wgDraft: null,
+        wgBaseline: null,
+        ipsecDraft: null,
+        ipsecBaseline: null,
+        openvpnDraft: null,
+        openvpnBaseline: null,
+        credentialVpnDraft: draft,
+        credentialVpnBaseline: cloneCredentialVpn(draft),
+        activeSection: defaultSection(nextKind),
+        dirty: true,
+        monacoJson: JSON.stringify(credentialVpnConfigToPersist(nextKind, draft), null, 2),
         monacoDirty: false,
         xrayImportWarnings: [],
       })
@@ -714,9 +874,9 @@ export const useCoreEditorStore = create<CoreEditorStoreState>((set, get) => ({
   setMonacoJson: (monacoJson, opts) => set({ monacoJson, monacoDirty: opts?.dirty ?? true }),
 
   syncMonacoFromDraft: () => {
-    const { kind, xrayProfile, wgDraft, ipsecDraft, openvpnDraft } = get()
+    const { kind, xrayProfile, wgDraft, ipsecDraft, openvpnDraft, credentialVpnDraft } = get()
     try {
-      if (kind === 'wg' && wgDraft) {
+      if (isWgFamilyKind(kind) && wgDraft) {
         set({ monacoJson: JSON.stringify(draftToPersistedConfig(wgDraft), null, 2), monacoDirty: false })
       } else if (kind === 'xray' && xrayProfile) {
         set({ monacoJson: JSON.stringify(profileToPersistedConfig(xrayProfile), null, 2), monacoDirty: false })
@@ -724,6 +884,8 @@ export const useCoreEditorStore = create<CoreEditorStoreState>((set, get) => ({
         set({ monacoJson: JSON.stringify(ipsecDraft, null, 2), monacoDirty: false })
       } else if (kind === 'openvpn' && openvpnDraft) {
         set({ monacoJson: JSON.stringify(openvpnDraft, null, 2), monacoDirty: false })
+      } else if (isCredentialVpnKind(kind) && credentialVpnDraft) {
+        set({ monacoJson: JSON.stringify(credentialVpnConfigToPersist(kind, credentialVpnDraft), null, 2), monacoDirty: false })
       }
     } catch {
       /* keep previous monacoJson */
@@ -738,7 +900,7 @@ export const useCoreEditorStore = create<CoreEditorStoreState>((set, get) => ({
     } catch (e) {
       return { ok: false, error: e instanceof Error ? e.message : 'Invalid JSON' }
     }
-    if (kind === 'wg') {
+    if (isWgFamilyKind(kind)) {
       const r = wireGuardConfigToDraft(parsed)
       if (!r.ok) return { ok: false, error: r.message }
       set({ wgDraft: r.draft, dirty: true, monacoDirty: false })
@@ -752,6 +914,11 @@ export const useCoreEditorStore = create<CoreEditorStoreState>((set, get) => ({
     if (kind === 'openvpn') {
       const draft = normalizeOpenVPNConfig(parsed)
       set({ openvpnDraft: draft, dirty: true, monacoDirty: false })
+      return { ok: true }
+    }
+    if (isCredentialVpnKind(kind)) {
+      const draft = normalizeCredentialVpnConfig(kind, parsed)
+      set({ credentialVpnDraft: draft, dirty: true, monacoDirty: false })
       return { ok: true }
     }
     const { profile, issues } = importRawToProfile(parsed)

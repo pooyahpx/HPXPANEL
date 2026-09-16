@@ -2816,9 +2816,17 @@
   "coreTypes": {
     "xray": "Xray",
     "wg": "WireGuard",
+    "wg_c": "WireGuard (Kernel)",
+    "amneziawg": "AmneziaWG",
     "ikev2": "IKEv2/IPsec",
     "l2tp": "L2TP/IPsec",
-    "openvpn": "OpenVPN"
+    "openvpn": "OpenVPN",
+    "pptp": "PPTP",
+    "openconnect": "OpenConnect",
+    "sstp": "SSTP",
+    "ssh": "SSH",
+    "gre": "GRE",
+    "mtproto": "MTProto"
   },
   "coreConfigModal": {
     "addConfig": "افزودن پیکربندی هسته",

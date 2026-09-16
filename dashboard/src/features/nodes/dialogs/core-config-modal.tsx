@@ -39,6 +39,12 @@ import { VlessAdvancedGenerationModal, type VlessKeyVariant } from '@/features/c
 import { XrayInboundTagPicker } from '@/features/core-editor/components/shared/xray-inbound-tag-selectors'
 import { createDefaultIpsecConfig } from '@/features/core-editor/kit/ipsec-config'
 import { createDefaultOpenVPNConfig } from '@/features/core-editor/kit/openvpn-config'
+import {
+  createDefaultCredentialVpnConfig,
+  credentialVpnConfigToPersist,
+  isCredentialVpnKind,
+  isWgFamilyKind,
+} from '@/features/core-editor/kit/credential-vpn-config'
 
 interface CoreConfigModalProps {
   isDialogOpen: boolean
@@ -67,7 +73,7 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
   const isMobile = useIsMobile()
   const backendType = (form.watch('type') ?? 'xray') as CoreBackendType
   const isXrayBackend = backendType === 'xray'
-  const isWireGuardBackend = backendType === 'wg'
+  const isWireGuardBackend = backendType === 'wg' || backendType === 'wg_c' || backendType === 'amneziawg'
   const [validation, setValidation] = useState<ValidationResult>({ isValid: true })
   const createCoreMutation = useCreateCoreConfig()
   const modifyCoreMutation = useModifyCoreConfig()
@@ -251,14 +257,25 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
   const applyBackendTemplate = useCallback(
     (nextBackendType: CoreBackendType) => {
       let defaultTemplate: string
-      if (nextBackendType === 'wg') {
+      if (isWgFamilyKind(nextBackendType)) {
         const keyPair = generateWireGuardKeyPair()
         setGeneratedWireGuardKeyPair(keyPair)
         defaultTemplate = createWireGuardCoreConfigJson(keyPair)
+        if (nextBackendType === 'amneziawg') {
+          try {
+            const parsed = JSON.parse(defaultTemplate) as Record<string, unknown>
+            Object.assign(parsed, { jc: 4, jmin: 40, jmax: 70, s1: 0, s2: 0, h1: 1, h2: 2, h3: 3, h4: 4 })
+            defaultTemplate = JSON.stringify(parsed, null, 2)
+          } catch {
+            /* keep wg template */
+          }
+        }
       } else if (nextBackendType === 'ikev2' || nextBackendType === 'l2tp') {
         defaultTemplate = JSON.stringify(createDefaultIpsecConfig(nextBackendType), null, 2)
       } else if (nextBackendType === 'openvpn') {
         defaultTemplate = JSON.stringify(createDefaultOpenVPNConfig(), null, 2)
+      } else if (isCredentialVpnKind(nextBackendType)) {
+        defaultTemplate = JSON.stringify(credentialVpnConfigToPersist(nextBackendType, createDefaultCredentialVpnConfig(nextBackendType)), null, 2)
       } else {
         defaultTemplate = DEFAULT_XRAY_CORE_CONFIG_JSON
       }
@@ -914,11 +931,19 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
                                 <SelectValue placeholder={t('coreConfigModal.backendType', { defaultValue: 'Type' })} />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="xray">Xray</SelectItem>
-                                <SelectItem value="wg">WireGuard</SelectItem>
+                                <SelectItem value="xray">{t('coreTypes.xray')}</SelectItem>
+                                <SelectItem value="wg">{t('coreTypes.wg')}</SelectItem>
+                                <SelectItem value="wg_c">{t('coreTypes.wg_c')}</SelectItem>
+                                <SelectItem value="amneziawg">{t('coreTypes.amneziawg')}</SelectItem>
+                                <SelectItem value="openvpn">{t('coreTypes.openvpn')}</SelectItem>
                                 <SelectItem value="ikev2">{t('coreTypes.ikev2')}</SelectItem>
                                 <SelectItem value="l2tp">{t('coreTypes.l2tp')}</SelectItem>
-                                <SelectItem value="openvpn">{t('coreTypes.openvpn')}</SelectItem>
+                                <SelectItem value="pptp">{t('coreTypes.pptp')}</SelectItem>
+                                <SelectItem value="openconnect">{t('coreTypes.openconnect')}</SelectItem>
+                                <SelectItem value="sstp">{t('coreTypes.sstp')}</SelectItem>
+                                <SelectItem value="ssh">{t('coreTypes.ssh')}</SelectItem>
+                                <SelectItem value="gre">{t('coreTypes.gre')}</SelectItem>
+                                <SelectItem value="mtproto">{t('coreTypes.mtproto')}</SelectItem>
                               </SelectContent>
                             </Select>
                           </FormControl>

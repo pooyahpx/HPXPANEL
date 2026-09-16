@@ -1051,9 +1051,10 @@ class NodeOperation(BaseOperation):
             if e.code == 503:
                 detail = (
                     f"{e.detail}. "
-                    "Open the node's API Port and ensure hpx-node-serviced is installed "
-                    "(re-run the node installer, or: hpx-node update). "
-                    "Panel Update Node talks to https://<node>:<api_port>/node/update."
+                    "Update Node needs hpx-node-serviced on the node's API Port "
+                    "(HPXNODE ≥ 0.6.0). On the node host run: "
+                    'sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXNODE/raw/main/scripts/install.sh)" @ update -y '
+                    "— then open the API Port firewall and retry Update Node."
                 )
             await self.raise_error(message=detail, code=e.code)
         return response.json()

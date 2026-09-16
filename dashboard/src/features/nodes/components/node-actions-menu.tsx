@@ -12,6 +12,8 @@ import UserOnlineStatsDialog from '@/features/users/dialogs/user-online-stats-mo
 import { OpenVPNMonitoringModal } from '@/features/openvpn/components/openvpn-monitoring-modal'
 import UpdateCoreDialog from '@/features/nodes/dialogs/update-core-modal'
 import UpdateGeofilesDialog from '@/features/nodes/dialogs/update-geofiles-modal'
+import { CopyButton } from '@/components/common/copy-button'
+import { HOST_AGENT_UPDATE_COMMAND } from '@/hooks/use-node-releases'
 
 interface NodeActionsMenuProps {
   node: NodeResponse
@@ -35,6 +37,7 @@ type NodeActionsMenuState = {
   showOpenVPNMonitoring: boolean
   showUpdateCoreDialog: boolean
   showUpdateGeofilesDialog: boolean
+  showHostAgentRequiredDialog: boolean
 }
 
 const nodeActionsMenuStateStore = new Map<number, NodeActionsMenuState>()
@@ -53,6 +56,7 @@ const createDefaultNodeActionsMenuState = (): NodeActionsMenuState => ({
   showOpenVPNMonitoring: false,
   showUpdateCoreDialog: false,
   showUpdateGeofilesDialog: false,
+  showHostAgentRequiredDialog: false,
 })
 
 const ensureNodeActionsMenuState = (node: NodeResponse): NodeActionsMenuState => {
@@ -68,7 +72,13 @@ const ensureNodeActionsMenuState = (node: NodeResponse): NodeActionsMenuState =>
 }
 
 const hasOpenNodeDialog = (state: NodeActionsMenuState) =>
-  state.isDeleteDialogOpen || state.isResetUsageDialogOpen || state.showOnlineStats || state.showOpenVPNMonitoring || state.showUpdateCoreDialog || state.showUpdateGeofilesDialog
+  state.isDeleteDialogOpen ||
+  state.isResetUsageDialogOpen ||
+  state.showOnlineStats ||
+  state.showOpenVPNMonitoring ||
+  state.showUpdateCoreDialog ||
+  state.showUpdateGeofilesDialog ||
+  state.showHostAgentRequiredDialog
 
 const notifyNodeActionsGlobalListeners = () => {
   nodeActionsGlobalStateVersion += 1
@@ -161,6 +171,32 @@ const updateNodeActionsMenuState = (nodeId: number, updater: (prev: NodeActionsM
   notifyNodeActionsGlobalListeners()
 }
 
+const getUpdateNodeErrorMessage = (error: unknown): string => {
+  const err = error as {
+    status?: number
+    message?: string
+    data?: { detail?: unknown }
+    response?: { status?: number; _data?: { detail?: unknown }; data?: { detail?: unknown } }
+  }
+  const detail = err?.data?.detail ?? err?.response?._data?.detail ?? err?.response?.data?.detail
+  if (typeof detail === 'string' && detail.trim()) return detail
+  if (typeof err?.message === 'string' && err.message.trim()) return err.message
+  return 'Unknown error'
+}
+
+const isHostAgentUpdateFailure = (error: unknown): boolean => {
+  const err = error as { status?: number; response?: { status?: number } }
+  const status = err?.status ?? err?.response?.status
+  const message = getUpdateNodeErrorMessage(error).toLowerCase()
+  return (
+    status === 503 ||
+    message.includes('service unavailable') ||
+    message.includes('not reachable') ||
+    message.includes('hpx-node-serviced') ||
+    message.includes('host agent')
+  )
+}
+
 const DeleteAlertDialog = ({ node, isOpen, onClose, onConfirm }: { node: NodeResponse; isOpen: boolean; onClose: () => void; onConfirm: () => void }) => {
   const { t } = useTranslation()
   const dir = useDirDetection()
@@ -211,6 +247,55 @@ const ResetUsageAlertDialog = ({ node, isOpen, onClose, onConfirm, isLoading }: 
   )
 }
 
+const HostAgentRequiredAlertDialog = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) => {
+  const { t } = useTranslation()
+  const dir = useDirDetection()
+
+  return (
+    <AlertDialog open={isOpen} onOpenChange={open => !open && onClose()}>
+      <AlertDialogContent className="max-w-xl">
+        <AlertDialogHeader>
+          <AlertDialogTitle>{t('nodeModal.hostAgentRequiredTitle', { defaultValue: 'Host agent required' })}</AlertDialogTitle>
+          <AlertDialogDescription asChild>
+            <div dir={dir} className="space-y-3 text-sm">
+              <p>
+                {t('nodeModal.hostAgentRequiredBody', {
+                  defaultValue:
+                    "Update Node talks to the management agent (hpx-node-serviced) on this node's API Port. Nodes still on 0.5.2 need one SSH command on the host first:",
+                })}
+              </p>
+              <div className="space-y-1.5 rounded-md border p-3 text-left" dir="ltr">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-foreground text-xs font-medium">
+                    {t('nodeModal.hostAgentCopyCommand', { defaultValue: 'Copy install command' })}
+                  </p>
+                  <CopyButton
+                    value={HOST_AGENT_UPDATE_COMMAND}
+                    className="h-8 w-8 shrink-0"
+                    copiedMessage="copied"
+                    defaultMessage="clickToCopy"
+                    showToast
+                    toastSuccessMessage="copied"
+                  />
+                </div>
+                <pre className="bg-muted overflow-x-auto rounded-md p-2 font-mono text-xs whitespace-pre-wrap break-all">{HOST_AGENT_UPDATE_COMMAND}</pre>
+              </div>
+              <p className="text-muted-foreground">
+                {t('nodeModal.hostAgentRequiredNote', {
+                  defaultValue: 'Open the firewall for the API Port, then retry Update Node. NODE VERSION should become 0.6.0 or newer.',
+                })}
+              </p>
+            </div>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogAction onClick={onClose}>{t('close', { defaultValue: 'Close' })}</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  )
+}
+
 export default function NodeActionsMenu({
   node,
   onEdit,
@@ -250,7 +335,7 @@ export default function NodeActionsMenu({
     [node, node.id],
   )
 
-  const { isDeleteDialogOpen, isResetUsageDialogOpen, showOnlineStats, showOpenVPNMonitoring, showUpdateCoreDialog, showUpdateGeofilesDialog } = menuState
+  const { isDeleteDialogOpen, isResetUsageDialogOpen, showOnlineStats, showOpenVPNMonitoring, showUpdateCoreDialog, showUpdateGeofilesDialog, showHostAgentRequiredDialog } = menuState
 
   const setDeleteDialogOpen = useCallback((value: boolean) => setMenuState({ isDeleteDialogOpen: value }), [setMenuState])
   const setResetUsageDialogOpen = useCallback((value: boolean) => setMenuState({ isResetUsageDialogOpen: value }), [setMenuState])
@@ -258,6 +343,7 @@ export default function NodeActionsMenu({
   const setShowOpenVPNMonitoring = useCallback((value: boolean) => setMenuState({ showOpenVPNMonitoring: value }), [setMenuState])
   const setShowUpdateCoreDialog = useCallback((value: boolean) => setMenuState({ showUpdateCoreDialog: value }), [setMenuState])
   const setShowUpdateGeofilesDialog = useCallback((value: boolean) => setMenuState({ showUpdateGeofilesDialog: value }), [setMenuState])
+  const setShowHostAgentRequiredDialog = useCallback((value: boolean) => setMenuState({ showHostAgentRequiredDialog: value }), [setMenuState])
 
   useEffect(() => {
     ensureNodeActionsMenuState(node)
@@ -396,13 +482,17 @@ export default function NodeActionsMenu({
       queryClient.invalidateQueries({ queryKey: ['/api/nodes'] })
       queryClient.invalidateQueries({ queryKey: ['/api/nodes/simple'] })
       queryClient.invalidateQueries({ queryKey: [`/api/node/${node.id}`] })
-    } catch (error: any) {
-      toast.error(
-        t('nodeModal.updateNodeFailed', {
-          message: error?.message || 'Unknown error',
-          defaultValue: 'Failed to update node: {message}',
-        }),
-      )
+    } catch (error: unknown) {
+      if (isHostAgentUpdateFailure(error)) {
+        setShowHostAgentRequiredDialog(true)
+      } else {
+        toast.error(
+          t('nodeModal.updateNodeFailed', {
+            message: getUpdateNodeErrorMessage(error),
+            defaultValue: 'Failed to update node: {message}',
+          }),
+        )
+      }
     } finally {
       setUpdatingNode(false)
     }
@@ -563,6 +653,7 @@ export default function NodeActionsMenu({
           )}
           {canUpdateCore && <UpdateCoreDialog node={node} isOpen={showUpdateCoreDialog} onOpenChange={setShowUpdateCoreDialog} />}
           {canUpdateCore && <UpdateGeofilesDialog node={node} isOpen={showUpdateGeofilesDialog} onOpenChange={setShowUpdateGeofilesDialog} />}
+          {canUpdateCore && <HostAgentRequiredAlertDialog isOpen={showHostAgentRequiredDialog} onClose={() => setShowHostAgentRequiredDialog(false)} />}
         </div>
       )}
     </>

@@ -7,7 +7,7 @@ import { CoresSimpleResponse, NodeResponse, NodeStatus } from '@/service/api'
 import { cn } from '@/lib/utils'
 import { Package, Server } from 'lucide-react'
 import { useXrayReleases } from '@/hooks/use-xray-releases'
-import { useNodeReleases } from '@/hooks/use-node-releases'
+import { needsHostAgentForUpdate, useNodeReleases } from '@/hooks/use-node-releases'
 import { Separator } from '@/components/ui/separator'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Badge } from '@/components/ui/badge'
@@ -91,6 +91,7 @@ export const useNodeListColumns = ({
           const coreUpdateVersion = node.xray_version ?? coreVersion
           const hasCoreUpdate = !!(isXrayBackend && coreUpdateVersion && latestXrayVersion && hasXrayUpdate(coreUpdateVersion))
           const hasNodeVersionUpdate = !!latestNodeVersion && !!node.node_version && hasNodeUpdate(node.node_version)
+          const needsHostAgent = needsHostAgentForUpdate(node.node_version)
 
           if (!coreVersion && !node.node_version && !boundCores.length) return null
 
@@ -150,9 +151,21 @@ export const useNodeListColumns = ({
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <div className="inline-flex min-w-0 items-center gap-1.5">
-                        <Server className={cn('h-3.5 w-3.5 shrink-0 transition-colors', hasNodeVersionUpdate ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground')} />
-                        <span className={cn('truncate font-mono font-medium', hasNodeVersionUpdate ? 'text-amber-700 dark:text-amber-300' : 'text-muted-foreground')}>{node.node_version}</span>
-                        {hasNodeVersionUpdate && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />}
+                        <Server
+                          className={cn(
+                            'h-3.5 w-3.5 shrink-0 transition-colors',
+                            hasNodeVersionUpdate || needsHostAgent ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground',
+                          )}
+                        />
+                        <span
+                          className={cn(
+                            'truncate font-mono font-medium',
+                            hasNodeVersionUpdate || needsHostAgent ? 'text-amber-700 dark:text-amber-300' : 'text-muted-foreground',
+                          )}
+                        >
+                          {node.node_version}
+                        </span>
+                        {(hasNodeVersionUpdate || needsHostAgent) && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />}
                       </div>
                     </TooltipTrigger>
                     <TooltipContent side="top" className="max-w-xs">
@@ -169,7 +182,15 @@ export const useNodeListColumns = ({
                               <span className="font-mono font-medium">{latestNodeVersion}</span>
                             </div>
                           )}
-                          {hasNodeVersionUpdate && (
+                          {needsHostAgent && (
+                            <>
+                              <Separator className="my-1.5" />
+                              <span className="text-muted-foreground">
+                                {t('nodeModal.hostAgentRequiredHint', { defaultValue: 'Host update required for Update Node' })}
+                              </span>
+                            </>
+                          )}
+                          {hasNodeVersionUpdate && !needsHostAgent && (
                             <>
                               <Separator className="my-1.5" />
                               <span>{t('nodeModal.updateAvailable', { defaultValue: 'Update available' })}</span>
@@ -179,6 +200,11 @@ export const useNodeListColumns = ({
                       </div>
                     </TooltipContent>
                   </Tooltip>
+                )}
+                {needsHostAgent && (
+                  <p className="text-muted-foreground max-w-[14rem] text-[10px] leading-snug">
+                    {t('nodeModal.hostAgentRequiredHint', { defaultValue: 'Host update required for Update Node' })}
+                  </p>
                 )}
               </div>
             </TooltipProvider>

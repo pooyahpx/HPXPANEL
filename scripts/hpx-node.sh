@@ -878,21 +878,15 @@ update_command() {
     run_step_live "Pulling latest image" pull_image
   fi
   run_step_live "Recreating container" bash -c "cd '$INSTALL_DIR' && $COMPOSE_CMD -p '$SERVICE' -f '$COMPOSE_FILE' up -d"
-  # Refresh CLI + serviced env; optionally restart management API unit.
+  # Always ensure management API (Update Node) is present after image recreate.
   install_cli_wrapper
   if [ -n "${API_KEY:-}" ]; then
     write_serviced_env || true
   fi
-  if [ ! -x "$SERVICED_BIN" ]; then
-    download_serviced_binary || warn "hpx-node-serviced still missing — Update Node from panel will not work until it is installed."
-  fi
   if [ "$NO_UPDATE_SERVICE" = 1 ]; then
-    log "Skipping serviced restart (--no-update-service)"
+    log "Skipping serviced install/restart (--no-update-service)"
   else
-    if [ -x "$SERVICED_BIN" ]; then
-      [ -f "/etc/systemd/system/$(serviced_unit_name)" ] || install_serviced_unit
-      restart_serviced_unit
-    fi
+    install_serviced || warn "hpx-node-serviced install incomplete — Panel Update Node needs API Port + serviced"
   fi
   log "Updated ($(docker inspect -f '{{.State.Status}}' "$SERVICE" 2>/dev/null))"
 }

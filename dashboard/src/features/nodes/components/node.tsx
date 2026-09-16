@@ -7,7 +7,7 @@ import { Separator } from '@/components/ui/separator'
 import { cn } from '@/lib/utils'
 import { CoresSimpleResponse, NodeResponse } from '@/service/api'
 import { useXrayReleases } from '@/hooks/use-xray-releases'
-import { useNodeReleases } from '@/hooks/use-node-releases'
+import { needsHostAgentForUpdate, useNodeReleases } from '@/hooks/use-node-releases'
 import NodeUsageDisplay from './node-usage-display'
 import NodeActionsMenu from './node-actions-menu'
 import UpdateCoreDialog from '@/features/nodes/dialogs/update-core-modal'
@@ -59,6 +59,7 @@ export default function Node({
   const coreUpdateVersion = node.xray_version ?? coreVersion
   const hasCoreUpdate = !!(isXrayBackend && coreUpdateVersion && latestXrayVersion && hasXrayUpdate(coreUpdateVersion))
   const hasNodeVersionUpdate = !!latestNodeVersion && !!node.node_version && hasNodeUpdate(node.node_version)
+  const needsHostAgent = needsHostAgentForUpdate(node.node_version)
 
   const getStatusConfig = () => {
     switch (node.status) {
@@ -192,85 +193,100 @@ export default function Node({
               </div>
 
               {(coreVersion || node.node_version) && (
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-                  {coreVersion && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <button
-                          type="button"
-                          onClick={handleCoreVersionClick}
-                          className={cn(
-                            'inline-flex items-center gap-1.5 rounded-md px-0 text-left',
-                            canUpdateCore && hasCoreUpdate && 'focus-visible:ring-ring cursor-pointer focus-visible:ring-2 focus-visible:outline-none',
-                            (!canUpdateCore || !hasCoreUpdate) && 'cursor-default',
-                          )}
-                          aria-label={t('nodeModal.updateCore', { defaultValue: 'Update Core' })}
-                        >
-                          <Package className={cn('h-3.5 w-3.5 shrink-0', hasCoreUpdate ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground')} />
-                          <span className="text-muted-foreground text-[10px] tracking-wide uppercase">{t('node.xrayVersion', { defaultValue: 'Core' })}</span>
-                          <span className={cn('font-mono text-xs font-medium', hasCoreUpdate ? 'text-amber-700 dark:text-amber-300' : 'text-foreground')}>{coreVersion}</span>
-                          {hasCoreUpdate && <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />}
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent side="top" className="max-w-xs">
-                        <div className="space-y-2 text-xs">
-                          <div className="font-semibold">{t('node.xrayVersion', { defaultValue: 'Core' })}</div>
-                          <div className="space-y-1.5">
-                            <div className="flex items-center justify-between gap-4">
-                              <span>{t('version.currentVersion', { defaultValue: 'Current' })}</span>
-                              <span className="font-mono font-medium">{coreVersion}</span>
-                            </div>
-                            {isXrayBackend && latestXrayVersion && (
+                <div className="space-y-1.5">
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                    {coreVersion && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            type="button"
+                            onClick={handleCoreVersionClick}
+                            className={cn(
+                              'inline-flex items-center gap-1.5 rounded-md px-0 text-left',
+                              canUpdateCore && hasCoreUpdate && 'focus-visible:ring-ring cursor-pointer focus-visible:ring-2 focus-visible:outline-none',
+                              (!canUpdateCore || !hasCoreUpdate) && 'cursor-default',
+                            )}
+                            aria-label={t('nodeModal.updateCore', { defaultValue: 'Update Core' })}
+                          >
+                            <Package className={cn('h-3.5 w-3.5 shrink-0', hasCoreUpdate ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground')} />
+                            <span className="text-muted-foreground text-[10px] tracking-wide uppercase">{t('node.xrayVersion', { defaultValue: 'Core' })}</span>
+                            <span className={cn('font-mono text-xs font-medium', hasCoreUpdate ? 'text-amber-700 dark:text-amber-300' : 'text-foreground')}>{coreVersion}</span>
+                            {hasCoreUpdate && <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />}
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="max-w-xs">
+                          <div className="space-y-2 text-xs">
+                            <div className="font-semibold">{t('node.xrayVersion', { defaultValue: 'Core' })}</div>
+                            <div className="space-y-1.5">
                               <div className="flex items-center justify-between gap-4">
-                                <span>{t('version.latestVersion', { defaultValue: 'Latest' })}</span>
-                                <span className="font-mono font-medium">{latestXrayVersion}</span>
+                                <span>{t('version.currentVersion', { defaultValue: 'Current' })}</span>
+                                <span className="font-mono font-medium">{coreVersion}</span>
                               </div>
-                            )}
-                            {hasCoreUpdate && (
-                              <>
-                                <Separator className="my-1.5" />
-                                <span>{t('nodeModal.updateAvailable', { defaultValue: 'Update available' })}</span>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                      </TooltipContent>
-                    </Tooltip>
-                  )}
-                  {node.node_version && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div className="inline-flex items-center gap-1.5">
-                          <Server className={cn('h-3.5 w-3.5 shrink-0', hasNodeVersionUpdate ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground')} />
-                          <span className="text-muted-foreground text-[10px] tracking-wide uppercase">{t('node.coreVersion', { defaultValue: 'Node' })}</span>
-                          <span className={cn('font-mono text-xs font-medium', hasNodeVersionUpdate ? 'text-amber-700 dark:text-amber-300' : 'text-foreground')}>{node.node_version}</span>
-                          {hasNodeVersionUpdate && <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />}
-                        </div>
-                      </TooltipTrigger>
-                      <TooltipContent side="top" className="max-w-xs">
-                        <div className="space-y-2 text-xs">
-                          <div className="font-semibold">{t('node.coreVersion', { defaultValue: 'Node Core' })}</div>
-                          <div className="space-y-1.5">
-                            <div className="flex items-center justify-between gap-4">
-                              <span>{t('version.currentVersion', { defaultValue: 'Current' })}</span>
-                              <span className="font-mono font-medium">{node.node_version}</span>
+                              {isXrayBackend && latestXrayVersion && (
+                                <div className="flex items-center justify-between gap-4">
+                                  <span>{t('version.latestVersion', { defaultValue: 'Latest' })}</span>
+                                  <span className="font-mono font-medium">{latestXrayVersion}</span>
+                                </div>
+                              )}
+                              {hasCoreUpdate && (
+                                <>
+                                  <Separator className="my-1.5" />
+                                  <span>{t('nodeModal.updateAvailable', { defaultValue: 'Update available' })}</span>
+                                </>
+                              )}
                             </div>
-                            {!isWireGuardCore && latestNodeVersion && (
-                              <div className="flex items-center justify-between gap-4">
-                                <span>{t('version.latestVersion', { defaultValue: 'Latest' })}</span>
-                                <span className="font-mono font-medium">{latestNodeVersion}</span>
-                              </div>
-                            )}
-                            {hasNodeVersionUpdate && (
-                              <>
-                                <Separator className="my-1.5" />
-                                <span>{t('nodeModal.updateAvailable', { defaultValue: 'Update available' })}</span>
-                              </>
-                            )}
                           </div>
-                        </div>
-                      </TooltipContent>
-                    </Tooltip>
+                        </TooltipContent>
+                      </Tooltip>
+                    )}
+                    {node.node_version && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div className="inline-flex items-center gap-1.5">
+                            <Server className={cn('h-3.5 w-3.5 shrink-0', hasNodeVersionUpdate || needsHostAgent ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground')} />
+                            <span className="text-muted-foreground text-[10px] tracking-wide uppercase">{t('node.coreVersion', { defaultValue: 'Node' })}</span>
+                            <span className={cn('font-mono text-xs font-medium', hasNodeVersionUpdate || needsHostAgent ? 'text-amber-700 dark:text-amber-300' : 'text-foreground')}>{node.node_version}</span>
+                            {(hasNodeVersionUpdate || needsHostAgent) && <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />}
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="max-w-xs">
+                          <div className="space-y-2 text-xs">
+                            <div className="font-semibold">{t('node.coreVersion', { defaultValue: 'Node Core' })}</div>
+                            <div className="space-y-1.5">
+                              <div className="flex items-center justify-between gap-4">
+                                <span>{t('version.currentVersion', { defaultValue: 'Current' })}</span>
+                                <span className="font-mono font-medium">{node.node_version}</span>
+                              </div>
+                              {!isWireGuardCore && latestNodeVersion && (
+                                <div className="flex items-center justify-between gap-4">
+                                  <span>{t('version.latestVersion', { defaultValue: 'Latest' })}</span>
+                                  <span className="font-mono font-medium">{latestNodeVersion}</span>
+                                </div>
+                              )}
+                              {needsHostAgent && (
+                                <>
+                                  <Separator className="my-1.5" />
+                                  <span className="text-muted-foreground">
+                                    {t('nodeModal.hostAgentRequiredHint', { defaultValue: 'Host update required for Update Node' })}
+                                  </span>
+                                </>
+                              )}
+                              {hasNodeVersionUpdate && !needsHostAgent && (
+                                <>
+                                  <Separator className="my-1.5" />
+                                  <span>{t('nodeModal.updateAvailable', { defaultValue: 'Update available' })}</span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </TooltipContent>
+                      </Tooltip>
+                    )}
+                  </div>
+                  {needsHostAgent && (
+                    <p className="text-muted-foreground text-[10px] leading-snug">
+                      {t('nodeModal.hostAgentRequiredHint', { defaultValue: 'Host update required for Update Node' })}
+                    </p>
                   )}
                 </div>
               )}

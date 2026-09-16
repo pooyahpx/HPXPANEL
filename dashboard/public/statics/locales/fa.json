@@ -2334,6 +2334,11 @@
     "updateNodeSuccess": "گره با موفقیت به‌روزرسانی شد",
     "updateNodeFailed": "به‌روزرسانی گره ناموفق بود: {{message}}",
     "updatingNode": "در حال به‌روزرسانی گره...",
+    "hostAgentRequiredTitle": "عامل میزبان لازم است",
+    "hostAgentRequiredBody": "به‌روزرسانی گره با عامل مدیریت (hpx-node-serviced) روی پورت API گره صحبت می‌کند. گره‌هایی که هنوز روی نسخه ۰٫۵٫۲ هستند ابتدا باید این دستور را یک‌بار روی میزبان اجرا کنند:",
+    "hostAgentRequiredNote": "فایروال پورت API را باز کنید، سپس دوباره Update Node را بزنید. نسخه NODE باید به ۰٫۶٫۰ یا بالاتر برسد.",
+    "hostAgentRequiredHint": "برای Update Node ابتدا به‌روزرسانی میزبان لازم است",
+    "hostAgentCopyCommand": "کپی دستور نصب",
     "selectVersion": "انتخاب نسخه",
     "selectRegion": "انتخاب منطقه",
     "regions": {
@@ -2942,6 +2947,31 @@
     "saved": "همه تغییرات ذخیره شده است.",
     "discard": "صرف‌نظر",
     "dragToReorder": "برای مرتب‌سازی بکشید",
+    "kindPicker": {
+      "title": "نوع هسته",
+      "chooseType": "انتخاب نوع هسته",
+      "groups": {
+        "proxy": "پروکسی",
+        "wireguard": "WireGuard",
+        "classicVpn": "VPN کلاسیک",
+        "overlay": "همپوشانی"
+      },
+      "desc": {
+        "xray": "هسته پروکسی با ورودی، مسیریابی و DNS.",
+        "wg": "تونل WireGuard در فضای کاربری.",
+        "wg_c": "WireGuard کرنل با سربار کمتر.",
+        "amneziawg": "WireGuard با مبهم‌سازی Amnezia.",
+        "openvpn": "OpenVPN با گواهی یا اعتبارنامه.",
+        "ikev2": "دسترسی از راه دور IKEv2 / IPsec.",
+        "l2tp": "L2TP روی IPsec.",
+        "pptp": "VPN قدیمی PPTP.",
+        "openconnect": "OpenConnect به سبک AnyConnect.",
+        "sstp": "SSTP روی HTTPS.",
+        "ssh": "تونل SSH به‌عنوان هسته VPN.",
+        "gre": "همپوشانی کپسوله‌سازی GRE.",
+        "mtproto": "پروکسی MTProto تلگرام."
+      }
+    },
     "stringArrayPopover": {
       "noValuesPlaceholder": "بدون مقدار",
       "emptyNoItems": "هنوز موردی اضافه نشده است."

@@ -35,8 +35,10 @@ import type { FieldErrors, UseFormReturn } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import type { CoreBackendType, CoreConfigFormValues } from '@/features/nodes/forms/core-config-form'
+import { CoreKindPicker } from '@/features/core-editor/components/shared/core-kind-picker'
 import { VlessAdvancedGenerationModal, type VlessKeyVariant } from '@/features/core-editor/components/shared/vless-advanced-generation-modal'
 import { XrayInboundTagPicker } from '@/features/core-editor/components/shared/xray-inbound-tag-selectors'
+import { apiCoreTypeToKind } from '@/features/core-editor/kit/core-kind'
 import { createDefaultIpsecConfig } from '@/features/core-editor/kit/ipsec-config'
 import { createDefaultOpenVPNConfig } from '@/features/core-editor/kit/openvpn-config'
 import {
@@ -917,35 +919,18 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
                         <FormItem>
                           <FormLabel>{t('coreConfigModal.backendType', { defaultValue: 'Type' })}</FormLabel>
                           <FormControl>
-                            <Select
-                              value={field.value ?? 'xray'}
-                              onValueChange={value => {
-                                const nextBackendType = value as CoreBackendType
+                            <CoreKindPicker
+                              value={apiCoreTypeToKind(field.value)}
+                              align="start"
+                              className="w-full"
+                              onChange={nextKind => {
+                                const nextBackendType = nextKind as CoreBackendType
                                 field.onChange(nextBackendType)
                                 form.setValue('fallback_id', [], { shouldDirty: true })
                                 form.setValue('excluded_inbound_ids', [], { shouldDirty: true })
                                 applyBackendTemplate(nextBackendType)
                               }}
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder={t('coreConfigModal.backendType', { defaultValue: 'Type' })} />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="xray">{t('coreTypes.xray')}</SelectItem>
-                                <SelectItem value="wg">{t('coreTypes.wg')}</SelectItem>
-                                <SelectItem value="wg_c">{t('coreTypes.wg_c')}</SelectItem>
-                                <SelectItem value="amneziawg">{t('coreTypes.amneziawg')}</SelectItem>
-                                <SelectItem value="openvpn">{t('coreTypes.openvpn')}</SelectItem>
-                                <SelectItem value="ikev2">{t('coreTypes.ikev2')}</SelectItem>
-                                <SelectItem value="l2tp">{t('coreTypes.l2tp')}</SelectItem>
-                                <SelectItem value="pptp">{t('coreTypes.pptp')}</SelectItem>
-                                <SelectItem value="openconnect">{t('coreTypes.openconnect')}</SelectItem>
-                                <SelectItem value="sstp">{t('coreTypes.sstp')}</SelectItem>
-                                <SelectItem value="ssh">{t('coreTypes.ssh')}</SelectItem>
-                                <SelectItem value="gre">{t('coreTypes.gre')}</SelectItem>
-                                <SelectItem value="mtproto">{t('coreTypes.mtproto')}</SelectItem>
-                              </SelectContent>
-                            </Select>
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>

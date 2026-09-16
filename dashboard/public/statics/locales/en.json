@@ -2824,6 +2824,11 @@
     "updateNodeSuccess": "Node updated successfully",
     "updateNodeFailed": "Failed to update node: {{message}}",
     "updatingNode": "Updating Node...",
+    "hostAgentRequiredTitle": "Host agent required",
+    "hostAgentRequiredBody": "Update Node talks to the management agent (hpx-node-serviced) on this node's API Port. Nodes still on 0.5.2 need one SSH command on the host first:",
+    "hostAgentRequiredNote": "Open the firewall for the API Port, then retry Update Node. NODE VERSION should become 0.6.0 or newer.",
+    "hostAgentRequiredHint": "Host update required for Update Node",
+    "hostAgentCopyCommand": "Copy install command",
     "selectVersion": "Select Version",
     "selectRegion": "Select Region",
     "regions": {
@@ -3056,6 +3061,31 @@
     "discard": "Discard",
     "minRowsBlocked": "That would remove too many entries.",
     "dragToReorder": "Drag to reorder",
+    "kindPicker": {
+      "title": "Core type",
+      "chooseType": "Choose core type",
+      "groups": {
+        "proxy": "Proxy",
+        "wireguard": "WireGuard",
+        "classicVpn": "Classic VPN",
+        "overlay": "Overlay"
+      },
+      "desc": {
+        "xray": "Proxy core with inbounds, routing, and DNS.",
+        "wg": "Userspace WireGuard tunnel.",
+        "wg_c": "Kernel WireGuard for lower overhead.",
+        "amneziawg": "WireGuard with Amnezia obfuscation.",
+        "openvpn": "OpenVPN with certificates or credentials.",
+        "ikev2": "IKEv2 / IPsec remote access.",
+        "l2tp": "L2TP over IPsec.",
+        "pptp": "Legacy PPTP VPN.",
+        "openconnect": "OpenConnect / AnyConnect-style VPN.",
+        "sstp": "SSTP over HTTPS.",
+        "ssh": "SSH tunnel as a VPN-style core.",
+        "gre": "GRE encapsulation overlay.",
+        "mtproto": "Telegram MTProto proxy."
+      }
+    },
     "stringArrayPopover": {
       "noValuesPlaceholder": "No values",
       "emptyNoItems": "No items added."

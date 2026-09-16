@@ -20,6 +20,21 @@ export type DashboardCoreKind =
   | 'gre'
   | 'mtproto'
 
+export type CoreKindGroupId = 'proxy' | 'wireguard' | 'classicVpn' | 'overlay'
+
+export type CoreKindGroup = {
+  id: CoreKindGroupId
+  kinds: readonly DashboardCoreKind[]
+}
+
+/** Grouped backend kinds for the Core Kind picker UI. */
+export const CORE_KIND_GROUPS: readonly CoreKindGroup[] = [
+  { id: 'proxy', kinds: ['xray'] },
+  { id: 'wireguard', kinds: ['wg', 'wg_c', 'amneziawg'] },
+  { id: 'classicVpn', kinds: ['openvpn', 'ikev2', 'l2tp', 'pptp', 'openconnect', 'sstp', 'ssh'] },
+  { id: 'overlay', kinds: ['gre', 'mtproto'] },
+]
+
 const KIND_SET = new Set<string>([
   'xray',
   'wg',

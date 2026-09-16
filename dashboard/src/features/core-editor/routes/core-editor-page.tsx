@@ -4,8 +4,8 @@ import { Button } from '@/components/ui/button'
 import PageHeader from '@/components/layout/page-header'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Input } from '@/components/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { CoreCommandMenu } from '@/features/core-editor/components/shared/core-command-menu'
+import { CoreKindPicker } from '@/features/core-editor/components/shared/core-kind-picker'
 import { CoreEditorLayout } from '@/features/core-editor/components/shell/core-editor-layout'
 import { CoreSectionTabsPlaceholder } from '@/features/core-editor/components/shell/core-section-sidebar'
 import { ValidationSummary, type ValidationListItem } from '@/features/core-editor/components/shared/validation-summary'
@@ -21,7 +21,7 @@ import { CredentialVpnCoreEditor } from '@/features/core-editor/components/crede
 import { validateOpenVPNConfig, validateOpenVPNConfigWarnings } from '@/features/core-editor/kit/openvpn-config'
 import { validateIpsecConfig } from '@/features/core-editor/kit/ipsec-config'
 import type { DashboardCoreKind } from '@/features/core-editor/kit/core-kind'
-import { apiCoreTypeToKind, isCredentialVpnKind, isWgFamilyKind } from '@/features/core-editor/kit/core-kind'
+import { isCredentialVpnKind, isWgFamilyKind } from '@/features/core-editor/kit/core-kind'
 import {
   credentialVpnConfigToPersist,
   validateCredentialVpnConfig,
@@ -589,10 +589,11 @@ export default function CoreEditorPage() {
               placeholder={showNameRequired ? nameRequiredMessage : t('coreConfigModal.namePlaceholder', { defaultValue: 'Core name' })}
               aria-invalid={showNameRequired}
             />
-            <Select
+            <CoreKindPicker
               value={kind}
-              onValueChange={value => {
-                const nextKind = apiCoreTypeToKind(value as DashboardCoreKind)
+              align="end"
+              className="w-36 shrink-0 sm:w-[220px]"
+              onChange={nextKind => {
                 if (isNew) {
                   setSearchParams(
                     prev => {
@@ -607,26 +608,7 @@ export default function CoreEditorPage() {
                 }
                 switchKind(nextKind)
               }}
-            >
-              <SelectTrigger className="h-10 w-36 shrink-0 px-2 sm:w-[220px] sm:px-3" aria-label={t('coreConfigModal.backendType', { defaultValue: 'Backend type' })}>
-                <SelectValue placeholder={t('coreConfigModal.backendType', { defaultValue: 'Type' })} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="xray">{t('coreTypes.xray')}</SelectItem>
-                <SelectItem value="wg">{t('coreTypes.wg')}</SelectItem>
-                <SelectItem value="wg_c">{t('coreTypes.wg_c')}</SelectItem>
-                <SelectItem value="amneziawg">{t('coreTypes.amneziawg')}</SelectItem>
-                <SelectItem value="openvpn">{t('coreTypes.openvpn')}</SelectItem>
-                <SelectItem value="ikev2">{t('coreTypes.ikev2')}</SelectItem>
-                <SelectItem value="l2tp">{t('coreTypes.l2tp')}</SelectItem>
-                <SelectItem value="pptp">{t('coreTypes.pptp')}</SelectItem>
-                <SelectItem value="openconnect">{t('coreTypes.openconnect')}</SelectItem>
-                <SelectItem value="sstp">{t('coreTypes.sstp')}</SelectItem>
-                <SelectItem value="ssh">{t('coreTypes.ssh')}</SelectItem>
-                <SelectItem value="gre">{t('coreTypes.gre')}</SelectItem>
-                <SelectItem value="mtproto">{t('coreTypes.mtproto')}</SelectItem>
-              </SelectContent>
-            </Select>
+            />
           </div>
           {kind === 'xray' && xrayImportWarnings.length > 0 && (
             <Alert>

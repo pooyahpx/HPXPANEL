@@ -17,7 +17,8 @@ const GITHUB_API_URL = 'https://api.github.com/repos/pooyahpx/HPXNODE/releases/l
 const CACHE_KEY = 'pg_node_release'
 const CACHE_DURATION = 10 * 60 * 1000
 
-function compareVersions(current: string, latest: string): number {
+/** Semantic-ish compare for node versions (e.g. 0.5.2 vs 0.6.0). Returns -1 / 0 / 1. */
+export function compareNodeVersions(current: string, latest: string): number {
   const currentParts = current
     .trim()
     .replace(/^v/i, '')
@@ -39,6 +40,17 @@ function compareVersions(current: string, latest: string): number {
   }
   return 0
 }
+
+/** Panel Update Node needs hpx-node-serviced (HPXNODE ≥ 0.6.0) on the API Port. */
+export const MIN_HOST_AGENT_VERSION = '0.6.0'
+
+export function needsHostAgentForUpdate(nodeVersion: string | null | undefined): boolean {
+  if (!nodeVersion) return false
+  return compareNodeVersions(nodeVersion, MIN_HOST_AGENT_VERSION) < 0
+}
+
+export const HOST_AGENT_UPDATE_COMMAND =
+  'sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXNODE/raw/main/scripts/install.sh)" @ update -y'
 
 function getCached(): CachedRelease | null {
   try {
@@ -103,7 +115,7 @@ export function useNodeReleases(): NodeReleaseResult {
     if (!currentVersion || !data?.version) return false
     const cleanCurrent = currentVersion.trim().replace(/^v/i, '')
     const cleanLatest = data.version.trim().replace(/^v/i, '')
-    return compareVersions(cleanCurrent, cleanLatest) < 0
+    return compareNodeVersions(cleanCurrent, cleanLatest) < 0
   }
 
   return {

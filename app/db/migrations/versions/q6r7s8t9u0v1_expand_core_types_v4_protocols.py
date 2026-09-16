@@ -6,6 +6,7 @@ Create Date: 2026-09-16 14:30:00.000000
 
 """
 
+import sqlalchemy as sa
 from alembic import op
 
 revision = "q6r7s8t9u0v1"
@@ -45,6 +46,17 @@ def _upgrade_core_type(bind) -> None:
             op.execute(f"ALTER TYPE coretype ADD VALUE IF NOT EXISTS '{value}'")
     elif dialect in {"mysql", "mariadb"}:
         op.execute(_mysql_core_enum(_NEW_CORE_TYPES))
+    elif dialect == "sqlite":
+        # SQLite stores native enums as VARCHAR(max_member_len); widen for longer names.
+        with op.batch_alter_table("core_configs") as batch_op:
+            batch_op.alter_column(
+                "type",
+                existing_type=sa.VARCHAR(length=7),
+                type_=sa.Enum(*_NEW_CORE_TYPES, name="coretype"),
+                existing_nullable=False,
+                existing_server_default=sa.text("'xray'"),
+                server_default="xray",
+            )
 
 
 def _downgrade_core_type(bind) -> None:
@@ -65,6 +77,16 @@ def _downgrade_core_type(bind) -> None:
         op.execute("DROP TYPE coretype_with_v4_protocols")
     elif dialect in {"mysql", "mariadb"}:
         op.execute(_mysql_core_enum(_OLD_CORE_TYPES))
+    elif dialect == "sqlite":
+        with op.batch_alter_table("core_configs") as batch_op:
+            batch_op.alter_column(
+                "type",
+                existing_type=sa.Enum(*_NEW_CORE_TYPES, name="coretype"),
+                type_=sa.Enum(*_OLD_CORE_TYPES, name="coretype"),
+                existing_nullable=False,
+                existing_server_default=sa.text("'xray'"),
+                server_default="xray",
+            )
 
 
 def upgrade() -> None:

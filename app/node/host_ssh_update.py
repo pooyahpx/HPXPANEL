@@ -64,6 +64,7 @@ def run_host_update_via_ssh(
     if private_key:
         key_file = io.StringIO(private_key.strip() + "\n")
         pkey = None
+        parse_errors: list[str] = []
         for key_cls in (
             paramiko.Ed25519Key,
             paramiko.RSAKey,
@@ -73,10 +74,11 @@ def run_host_update_via_ssh(
                 key_file.seek(0)
                 pkey = key_cls.from_private_key(key_file)
                 break
-            except Exception:
-                continue
+            except Exception as exc:
+                parse_errors.append(f"{key_cls.__name__}: {exc}")
         if pkey is None:
-            raise ValueError("Could not parse SSH private key (supports Ed25519/RSA/ECDSA)")
+            detail = "; ".join(parse_errors) if parse_errors else "unsupported key type"
+            raise ValueError(f"Could not parse SSH private key ({detail})")
         connect_kwargs["pkey"] = pkey
     else:
         connect_kwargs["password"] = password

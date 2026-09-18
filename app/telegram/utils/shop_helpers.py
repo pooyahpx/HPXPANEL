@@ -51,6 +51,25 @@ def test_config_summary(config: ShopConfig | None, lang: str) -> str:
     )
 
 
+def custom_config_summary(config: ShopConfig | None, lang: str) -> str:
+    if not config or not getattr(config, "custom_enabled", False):
+        return t(lang, "no")
+    from app.telegram.utils.i18n import format_price
+
+    groups = ",".join(str(g) for g in (config.custom_group_ids or [])) or "—"
+    return rich(
+        lang,
+        "admin_custom_summary",
+        gb=format_price(int(config.custom_price_per_gb or 0)),
+        day=format_price(int(config.custom_price_per_day or 0)),
+        ip=format_price(int(config.custom_price_per_ip or 0)),
+        base=int(config.custom_base_ip or 1),
+        range_gb=f"{config.custom_min_gb}-{config.custom_max_gb}",
+        range_days=f"{config.custom_min_days}-{config.custom_max_days}",
+        groups=groups,
+    )
+
+
 _DIGIT_TRANSLATE = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
 
 

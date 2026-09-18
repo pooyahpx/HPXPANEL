@@ -61,6 +61,8 @@ type PlanFormState = {
   data_gb: string
   expire_days: string
   group_ids: number[]
+  ip_limit: string
+  hwid_limit: string
 }
 
 const emptyPlanForm = (): PlanFormState => ({
@@ -69,6 +71,8 @@ const emptyPlanForm = (): PlanFormState => ({
   data_gb: '30',
   expire_days: '30',
   group_ids: [],
+  ip_limit: '',
+  hwid_limit: '',
 })
 
 function ShopPlanGroupsPicker({
@@ -256,6 +260,16 @@ export default function ShopPage() {
   const [cardNote, setCardNote] = useState('')
   const [cardNumber, setCardNumber] = useState('')
   const [cardHolder, setCardHolder] = useState('')
+  const [customEnabled, setCustomEnabled] = useState(false)
+  const [customPricePerGb, setCustomPricePerGb] = useState('5000')
+  const [customPricePerDay, setCustomPricePerDay] = useState('2000')
+  const [customPricePerIp, setCustomPricePerIp] = useState('10000')
+  const [customMinGb, setCustomMinGb] = useState('1')
+  const [customMaxGb, setCustomMaxGb] = useState('500')
+  const [customMinDays, setCustomMinDays] = useState('1')
+  const [customMaxDays, setCustomMaxDays] = useState('365')
+  const [customBaseIp, setCustomBaseIp] = useState('1')
+  const [customGroupIds, setCustomGroupIds] = useState<number[]>([])
   const [accountingFilter, setAccountingFilter] = useState<'all' | 'charge' | 'credit' | 'unsettled' | 'settled'>('all')
 
   const { data: groupsSimple } = useGetGroupsSimple({ all: true }, { query: { staleTime: 5 * 60 * 1000, enabled: canView } })
@@ -280,6 +294,8 @@ export default function ShopPage() {
       data_gb: String(((plan.data_limit || 0) / GB).toFixed((plan.data_limit || 0) % GB === 0 ? 0 : 1)),
       expire_days: String(plan.expire_days ?? 0),
       group_ids: [...(plan.group_ids || [])],
+      ip_limit: plan.ip_limit != null ? String(plan.ip_limit) : '',
+      hwid_limit: plan.hwid_limit != null ? String(plan.hwid_limit) : '',
     })
   }
 
@@ -320,6 +336,16 @@ export default function ShopPage() {
     const primary = config.cards?.[0]
     setCardNumber(primary?.number || config.card_number || '')
     setCardHolder(primary?.holder || config.card_holder || '')
+    setCustomEnabled(Boolean(config.custom_enabled))
+    setCustomPricePerGb(String(config.custom_price_per_gb ?? 0))
+    setCustomPricePerDay(String(config.custom_price_per_day ?? 0))
+    setCustomPricePerIp(String(config.custom_price_per_ip ?? 0))
+    setCustomMinGb(String(config.custom_min_gb ?? 1))
+    setCustomMaxGb(String(config.custom_max_gb ?? 500))
+    setCustomMinDays(String(config.custom_min_days ?? 1))
+    setCustomMaxDays(String(config.custom_max_days ?? 365))
+    setCustomBaseIp(String(config.custom_base_ip ?? 1))
+    setCustomGroupIds([...(config.custom_group_ids || [])])
   }, [config])
 
   useEffect(() => {
@@ -496,12 +522,22 @@ export default function ShopPage() {
                             </TableCell>
                             <TableCell className="px-4 py-4">
                               <div className="space-y-1">
-                                <div className="leading-snug">{order.plan_name || `#${order.plan_id}`}</div>
-                                {order.plan_price_toman != null ? (
-                                  <div className="text-muted-foreground text-xs">
-                                    {formatPrice(order.plan_price_toman)} {t('shop.toman')}
-                                  </div>
-                                ) : null}
+                                <div className="leading-snug">
+                                  {order.is_custom
+                                    ? t('shop.customOrder', { defaultValue: 'Custom' })
+                                    : order.plan_name || (order.plan_id ? `#${order.plan_id}` : '—')}
+                                </div>
+                                <div className="text-muted-foreground text-xs">
+                                  {order.quoted_price_toman != null
+                                    ? `${formatPrice(order.quoted_price_toman)} ${t('shop.toman')}`
+                                    : order.plan_price_toman != null
+                                      ? `${formatPrice(order.plan_price_toman)} ${t('shop.toman')}`
+                                      : null}
+                                  {order.is_custom
+                                    ? ` · ${order.custom_data_gb ?? '—'}GB / ${order.custom_expire_days ?? '—'}d / IP ${order.custom_ip_limit ?? '—'}`
+                                    : null}
+                                  {order.requested_username ? ` · @${order.requested_username}` : null}
+                                </div>
                               </div>
                             </TableCell>
                             <TableCell className="px-4 py-4">
@@ -607,6 +643,22 @@ export default function ShopPage() {
                     <Label>{t('shop.expireDays')}</Label>
                     <Input value={planForm.expire_days} onChange={e => setPlanForm(prev => ({ ...prev, expire_days: e.target.value }))} />
                   </div>
+                  <div className="space-y-2">
+                    <Label>{t('shop.ipLimit', { defaultValue: 'IP limit' })}</Label>
+                    <Input
+                      value={planForm.ip_limit}
+                      placeholder="—"
+                      onChange={e => setPlanForm(prev => ({ ...prev, ip_limit: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>{t('shop.hwidLimit', { defaultValue: 'HWID limit' })}</Label>
+                    <Input
+                      value={planForm.hwid_limit}
+                      placeholder="—"
+                      onChange={e => setPlanForm(prev => ({ ...prev, hwid_limit: e.target.value }))}
+                    />
+                  </div>
                   <div className="space-y-2 sm:col-span-2">
                     <Label>{t('shop.planGroups', { defaultValue: 'Groups' })}</Label>
                     <p className="text-muted-foreground text-xs">
@@ -632,6 +684,8 @@ export default function ShopPage() {
                             data_limit: Math.max(0, Math.round(Number(planForm.data_gb) * GB)) || 0,
                             expire_days: Number(planForm.expire_days) || 0,
                             group_ids: planForm.group_ids,
+                            ip_limit: planForm.ip_limit.trim() ? Number(planForm.ip_limit) : null,
+                            hwid_limit: planForm.hwid_limit.trim() ? Number(planForm.hwid_limit) : null,
                           })
                           setPlanForm(emptyPlanForm())
                           toast.success(t('shop.planCreated'))
@@ -663,6 +717,7 @@ export default function ShopPage() {
                         <TableHead className="px-4 py-3.5">{t('shop.data')}</TableHead>
                         <TableHead className="px-4 py-3.5">{t('shop.expire')}</TableHead>
                         <TableHead className="px-4 py-3.5">{t('shop.planGroups', { defaultValue: 'Groups' })}</TableHead>
+                        <TableHead className="px-4 py-3.5">{t('shop.ipLimit', { defaultValue: 'IP' })}</TableHead>
                         <TableHead className="px-4 py-3.5">{t('shop.active')}</TableHead>
                         {canManage ? <TableHead className="px-4 py-3.5 text-end">{t('shop.actions')}</TableHead> : null}
                       </TableRow>
@@ -685,6 +740,10 @@ export default function ShopPage() {
                             >
                               {formatPlanGroups(plan.group_ids)}
                             </span>
+                          </TableCell>
+                          <TableCell className="px-4 py-4 tabular-nums text-sm">
+                            {plan.ip_limit != null ? plan.ip_limit : '—'}
+                            {plan.hwid_limit != null ? ` / H${plan.hwid_limit}` : ''}
                           </TableCell>
                           <TableCell className="px-4 py-4">
                             <Badge variant={plan.is_active ? 'default' : 'secondary'}>{plan.is_active ? t('shop.active') : t('shop.inactive')}</Badge>
@@ -766,6 +825,14 @@ export default function ShopPage() {
                     <Label>{t('shop.expireDays')}</Label>
                     <Input value={editForm.expire_days} onChange={e => setEditForm(prev => ({ ...prev, expire_days: e.target.value }))} />
                   </div>
+                  <div className="space-y-2">
+                    <Label>{t('shop.ipLimit', { defaultValue: 'IP limit' })}</Label>
+                    <Input value={editForm.ip_limit} onChange={e => setEditForm(prev => ({ ...prev, ip_limit: e.target.value }))} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>{t('shop.hwidLimit', { defaultValue: 'HWID limit' })}</Label>
+                    <Input value={editForm.hwid_limit} onChange={e => setEditForm(prev => ({ ...prev, hwid_limit: e.target.value }))} />
+                  </div>
                   <div className="space-y-2 sm:col-span-2">
                     <Label>{t('shop.planGroups', { defaultValue: 'Groups' })}</Label>
                     <ShopPlanGroupsPicker
@@ -800,6 +867,8 @@ export default function ShopPage() {
                             data_limit: Math.max(0, Math.round(Number(editForm.data_gb) * GB)) || 0,
                             expire_days: Number(editForm.expire_days) || 0,
                             group_ids: editForm.group_ids,
+                            ip_limit: editForm.ip_limit.trim() ? Number(editForm.ip_limit) : null,
+                            hwid_limit: editForm.hwid_limit.trim() ? Number(editForm.hwid_limit) : null,
                           },
                         })
                         toast.success(t('shop.planUpdated', { defaultValue: 'Plan updated' }))
@@ -1123,15 +1192,92 @@ export default function ShopPage() {
                     <Textarea value={welcomeNote} disabled={!canManage} onChange={e => setWelcomeNote(e.target.value)} rows={3} />
                   </div>
 
+                  <div className="space-y-4 rounded-lg border p-4">
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="space-y-1">
+                        <div className="font-medium">
+                          {t('shop.customPurchase', { defaultValue: 'Custom purchase' })}
+                        </div>
+                        <div className="text-muted-foreground text-sm">
+                          {t('shop.customPurchaseHint', {
+                            defaultValue: 'Buyers pick GB, days, and extra IP slots. Price = units × rates below.',
+                          })}
+                        </div>
+                      </div>
+                      <Switch
+                        checked={customEnabled}
+                        disabled={!canManage}
+                        onCheckedChange={setCustomEnabled}
+                      />
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <div className="space-y-2">
+                        <Label>{t('shop.pricePerGb', { defaultValue: 'Price / GB' })}</Label>
+                        <Input value={customPricePerGb} disabled={!canManage} onChange={e => setCustomPricePerGb(e.target.value)} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>{t('shop.pricePerDay', { defaultValue: 'Price / day' })}</Label>
+                        <Input value={customPricePerDay} disabled={!canManage} onChange={e => setCustomPricePerDay(e.target.value)} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>{t('shop.pricePerIp', { defaultValue: 'Price / extra IP' })}</Label>
+                        <Input value={customPricePerIp} disabled={!canManage} onChange={e => setCustomPricePerIp(e.target.value)} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>{t('shop.minGb', { defaultValue: 'Min GB' })}</Label>
+                        <Input value={customMinGb} disabled={!canManage} onChange={e => setCustomMinGb(e.target.value)} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>{t('shop.maxGb', { defaultValue: 'Max GB' })}</Label>
+                        <Input value={customMaxGb} disabled={!canManage} onChange={e => setCustomMaxGb(e.target.value)} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>{t('shop.baseIp', { defaultValue: 'Free base IP' })}</Label>
+                        <Input value={customBaseIp} disabled={!canManage} onChange={e => setCustomBaseIp(e.target.value)} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>{t('shop.minDays', { defaultValue: 'Min days' })}</Label>
+                        <Input value={customMinDays} disabled={!canManage} onChange={e => setCustomMinDays(e.target.value)} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>{t('shop.maxDays', { defaultValue: 'Max days' })}</Label>
+                        <Input value={customMaxDays} disabled={!canManage} onChange={e => setCustomMaxDays(e.target.value)} />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>{t('shop.customGroups', { defaultValue: 'Custom purchase groups' })}</Label>
+                      <p className="text-muted-foreground text-xs">
+                        {t('shop.customGroupsHint', {
+                          defaultValue: 'Required when custom purchase is enabled.',
+                        })}
+                      </p>
+                      <ShopPlanGroupsPicker
+                        selected={customGroupIds}
+                        onChange={setCustomGroupIds}
+                        disabled={!canManage}
+                      />
+                    </div>
+                  </div>
+
                   {canManage ? (
                     <Button
-                      disabled={updateConfig.isPending}
+                      disabled={updateConfig.isPending || (customEnabled && customGroupIds.length === 0)}
                       onClick={async () => {
                         try {
                           await updateConfig.mutateAsync({
                             welcome_note: welcomeNote,
                             card_note: cardNote,
                             cards: cardNumber.trim() ? [{ number: cardNumber.trim(), holder: cardHolder.trim() }] : [],
+                            custom_enabled: customEnabled,
+                            custom_price_per_gb: Number(customPricePerGb) || 0,
+                            custom_price_per_day: Number(customPricePerDay) || 0,
+                            custom_price_per_ip: Number(customPricePerIp) || 0,
+                            custom_min_gb: Number(customMinGb) || 1,
+                            custom_max_gb: Number(customMaxGb) || 500,
+                            custom_min_days: Number(customMinDays) || 1,
+                            custom_max_days: Number(customMaxDays) || 365,
+                            custom_base_ip: Number(customBaseIp) || 1,
+                            custom_group_ids: customGroupIds,
                           })
                           toast.success(t('shop.saved'))
                         } catch (error: any) {

@@ -23,6 +23,16 @@ export interface ShopConfig {
   test_data_limit: number
   test_expire_days: number
   test_group_ids: number[]
+  custom_enabled: boolean
+  custom_price_per_gb: number
+  custom_price_per_day: number
+  custom_price_per_ip: number
+  custom_min_gb: number
+  custom_max_gb: number
+  custom_min_days: number
+  custom_max_days: number
+  custom_base_ip: number
+  custom_group_ids: number[]
   created_at?: string | null
 }
 
@@ -35,6 +45,16 @@ export interface ShopConfigUpdate {
   test_data_limit?: number
   test_expire_days?: number
   test_group_ids?: number[]
+  custom_enabled?: boolean
+  custom_price_per_gb?: number
+  custom_price_per_day?: number
+  custom_price_per_ip?: number
+  custom_min_gb?: number
+  custom_max_gb?: number
+  custom_min_days?: number
+  custom_max_days?: number
+  custom_base_ip?: number
+  custom_group_ids?: number[]
 }
 
 export interface ShopPlan {
@@ -66,7 +86,7 @@ export interface ShopPlanUpdate extends Partial<ShopPlanCreate> {}
 
 export interface ShopOrder {
   id: number
-  plan_id: number
+  plan_id?: number | null
   admin_id: number
   buyer_telegram_id: number
   buyer_username?: string | null
@@ -80,6 +100,12 @@ export interface ShopOrder {
   created_username?: string | null
   plan_name?: string | null
   plan_price_toman?: number | null
+  requested_username?: string | null
+  custom_data_gb?: number | null
+  custom_expire_days?: number | null
+  custom_ip_limit?: number | null
+  quoted_price_toman?: number | null
+  is_custom?: boolean
   note?: string | null
   created_at?: string | null
 }
@@ -98,7 +124,7 @@ export interface ShopStats {
   orders_pending: number
   orders_approved: number
   orders_rejected: number
-  orders_renewed?: number
+  orders_renewed: number
 }
 
 export interface ShopApproveResponse {
@@ -117,8 +143,8 @@ export interface CreateBudgetLedgerEntry {
   actor_admin_id?: number | null
   user_id?: number | null
   username?: string | null
-  billable_gb: number
-  billable_days: number
+  billable_gb?: number
+  billable_days?: number
   price_per_gb?: number | null
   price_per_day?: number | null
   pricing_mode?: string | null
@@ -135,85 +161,76 @@ export interface CreateBudgetLedgerList {
   total: number
 }
 
-const shopKeys = {
+export const shopKeys = {
   all: ['shop'] as const,
   config: ['shop', 'config'] as const,
   stats: ['shop', 'stats'] as const,
   plans: ['shop', 'plans'] as const,
-  orders: (status?: ShopOrderStatus | 'all' | 'renewal') => ['shop', 'orders', status ?? 'all'] as const,
-  accounting: (adminId?: number | 'all', settled?: boolean | 'all') =>
-    ['shop', 'accounting', adminId ?? 'all', settled ?? 'all'] as const,
+  orders: (filter?: Record<string, unknown>) => ['shop', 'orders', filter] as const,
+  accounting: (adminId?: number, settled?: boolean) => ['shop', 'accounting', adminId, settled] as const,
 }
 
 export const getShopConfig = () => fetcher<ShopConfig>('/api/shop/config')
 export const updateShopConfig = (body: ShopConfigUpdate) =>
   fetcher<ShopConfig>('/api/shop/config', { method: 'PUT', body })
-
 export const getShopStats = () => fetcher<ShopStats>('/api/shop/stats')
 export const getShopPlans = () => fetcher<ShopPlan[]>('/api/shop/plans')
-export const getShopAccounting = (adminId?: number, offset = 0, limit = 50, settled?: boolean) => {
-  const params = new URLSearchParams()
-  if (adminId != null) params.set('admin_id', String(adminId))
-  if (settled != null) params.set('settled', String(settled))
-  params.set('offset', String(offset))
-  params.set('limit', String(limit))
-  return fetcher<CreateBudgetLedgerList>(`/api/shop/accounting?${params.toString()}`)
-}
-export const settleShopAccountingEntry = (entryId: number, settled: boolean) =>
-  fetcher<CreateBudgetLedgerEntry>(`/api/shop/accounting/${entryId}/settle`, {
-    method: 'POST',
-    body: { settled },
-  })
 export const createShopPlan = (body: ShopPlanCreate) =>
   fetcher<ShopPlan>('/api/shop/plans', { method: 'POST', body })
 export const updateShopPlan = (planId: number, body: ShopPlanUpdate) =>
   fetcher<ShopPlan>(`/api/shop/plans/${planId}`, { method: 'PATCH', body })
 export const deleteShopPlan = (planId: number) =>
   fetcher<void>(`/api/shop/plans/${planId}`, { method: 'DELETE' })
-
-export const getShopOrders = (params?: {
-  status?: ShopOrderStatus
-  order_kind?: ShopOrderKind
-  offset?: number
-  limit?: number
-}) => fetcher<ShopOrderList>('/api/shop/orders', { params })
-
+export const getShopOrders = (params?: { status?: ShopOrderStatus; order_kind?: ShopOrderKind; offset?: number; limit?: number }) => {
+  const search = new URLSearchParams()
+  if (params?.status) search.set('status', params.status)
+  if (params?.order_kind) search.set('order_kind', params.order_kind)
+  if (params?.offset != null) search.set('offset', String(params.offset))
+  if (params?.limit != null) search.set('limit', String(params.limit))
+  const q = search.toString()
+  return fetcher<ShopOrderList>(`/api/shop/orders${q ? `?${q}` : ''}`)
+}
 export const approveShopOrder = (orderId: number) =>
   fetcher<ShopApproveResponse>(`/api/shop/orders/${orderId}/approve`, { method: 'POST' })
-
 export const rejectShopOrder = (orderId: number, note?: string) =>
-  fetcher<ShopOrder>(`/api/shop/orders/${orderId}/reject`, { method: 'POST', body: note ? { note } : {} })
-
-export const getShopOrderReceiptUrl = (orderId: number) => `/api/shop/orders/${orderId}/receipt`
-
-export async function fetchShopOrderReceiptBlob(orderId: number): Promise<Blob> {
-  return fetcher<Blob>(getShopOrderReceiptUrl(orderId), { responseType: 'blob' })
+  fetcher<ShopOrder>(`/api/shop/orders/${orderId}/reject`, { method: 'POST', body: { note } })
+export const fetchShopOrderReceiptBlob = async (orderId: number) => {
+  const res = await fetch(`/api/shop/orders/${orderId}/receipt`, { credentials: 'include' })
+  if (!res.ok) throw new Error('receipt failed')
+  return res.blob()
 }
+export const getShopAccounting = (adminId?: number, settled?: boolean) => {
+  const search = new URLSearchParams()
+  if (adminId != null) search.set('admin_id', String(adminId))
+  if (settled != null) search.set('settled', String(settled))
+  const q = search.toString()
+  return fetcher<CreateBudgetLedgerList>(`/api/shop/accounting${q ? `?${q}` : ''}`)
+}
+export const settleShopAccounting = (entryId: number, settled: boolean) =>
+  fetcher<CreateBudgetLedgerEntry>(`/api/shop/accounting/${entryId}/settle`, {
+    method: 'POST',
+    body: { settled },
+  })
 
 export const useShopConfig = (enabled = true) =>
   useQuery({ queryKey: shopKeys.config, queryFn: getShopConfig, enabled, staleTime: 10_000 })
-
 export const useShopStats = (enabled = true) =>
-  useQuery({ queryKey: shopKeys.stats, queryFn: getShopStats, enabled, refetchInterval: 20_000, staleTime: 5_000 })
-
+  useQuery({ queryKey: shopKeys.stats, queryFn: getShopStats, enabled, staleTime: 10_000 })
 export const useShopPlans = (enabled = true) =>
   useQuery({ queryKey: shopKeys.plans, queryFn: getShopPlans, enabled, staleTime: 10_000 })
-
-export const useShopOrders = (
-  filter?: { status?: ShopOrderStatus; order_kind?: ShopOrderKind },
-  enabled = true,
-) =>
+export const useShopOrders = (filter?: { status?: ShopOrderStatus; order_kind?: ShopOrderKind }, enabled = true) =>
   useQuery({
-    queryKey: shopKeys.orders(filter?.order_kind === 'renewal' ? 'renewal' : filter?.status),
-    queryFn: () =>
-      getShopOrders({
-        status: filter?.status,
-        order_kind: filter?.order_kind,
-        limit: 100,
-      }),
+    queryKey: shopKeys.orders(filter),
+    queryFn: () => getShopOrders(filter),
     enabled,
-    refetchInterval: 15_000,
     staleTime: 5_000,
+  })
+export const useShopAccounting = (adminId?: number, enabled = true, settled?: boolean) =>
+  useQuery({
+    queryKey: shopKeys.accounting(adminId, settled),
+    queryFn: () => getShopAccounting(adminId, settled),
+    enabled,
+    staleTime: 10_000,
   })
 
 export function useUpdateShopConfig() {
@@ -226,7 +243,6 @@ export function useUpdateShopConfig() {
     },
   })
 }
-
 export function useCreateShopPlan() {
   const qc = useQueryClient()
   return useMutation({
@@ -234,7 +250,6 @@ export function useCreateShopPlan() {
     onSuccess: () => qc.invalidateQueries({ queryKey: shopKeys.plans }),
   })
 }
-
 export function useUpdateShopPlan() {
   const qc = useQueryClient()
   return useMutation({
@@ -242,7 +257,6 @@ export function useUpdateShopPlan() {
     onSuccess: () => qc.invalidateQueries({ queryKey: shopKeys.plans }),
   })
 }
-
 export function useDeleteShopPlan() {
   const qc = useQueryClient()
   return useMutation({
@@ -250,42 +264,30 @@ export function useDeleteShopPlan() {
     onSuccess: () => qc.invalidateQueries({ queryKey: shopKeys.plans }),
   })
 }
-
 export function useApproveShopOrder() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: approveShopOrder,
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: shopKeys.all })
+      qc.invalidateQueries({ queryKey: ['shop', 'orders'] })
+      qc.invalidateQueries({ queryKey: shopKeys.stats })
     },
   })
 }
-
 export function useRejectShopOrder() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ orderId, note }: { orderId: number; note?: string }) => rejectShopOrder(orderId, note),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: shopKeys.all })
+      qc.invalidateQueries({ queryKey: ['shop', 'orders'] })
+      qc.invalidateQueries({ queryKey: shopKeys.stats })
     },
   })
 }
-
-export function useShopAccounting(adminId?: number, enabled = true, settled?: boolean) {
-  return useQuery({
-    queryKey: shopKeys.accounting(adminId ?? 'all', settled ?? 'all'),
-    queryFn: () => getShopAccounting(adminId, 0, 50, settled),
-    enabled,
-  })
-}
-
 export function useSettleShopAccounting() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ entryId, settled }: { entryId: number; settled: boolean }) =>
-      settleShopAccountingEntry(entryId, settled),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: shopKeys.all })
-    },
+    mutationFn: ({ entryId, settled }: { entryId: number; settled: boolean }) => settleShopAccounting(entryId, settled),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['shop', 'accounting'] }),
   })
 }

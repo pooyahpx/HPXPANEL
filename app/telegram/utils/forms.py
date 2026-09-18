@@ -66,6 +66,11 @@ class ShopAdminWelcome(StatesGroup):
 
 
 class ShopBuy(StatesGroup):
+    choose_username = State()
+    waiting_custom_username = State()
+    waiting_gb = State()
+    waiting_days = State()
+    waiting_ip = State()
     waiting_receipt = State()
 
 

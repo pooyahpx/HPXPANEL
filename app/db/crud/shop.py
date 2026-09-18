@@ -178,6 +178,16 @@ async def upsert_shop_config(
     test_data_limit: int | None = None,
     test_expire_days: int | None = None,
     test_group_ids: list[int] | None = None,
+    custom_enabled: bool | None = None,
+    custom_price_per_gb: int | None = None,
+    custom_price_per_day: int | None = None,
+    custom_price_per_ip: int | None = None,
+    custom_min_gb: int | None = None,
+    custom_max_gb: int | None = None,
+    custom_min_days: int | None = None,
+    custom_max_days: int | None = None,
+    custom_base_ip: int | None = None,
+    custom_group_ids: list[int] | None = None,
 ) -> ShopConfig:
     config = await get_shop_config_by_admin(db, admin_id)
     if config is None:
@@ -212,6 +222,26 @@ async def upsert_shop_config(
         config.test_expire_days = test_expire_days
     if test_group_ids is not None:
         config.test_group_ids = test_group_ids
+    if custom_enabled is not None:
+        config.custom_enabled = custom_enabled
+    if custom_price_per_gb is not None:
+        config.custom_price_per_gb = custom_price_per_gb
+    if custom_price_per_day is not None:
+        config.custom_price_per_day = custom_price_per_day
+    if custom_price_per_ip is not None:
+        config.custom_price_per_ip = custom_price_per_ip
+    if custom_min_gb is not None:
+        config.custom_min_gb = custom_min_gb
+    if custom_max_gb is not None:
+        config.custom_max_gb = custom_max_gb
+    if custom_min_days is not None:
+        config.custom_min_days = custom_min_days
+    if custom_max_days is not None:
+        config.custom_max_days = custom_max_days
+    if custom_base_ip is not None:
+        config.custom_base_ip = custom_base_ip
+    if custom_group_ids is not None:
+        config.custom_group_ids = custom_group_ids
     await db.commit()
     await db.refresh(config)
     return config
@@ -288,13 +318,19 @@ async def delete_shop_plan(db: AsyncSession, plan: ShopPlan) -> None:
 async def create_shop_order(
     db: AsyncSession,
     *,
-    plan_id: int,
+    plan_id: int | None,
     admin_id: int,
     buyer_telegram_id: int,
     buyer_username: str | None,
     receipt_file_id: str,
     order_kind: str = "purchase",
     renew_user_id: int | None = None,
+    requested_username: str | None = None,
+    custom_data_gb: int | None = None,
+    custom_expire_days: int | None = None,
+    custom_ip_limit: int | None = None,
+    quoted_price_toman: int | None = None,
+    is_custom: bool = False,
 ) -> ShopOrder:
     kind = (order_kind or "purchase").strip().lower()
     if kind not in ("purchase", "renewal"):
@@ -308,6 +344,12 @@ async def create_shop_order(
         status=ShopOrderStatus.pending,
         order_kind=kind,
         renew_user_id=renew_user_id if kind == "renewal" else None,
+        requested_username=requested_username,
+        custom_data_gb=custom_data_gb,
+        custom_expire_days=custom_expire_days,
+        custom_ip_limit=custom_ip_limit,
+        quoted_price_toman=quoted_price_toman,
+        is_custom=bool(is_custom),
     )
     await _assign_sqlite_pk(db, ShopOrder, order)
     db.add(order)

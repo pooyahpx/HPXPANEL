@@ -1,7 +1,7 @@
 from datetime import datetime as dt
 from enum import Enum
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class ShopOrderKindLiteral(str, Enum):
@@ -34,6 +34,16 @@ class ShopConfigResponse(BaseModel):
     test_data_limit: int = 0
     test_expire_days: int = 1
     test_group_ids: list[int] = Field(default_factory=list)
+    custom_enabled: bool = False
+    custom_price_per_gb: int = 0
+    custom_price_per_day: int = 0
+    custom_price_per_ip: int = 0
+    custom_min_gb: int = 1
+    custom_max_gb: int = 500
+    custom_min_days: int = 1
+    custom_max_days: int = 365
+    custom_base_ip: int = 1
+    custom_group_ids: list[int] = Field(default_factory=list)
     created_at: dt | None = None
 
     model_config = ConfigDict(from_attributes=True)
@@ -48,6 +58,36 @@ class ShopConfigUpdate(BaseModel):
     test_data_limit: int | None = Field(default=None, ge=0)
     test_expire_days: int | None = Field(default=None, ge=0)
     test_group_ids: list[int] | None = None
+    custom_enabled: bool | None = None
+    custom_price_per_gb: int | None = Field(default=None, ge=0)
+    custom_price_per_day: int | None = Field(default=None, ge=0)
+    custom_price_per_ip: int | None = Field(default=None, ge=0)
+    custom_min_gb: int | None = Field(default=None, ge=1)
+    custom_max_gb: int | None = Field(default=None, ge=1)
+    custom_min_days: int | None = Field(default=None, ge=1)
+    custom_max_days: int | None = Field(default=None, ge=1)
+    custom_base_ip: int | None = Field(default=None, ge=1)
+    custom_group_ids: list[int] | None = None
+
+    @model_validator(mode="after")
+    def validate_custom_groups_and_bounds(self):
+        if self.custom_enabled is True:
+            groups = self.custom_group_ids
+            if groups is not None and not groups:
+                raise ValueError("you must select at least one group for custom purchase")
+        if (
+            self.custom_min_gb is not None
+            and self.custom_max_gb is not None
+            and self.custom_min_gb > self.custom_max_gb
+        ):
+            raise ValueError("custom_min_gb cannot exceed custom_max_gb")
+        if (
+            self.custom_min_days is not None
+            and self.custom_max_days is not None
+            and self.custom_min_days > self.custom_max_days
+        ):
+            raise ValueError("custom_min_days cannot exceed custom_max_days")
+        return self
 
 
 class ShopPlanResponse(BaseModel):
@@ -104,7 +144,7 @@ class ShopPlanUpdate(BaseModel):
 
 class ShopOrderResponse(BaseModel):
     id: int
-    plan_id: int
+    plan_id: int | None = None
     admin_id: int
     buyer_telegram_id: int
     buyer_username: str | None = None
@@ -118,6 +158,12 @@ class ShopOrderResponse(BaseModel):
     created_username: str | None = None
     plan_name: str | None = None
     plan_price_toman: int | None = None
+    requested_username: str | None = None
+    custom_data_gb: int | None = None
+    custom_expire_days: int | None = None
+    custom_ip_limit: int | None = None
+    quoted_price_toman: int | None = None
+    is_custom: bool = False
     note: str | None = None
     created_at: dt | None = None
 

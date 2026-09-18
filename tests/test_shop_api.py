@@ -205,3 +205,93 @@ def test_shop_order_approve_and_reject(shop_admin):
         asyncio.run(_assert_db())
     finally:
         delete_core(shop_admin["token"], core["id"])
+
+
+def test_shop_custom_config_requires_groups(shop_admin):
+    headers = auth_headers(shop_admin["token"])
+    from tests.api.helpers import create_core, create_group, delete_core
+
+    core = create_core(shop_admin["token"])
+    try:
+        blocked = client.put(
+            "/api/shop/config",
+            headers=headers,
+            json={"custom_enabled": True, "custom_group_ids": []},
+        )
+        assert blocked.status_code in (status.HTTP_400_BAD_REQUEST, status.HTTP_422_UNPROCESSABLE_ENTITY), blocked.text
+
+        group = create_group(shop_admin["token"])
+        ok = client.put(
+            "/api/shop/config",
+            headers=headers,
+            json={
+                "custom_enabled": True,
+                "custom_price_per_gb": 5000,
+                "custom_price_per_day": 2000,
+                "custom_price_per_ip": 10000,
+                "custom_min_gb": 1,
+                "custom_max_gb": 100,
+                "custom_min_days": 1,
+                "custom_max_days": 90,
+                "custom_base_ip": 1,
+                "custom_group_ids": [group["id"]],
+            },
+        )
+        assert ok.status_code == status.HTTP_200_OK, ok.text
+        body = ok.json()
+        assert body["custom_enabled"] is True
+        assert body["custom_group_ids"] == [group["id"]]
+        assert body["custom_price_per_gb"] == 5000
+    finally:
+        delete_core(shop_admin["token"], core["id"])
+
+
+def test_shop_custom_order_approve_with_requested_username(shop_admin):
+    headers = auth_headers(shop_admin["token"])
+    from tests.api.helpers import create_core, create_group, delete_core
+
+    core = create_core(shop_admin["token"])
+    try:
+        group = create_group(shop_admin["token"])
+        client.put(
+            "/api/shop/config",
+            headers=headers,
+            json={
+                "enabled": True,
+                "custom_enabled": True,
+                "custom_group_ids": [group["id"]],
+                "custom_price_per_gb": 1000,
+                "custom_price_per_day": 100,
+                "custom_price_per_ip": 500,
+                "custom_base_ip": 1,
+            },
+        )
+
+        async def _seed():
+            from app.db.crud.shop import create_shop_order
+
+            async with TestSession() as session:
+                order = await create_shop_order(
+                    session,
+                    plan_id=None,
+                    admin_id=shop_admin["id"],
+                    buyer_telegram_id=910001,
+                    buyer_username="custom_buyer",
+                    receipt_file_id="file-custom",
+                    requested_username="mycustomuser",
+                    custom_data_gb=5,
+                    custom_expire_days=10,
+                    custom_ip_limit=2,
+                    quoted_price_toman=6500,
+                    is_custom=True,
+                )
+                return order.id
+
+        order_id = asyncio.run(_seed())
+        approved = client.post(f"/api/shop/orders/{order_id}/approve", headers=headers)
+        assert approved.status_code == status.HTTP_200_OK, approved.text
+        assert approved.json()["username"] == "mycustomuser"
+        assert approved.json()["order"]["is_custom"] is True
+        assert approved.json()["order"]["custom_data_gb"] == 5
+    finally:
+        delete_core(shop_admin["token"], core["id"])

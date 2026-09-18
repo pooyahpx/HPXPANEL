@@ -27,6 +27,10 @@ class ShopAction(str, Enum):
     home = "home"
     plans = "plans"
     buy = "buy"
+    custom = "custom"
+    username_random = "unr"
+    username_custom = "unc"
+    ip_base = "ipb"
     renew = "renew"
     renew_pick = "rnp"
     renew_buy = "rnb"
@@ -66,18 +70,42 @@ class ShopHomeKeyboard(InlineKeyboardBuilder):
 class ShopPlansKeyboard(InlineKeyboardBuilder):
     """Plan list with prices — shown after tapping Plans."""
 
-    def __init__(self, lang: str, plans: list[ShopPlan], *args, **kwargs):
+    def __init__(self, lang: str, plans: list[ShopPlan], *, custom_enabled: bool = False, *args, **kwargs):
         super().__init__(*args, **kwargs)
         cb = ShopKeyboardCallback
         for plan in plans:
             label = f"{plan.name} · {format_price(plan.price_toman)}T"
             self.button(text=label, callback_data=cb(action=ShopAction.buy, plan_id=plan.id))
+        if custom_enabled:
+            self.button(text=t(lang, "btn_custom_purchase"), callback_data=cb(action=ShopAction.custom))
         self.button(text=t(lang, "btn_back"), callback_data=cb(action=ShopAction.home))
-        n = len(plans)
+        n = len(plans) + (1 if custom_enabled else 0)
         if n:
             self.adjust(*([1] * n), 1)
         else:
             self.adjust(1)
+
+
+class ShopUsernameKeyboard(InlineKeyboardBuilder):
+    def __init__(self, lang: str, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        cb = ShopKeyboardCallback
+        self.button(text=t(lang, "btn_username_random"), callback_data=cb(action=ShopAction.username_random))
+        self.button(text=t(lang, "btn_username_custom"), callback_data=cb(action=ShopAction.username_custom))
+        self.button(text=t(lang, "btn_back"), callback_data=cb(action=ShopAction.plans))
+        self.adjust(1, 1, 1)
+
+
+class ShopIpKeyboard(InlineKeyboardBuilder):
+    def __init__(self, lang: str, base_ip: int, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        cb = ShopKeyboardCallback
+        self.button(
+            text=t(lang, "btn_ip_base", base=base_ip),
+            callback_data=cb(action=ShopAction.ip_base),
+        )
+        self.button(text=t(lang, "btn_back"), callback_data=cb(action=ShopAction.plans))
+        self.adjust(1, 1)
 
 
 class ShopRenewAccountsKeyboard(InlineKeyboardBuilder):

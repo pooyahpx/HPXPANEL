@@ -18,6 +18,7 @@ from app.db.crud.shop import (
 from app.db.models import ShopOrderStatus, UserStatus
 from app.models.admin import AdminDetails
 from app.models.user import UserCreate
+from app.models.validators import UserValidator
 from app.operation import OperatorType
 from app.operation.user import UserOperation
 from app.telegram.keyboards.shop import (
@@ -26,6 +27,7 @@ from app.telegram.keyboards.shop import (
     ShopHomeKeyboard,
     ShopIpKeyboard,
     ShopKeyboard,
+    ShopKeyboardCallback,
     ShopOrderAdminKeyboard,
     ShopPlansKeyboard,
     ShopRenewAccountsKeyboard,
@@ -34,19 +36,18 @@ from app.telegram.keyboards.shop import (
 )
 from app.telegram.utils import forms
 from app.telegram.utils.i18n import format_bytes, format_price, rich, t
-from app.telegram.utils.shared import add_to_messages_to_delete
 from app.telegram.utils.shop_helpers import (
-    build_pay_card_section,
     buyer_show_test_button,
+    continue_card_checkout,
+    continue_online_checkout,
     normalize_group_ids,
     notify_admins_user_joined,
     notify_all_admins_order,
     notify_all_admins_support,
     safe_error_text,
-    send_card_photos,
     shop_home_text,
+    start_checkout,
 )
-from app.models.validators import UserValidator
 from app.utils.shop_quote import quote_custom_purchase, validate_custom_bounds
 
 user_operator = UserOperation(OperatorType.TELEGRAM)
@@ -267,23 +268,14 @@ async def _show_fixed_pay(event: types.CallbackQuery, db: AsyncSession, state: F
         price=format_price(plan.price_toman),
     )
     text += t(lang, "fixed_pay_username", username=username_label)
-    text += build_pay_card_section(lang, config)
-    await state.set_state(forms.ShopBuy.waiting_receipt)
     await state.update_data(
         quoted_price_toman=int(plan.price_toman or 0),
         custom_data_gb=None,
         custom_expire_days=None,
         custom_ip_limit=plan.ip_limit,
+        admin_id=config.admin_id,
     )
-    await event.message.edit_text(text)
-    from app.telegram import get_bot
-
-    bot = get_bot()
-    if bot:
-        await send_card_photos(bot, event.from_user.id, config)
-    tip = await event.message.answer(t(lang, "send_receipt"))
-    await add_to_messages_to_delete(state, tip)
-    await event.answer()
+    await start_checkout(event, db, state, lang, summary_text=text)
 
 
 async def _show_fixed_pay_message(event: types.Message, db: AsyncSession, state: FSMContext, lang: str):
@@ -304,22 +296,14 @@ async def _show_fixed_pay_message(event: types.Message, db: AsyncSession, state:
         price=format_price(plan.price_toman),
     )
     text += t(lang, "fixed_pay_username", username=username_label)
-    text += build_pay_card_section(lang, config)
-    await state.set_state(forms.ShopBuy.waiting_receipt)
     await state.update_data(
         quoted_price_toman=int(plan.price_toman or 0),
         custom_data_gb=None,
         custom_expire_days=None,
         custom_ip_limit=plan.ip_limit,
+        admin_id=config.admin_id,
     )
-    await event.answer(text)
-    from app.telegram import get_bot
-
-    bot = get_bot()
-    if bot:
-        await send_card_photos(bot, event.from_user.id, config)
-    tip = await event.answer(t(lang, "send_receipt"))
-    await add_to_messages_to_delete(state, tip)
+    await start_checkout(event, db, state, lang, summary_text=text)
 
 
 @router.message(forms.ShopBuy.waiting_gb)
@@ -444,17 +428,8 @@ async def custom_ip_value(event: types.Message, db: AsyncSession, state: FSMCont
         username=username_label,
         price=format_price(quote.amount),
     )
-    text += build_pay_card_section(lang, config)
-    await state.set_state(forms.ShopBuy.waiting_receipt)
-    await state.update_data(quoted_price_toman=quote.amount)
-    await event.answer(text)
-    from app.telegram import get_bot
-
-    bot = get_bot()
-    if bot:
-        await send_card_photos(bot, event.from_user.id, config)
-    tip = await event.answer(t(lang, "send_receipt"))
-    await add_to_messages_to_delete(state, tip)
+    await state.update_data(quoted_price_toman=quote.amount, admin_id=config.admin_id)
+    await start_checkout(event, db, state, lang, summary_text=text)
 
 
 async def _show_custom_pay(event: types.CallbackQuery, db: AsyncSession, state: FSMContext, lang: str, config):
@@ -481,17 +456,8 @@ async def _show_custom_pay(event: types.CallbackQuery, db: AsyncSession, state: 
         username=username_label,
         price=format_price(quote.amount),
     )
-    text += build_pay_card_section(lang, config)
-    await state.set_state(forms.ShopBuy.waiting_receipt)
-    await state.update_data(quoted_price_toman=quote.amount)
-    await event.message.edit_text(text)
-    from app.telegram import get_bot
-
-    bot = get_bot()
-    if bot:
-        await send_card_photos(bot, event.from_user.id, config)
-    tip = await event.message.answer(t(lang, "send_receipt"))
-    await add_to_messages_to_delete(state, tip)
+    await state.update_data(quoted_price_toman=quote.amount, admin_id=config.admin_id)
+    await start_checkout(event, db, state, lang, summary_text=text)
 
 
 @router.callback_query(ShopKeyboard.Callback.filter(ShopAction.home == F.action))
@@ -528,8 +494,8 @@ async def claim_test_config(event: types.CallbackQuery, db: AsyncSession, admin:
         await _fail("test_already_claimed")
         return
 
-    from datetime import UTC, datetime as dt, timedelta as td
     import secrets
+    from datetime import UTC, datetime as dt, timedelta as td
 
     from app.db.crud.admin import build_admin_details, get_admin_by_id
 
@@ -709,27 +675,15 @@ async def renew_buy_plan(
         days=days,
         price=format_price(plan.price_toman),
     )
-    text += build_pay_card_section(lang, config)
-
-    await state.set_state(forms.ShopBuy.waiting_receipt)
     await state.update_data(
         plan_id=plan.id,
         admin_id=config.admin_id,
         lang=lang,
         order_kind="renewal",
         renew_user_id=int(target.id),
+        quoted_price_toman=int(plan.price_toman or 0),
     )
-    await event.message.edit_text(text)
-
-    from app.telegram import get_bot
-
-    bot = get_bot()
-    if bot:
-        await send_card_photos(bot, event.from_user.id, config)
-
-    tip = await event.message.answer(t(lang, "send_receipt"))
-    await add_to_messages_to_delete(state, tip)
-    await event.answer()
+    await start_checkout(event, db, state, lang, summary_text=text)
 
 
 @router.callback_query(ShopKeyboard.Callback.filter(ShopAction.support == F.action))
@@ -787,6 +741,27 @@ async def support_invalid(event: types.Message, state: FSMContext, db: AsyncSess
     await event.answer(t(lang, "support_prompt"))
 
 
+@router.callback_query(ShopKeyboardCallback.filter(ShopAction.pay_method == F.action))
+async def choose_pay_method(event: types.CallbackQuery, callback_data: ShopKeyboardCallback, db: AsyncSession, state: FSMContext):
+    data = await state.get_data()
+    lang = data.get("lang") or await _lang(db, event.from_user.id)
+    gateways = list(data.get("pay_gateways") or [])
+    index = int(callback_data.plan_id or 0)
+    if index < 0 or index >= len(gateways):
+        await event.answer(t(lang, "payment_create_failed"), show_alert=True)
+        return
+    gateway = gateways[index]
+    config = await get_enabled_shop_config(db)
+    if not config:
+        await event.answer(t(lang, "shop_disabled"), show_alert=True)
+        return
+    summary = data.get("checkout_summary") or ""
+    if gateway == "card":
+        await continue_card_checkout(event, state, lang, config, summary)
+        return
+    await continue_online_checkout(event, db, state, lang, config, gateway, summary)
+
+
 @router.message(forms.ShopBuy.waiting_receipt, F.photo)
 async def receive_receipt(event: types.Message, db: AsyncSession, state: FSMContext):
     data = await state.get_data()
@@ -821,6 +796,8 @@ async def receive_receipt(event: types.Message, db: AsyncSession, state: FSMCont
         custom_ip_limit=data.get("custom_ip_limit"),
         quoted_price_toman=int(quoted) if quoted is not None else None,
         is_custom=is_custom,
+        payment_method=data.get("payment_method") or "card",
+        payment_paid=False,
     )
     await state.clear()
     created_key = "renew_order_created" if order_kind == "renewal" else "order_created"

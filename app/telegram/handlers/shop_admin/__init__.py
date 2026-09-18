@@ -22,9 +22,17 @@ from app.db.models import ShopOrderStatus
 from app.models.admin import AdminDetails
 from app.operation import OperatorType
 from app.telegram.keyboards.shop import (
+    PAY_GW_CALLBACK,
+    PAY_GW_CARD,
+    PAY_GW_IDPAY,
+    PAY_GW_NOWPAYMENTS,
+    PAY_GW_PAYPAL,
+    PAY_GW_STRIPE,
+    PAY_GW_ZARINPAL,
     ShopAdminAction,
     ShopAdminCardsKeyboard,
     ShopAdminKeyboard,
+    ShopAdminPaymentsKeyboard,
     ShopAdminPlanEditKeyboard,
     ShopAdminPlansKeyboard,
 )
@@ -720,6 +728,194 @@ async def custom_groups(event: types.Message, db: AsyncSession, state: FSMContex
     await state.clear()
     await event.answer(t(lang, "admin_custom_saved"))
     await _render_admin_shop(event, db, admin)
+
+
+async def _render_payments(event: types.CallbackQuery, db: AsyncSession, admin: AdminDetails):
+    lang = await _lang(db, event.from_user.id)
+    config = await get_shop_config_by_admin(db, admin.id)
+    if config is None:
+        config = await upsert_shop_config(db, admin.id)
+    text = rich(
+        lang,
+        "admin_payments_home",
+        callback=config.pay_callback_base_url or "—",
+        card=t(lang, "yes") if config.pay_card_enabled else t(lang, "no"),
+        zarinpal=t(lang, "yes") if config.pay_zarinpal_enabled else t(lang, "no"),
+        idpay=t(lang, "yes") if config.pay_idpay_enabled else t(lang, "no"),
+        nowpayments=t(lang, "yes") if config.pay_nowpayments_enabled else t(lang, "no"),
+        paypal=t(lang, "yes") if config.pay_paypal_enabled else t(lang, "no"),
+        stripe=t(lang, "yes") if config.pay_stripe_enabled else t(lang, "no"),
+    )
+    try:
+        await event.message.edit_text(text, reply_markup=ShopAdminPaymentsKeyboard(lang, config).as_markup())
+    except TelegramBadRequest:
+        await event.message.answer(text, reply_markup=ShopAdminPaymentsKeyboard(lang, config).as_markup())
+    await event.answer()
+
+
+@router.callback_query(ShopAdminKeyboard.Callback.filter(ShopAdminAction.payments == F.action))
+async def payments_home(event: types.CallbackQuery, db: AsyncSession, admin: AdminDetails):
+    await _render_payments(event, db, admin)
+
+
+@router.callback_query(ShopAdminKeyboard.Callback.filter(ShopAdminAction.toggle_pay == F.action))
+async def toggle_payment_gateway(
+    event: types.CallbackQuery, callback_data: ShopAdminKeyboard.Callback, db: AsyncSession, admin: AdminDetails
+):
+    lang = await _lang(db, event.from_user.id)
+    config = await get_shop_config_by_admin(db, admin.id)
+    gw_id = int(callback_data.id or 0)
+    kwargs: dict = {}
+    if gw_id == PAY_GW_CARD:
+        kwargs["pay_card_enabled"] = not bool(config and config.pay_card_enabled)
+    elif gw_id == PAY_GW_ZARINPAL:
+        if config and not (config.pay_zarinpal_merchant_id or "").strip() and not config.pay_zarinpal_enabled:
+            await event.answer(t(lang, "admin_pay_need_setup"), show_alert=True)
+            return
+        kwargs["pay_zarinpal_enabled"] = not bool(config and config.pay_zarinpal_enabled)
+    elif gw_id == PAY_GW_IDPAY:
+        if config and not (config.pay_idpay_api_key or "").strip() and not config.pay_idpay_enabled:
+            await event.answer(t(lang, "admin_pay_need_setup"), show_alert=True)
+            return
+        kwargs["pay_idpay_enabled"] = not bool(config and config.pay_idpay_enabled)
+    elif gw_id == PAY_GW_NOWPAYMENTS:
+        if config and not (config.pay_nowpayments_api_key or "").strip() and not config.pay_nowpayments_enabled:
+            await event.answer(t(lang, "admin_pay_need_setup"), show_alert=True)
+            return
+        kwargs["pay_nowpayments_enabled"] = not bool(config and config.pay_nowpayments_enabled)
+    elif gw_id == PAY_GW_PAYPAL:
+        if (
+            config
+            and not ((config.pay_paypal_client_id or "").strip() and (config.pay_paypal_client_secret or "").strip())
+            and not config.pay_paypal_enabled
+        ):
+            await event.answer(t(lang, "admin_pay_need_setup"), show_alert=True)
+            return
+        kwargs["pay_paypal_enabled"] = not bool(config and config.pay_paypal_enabled)
+    elif gw_id == PAY_GW_STRIPE:
+        if config and not (config.pay_stripe_secret_key or "").strip() and not config.pay_stripe_enabled:
+            await event.answer(t(lang, "admin_pay_need_setup"), show_alert=True)
+            return
+        kwargs["pay_stripe_enabled"] = not bool(config and config.pay_stripe_enabled)
+    else:
+        await event.answer()
+        return
+    await upsert_shop_config(db, admin.id, **kwargs)
+    await event.answer(t(lang, "admin_pay_toggled"))
+    await _render_payments(event, db, admin)
+
+
+@router.callback_query(ShopAdminKeyboard.Callback.filter(ShopAdminAction.set_pay == F.action))
+async def ask_payment_setup(
+    event: types.CallbackQuery, callback_data: ShopAdminKeyboard.Callback, db: AsyncSession, state: FSMContext
+):
+    lang = await _lang(db, event.from_user.id)
+    gw_id = int(callback_data.id or 0)
+    prompts = {
+        PAY_GW_ZARINPAL: "admin_ask_zarinpal_merchant",
+        PAY_GW_IDPAY: "admin_ask_idpay_key",
+        PAY_GW_NOWPAYMENTS: "admin_ask_nowpayments_key",
+        PAY_GW_PAYPAL: "admin_ask_paypal_client_id",
+        PAY_GW_STRIPE: "admin_ask_stripe_secret",
+        PAY_GW_CALLBACK: "admin_ask_callback_url",
+    }
+    prompt = prompts.get(gw_id)
+    if not prompt:
+        await event.answer()
+        return
+    await state.set_state(forms.ShopAdminPayment.waiting_value)
+    await state.update_data(lang=lang, pay_gw_id=gw_id)
+    msg = await event.message.answer(t(lang, prompt))
+    await add_to_messages_to_delete(state, msg)
+    await event.answer()
+
+
+@router.message(forms.ShopAdminPayment.waiting_value)
+async def save_payment_value(event: types.Message, db: AsyncSession, state: FSMContext, admin: AdminDetails):
+    data = await state.get_data()
+    lang = data.get("lang", "fa")
+    gw_id = int(data.get("pay_gw_id") or 0)
+    raw = (event.text or "").strip()
+    if gw_id == PAY_GW_CALLBACK:
+        await upsert_shop_config(db, admin.id, pay_callback_base_url=raw)
+        await state.clear()
+        await event.answer(t(lang, "admin_pay_saved"))
+        # re-open payments from a synthetic path
+        config = await get_shop_config_by_admin(db, admin.id)
+        text = rich(
+            lang,
+            "admin_payments_home",
+            callback=(config.pay_callback_base_url if config else None) or "—",
+            card=t(lang, "yes") if config and config.pay_card_enabled else t(lang, "no"),
+            zarinpal=t(lang, "yes") if config and config.pay_zarinpal_enabled else t(lang, "no"),
+            idpay=t(lang, "yes") if config and config.pay_idpay_enabled else t(lang, "no"),
+            nowpayments=t(lang, "yes") if config and config.pay_nowpayments_enabled else t(lang, "no"),
+            paypal=t(lang, "yes") if config and config.pay_paypal_enabled else t(lang, "no"),
+            stripe=t(lang, "yes") if config and config.pay_stripe_enabled else t(lang, "no"),
+        )
+        await event.answer(text, reply_markup=ShopAdminPaymentsKeyboard(lang, config).as_markup())
+        return
+    if gw_id == PAY_GW_ZARINPAL:
+        await upsert_shop_config(db, admin.id, pay_zarinpal_merchant_id=raw, pay_zarinpal_enabled=True)
+        await state.clear()
+        await event.answer(t(lang, "admin_pay_saved"))
+        return
+    if gw_id == PAY_GW_IDPAY:
+        await upsert_shop_config(db, admin.id, pay_idpay_api_key=raw, pay_idpay_enabled=True)
+        await state.clear()
+        await event.answer(t(lang, "admin_pay_saved"))
+        return
+    if gw_id == PAY_GW_NOWPAYMENTS:
+        await state.update_data(pay_nowpayments_api_key=raw)
+        await state.set_state(forms.ShopAdminPayment.waiting_value2)
+        await event.answer(t(lang, "admin_ask_nowpayments_ipn"))
+        return
+    if gw_id == PAY_GW_PAYPAL:
+        await state.update_data(pay_paypal_client_id=raw)
+        await state.set_state(forms.ShopAdminPayment.waiting_value2)
+        await event.answer(t(lang, "admin_ask_paypal_secret"))
+        return
+    if gw_id == PAY_GW_STRIPE:
+        await state.update_data(pay_stripe_secret_key=raw)
+        await state.set_state(forms.ShopAdminPayment.waiting_value2)
+        await event.answer(t(lang, "admin_ask_stripe_webhook"))
+        return
+    await state.clear()
+    await event.answer(t(lang, "admin_pay_saved"))
+
+
+@router.message(forms.ShopAdminPayment.waiting_value2)
+async def save_payment_value2(event: types.Message, db: AsyncSession, state: FSMContext, admin: AdminDetails):
+    data = await state.get_data()
+    lang = data.get("lang", "fa")
+    gw_id = int(data.get("pay_gw_id") or 0)
+    raw = (event.text or "").strip()
+    if gw_id == PAY_GW_NOWPAYMENTS:
+        await upsert_shop_config(
+            db,
+            admin.id,
+            pay_nowpayments_api_key=data.get("pay_nowpayments_api_key"),
+            pay_nowpayments_ipn_secret=raw,
+            pay_nowpayments_enabled=True,
+        )
+    elif gw_id == PAY_GW_PAYPAL:
+        await upsert_shop_config(
+            db,
+            admin.id,
+            pay_paypal_client_id=data.get("pay_paypal_client_id"),
+            pay_paypal_client_secret=raw,
+            pay_paypal_enabled=True,
+        )
+    elif gw_id == PAY_GW_STRIPE:
+        await upsert_shop_config(
+            db,
+            admin.id,
+            pay_stripe_secret_key=data.get("pay_stripe_secret_key"),
+            pay_stripe_webhook_secret=raw,
+            pay_stripe_enabled=True,
+        )
+    await state.clear()
+    await event.answer(t(lang, "admin_pay_saved"))
 
 
 @router.callback_query(ShopAdminKeyboard.Callback.filter(ShopAdminAction.set_welcome == F.action))

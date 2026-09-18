@@ -33,6 +33,25 @@ export interface ShopConfig {
   custom_max_days: number
   custom_base_ip: number
   custom_group_ids: number[]
+  pay_card_enabled: boolean
+  pay_zarinpal_enabled: boolean
+  pay_zarinpal_merchant_id?: string | null
+  pay_zarinpal_sandbox: boolean
+  pay_idpay_enabled: boolean
+  pay_idpay_api_key?: string | null
+  pay_idpay_sandbox: boolean
+  pay_nowpayments_enabled: boolean
+  pay_nowpayments_api_key?: string | null
+  pay_nowpayments_ipn_secret?: string | null
+  pay_paypal_enabled: boolean
+  pay_paypal_client_id?: string | null
+  pay_paypal_client_secret?: string | null
+  pay_paypal_sandbox: boolean
+  pay_stripe_enabled: boolean
+  pay_stripe_secret_key?: string | null
+  pay_stripe_webhook_secret?: string | null
+  pay_callback_base_url?: string | null
+  enabled_gateways: string[]
   created_at?: string | null
 }
 
@@ -55,6 +74,24 @@ export interface ShopConfigUpdate {
   custom_max_days?: number
   custom_base_ip?: number
   custom_group_ids?: number[]
+  pay_card_enabled?: boolean
+  pay_zarinpal_enabled?: boolean
+  pay_zarinpal_merchant_id?: string | null
+  pay_zarinpal_sandbox?: boolean
+  pay_idpay_enabled?: boolean
+  pay_idpay_api_key?: string | null
+  pay_idpay_sandbox?: boolean
+  pay_nowpayments_enabled?: boolean
+  pay_nowpayments_api_key?: string | null
+  pay_nowpayments_ipn_secret?: string | null
+  pay_paypal_enabled?: boolean
+  pay_paypal_client_id?: string | null
+  pay_paypal_client_secret?: string | null
+  pay_paypal_sandbox?: boolean
+  pay_stripe_enabled?: boolean
+  pay_stripe_secret_key?: string | null
+  pay_stripe_webhook_secret?: string | null
+  pay_callback_base_url?: string | null
 }
 
 export interface ShopPlan {

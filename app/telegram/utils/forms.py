@@ -83,7 +83,13 @@ class ShopBuy(StatesGroup):
     waiting_gb = State()
     waiting_days = State()
     waiting_ip = State()
+    choose_pay_method = State()
     waiting_receipt = State()
+
+
+class ShopAdminPayment(StatesGroup):
+    waiting_value = State()
+    waiting_value2 = State()
 
 
 class ShopSupport(StatesGroup):

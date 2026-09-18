@@ -551,3 +551,144 @@ async def notify_owner_create_budget_charged(
         await bot.send_message(owner.telegram_id, text)
     except Exception:
         pass
+
+
+async def start_checkout(event, db, state, lang: str, *, summary_text: str) -> None:
+    """Show payment method picker or continue with the only enabled gateway."""
+    from aiogram import types
+
+    from app.db.crud.shop import get_enabled_shop_config
+    from app.shop.payments import GATEWAY_CARD, enabled_gateways
+    from app.telegram.keyboards.shop import ShopPayMethodKeyboard
+    from app.telegram.utils import forms
+
+    config = await get_enabled_shop_config(db)
+    if not config:
+        target = event.message if isinstance(event, types.CallbackQuery) else event
+        await target.answer(t(lang, "shop_disabled"))
+        return
+    gateways = enabled_gateways(config)
+    if not gateways:
+        gateways = [GATEWAY_CARD]
+    await state.update_data(pay_gateways=gateways, lang=lang, checkout_summary=summary_text)
+    if len(gateways) == 1 and gateways[0] == GATEWAY_CARD:
+        await continue_card_checkout(event, state, lang, config, summary_text)
+        return
+    if len(gateways) == 1:
+        await continue_online_checkout(event, db, state, lang, config, gateways[0], summary_text)
+        return
+    await state.set_state(forms.ShopBuy.choose_pay_method)
+    text = summary_text + "\n\n" + t(lang, "choose_pay_method")
+    markup = ShopPayMethodKeyboard(lang, gateways).as_markup()
+    if isinstance(event, types.CallbackQuery):
+        try:
+            await event.message.edit_text(text, reply_markup=markup)
+        except Exception:
+            await event.message.answer(text, reply_markup=markup)
+        await event.answer()
+    else:
+        await event.answer(text, reply_markup=markup)
+
+
+async def continue_card_checkout(event, state, lang: str, config, summary_text: str) -> None:
+    from aiogram import types
+
+    from app.telegram.utils import forms
+    from app.telegram.utils.shared import add_to_messages_to_delete
+
+    text = summary_text + build_pay_card_section(lang, config)
+    await state.set_state(forms.ShopBuy.waiting_receipt)
+    await state.update_data(payment_method="card")
+    if isinstance(event, types.CallbackQuery):
+        try:
+            await event.message.edit_text(text)
+        except Exception:
+            await event.message.answer(text)
+        chat_id = event.from_user.id
+        tip_target = event.message
+        await event.answer()
+    else:
+        await event.answer(text)
+        chat_id = event.from_user.id
+        tip_target = event
+    from app.telegram import get_bot
+
+    bot = get_bot()
+    if bot:
+        await send_card_photos(bot, chat_id, config)
+    tip = await tip_target.answer(t(lang, "send_receipt"))
+    await add_to_messages_to_delete(state, tip)
+
+
+async def continue_online_checkout(event, db, state, lang: str, config, gateway: str, summary_text: str) -> None:
+    from aiogram import types
+
+    from app.db.crud.shop import create_shop_order, update_shop_order_payment
+    from app.shop.payments import PaymentGatewayError, create_payment
+
+    data = await state.get_data()
+    admin_id = data.get("admin_id") or config.admin_id
+    plan_id = data.get("plan_id")
+    amount = int(data.get("quoted_price_toman") or 0)
+    if amount <= 0:
+        msg = t(lang, "payment_create_failed")
+        if isinstance(event, types.CallbackQuery):
+            await event.answer(msg, show_alert=True)
+        else:
+            await event.answer(msg)
+        return
+    user = event.from_user
+    try:
+        order = await create_shop_order(
+            db,
+            plan_id=plan_id,
+            admin_id=admin_id,
+            buyer_telegram_id=user.id,
+            buyer_username=user.username,
+            receipt_file_id=None,
+            order_kind=data.get("order_kind") or "purchase",
+            renew_user_id=int(data["renew_user_id"]) if data.get("renew_user_id") else None,
+            requested_username=data.get("requested_username"),
+            custom_data_gb=data.get("custom_data_gb"),
+            custom_expire_days=data.get("custom_expire_days"),
+            custom_ip_limit=data.get("custom_ip_limit"),
+            quoted_price_toman=amount,
+            is_custom=bool(data.get("is_custom")),
+            payment_method=gateway,
+            payment_paid=False,
+        )
+        result = await create_payment(
+            config,
+            gateway=gateway,
+            order_id=order.id,
+            amount_toman=amount,
+            description=f"HPXPANEL shop order #{order.id}",
+        )
+        await update_shop_order_payment(db, order, payment_ref=result.payment_ref, payment_url=result.payment_url)
+    except PaymentGatewayError as exc:
+        msg = (t(lang, "payment_create_failed") + f"\n{exc}")[:200]
+        if isinstance(event, types.CallbackQuery):
+            await event.answer(msg, show_alert=True)
+        else:
+            await event.answer(msg)
+        return
+    except Exception:
+        msg = t(lang, "payment_create_failed")
+        if isinstance(event, types.CallbackQuery):
+            await event.answer(msg, show_alert=True)
+        else:
+            await event.answer(msg)
+        return
+
+    text = summary_text + "\n\n" + t(
+        lang, "pay_online_link", gateway=gateway, url=result.payment_url, id=order.id
+    )
+    await state.clear()
+    if isinstance(event, types.CallbackQuery):
+        try:
+            await event.message.edit_text(text)
+        except Exception:
+            await event.message.answer(text)
+        await event.answer()
+    else:
+        await event.answer(text)

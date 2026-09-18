@@ -1614,7 +1614,6 @@ export type RunMethod = (typeof RunMethod)[keyof typeof RunMethod]
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const RunMethod = {
-  webhook: 'webhook',
   'long-polling': 'long-polling',
 } as const
 

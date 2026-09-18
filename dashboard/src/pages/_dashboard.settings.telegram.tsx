@@ -10,51 +10,15 @@ import { Input } from '@/components/ui/input'
 import { PasswordInput } from '@/components/ui/password-input'
 import { Switch } from '@/components/ui/switch'
 import { Separator } from '@/components/ui/separator'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Bot, Webhook, Shield, Globe, Smartphone, Send, Users, Settings, RefreshCcw } from 'lucide-react'
+import { Bot, Globe, Smartphone, Send, Users, RefreshCcw } from 'lucide-react'
 import { useSettingsContext } from './_dashboard.settings'
 import { toast } from 'sonner'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { useState } from 'react'
 import { useGetWorkersHealth } from '@/service/api'
 
-// Telegram settings validation schema
 const telegramSettingsSchema = z.object({
   enable: z.boolean().default(false),
   token: z.string().optional(),
-  method: z.enum(['webhook', 'long-polling']).default('webhook'),
-  webhook_url: z
-    .string()
-    .url('Please enter a valid URL')
-    .optional()
-    .or(z.literal(''))
-    .refine(
-      url => {
-        if (!url || url === '') return true // Allow empty URLs
-        try {
-          const parsedUrl = new URL(url)
-          const allowedPorts = ['443', '80', '88', '8443']
-          const port = parsedUrl.port || (parsedUrl.protocol === 'https:' ? '443' : '80')
-          return allowedPorts.includes(port)
-        } catch {
-          return false
-        }
-      },
-      {
-        message: 'Telegram webhook URL must use ports 443, 80, 88, or 8443',
-      },
-    )
-    .refine(
-      url => {
-        if (!url || url === '') return true
-        return !url.endsWith('/')
-      },
-      {
-        message: 'Telegram webhook URL must not end with a slash (/).',
-      },
-    ),
-  webhook_secret: z.string().optional(),
   proxy_url: z.string().url('Please enter a valid URL').optional().or(z.literal('')),
   mini_app_login: z.boolean().default(false),
   mini_app_url: z.string().url('Please enter a valid URL').optional().or(z.literal('')),
@@ -64,36 +28,31 @@ const telegramSettingsSchema = z.object({
 
 type TelegramSettingsFormInput = z.input<typeof telegramSettingsSchema>
 
-// Helper function to get current panel URL
 const getCurrentPanelUrl = () => {
   const protocol = window.location.protocol
   const host = window.location.host
   return `${protocol}//${host}`
 }
 
-// Helper to map frontend Telegram form data to backend payload
 function mapTelegramFormToPayload(data: TelegramSettingsFormInput) {
   const mapped = {
     ...data,
     enable: data.enable ?? false,
-    method: data.method ?? 'webhook',
+    method: 'long-polling' as const,
     mini_app_login: data.mini_app_login ?? false,
     for_admins_only: data.for_admins_only ?? true,
     token: data.token?.trim() || undefined,
-    webhook_url: data.webhook_url?.trim() || undefined,
-    webhook_secret: data.webhook_secret?.trim() || undefined,
     proxy_url: data.proxy_url?.trim() || undefined,
     mini_app_web_url: data.mini_app_url?.trim() || undefined,
     panel_url: data.panel_url?.trim() || undefined,
   }
-  delete mapped.mini_app_url
+  delete (mapped as { mini_app_url?: string }).mini_app_url
   return { telegram: mapped }
 }
 
 export default function TelegramSettings() {
   const { t } = useTranslation()
   const { settings, isLoading, error, updateSettings, isSaving } = useSettingsContext()
-  const [popoverOpen, setPopoverOpen] = useState(false)
   const { data: workersHealth } = useGetWorkersHealth({
     query: {
       retry: false,
@@ -107,9 +66,6 @@ export default function TelegramSettings() {
     defaultValues: {
       enable: false,
       token: '',
-      method: 'webhook',
-      webhook_url: '',
-      webhook_secret: '',
       proxy_url: '',
       mini_app_login: false,
       mini_app_url: '',
@@ -118,23 +74,17 @@ export default function TelegramSettings() {
     },
   })
 
-  // Watch the enable, method, and mini_app_login fields for conditional rendering
   const enableTelegram = form.watch('enable')
-  const method = form.watch('method')
   const schedulerStatus = workersHealth?.scheduler?.status?.toLowerCase().trim()
   const nodeStatus = workersHealth?.node?.status?.toLowerCase().trim()
   const isMultiWorkerMode = !!workersHealth && !(schedulerStatus === 'disabled' && nodeStatus === 'disabled')
 
-  // Update form when settings are loaded
   useEffect(() => {
     if (settings?.telegram) {
       const telegramData = settings.telegram
       form.reset({
         enable: telegramData.enable || false,
         token: telegramData.token || '',
-        method: telegramData.method || 'webhook',
-        webhook_url: telegramData.webhook_url || '',
-        webhook_secret: telegramData.webhook_secret || '',
         proxy_url: telegramData.proxy_url || '',
         mini_app_login: telegramData.mini_app_login || false,
         mini_app_url: telegramData.mini_app_web_url || '',
@@ -146,10 +96,8 @@ export default function TelegramSettings() {
 
   const onSubmit = async (data: TelegramSettingsFormInput) => {
     try {
-      // Use the mapping helper
-      const filteredData = mapTelegramFormToPayload(data)
-      await updateSettings(filteredData)
-    } catch (error) {
+      await updateSettings(mapTelegramFormToPayload(data))
+    } catch {
       // Error handling is done in the parent context
     }
   }
@@ -160,9 +108,6 @@ export default function TelegramSettings() {
       form.reset({
         enable: telegramData.enable || false,
         token: telegramData.token || '',
-        method: telegramData.method || 'webhook',
-        webhook_url: telegramData.webhook_url || '',
-        webhook_secret: telegramData.webhook_secret || '',
         proxy_url: telegramData.proxy_url || '',
         mini_app_login: telegramData.mini_app_login || false,
         mini_app_url: telegramData.mini_app_web_url || '',
@@ -177,7 +122,6 @@ export default function TelegramSettings() {
     return (
       <div className="w-full p-4 sm:py-6 lg:py-8">
         <div className="space-y-6 sm:space-y-8 lg:space-y-10">
-          {/* General Settings Skeleton */}
           <div className="space-y-4">
             <div className="space-y-2">
               <Skeleton className="h-6 w-48" />
@@ -196,7 +140,6 @@ export default function TelegramSettings() {
             <Skeleton className="h-16" />
           </div>
 
-          {/* Action Buttons Skeleton */}
           <div className="flex flex-col gap-3 pt-4 sm:flex-row sm:gap-4">
             <div className="flex-1"></div>
             <div className="flex flex-col gap-3 sm:shrink-0 sm:flex-row sm:gap-4">
@@ -225,14 +168,12 @@ export default function TelegramSettings() {
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-1 flex-col p-4 sm:py-6 lg:py-8">
           <div className="flex-1 space-y-6 sm:space-y-8 lg:space-y-10">
-            {/* General Settings */}
             <div className="space-y-3">
               <div className="space-y-2">
                 <h3 className="text-base font-semibold sm:text-lg">{t('settings.telegram.general.title')}</h3>
                 <p className="text-muted-foreground text-xs sm:text-sm">{t('settings.telegram.general.description')}</p>
               </div>
 
-              {/* Enable Telegram */}
               <FormField
                 control={form.control}
                 name="enable"
@@ -252,49 +193,14 @@ export default function TelegramSettings() {
                 )}
               />
 
-              {/* Method Selection - Only show when Telegram is enabled */}
-              {enableTelegram && (
-                <FormField
-                  control={form.control}
-                  name="method"
-                  render={({ field }) => (
-                    <FormItem className="space-y-2">
-                      <FormLabel className="flex items-center gap-2 text-xs font-medium sm:text-sm">
-                        <Settings className="h-4 w-4" />
-                        {t('settings.telegram.general.method')}
-                      </FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger className="w-full text-xs sm:text-sm">
-                            <SelectValue placeholder={t('settings.telegram.general.methodPlaceholder')} />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="webhook">
-                            <div className="flex items-center gap-2 text-xs sm:text-sm">
-                              <Webhook className="h-4 w-4" />
-                              {t('settings.telegram.general.webhook')}
-                            </div>
-                          </SelectItem>
-                          <SelectItem value="long-polling" disabled={isMultiWorkerMode}>
-                            <div className="flex items-center gap-2 text-xs sm:text-sm">
-                              <Send className="h-4 w-4" />
-                              {t('settings.telegram.general.longPolling')}
-                            </div>
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormDescription className="text-muted-foreground text-xs sm:text-sm">
-                        {t('settings.telegram.general.methodDescription')}
-                        {isMultiWorkerMode ? ` ${t('settings.telegram.general.longPollingDisabledInMultiWorker', { defaultValue: 'Long polling is disabled in multi-worker mode.' })}` : ''}
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+              {enableTelegram && isMultiWorkerMode && (
+                <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-700 sm:text-sm dark:text-amber-300">
+                  {t('settings.telegram.general.longPollingDisabledInMultiWorker', {
+                    defaultValue: 'Long polling is disabled in multi-worker mode. Disable NATS and set UVICORN_WORKERS=1.',
+                  })}
+                </div>
               )}
 
-              {/* Configuration Fields - Only show when Telegram is enabled */}
               {enableTelegram && (
                 <div className="grid grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-2">
                   <FormField
@@ -315,115 +221,38 @@ export default function TelegramSettings() {
                     )}
                   />
 
-                  {/* Panel URL - for long polling (subscription links in bot) */}
-                  {method === 'long-polling' && (
-                    <FormField
-                      control={form.control}
-                      name="panel_url"
-                      render={({ field }) => (
-                        <FormItem className="space-y-2 lg:col-span-2">
-                          <FormLabel className="flex items-center gap-2 text-xs font-medium sm:text-sm">
-                            <Globe className="h-4 w-4" />
-                            {t('settings.telegram.general.panelUrl')}
-                          </FormLabel>
-                          <div className="relative">
-                            <FormControl>
-                              <Input type="url" placeholder={t('settings.telegram.general.panelUrlPlaceholder')} {...field} className="pr-10 font-mono text-xs sm:text-sm" />
-                            </FormControl>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="hover:bg-accent absolute top-1/2 right-1 h-8 w-8 -translate-y-1/2"
-                              onClick={e => {
-                                e.preventDefault()
-                                field.onChange(getCurrentPanelUrl())
-                                toast.success(t('settings.telegram.general.panelUrlApplied'))
-                              }}
-                            >
-                              <RefreshCcw className="h-3 w-3" />
-                            </Button>
-                          </div>
-                          <FormDescription className="text-muted-foreground text-xs sm:text-sm">{t('settings.telegram.general.panelUrlDescription')}</FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  )}
-
-                  {/* Webhook URL - Only show when method is webhook */}
-                  {method === 'webhook' && (
-                    <FormField
-                      control={form.control}
-                      name="webhook_url"
-                      render={({ field }) => (
-                        <FormItem className="space-y-2">
-                          <FormLabel className="flex items-center gap-2 text-xs font-medium sm:text-sm">
-                            <Webhook className="h-4 w-4" />
-                            {t('settings.telegram.general.webhookUrl')}
-                          </FormLabel>
-                          <div className="relative">
-                            <FormControl>
-                              <Input type="url" placeholder={t('settings.telegram.general.webhookUrlPlaceholder')} {...field} className="pr-10 font-mono text-xs sm:text-sm" />
-                            </FormControl>
-                            <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
-                              <PopoverTrigger asChild>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  className="hover:bg-accent absolute top-1/2 right-1 h-8 w-8 -translate-y-1/2"
-                                  onClick={e => {
-                                    e.preventDefault()
-                                    const currentUrl = getCurrentPanelUrl()
-                                    field.onChange(currentUrl)
-                                    toast.success(t('settings.telegram.general.panelUrlApplied'))
-                                    setPopoverOpen(false)
-                                  }}
-                                  onMouseEnter={() => setPopoverOpen(true)}
-                                  onMouseLeave={() => setPopoverOpen(false)}
-                                >
-                                  <RefreshCcw className="h-3 w-3" />
-                                </Button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-72 sm:w-80" side="top" align="end">
-                                <div className="space-y-2">
-                                  <p className="text-[11px] font-medium">{t('settings.telegram.general.usePanelUrl')}</p>
-                                  <p className="text-muted-foreground text-[11px]">{t('settings.telegram.general.usePanelUrlDescription')}</p>
-                                </div>
-                              </PopoverContent>
-                            </Popover>
-                          </div>
-                          <FormDescription className="text-muted-foreground text-xs sm:text-sm">
-                            {t('settings.telegram.general.webhookUrlDescription')}
-                            <br />
-                          </FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  )}
-
-                  {/* Webhook Secret - Only show when method is webhook */}
-                  {method === 'webhook' && (
-                    <FormField
-                      control={form.control}
-                      name="webhook_secret"
-                      render={({ field }) => (
-                        <FormItem className="space-y-2">
-                          <FormLabel className="flex items-center gap-2 text-xs font-medium sm:text-sm">
-                            <Shield className="h-4 w-4" />
-                            {t('settings.telegram.general.webhookSecret')}
-                          </FormLabel>
+                  <FormField
+                    control={form.control}
+                    name="panel_url"
+                    render={({ field }) => (
+                      <FormItem className="space-y-2 lg:col-span-2">
+                        <FormLabel className="flex items-center gap-2 text-xs font-medium sm:text-sm">
+                          <Globe className="h-4 w-4" />
+                          {t('settings.telegram.general.panelUrl')}
+                        </FormLabel>
+                        <div className="relative">
                           <FormControl>
-                            <PasswordInput placeholder={t('settings.telegram.general.webhookSecretPlaceholder')} {...field} className="font-mono text-xs sm:text-sm" />
+                            <Input type="url" placeholder={t('settings.telegram.general.panelUrlPlaceholder')} {...field} className="pr-10 font-mono text-xs sm:text-sm" />
                           </FormControl>
-                          <FormDescription className="text-muted-foreground text-xs sm:text-sm">{t('settings.telegram.general.webhookSecretDescription')}</FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  )}
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="hover:bg-accent absolute top-1/2 right-1 h-8 w-8 -translate-y-1/2"
+                            onClick={e => {
+                              e.preventDefault()
+                              field.onChange(getCurrentPanelUrl())
+                              toast.success(t('settings.telegram.general.panelUrlApplied'))
+                            }}
+                          >
+                            <RefreshCcw className="h-3 w-3" />
+                          </Button>
+                        </div>
+                        <FormDescription className="text-muted-foreground text-xs sm:text-sm">{t('settings.telegram.general.panelUrlDescription')}</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
                   <FormField
                     control={form.control}
@@ -446,7 +275,6 @@ export default function TelegramSettings() {
               )}
             </div>
 
-            {/* Advanced Settings - Only show when Telegram is enabled */}
             {enableTelegram && (
               <>
                 <Separator className="my-3" />
@@ -457,7 +285,6 @@ export default function TelegramSettings() {
                     <p className="text-muted-foreground text-xs sm:text-sm">{t('settings.telegram.advanced.description')}</p>
                   </div>
 
-                  {/* Mini App Login */}
                   <FormField
                     control={form.control}
                     name="mini_app_login"
@@ -476,7 +303,6 @@ export default function TelegramSettings() {
                       </FormItem>
                     )}
                   />
-                  {/* Mini App URL - only show when mini_app_login is enabled */}
                   {form.watch('mini_app_login') && (
                     <FormField
                       control={form.control}
@@ -497,7 +323,6 @@ export default function TelegramSettings() {
                     />
                   )}
 
-                  {/* For Admins Only */}
                   <FormField
                     control={form.control}
                     name="for_admins_only"

@@ -16,11 +16,13 @@ from app.db.crud.shop import (
     get_shop_bot_stats,
     get_shop_config_by_admin,
     get_shop_order,
+    get_shop_order_by_payment_ref,
     get_shop_plan,
     get_telegram_lang,
     list_orders_for_admin,
     list_plans_for_admin,
     update_order_status,
+    update_shop_order_payment,
     update_shop_plan,
     upsert_shop_config,
 )
@@ -98,8 +100,41 @@ def _config_response(config) -> ShopConfigResponse:
         custom_max_days=int(getattr(config, "custom_max_days", 365) or 365),
         custom_base_ip=int(getattr(config, "custom_base_ip", 1) or 1),
         custom_group_ids=list(getattr(config, "custom_group_ids", None) or []),
+        pay_card_enabled=bool(getattr(config, "pay_card_enabled", True)),
+        pay_zarinpal_enabled=bool(getattr(config, "pay_zarinpal_enabled", False)),
+        pay_zarinpal_merchant_id=getattr(config, "pay_zarinpal_merchant_id", None),
+        pay_zarinpal_sandbox=bool(getattr(config, "pay_zarinpal_sandbox", False)),
+        pay_idpay_enabled=bool(getattr(config, "pay_idpay_enabled", False)),
+        pay_idpay_api_key=_mask_cfg(getattr(config, "pay_idpay_api_key", None)),
+        pay_idpay_sandbox=bool(getattr(config, "pay_idpay_sandbox", True)),
+        pay_nowpayments_enabled=bool(getattr(config, "pay_nowpayments_enabled", False)),
+        pay_nowpayments_api_key=_mask_cfg(getattr(config, "pay_nowpayments_api_key", None)),
+        pay_nowpayments_ipn_secret=_mask_cfg(getattr(config, "pay_nowpayments_ipn_secret", None)),
+        pay_paypal_enabled=bool(getattr(config, "pay_paypal_enabled", False)),
+        pay_paypal_client_id=getattr(config, "pay_paypal_client_id", None),
+        pay_paypal_client_secret=_mask_cfg(getattr(config, "pay_paypal_client_secret", None)),
+        pay_paypal_sandbox=bool(getattr(config, "pay_paypal_sandbox", True)),
+        pay_stripe_enabled=bool(getattr(config, "pay_stripe_enabled", False)),
+        pay_stripe_secret_key=_mask_cfg(getattr(config, "pay_stripe_secret_key", None)),
+        pay_stripe_webhook_secret=_mask_cfg(getattr(config, "pay_stripe_webhook_secret", None)),
+        pay_callback_base_url=getattr(config, "pay_callback_base_url", None),
+        enabled_gateways=_enabled_gateways(config),
         created_at=config.created_at,
     )
+
+
+def _mask_cfg(value: str | None) -> str | None:
+    if not value:
+        return None
+    if len(value) <= 8:
+        return "••••"
+    return f"{value[:4]}••••{value[-4:]}"
+
+
+def _enabled_gateways(config) -> list[str]:
+    from app.shop.payments import enabled_gateways
+
+    return enabled_gateways(config)
 
 
 def _plan_response(plan: ShopPlan) -> ShopPlanResponse:
@@ -162,6 +197,10 @@ async def _order_response(db: AsyncSession, order: ShopOrder) -> ShopOrderRespon
         custom_ip_limit=getattr(order, "custom_ip_limit", None),
         quoted_price_toman=getattr(order, "quoted_price_toman", None),
         is_custom=bool(getattr(order, "is_custom", False)),
+        payment_method=getattr(order, "payment_method", None),
+        payment_ref=getattr(order, "payment_ref", None),
+        payment_url=getattr(order, "payment_url", None),
+        payment_paid=bool(getattr(order, "payment_paid", False)),
         note=order.note,
         created_at=order.created_at,
     )
@@ -340,6 +379,31 @@ class ShopOperation(BaseOperation):
                 await self.raise_error("Plan not found", 404, db)
             return await self._approve_renewal_order(db, shop_admin, order, plan)
         return await self._approve_purchase_order(db, shop_admin, order, plan)
+
+    async def fulfill_paid_order(self, db: AsyncSession, order_id: int) -> ShopApproveResponse | None:
+        """Mark online payment as paid and auto-approve. Idempotent if already approved."""
+        order = await get_shop_order(db, order_id)
+        if order is None:
+            return None
+        if order.status == ShopOrderStatus.approved:
+            return None
+        if order.status != ShopOrderStatus.pending:
+            return None
+        if not getattr(order, "payment_paid", False):
+            await update_shop_order_payment(db, order, payment_paid=True)
+            order = await get_shop_order(db, order_id)
+        db_admin = await get_admin_by_id(db, order.admin_id, load_users=False, load_usage_logs=False)
+        if db_admin is None:
+            logger.error("Shop order %s admin %s missing for auto-approve", order_id, order.admin_id)
+            return None
+        admin = build_admin_details(db_admin, include_loaded_metrics=False)
+        return await self.approve_order(db, admin, order_id)
+
+    async def fulfill_by_payment_ref(self, db: AsyncSession, payment_ref: str) -> ShopApproveResponse | None:
+        order = await get_shop_order_by_payment_ref(db, payment_ref)
+        if order is None:
+            return None
+        return await self.fulfill_paid_order(db, order.id)
 
     async def _approve_purchase_order(
         self, db: AsyncSession, shop_admin: AdminDetails, order: ShopOrder, plan: ShopPlan | None

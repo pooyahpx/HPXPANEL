@@ -34,6 +34,7 @@ class ShopAction(str, Enum):
     renew = "renew"
     renew_pick = "rnp"
     renew_buy = "rnb"
+    pay_method = "pay"
     my_orders = "orders"
     lang = "lang"
     support = "support"
@@ -106,6 +107,33 @@ class ShopIpKeyboard(InlineKeyboardBuilder):
         )
         self.button(text=t(lang, "btn_back"), callback_data=cb(action=ShopAction.plans))
         self.adjust(1, 1)
+
+
+class ShopPayMethodKeyboard(InlineKeyboardBuilder):
+    """Buyer chooses an enabled payment gateway. plan_id carries gateway index."""
+
+    def __init__(self, lang: str, gateways: list[str], *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        cb = ShopKeyboardCallback
+        labels = {
+            "card": "btn_pay_card",
+            "zarinpal": "btn_pay_zarinpal",
+            "idpay": "btn_pay_idpay",
+            "nowpayments": "btn_pay_nowpayments",
+            "paypal": "btn_pay_paypal",
+            "stripe": "btn_pay_stripe",
+        }
+        for index, gw in enumerate(gateways):
+            self.button(
+                text=t(lang, labels.get(gw, "btn_pay_card")),
+                callback_data=cb(action=ShopAction.pay_method, plan_id=index),
+            )
+        self.button(text=t(lang, "btn_back"), callback_data=cb(action=ShopAction.home))
+        n = len(gateways)
+        if n:
+            self.adjust(*([1] * n), 1)
+        else:
+            self.adjust(1)
 
 
 class ShopRenewAccountsKeyboard(InlineKeyboardBuilder):
@@ -187,6 +215,9 @@ class ShopAdminAction(str, Enum):
     set_test = "stest"
     toggle_custom = "tcustom"
     set_custom = "scustom"
+    payments = "pays"
+    toggle_pay = "tpay"
+    set_pay = "spay"
     stats = "stats"
     accounting = "acct"
 
@@ -212,11 +243,91 @@ class ShopAdminKeyboard(InlineKeyboardBuilder):
         self.button(text=t(lang, "btn_toggle_test"), callback_data=self.Callback(action=ShopAdminAction.toggle_test))
         self.button(text=t(lang, "btn_custom_settings"), callback_data=self.Callback(action=ShopAdminAction.set_custom))
         self.button(text=t(lang, "btn_toggle_custom"), callback_data=self.Callback(action=ShopAdminAction.toggle_custom))
+        self.button(text=t(lang, "btn_payments"), callback_data=self.Callback(action=ShopAdminAction.payments))
         self.button(text=t(lang, "btn_add_plan"), callback_data=self.Callback(action=ShopAdminAction.add_plan))
         self.button(text=t(lang, "btn_list_plans"), callback_data=self.Callback(action=ShopAdminAction.list_plans))
         self.button(text=t(lang, "btn_pending"), callback_data=self.Callback(action=ShopAdminAction.pending))
         self.button(text=t(lang, "btn_back"), callback_data=self.Callback(action=ShopAdminAction.home, id=-1))
-        self.adjust(2, 2, 2, 2, 2, 2, 2, 1)
+        self.adjust(2, 2, 2, 2, 2, 2, 2, 2, 1)
+
+
+# id encoding for payment admin callbacks
+PAY_GW_CARD = 1
+PAY_GW_ZARINPAL = 2
+PAY_GW_IDPAY = 3
+PAY_GW_NOWPAYMENTS = 4
+PAY_GW_PAYPAL = 5
+PAY_GW_STRIPE = 6
+PAY_GW_CALLBACK = 7
+
+PAY_GW_BY_ID = {
+    PAY_GW_CARD: "card",
+    PAY_GW_ZARINPAL: "zarinpal",
+    PAY_GW_IDPAY: "idpay",
+    PAY_GW_NOWPAYMENTS: "nowpayments",
+    PAY_GW_PAYPAL: "paypal",
+    PAY_GW_STRIPE: "stripe",
+}
+
+
+class ShopAdminPaymentsKeyboard(InlineKeyboardBuilder):
+    def __init__(self, lang: str, config, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        cb = ShopAdminKeyboard.Callback
+
+        def _on(flag: bool) -> str:
+            return "✅" if flag else "⏹"
+
+        self.button(
+            text=f"{_on(bool(getattr(config, 'pay_card_enabled', True)))} {t(lang, 'btn_pay_card')}",
+            callback_data=cb(action=ShopAdminAction.toggle_pay, id=PAY_GW_CARD),
+        )
+        self.button(
+            text=f"{_on(bool(getattr(config, 'pay_zarinpal_enabled', False)))} {t(lang, 'btn_pay_zarinpal')}",
+            callback_data=cb(action=ShopAdminAction.toggle_pay, id=PAY_GW_ZARINPAL),
+        )
+        self.button(
+            text=t(lang, "btn_set_zarinpal"),
+            callback_data=cb(action=ShopAdminAction.set_pay, id=PAY_GW_ZARINPAL),
+        )
+        self.button(
+            text=f"{_on(bool(getattr(config, 'pay_idpay_enabled', False)))} {t(lang, 'btn_pay_idpay')}",
+            callback_data=cb(action=ShopAdminAction.toggle_pay, id=PAY_GW_IDPAY),
+        )
+        self.button(
+            text=t(lang, "btn_set_idpay"),
+            callback_data=cb(action=ShopAdminAction.set_pay, id=PAY_GW_IDPAY),
+        )
+        self.button(
+            text=f"{_on(bool(getattr(config, 'pay_nowpayments_enabled', False)))} {t(lang, 'btn_pay_nowpayments')}",
+            callback_data=cb(action=ShopAdminAction.toggle_pay, id=PAY_GW_NOWPAYMENTS),
+        )
+        self.button(
+            text=t(lang, "btn_set_nowpayments"),
+            callback_data=cb(action=ShopAdminAction.set_pay, id=PAY_GW_NOWPAYMENTS),
+        )
+        self.button(
+            text=f"{_on(bool(getattr(config, 'pay_paypal_enabled', False)))} {t(lang, 'btn_pay_paypal')}",
+            callback_data=cb(action=ShopAdminAction.toggle_pay, id=PAY_GW_PAYPAL),
+        )
+        self.button(
+            text=t(lang, "btn_set_paypal"),
+            callback_data=cb(action=ShopAdminAction.set_pay, id=PAY_GW_PAYPAL),
+        )
+        self.button(
+            text=f"{_on(bool(getattr(config, 'pay_stripe_enabled', False)))} {t(lang, 'btn_pay_stripe')}",
+            callback_data=cb(action=ShopAdminAction.toggle_pay, id=PAY_GW_STRIPE),
+        )
+        self.button(
+            text=t(lang, "btn_set_stripe"),
+            callback_data=cb(action=ShopAdminAction.set_pay, id=PAY_GW_STRIPE),
+        )
+        self.button(
+            text=t(lang, "btn_set_callback_url"),
+            callback_data=cb(action=ShopAdminAction.set_pay, id=PAY_GW_CALLBACK),
+        )
+        self.button(text=t(lang, "btn_back"), callback_data=cb(action=ShopAdminAction.home))
+        self.adjust(1, 2, 2, 2, 2, 2, 1, 1)
 
 
 class ShopAdminCardsKeyboard(InlineKeyboardBuilder):

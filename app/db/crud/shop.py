@@ -188,6 +188,24 @@ async def upsert_shop_config(
     custom_max_days: int | None = None,
     custom_base_ip: int | None = None,
     custom_group_ids: list[int] | None = None,
+    pay_card_enabled: bool | None = None,
+    pay_zarinpal_enabled: bool | None = None,
+    pay_zarinpal_merchant_id: str | None = None,
+    pay_zarinpal_sandbox: bool | None = None,
+    pay_idpay_enabled: bool | None = None,
+    pay_idpay_api_key: str | None = None,
+    pay_idpay_sandbox: bool | None = None,
+    pay_nowpayments_enabled: bool | None = None,
+    pay_nowpayments_api_key: str | None = None,
+    pay_nowpayments_ipn_secret: str | None = None,
+    pay_paypal_enabled: bool | None = None,
+    pay_paypal_client_id: str | None = None,
+    pay_paypal_client_secret: str | None = None,
+    pay_paypal_sandbox: bool | None = None,
+    pay_stripe_enabled: bool | None = None,
+    pay_stripe_secret_key: str | None = None,
+    pay_stripe_webhook_secret: str | None = None,
+    pay_callback_base_url: str | None = None,
 ) -> ShopConfig:
     config = await get_shop_config_by_admin(db, admin_id)
     if config is None:
@@ -242,6 +260,42 @@ async def upsert_shop_config(
         config.custom_base_ip = custom_base_ip
     if custom_group_ids is not None:
         config.custom_group_ids = custom_group_ids
+    if pay_card_enabled is not None:
+        config.pay_card_enabled = pay_card_enabled
+    if pay_zarinpal_enabled is not None:
+        config.pay_zarinpal_enabled = pay_zarinpal_enabled
+    if pay_zarinpal_merchant_id is not None:
+        config.pay_zarinpal_merchant_id = pay_zarinpal_merchant_id or None
+    if pay_zarinpal_sandbox is not None:
+        config.pay_zarinpal_sandbox = pay_zarinpal_sandbox
+    if pay_idpay_enabled is not None:
+        config.pay_idpay_enabled = pay_idpay_enabled
+    if pay_idpay_api_key is not None and "••••" not in pay_idpay_api_key:
+        config.pay_idpay_api_key = pay_idpay_api_key or None
+    if pay_idpay_sandbox is not None:
+        config.pay_idpay_sandbox = pay_idpay_sandbox
+    if pay_nowpayments_enabled is not None:
+        config.pay_nowpayments_enabled = pay_nowpayments_enabled
+    if pay_nowpayments_api_key is not None and "••••" not in pay_nowpayments_api_key:
+        config.pay_nowpayments_api_key = pay_nowpayments_api_key or None
+    if pay_nowpayments_ipn_secret is not None and "••••" not in pay_nowpayments_ipn_secret:
+        config.pay_nowpayments_ipn_secret = pay_nowpayments_ipn_secret or None
+    if pay_paypal_enabled is not None:
+        config.pay_paypal_enabled = pay_paypal_enabled
+    if pay_paypal_client_id is not None:
+        config.pay_paypal_client_id = pay_paypal_client_id or None
+    if pay_paypal_client_secret is not None and "••••" not in pay_paypal_client_secret:
+        config.pay_paypal_client_secret = pay_paypal_client_secret or None
+    if pay_paypal_sandbox is not None:
+        config.pay_paypal_sandbox = pay_paypal_sandbox
+    if pay_stripe_enabled is not None:
+        config.pay_stripe_enabled = pay_stripe_enabled
+    if pay_stripe_secret_key is not None and "••••" not in pay_stripe_secret_key:
+        config.pay_stripe_secret_key = pay_stripe_secret_key or None
+    if pay_stripe_webhook_secret is not None and "••••" not in pay_stripe_webhook_secret:
+        config.pay_stripe_webhook_secret = pay_stripe_webhook_secret or None
+    if pay_callback_base_url is not None:
+        config.pay_callback_base_url = (pay_callback_base_url or "").strip().rstrip("/") or None
     await db.commit()
     await db.refresh(config)
     return config
@@ -322,7 +376,7 @@ async def create_shop_order(
     admin_id: int,
     buyer_telegram_id: int,
     buyer_username: str | None,
-    receipt_file_id: str,
+    receipt_file_id: str | None = None,
     order_kind: str = "purchase",
     renew_user_id: int | None = None,
     requested_username: str | None = None,
@@ -331,6 +385,10 @@ async def create_shop_order(
     custom_ip_limit: int | None = None,
     quoted_price_toman: int | None = None,
     is_custom: bool = False,
+    payment_method: str | None = None,
+    payment_ref: str | None = None,
+    payment_url: str | None = None,
+    payment_paid: bool = False,
 ) -> ShopOrder:
     kind = (order_kind or "purchase").strip().lower()
     if kind not in ("purchase", "renewal"):
@@ -350,6 +408,10 @@ async def create_shop_order(
         custom_ip_limit=custom_ip_limit,
         quoted_price_toman=quoted_price_toman,
         is_custom=bool(is_custom),
+        payment_method=payment_method,
+        payment_ref=payment_ref,
+        payment_url=payment_url,
+        payment_paid=bool(payment_paid),
     )
     await _assign_sqlite_pk(db, ShopOrder, order)
     db.add(order)
@@ -358,17 +420,58 @@ async def create_shop_order(
     return order
 
 
+async def update_shop_order_payment(
+    db: AsyncSession,
+    order: ShopOrder,
+    *,
+    payment_ref: str | None = None,
+    payment_url: str | None = None,
+    payment_paid: bool | None = None,
+    receipt_file_id: str | None = None,
+) -> ShopOrder:
+    if payment_ref is not None:
+        order.payment_ref = payment_ref
+    if payment_url is not None:
+        order.payment_url = payment_url
+    if payment_paid is not None:
+        order.payment_paid = payment_paid
+    if receipt_file_id is not None:
+        order.receipt_file_id = receipt_file_id
+    await db.commit()
+    await db.refresh(order)
+    return order
+
+
+async def get_shop_order_by_payment_ref(db: AsyncSession, payment_ref: str) -> ShopOrder | None:
+    if not payment_ref:
+        return None
+    stmt = select(ShopOrder).where(ShopOrder.payment_ref == payment_ref).limit(1)
+    return (await db.execute(stmt)).scalar_one_or_none()
+
+
 async def get_shop_order(db: AsyncSession, order_id: int) -> ShopOrder | None:
     return await db.get(ShopOrder, order_id)
 
 
 async def list_pending_orders(db: AsyncSession, admin_id: int) -> list[ShopOrder]:
+    """Pending orders that need admin review (exclude unpaid online invoices)."""
     stmt = (
         select(ShopOrder)
         .where(ShopOrder.admin_id == admin_id, ShopOrder.status == ShopOrderStatus.pending)
         .order_by(ShopOrder.id.asc())
     )
-    return list((await db.execute(stmt)).scalars().all())
+    rows = list((await db.execute(stmt)).scalars().all())
+    filtered: list[ShopOrder] = []
+    for order in rows:
+        method = (getattr(order, "payment_method", None) or "card").lower()
+        if method == "card":
+            if order.receipt_file_id:
+                filtered.append(order)
+            continue
+        # Online gateways auto-approve on pay; only show if somehow still pending & paid
+        if getattr(order, "payment_paid", False):
+            filtered.append(order)
+    return filtered
 
 
 async def list_orders_for_admin(

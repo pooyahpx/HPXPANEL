@@ -44,6 +44,25 @@ class ShopConfigResponse(BaseModel):
     custom_max_days: int = 365
     custom_base_ip: int = 1
     custom_group_ids: list[int] = Field(default_factory=list)
+    pay_card_enabled: bool = True
+    pay_zarinpal_enabled: bool = False
+    pay_zarinpal_merchant_id: str | None = None
+    pay_zarinpal_sandbox: bool = False
+    pay_idpay_enabled: bool = False
+    pay_idpay_api_key: str | None = None
+    pay_idpay_sandbox: bool = True
+    pay_nowpayments_enabled: bool = False
+    pay_nowpayments_api_key: str | None = None
+    pay_nowpayments_ipn_secret: str | None = None
+    pay_paypal_enabled: bool = False
+    pay_paypal_client_id: str | None = None
+    pay_paypal_client_secret: str | None = None
+    pay_paypal_sandbox: bool = True
+    pay_stripe_enabled: bool = False
+    pay_stripe_secret_key: str | None = None
+    pay_stripe_webhook_secret: str | None = None
+    pay_callback_base_url: str | None = None
+    enabled_gateways: list[str] = Field(default_factory=list)
     created_at: dt | None = None
 
     model_config = ConfigDict(from_attributes=True)
@@ -68,6 +87,24 @@ class ShopConfigUpdate(BaseModel):
     custom_max_days: int | None = Field(default=None, ge=1)
     custom_base_ip: int | None = Field(default=None, ge=1)
     custom_group_ids: list[int] | None = None
+    pay_card_enabled: bool | None = None
+    pay_zarinpal_enabled: bool | None = None
+    pay_zarinpal_merchant_id: str | None = None
+    pay_zarinpal_sandbox: bool | None = None
+    pay_idpay_enabled: bool | None = None
+    pay_idpay_api_key: str | None = None
+    pay_idpay_sandbox: bool | None = None
+    pay_nowpayments_enabled: bool | None = None
+    pay_nowpayments_api_key: str | None = None
+    pay_nowpayments_ipn_secret: str | None = None
+    pay_paypal_enabled: bool | None = None
+    pay_paypal_client_id: str | None = None
+    pay_paypal_client_secret: str | None = None
+    pay_paypal_sandbox: bool | None = None
+    pay_stripe_enabled: bool | None = None
+    pay_stripe_secret_key: str | None = None
+    pay_stripe_webhook_secret: str | None = None
+    pay_callback_base_url: str | None = None
 
     @model_validator(mode="after")
     def validate_custom_groups_and_bounds(self):
@@ -164,6 +201,10 @@ class ShopOrderResponse(BaseModel):
     custom_ip_limit: int | None = None
     quoted_price_toman: int | None = None
     is_custom: bool = False
+    payment_method: str | None = None
+    payment_ref: str | None = None
+    payment_url: str | None = None
+    payment_paid: bool = False
     note: str | None = None
     created_at: dt | None = None
 

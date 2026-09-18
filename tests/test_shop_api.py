@@ -73,6 +73,33 @@ def test_shop_config_get_and_update(shop_admin):
     assert data["card_number"] == "6037991234567890"
 
 
+def test_shop_payment_gateway_config(shop_admin):
+    headers = auth_headers(shop_admin["token"])
+    updated = client.put(
+        "/api/shop/config",
+        headers=headers,
+        json={
+            "pay_card_enabled": True,
+            "pay_zarinpal_enabled": True,
+            "pay_zarinpal_merchant_id": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+            "pay_zarinpal_sandbox": True,
+            "pay_callback_base_url": "https://panel.example.com",
+            "pay_stripe_enabled": False,
+            "pay_paypal_enabled": False,
+            "pay_idpay_enabled": False,
+            "pay_nowpayments_enabled": False,
+        },
+    )
+    assert updated.status_code == status.HTTP_200_OK, updated.text
+    data = updated.json()
+    assert data["pay_card_enabled"] is True
+    assert data["pay_zarinpal_enabled"] is True
+    assert data["pay_zarinpal_merchant_id"] == "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+    assert data["pay_callback_base_url"] == "https://panel.example.com"
+    assert "zarinpal" in data["enabled_gateways"]
+    assert "card" in data["enabled_gateways"]
+
+
 def test_shop_plan_crud_and_stats(shop_admin):
     headers = auth_headers(shop_admin["token"])
     from tests.api.helpers import create_core, create_group, delete_core

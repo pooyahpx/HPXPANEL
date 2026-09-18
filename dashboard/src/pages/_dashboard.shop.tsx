@@ -270,6 +270,24 @@ export default function ShopPage() {
   const [customMaxDays, setCustomMaxDays] = useState('365')
   const [customBaseIp, setCustomBaseIp] = useState('1')
   const [customGroupIds, setCustomGroupIds] = useState<number[]>([])
+  const [payCardEnabled, setPayCardEnabled] = useState(true)
+  const [payZarinpalEnabled, setPayZarinpalEnabled] = useState(false)
+  const [payZarinpalMerchant, setPayZarinpalMerchant] = useState('')
+  const [payZarinpalSandbox, setPayZarinpalSandbox] = useState(false)
+  const [payIdpayEnabled, setPayIdpayEnabled] = useState(false)
+  const [payIdpayKey, setPayIdpayKey] = useState('')
+  const [payIdpaySandbox, setPayIdpaySandbox] = useState(true)
+  const [payNowEnabled, setPayNowEnabled] = useState(false)
+  const [payNowKey, setPayNowKey] = useState('')
+  const [payNowIpn, setPayNowIpn] = useState('')
+  const [payPaypalEnabled, setPayPaypalEnabled] = useState(false)
+  const [payPaypalClientId, setPayPaypalClientId] = useState('')
+  const [payPaypalSecret, setPayPaypalSecret] = useState('')
+  const [payPaypalSandbox, setPayPaypalSandbox] = useState(true)
+  const [payStripeEnabled, setPayStripeEnabled] = useState(false)
+  const [payStripeSecret, setPayStripeSecret] = useState('')
+  const [payStripeWebhook, setPayStripeWebhook] = useState('')
+  const [payCallbackUrl, setPayCallbackUrl] = useState('')
   const [accountingFilter, setAccountingFilter] = useState<'all' | 'charge' | 'credit' | 'unsettled' | 'settled'>('all')
 
   const { data: groupsSimple } = useGetGroupsSimple({ all: true }, { query: { staleTime: 5 * 60 * 1000, enabled: canView } })
@@ -346,6 +364,24 @@ export default function ShopPage() {
     setCustomMaxDays(String(config.custom_max_days ?? 365))
     setCustomBaseIp(String(config.custom_base_ip ?? 1))
     setCustomGroupIds([...(config.custom_group_ids || [])])
+    setPayCardEnabled(config.pay_card_enabled !== false)
+    setPayZarinpalEnabled(Boolean(config.pay_zarinpal_enabled))
+    setPayZarinpalMerchant(config.pay_zarinpal_merchant_id || '')
+    setPayZarinpalSandbox(Boolean(config.pay_zarinpal_sandbox))
+    setPayIdpayEnabled(Boolean(config.pay_idpay_enabled))
+    setPayIdpayKey(config.pay_idpay_api_key?.includes('••••') ? '' : config.pay_idpay_api_key || '')
+    setPayIdpaySandbox(config.pay_idpay_sandbox !== false)
+    setPayNowEnabled(Boolean(config.pay_nowpayments_enabled))
+    setPayNowKey(config.pay_nowpayments_api_key?.includes('••••') ? '' : config.pay_nowpayments_api_key || '')
+    setPayNowIpn(config.pay_nowpayments_ipn_secret?.includes('••••') ? '' : config.pay_nowpayments_ipn_secret || '')
+    setPayPaypalEnabled(Boolean(config.pay_paypal_enabled))
+    setPayPaypalClientId(config.pay_paypal_client_id || '')
+    setPayPaypalSecret(config.pay_paypal_client_secret?.includes('••••') ? '' : config.pay_paypal_client_secret || '')
+    setPayPaypalSandbox(config.pay_paypal_sandbox !== false)
+    setPayStripeEnabled(Boolean(config.pay_stripe_enabled))
+    setPayStripeSecret(config.pay_stripe_secret_key?.includes('••••') ? '' : config.pay_stripe_secret_key || '')
+    setPayStripeWebhook(config.pay_stripe_webhook_secret?.includes('••••') ? '' : config.pay_stripe_webhook_secret || '')
+    setPayCallbackUrl(config.pay_callback_base_url || '')
   }, [config])
 
   useEffect(() => {
@@ -1259,6 +1295,83 @@ export default function ShopPage() {
                     </div>
                   </div>
 
+                  <div className="space-y-4 rounded-lg border p-4">
+                    <div className="space-y-1">
+                      <div className="font-medium">
+                        {t('shop.paymentGateways', { defaultValue: 'Payment gateways' })}
+                      </div>
+                      <div className="text-muted-foreground text-sm">
+                        {t('shop.paymentGatewaysHint', {
+                          defaultValue:
+                            'Toggle each gateway independently. Online gateways need a public panel URL for callbacks.',
+                        })}
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>{t('shop.callbackUrl', { defaultValue: 'Public panel URL' })}</Label>
+                      <Input
+                        value={payCallbackUrl}
+                        disabled={!canManage}
+                        placeholder="https://panel.example.com"
+                        onChange={e => setPayCallbackUrl(e.target.value)}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between gap-4 rounded-md border p-3">
+                      <div className="font-medium">{t('shop.payCard', { defaultValue: 'Card-to-card' })}</div>
+                      <Switch checked={payCardEnabled} disabled={!canManage} onCheckedChange={setPayCardEnabled} />
+                    </div>
+                    <div className="space-y-3 rounded-md border p-3">
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="font-medium">{t('shop.payZarinpal', { defaultValue: 'Zarinpal' })}</div>
+                        <Switch checked={payZarinpalEnabled} disabled={!canManage} onCheckedChange={setPayZarinpalEnabled} />
+                      </div>
+                      <Input value={payZarinpalMerchant} disabled={!canManage} placeholder="Merchant ID" onChange={e => setPayZarinpalMerchant(e.target.value)} />
+                      <div className="flex items-center justify-between gap-4">
+                        <Label>{t('shop.sandbox', { defaultValue: 'Sandbox' })}</Label>
+                        <Switch checked={payZarinpalSandbox} disabled={!canManage} onCheckedChange={setPayZarinpalSandbox} />
+                      </div>
+                    </div>
+                    <div className="space-y-3 rounded-md border p-3">
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="font-medium">{t('shop.payIdpay', { defaultValue: 'IDPay' })}</div>
+                        <Switch checked={payIdpayEnabled} disabled={!canManage} onCheckedChange={setPayIdpayEnabled} />
+                      </div>
+                      <Input value={payIdpayKey} disabled={!canManage} placeholder="API Key" onChange={e => setPayIdpayKey(e.target.value)} />
+                      <div className="flex items-center justify-between gap-4">
+                        <Label>{t('shop.sandbox', { defaultValue: 'Sandbox' })}</Label>
+                        <Switch checked={payIdpaySandbox} disabled={!canManage} onCheckedChange={setPayIdpaySandbox} />
+                      </div>
+                    </div>
+                    <div className="space-y-3 rounded-md border p-3">
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="font-medium">{t('shop.payNowpayments', { defaultValue: 'NOWPayments (crypto)' })}</div>
+                        <Switch checked={payNowEnabled} disabled={!canManage} onCheckedChange={setPayNowEnabled} />
+                      </div>
+                      <Input value={payNowKey} disabled={!canManage} placeholder="API Key" onChange={e => setPayNowKey(e.target.value)} />
+                      <Input value={payNowIpn} disabled={!canManage} placeholder="IPN Secret" onChange={e => setPayNowIpn(e.target.value)} />
+                    </div>
+                    <div className="space-y-3 rounded-md border p-3">
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="font-medium">{t('shop.payPaypal', { defaultValue: 'PayPal' })}</div>
+                        <Switch checked={payPaypalEnabled} disabled={!canManage} onCheckedChange={setPayPaypalEnabled} />
+                      </div>
+                      <Input value={payPaypalClientId} disabled={!canManage} placeholder="Client ID" onChange={e => setPayPaypalClientId(e.target.value)} />
+                      <Input value={payPaypalSecret} disabled={!canManage} placeholder="Client Secret" onChange={e => setPayPaypalSecret(e.target.value)} />
+                      <div className="flex items-center justify-between gap-4">
+                        <Label>{t('shop.sandbox', { defaultValue: 'Sandbox' })}</Label>
+                        <Switch checked={payPaypalSandbox} disabled={!canManage} onCheckedChange={setPayPaypalSandbox} />
+                      </div>
+                    </div>
+                    <div className="space-y-3 rounded-md border p-3">
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="font-medium">{t('shop.payStripe', { defaultValue: 'Visa / Mastercard (Stripe)' })}</div>
+                        <Switch checked={payStripeEnabled} disabled={!canManage} onCheckedChange={setPayStripeEnabled} />
+                      </div>
+                      <Input value={payStripeSecret} disabled={!canManage} placeholder="Secret Key" onChange={e => setPayStripeSecret(e.target.value)} />
+                      <Input value={payStripeWebhook} disabled={!canManage} placeholder="Webhook Secret" onChange={e => setPayStripeWebhook(e.target.value)} />
+                    </div>
+                  </div>
+
                   {canManage ? (
                     <Button
                       disabled={updateConfig.isPending || (customEnabled && customGroupIds.length === 0)}
@@ -1278,6 +1391,24 @@ export default function ShopPage() {
                             custom_max_days: Number(customMaxDays) || 365,
                             custom_base_ip: Number(customBaseIp) || 1,
                             custom_group_ids: customGroupIds,
+                            pay_card_enabled: payCardEnabled,
+                            pay_zarinpal_enabled: payZarinpalEnabled,
+                            pay_zarinpal_merchant_id: payZarinpalMerchant || null,
+                            pay_zarinpal_sandbox: payZarinpalSandbox,
+                            pay_idpay_enabled: payIdpayEnabled,
+                            ...(payIdpayKey ? { pay_idpay_api_key: payIdpayKey } : {}),
+                            pay_idpay_sandbox: payIdpaySandbox,
+                            pay_nowpayments_enabled: payNowEnabled,
+                            ...(payNowKey ? { pay_nowpayments_api_key: payNowKey } : {}),
+                            ...(payNowIpn ? { pay_nowpayments_ipn_secret: payNowIpn } : {}),
+                            pay_paypal_enabled: payPaypalEnabled,
+                            pay_paypal_client_id: payPaypalClientId || null,
+                            ...(payPaypalSecret ? { pay_paypal_client_secret: payPaypalSecret } : {}),
+                            pay_paypal_sandbox: payPaypalSandbox,
+                            pay_stripe_enabled: payStripeEnabled,
+                            ...(payStripeSecret ? { pay_stripe_secret_key: payStripeSecret } : {}),
+                            ...(payStripeWebhook ? { pay_stripe_webhook_secret: payStripeWebhook } : {}),
+                            pay_callback_base_url: payCallbackUrl || null,
                           })
                           toast.success(t('shop.saved'))
                         } catch (error: any) {

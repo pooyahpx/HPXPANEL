@@ -91,6 +91,13 @@ def toman_to_rial(amount_toman: int) -> int:
     return max(0, int(amount_toman)) * 10
 
 
+def fx_toman_per_usd(config: ShopConfig | None = None) -> int:
+    """Configured Toman-per-USD rate (floor 1000)."""
+    if config is None:
+        return 600_000
+    return max(1000, int(getattr(config, "pay_fx_toman_per_usd", None) or 600_000))
+
+
 def toman_to_usd_cents(amount_toman: int, rate_toman_per_usd: int = 600_000) -> int:
     """Rough USD conversion for PayPal/Stripe when price is stored in Toman."""
     if amount_toman <= 0:
@@ -224,8 +231,8 @@ async def _nowpayments_create(
     api_key = (config.pay_nowpayments_api_key or "").strip()
     if not api_key:
         raise PaymentGatewayError("NOWPayments API key missing")
-    # Invoice amount in USD (approx from Toman)
-    price_amount = max(0.5, round(amount_toman / 600_000, 2))
+    rate = fx_toman_per_usd(config)
+    price_amount = max(0.5, round(amount_toman / rate, 2))
     payload = {
         "price_amount": price_amount,
         "price_currency": "usd",
@@ -276,7 +283,7 @@ async def _paypal_create(
 ) -> PaymentCreateResult:
     token = await _paypal_access_token(config)
     base = "https://api-m.sandbox.paypal.com" if config.pay_paypal_sandbox else "https://api-m.paypal.com"
-    cents = toman_to_usd_cents(amount_toman)
+    cents = toman_to_usd_cents(amount_toman, fx_toman_per_usd(config))
     amount = f"{cents / 100:.2f}"
     payload = {
         "intent": "CAPTURE",
@@ -330,7 +337,7 @@ async def _stripe_create(
     secret = (config.pay_stripe_secret_key or "").strip()
     if not secret:
         raise PaymentGatewayError("Stripe secret key missing")
-    cents = toman_to_usd_cents(amount_toman)
+    cents = toman_to_usd_cents(amount_toman, fx_toman_per_usd(config))
     form = {
         "mode": "payment",
         "success_url": return_url(config, order_id) + "&session_id={CHECKOUT_SESSION_ID}",
@@ -382,7 +389,7 @@ def gateway_public_fields(config: ShopConfig) -> dict[str, Any]:
     return {
         "pay_card_enabled": bool(getattr(config, "pay_card_enabled", True)),
         "pay_zarinpal_enabled": bool(getattr(config, "pay_zarinpal_enabled", False)),
-        "pay_zarinpal_merchant_id": getattr(config, "pay_zarinpal_merchant_id", None),
+        "pay_zarinpal_merchant_id": _mask_secret(getattr(config, "pay_zarinpal_merchant_id", None)),
         "pay_zarinpal_sandbox": bool(getattr(config, "pay_zarinpal_sandbox", False)),
         "pay_idpay_enabled": bool(getattr(config, "pay_idpay_enabled", False)),
         "pay_idpay_api_key": _mask_secret(getattr(config, "pay_idpay_api_key", None)),
@@ -391,12 +398,14 @@ def gateway_public_fields(config: ShopConfig) -> dict[str, Any]:
         "pay_nowpayments_api_key": _mask_secret(getattr(config, "pay_nowpayments_api_key", None)),
         "pay_nowpayments_ipn_secret": _mask_secret(getattr(config, "pay_nowpayments_ipn_secret", None)),
         "pay_paypal_enabled": bool(getattr(config, "pay_paypal_enabled", False)),
-        "pay_paypal_client_id": getattr(config, "pay_paypal_client_id", None),
+        "pay_paypal_client_id": _mask_secret(getattr(config, "pay_paypal_client_id", None)),
         "pay_paypal_client_secret": _mask_secret(getattr(config, "pay_paypal_client_secret", None)),
         "pay_paypal_sandbox": bool(getattr(config, "pay_paypal_sandbox", True)),
         "pay_stripe_enabled": bool(getattr(config, "pay_stripe_enabled", False)),
         "pay_stripe_secret_key": _mask_secret(getattr(config, "pay_stripe_secret_key", None)),
         "pay_stripe_webhook_secret": _mask_secret(getattr(config, "pay_stripe_webhook_secret", None)),
         "pay_callback_base_url": getattr(config, "pay_callback_base_url", None),
+        "pay_fx_toman_per_usd": fx_toman_per_usd(config),
+        "pay_unpaid_expire_minutes": max(5, int(getattr(config, "pay_unpaid_expire_minutes", None) or 60)),
         "enabled_gateways": enabled_gateways(config),
     }

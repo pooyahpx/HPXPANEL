@@ -13,6 +13,8 @@ class ShopOrderStatusLiteral(str, Enum):
     pending = "pending"
     approved = "approved"
     rejected = "rejected"
+    awaiting_payment = "awaiting_payment"
+    expired = "expired"
 
 
 class ShopCard(BaseModel):
@@ -62,6 +64,8 @@ class ShopConfigResponse(BaseModel):
     pay_stripe_secret_key: str | None = None
     pay_stripe_webhook_secret: str | None = None
     pay_callback_base_url: str | None = None
+    pay_fx_toman_per_usd: int = 600_000
+    pay_unpaid_expire_minutes: int = 60
     enabled_gateways: list[str] = Field(default_factory=list)
     created_at: dt | None = None
 
@@ -105,6 +109,8 @@ class ShopConfigUpdate(BaseModel):
     pay_stripe_secret_key: str | None = None
     pay_stripe_webhook_secret: str | None = None
     pay_callback_base_url: str | None = None
+    pay_fx_toman_per_usd: int | None = Field(default=None, ge=1000)
+    pay_unpaid_expire_minutes: int | None = Field(default=None, ge=5, le=10080)
 
     @model_validator(mode="after")
     def validate_custom_groups_and_bounds(self):

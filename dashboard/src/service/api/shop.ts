@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { fetcher } from '@/service/http'
 
-export type ShopOrderStatus = 'pending' | 'approved' | 'rejected'
+export type ShopOrderStatus = 'pending' | 'approved' | 'rejected' | 'awaiting_payment' | 'expired'
 export type ShopOrderKind = 'purchase' | 'renewal'
 
 export interface ShopCard {
@@ -51,6 +51,8 @@ export interface ShopConfig {
   pay_stripe_secret_key?: string | null
   pay_stripe_webhook_secret?: string | null
   pay_callback_base_url?: string | null
+  pay_fx_toman_per_usd: number
+  pay_unpaid_expire_minutes: number
   enabled_gateways: string[]
   created_at?: string | null
 }
@@ -92,6 +94,8 @@ export interface ShopConfigUpdate {
   pay_stripe_secret_key?: string | null
   pay_stripe_webhook_secret?: string | null
   pay_callback_base_url?: string | null
+  pay_fx_toman_per_usd?: number
+  pay_unpaid_expire_minutes?: number
 }
 
 export interface ShopPlan {
@@ -143,6 +147,10 @@ export interface ShopOrder {
   custom_ip_limit?: number | null
   quoted_price_toman?: number | null
   is_custom?: boolean
+  payment_method?: string | null
+  payment_ref?: string | null
+  payment_url?: string | null
+  payment_paid?: boolean
   note?: string | null
   created_at?: string | null
 }

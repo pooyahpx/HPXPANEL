@@ -39,6 +39,7 @@ async def create_hpx_tunnel(
         docker_image=model.docker_image,
         backup_tunnel_id=model.backup_tunnel_id,
         auto_failover=model.auto_failover,
+        auto_failback=model.auto_failback,
         priority=model.priority,
         alert_on_down=model.alert_on_down,
         note=model.note,

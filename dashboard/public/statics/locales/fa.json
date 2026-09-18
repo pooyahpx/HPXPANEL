@@ -2638,7 +2638,8 @@
     "repairSuccess": "تعمیر اعمال شد",
     "diagnoseOk": "مشکلی یافت نشد",
     "repairSkipped": "تعمیر ممکن نشد",
-    "mtuHint": "برای ICMP مقدار 1000 توصیه می‌شود."
+    "mtuHint": "برای ICMP مقدار 1000 توصیه می‌شود.",
+    "failbackEnabled": "Failback خودکار"
   },
   "hpxPulse": {
     "title": "HPX Pulse",
@@ -2738,7 +2739,23 @@
       "error": "خطا",
       "unhealthy": "ناسالم",
       "partial": "ناقص"
-    }
+    },
+    "intent": "قصد",
+    "intentMobile": "موبایل — stealth + balance",
+    "intentHard": "سخت — stealth تهاجمی",
+    "intentFast": "سریع — turbo / KCP / QUIC",
+    "intentHint": "حس تونل را انتخاب کن — advisor پریست‌های Stealth را رتبه‌بندی می‌کند.",
+    "failoverSection": "Failover مسیر",
+    "backupPulseId": "شناسه Pulse پشتیبان",
+    "priority": "اولویت",
+    "autoFailover": "Failover خودکار به پشتیبان",
+    "autoFailback": "Failback خودکار وقتی primary سالم شد",
+    "autoHeal": "ترمیم خودکار agentهای قطع‌شده",
+    "failoverEnabled": "Failover",
+    "failoverActive": "روی مسیر پشتیبان",
+    "lastHeal": "ترمیم",
+    "enginePin": "نسخه engine",
+    "topProfiles": "برترین پریست‌های Stealth / تونل"
   },
   "success": "موفق",
   "error": "خطا",
@@ -4454,5 +4471,17 @@
     "commandCopied": "دستور آپدیت کپی شد",
     "closeBanner": "بستن اعلان به‌روزرسانی",
     "needsUpdate": "نیاز به به‌روزرسانی"
+  },
+  "hostStealthPresets": {
+    "title": "پریست‌های HPX Stealth",
+    "description": "پریست یک‌صفحه‌ای Reality / Hysteria2 / fragment. قصد را انتخاب کن، اعمال کن، بعد inbound tag را در فرم میزبان کامل کن.",
+    "intent": "قصد",
+    "all": "همه",
+    "mobile": "موبایل",
+    "hard": "DPI سخت",
+    "fast": "سریع",
+    "apply": "اعمال پریست Stealth",
+    "applied": "{{name}} اعمال شد — inbound tag و address را بگذار و بساز",
+    "hint": "روی یک پریست کلیک کن"
   }
 }

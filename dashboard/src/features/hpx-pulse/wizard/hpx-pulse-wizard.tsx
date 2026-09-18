@@ -35,10 +35,15 @@ const schema = z.object({
   name: z.string().min(1, 'Name required').max(40),
   iran_public_ip: z.string().min(7, 'Iran IP required'),
   abroad_public_ip: z.string().min(7, 'Abroad IP required'),
-  goal: z.enum(['stealth', 'balanced', 'speed']),
+  goal: z.enum(['mobile', 'hard', 'fast', 'stealth', 'balanced', 'speed']),
   control_port: z.coerce.number().int().min(1024).max(65535),
   port_forwards: z.array(portForwardSchema).default([]),
   auto_restart_interval_minutes: z.coerce.number().int().min(0).max(10080),
+  auto_heal_enabled: z.boolean().default(true),
+  backup_pulse_id: z.coerce.number().int().min(0).optional(),
+  auto_failover: z.boolean().default(false),
+  auto_failback: z.boolean().default(true),
+  priority: z.coerce.number().int().min(0).max(100).default(0),
 })
 
 type FormValues = z.infer<typeof schema>
@@ -82,6 +87,11 @@ function pulseToFormValues(pulse: HpxPulseResponse): FormValues {
     control_port: pulse.control_port,
     port_forwards: portForwards.length ? portForwards : [{ external_port: 443, internal_ip: '', internal_port: 443 }],
     auto_restart_interval_minutes: pulse.auto_restart_interval_minutes ?? 0,
+    auto_heal_enabled: pulse.auto_heal_enabled ?? true,
+    backup_pulse_id: pulse.backup_pulse_id ?? 0,
+    auto_failover: pulse.auto_failover ?? false,
+    auto_failback: pulse.auto_failback ?? true,
+    priority: pulse.priority ?? 0,
   }
 }
 
@@ -103,10 +113,15 @@ export default function HpxPulseWizard({ open, onOpenChange, onCreated, editingP
       name: defaultPulseName(),
       iran_public_ip: '',
       abroad_public_ip: '',
-      goal: 'balanced',
+      goal: 'mobile',
       control_port: randomTunnelPort(),
       port_forwards: [{ external_port: 443, internal_ip: '', internal_port: 443 }],
       auto_restart_interval_minutes: 0,
+      auto_heal_enabled: true,
+      backup_pulse_id: 0,
+      auto_failover: false,
+      auto_failback: true,
+      priority: 0,
     },
   })
 
@@ -122,10 +137,15 @@ export default function HpxPulseWizard({ open, onOpenChange, onCreated, editingP
       name: defaultPulseName(),
       iran_public_ip: '',
       abroad_public_ip: '',
-      goal: 'balanced',
+      goal: 'mobile',
       control_port: randomTunnelPort(),
       port_forwards: [{ external_port: 443, internal_ip: '', internal_port: 443 }],
       auto_restart_interval_minutes: 0,
+      auto_heal_enabled: true,
+      backup_pulse_id: 0,
+      auto_failover: false,
+      auto_failback: true,
+      priority: 0,
     })
     setAdvice(null)
     setSelectedProfile(null)
@@ -168,6 +188,11 @@ export default function HpxPulseWizard({ open, onOpenChange, onCreated, editingP
             control_port: values.control_port,
             port_forwards: portForwards,
             auto_restart_interval_minutes: autoRestart,
+            auto_heal_enabled: values.auto_heal_enabled,
+            backup_pulse_id: values.backup_pulse_id && values.backup_pulse_id > 0 ? values.backup_pulse_id : null,
+            auto_failover: values.auto_failover,
+            auto_failback: values.auto_failback,
+            priority: values.priority,
           },
         })
         toast.success(t('hpxPulse.updateSuccess', { defaultValue: 'Pulse updated — agents will sync' }))
@@ -188,6 +213,11 @@ export default function HpxPulseWizard({ open, onOpenChange, onCreated, editingP
         control_port: values.control_port,
         port_forwards: portForwards,
         auto_restart_interval_minutes: autoRestart || null,
+        auto_heal_enabled: values.auto_heal_enabled,
+        backup_pulse_id: values.backup_pulse_id && values.backup_pulse_id > 0 ? values.backup_pulse_id : null,
+        auto_failover: values.auto_failover,
+        auto_failback: values.auto_failback,
+        priority: values.priority,
       })
       toast.success(t('hpxPulse.createSuccess', { defaultValue: 'Pulse created — copy install commands below' }))
       onCreated?.(res)
@@ -237,15 +267,21 @@ export default function HpxPulseWizard({ open, onOpenChange, onCreated, editingP
               )} />
               <FormField control={form.control} name="goal" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>{t('hpxPulse.goal', { defaultValue: 'Goal' })}</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
+                  <FormLabel>{t('hpxPulse.intent', { defaultValue: 'Intent' })}</FormLabel>
+                  <Select onValueChange={v => { field.onChange(v); setAdvice(null) }} value={field.value}>
                     <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
                     <SelectContent>
+                      <SelectItem value="mobile">{t('hpxPulse.intentMobile', { defaultValue: 'Mobile — stealth + balance' })}</SelectItem>
+                      <SelectItem value="hard">{t('hpxPulse.intentHard', { defaultValue: 'Hard — aggressive stealth' })}</SelectItem>
+                      <SelectItem value="fast">{t('hpxPulse.intentFast', { defaultValue: 'Fast — turbo / KCP / QUIC' })}</SelectItem>
                       <SelectItem value="stealth">stealth</SelectItem>
                       <SelectItem value="balanced">balanced</SelectItem>
                       <SelectItem value="speed">speed</SelectItem>
                     </SelectContent>
                   </Select>
+                  <p className="text-muted-foreground text-xs">
+                    {t('hpxPulse.intentHint', { defaultValue: 'Pick how you want the tunnel to feel — advisor ranks Stealth presets.' })}
+                  </p>
                 </FormItem>
               )} />
               <FormField control={form.control} name="iran_public_ip" render={({ field }) => (
@@ -393,15 +429,70 @@ export default function HpxPulseWizard({ open, onOpenChange, onCreated, editingP
               ))}
             </div>
 
+            <div className="grid gap-3 rounded-lg border p-3 sm:grid-cols-2">
+              <p className="text-sm font-medium sm:col-span-2">
+                {t('hpxPulse.failoverSection', { defaultValue: 'Path failover' })}
+              </p>
+              <FormField control={form.control} name="backup_pulse_id" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('hpxPulse.backupPulseId', { defaultValue: 'Backup pulse ID' })}</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      dir="ltr"
+                      min={0}
+                      {...field}
+                      value={field.value || ''}
+                      onChange={e => field.onChange(Number(e.target.value) || 0)}
+                      placeholder="0 = none"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="priority" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('hpxPulse.priority', { defaultValue: 'Priority' })}</FormLabel>
+                  <FormControl><Input type="number" dir="ltr" min={0} max={100} {...field} /></FormControl>
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="auto_failover" render={({ field }) => (
+                <FormItem className="flex items-center gap-2 space-y-0">
+                  <FormControl>
+                    <input type="checkbox" className="size-4" checked={field.value} onChange={e => field.onChange(e.target.checked)} />
+                  </FormControl>
+                  <FormLabel>{t('hpxPulse.autoFailover', { defaultValue: 'Auto-failover to backup' })}</FormLabel>
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="auto_failback" render={({ field }) => (
+                <FormItem className="flex items-center gap-2 space-y-0">
+                  <FormControl>
+                    <input type="checkbox" className="size-4" checked={field.value} onChange={e => field.onChange(e.target.checked)} />
+                  </FormControl>
+                  <FormLabel>{t('hpxPulse.autoFailback', { defaultValue: 'Auto-failback when primary recovers' })}</FormLabel>
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="auto_heal_enabled" render={({ field }) => (
+                <FormItem className="flex items-center gap-2 space-y-0 sm:col-span-2">
+                  <FormControl>
+                    <input type="checkbox" className="size-4" checked={field.value} onChange={e => field.onChange(e.target.checked)} />
+                  </FormControl>
+                  <FormLabel>{t('hpxPulse.autoHeal', { defaultValue: 'Auto-heal stale agents' })}</FormLabel>
+                </FormItem>
+              )} />
+            </div>
+
             <Button type="button" variant="secondary" onClick={previewAdvise} disabled={adviseMutation.isPending}>
               <Sparkles className="size-4" />
-              {t('hpxPulse.advise', { defaultValue: 'Preview recommendation (optional)' })}
+              {t('hpxPulse.advise', { defaultValue: 'Rank Stealth presets' })}
             </Button>
 
             {advice && (
               <div className="space-y-2 rounded-lg border p-3">
-                <p className="text-sm font-medium">{t('hpxPulse.profiles', { defaultValue: 'Profiles' })}</p>
-                {advice.profiles.map(p => (
+                <p className="text-sm font-medium">
+                  {t('hpxPulse.topProfiles', { defaultValue: 'Top Stealth / tunnel presets' })}
+                </p>
+                {advice.profiles.slice(0, 3).map(p => (
                   <button
                     key={p.profile_id}
                     type="button"
@@ -414,9 +505,7 @@ export default function HpxPulseWizard({ open, onOpenChange, onCreated, editingP
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <span className="font-medium">{fa ? p.title_fa : p.title}</span>
                       <div className="flex items-center gap-1">
-                        {p.tunnel_mode.startsWith('reverse_') && (
-                          <Badge variant="outline" className="text-[10px] uppercase">Reverse</Badge>
-                        )}
+                        <Badge variant="outline" className="text-[10px] uppercase">{p.preset}</Badge>
                         {p.carrier && (
                           <Badge variant="secondary" className="text-[10px] uppercase">{p.carrier}</Badge>
                         )}

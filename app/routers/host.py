@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 
 from app.db import AsyncSession, get_db
 from app.models.admin import AdminDetails
 from app.models.host import BaseHost, BulkHostsActionResponse, BulkHostSelection, CreateHost, RemoveHostsResponse
 from app.operation import OperatorType
 from app.operation.host import HostOperation
+from app.services.host_stealth_presets import HostStealthPreset, HostStealthPresetsResponse, list_host_stealth_presets
 from app.utils import responses
 
 from .authentication import require_permission
@@ -12,6 +13,31 @@ from .dependencies import get_host_list_query
 
 host_operator = HostOperation(operator_type=OperatorType.API)
 router = APIRouter(tags=["Host"], prefix="/api/host", responses={401: responses._401, 403: responses._403})
+
+
+@router.get("/stealth-presets", response_model=HostStealthPresetsResponse)
+async def get_host_stealth_presets(
+    intent: str | None = Query(default=None, pattern="^(mobile|hard|fast)$"),
+    stack: str | None = Query(default=None, pattern="^(reality|hysteria2|fragment)$"),
+    _: AdminDetails = Depends(require_permission("hosts", "read")),
+):
+    """List curated HPX-Stealth host presets (Reality / Hysteria2 / fragment)."""
+    return list_host_stealth_presets(intent=intent, stack=stack)
+
+
+@router.get("/stealth-presets/{preset_id}", response_model=HostStealthPreset, responses={404: responses._404})
+async def get_host_stealth_preset(
+    preset_id: str,
+    _: AdminDetails = Depends(require_permission("hosts", "read")),
+):
+    from fastapi import HTTPException
+
+    from app.services.host_stealth_presets import get_host_stealth_preset as _get
+
+    preset = _get(preset_id)
+    if preset is None:
+        raise HTTPException(status_code=404, detail="Stealth preset not found")
+    return preset
 
 
 @router.get("/{host_id}", response_model=BaseHost)

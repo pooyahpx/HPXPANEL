@@ -8,10 +8,12 @@ import { useAdmin } from '@/hooks/use-admin'
 import useDirDetection from '@/hooks/use-dir-detection'
 import { cn } from '@/lib/utils'
 import { useGetHpxPulses } from '@/service/api/hpx-pulse'
+import { fetcher } from '@/service/http'
 import { hasPermission } from '@/utils/rbac'
 import { Activity, CircleAlert, Gauge, Plus, RadioTower, RefreshCw, Timer, Zap } from 'lucide-react'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useQuery } from '@tanstack/react-query'
 
 export default function HpxPulsePage() {
   const { t } = useTranslation()
@@ -19,6 +21,11 @@ export default function HpxPulsePage() {
   const { admin } = useAdmin()
   const canCreate = hasPermission(admin, 'hpx_pulse', 'create')
   const { data, isFetching, refetch } = useGetHpxPulses({ limit: 50, offset: 0 })
+  const { data: engineInfo } = useQuery({
+    queryKey: ['hpx-pulse-engine'],
+    queryFn: () => fetcher('/api/hpx_pulse/engine', { method: 'GET' }) as Promise<{ engine_version: string; release_tag: string }>,
+    staleTime: 60_000,
+  })
 
   const overview = useMemo(() => {
     const pulses = data?.pulses ?? []
@@ -102,6 +109,10 @@ export default function HpxPulsePage() {
                     </div>
                     <p className="text-muted-foreground mt-1 max-w-3xl text-xs leading-relaxed sm:text-sm">
                       {t('hpxPulse.description')}
+                    </p>
+                    <p className="text-muted-foreground font-mono text-[11px]" dir="ltr">
+                      {t('hpxPulse.enginePin', { defaultValue: 'Engine pin' })}: v
+                      {engineInfo?.engine_version || '—'}
                     </p>
                   </div>
                 </div>

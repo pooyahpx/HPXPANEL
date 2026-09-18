@@ -238,6 +238,9 @@ export default function HpxTunnelModal({ open, onOpenChange, form, editingTunnel
                     <FormField control={form.control} name="auto_failover" render={({ field }) => (
                       <FormItem className="flex items-center gap-2 space-y-0"><FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel>{t('hpxTunnel.failoverEnabled', { defaultValue: 'Auto-failover' })}</FormLabel></FormItem>
                     )} />
+                    <FormField control={form.control} name="auto_failback" render={({ field }) => (
+                      <FormItem className="flex items-center gap-2 space-y-0"><FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel>{t('hpxTunnel.failbackEnabled', { defaultValue: 'Auto-failback' })}</FormLabel></FormItem>
+                    )} />
                     <FormField control={form.control} name="alert_on_down" render={({ field }) => (
                       <FormItem className="flex items-center gap-2 space-y-0"><FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel>{t('hpxTunnel.alertOnDown', { defaultValue: 'Telegram alert on down' })}</FormLabel></FormItem>
                     )} />

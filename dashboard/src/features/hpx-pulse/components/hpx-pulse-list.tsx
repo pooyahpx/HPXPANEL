@@ -387,6 +387,22 @@ function PulseCard({
                   {autoLabel}
                 </Badge>
               )}
+              {pulse.auto_failover && (
+                <Badge variant="outline" className="h-5 rounded-md border-violet-500/30 bg-violet-500/10 px-1.5 text-[10px] text-violet-700 dark:text-violet-300">
+                  {t('hpxPulse.failoverEnabled', { defaultValue: 'Failover' })}
+                  {pulse.backup_pulse_id ? ` → #${pulse.backup_pulse_id}` : ''}
+                </Badge>
+              )}
+              {pulse.failover_active && (
+                <Badge variant="outline" className="h-5 rounded-md border-orange-500/40 bg-orange-500/10 px-1.5 text-[10px] text-orange-700 dark:text-orange-300">
+                  {t('hpxPulse.failoverActive', { defaultValue: 'On backup path' })}
+                </Badge>
+              )}
+              {pulse.last_heal_action && (
+                <Badge variant="outline" className="h-5 rounded-md px-1.5 text-[10px]">
+                  {t('hpxPulse.lastHeal', { defaultValue: 'Heal' })}: {pulse.last_heal_action}
+                </Badge>
+              )}
             </div>
           </div>
 

@@ -47,6 +47,18 @@ class ShopAdminTest(StatesGroup):
     groups = State()
 
 
+class ShopAdminCustom(StatesGroup):
+    price_per_gb = State()
+    price_per_day = State()
+    price_per_ip = State()
+    min_gb = State()
+    max_gb = State()
+    min_days = State()
+    max_days = State()
+    base_ip = State()
+    groups = State()
+
+
 class ShopAdminPlan(StatesGroup):
     name = State()
     gb = State()

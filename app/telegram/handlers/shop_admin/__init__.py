@@ -37,6 +37,7 @@ from app.telegram.utils.shop_helpers import (
     card_note_preview,
     card_photos_count,
     cards_summary,
+    custom_config_summary,
     format_groups_hint,
     normalize_group_ids,
     parse_optional_limit,
@@ -145,6 +146,7 @@ async def _render_admin_shop(event: types.Message | types.CallbackQuery, db: Asy
         welcome=welcome_note_preview(config.welcome_note if config else None, lang),
         card_photos=str(card_photos_count(config)),
         test=test_config_summary(config, lang),
+        custom=custom_config_summary(config, lang),
         plans=sum(1 for p in plans if p.is_active),
         pending=len(pending),
     )
@@ -529,6 +531,194 @@ async def test_groups(event: types.Message, db: AsyncSession, state: FSMContext,
     )
     await state.clear()
     await event.answer(t(lang, "admin_test_saved"))
+    await _render_admin_shop(event, db, admin)
+
+
+@router.callback_query(ShopAdminKeyboard.Callback.filter(ShopAdminAction.toggle_custom == F.action))
+async def toggle_custom(event: types.CallbackQuery, db: AsyncSession, admin: AdminDetails):
+    lang = await _lang(db, event.from_user.id)
+    config = await get_shop_config_by_admin(db, admin.id)
+    currently = bool(config and config.custom_enabled)
+    if currently:
+        await upsert_shop_config(db, admin.id, custom_enabled=False)
+        await event.answer(t(lang, "admin_custom_enabled_off"))
+        await _render_admin_shop(event, db, admin)
+        return
+    groups = list((config.custom_group_ids if config else None) or [])
+    if not groups:
+        await event.answer(t(lang, "admin_custom_need_setup"), show_alert=True)
+        return
+    await upsert_shop_config(db, admin.id, custom_enabled=True)
+    await event.answer(t(lang, "admin_custom_enabled_on"))
+    await _render_admin_shop(event, db, admin)
+
+
+@router.callback_query(ShopAdminKeyboard.Callback.filter(ShopAdminAction.set_custom == F.action))
+async def ask_custom_config(event: types.CallbackQuery, db: AsyncSession, state: FSMContext):
+    lang = await _lang(db, event.from_user.id)
+    await state.set_state(forms.ShopAdminCustom.price_per_gb)
+    await state.update_data(lang=lang)
+    msg = await event.message.answer(t(lang, "admin_ask_custom_price_gb"))
+    await add_to_messages_to_delete(state, msg)
+    await event.answer()
+
+
+def _parse_nonneg_int(raw: str) -> int:
+    value = int(raw.strip().replace(",", "").replace("٬", ""))
+    if value < 0:
+        raise ValueError
+    return value
+
+
+def _parse_pos_int(raw: str) -> int:
+    value = _parse_nonneg_int(raw)
+    if value < 1:
+        raise ValueError
+    return value
+
+
+@router.message(forms.ShopAdminCustom.price_per_gb)
+async def custom_price_gb(event: types.Message, state: FSMContext):
+    data = await state.get_data()
+    lang = data.get("lang", "fa")
+    try:
+        price = _parse_nonneg_int(event.text or "")
+    except ValueError:
+        await event.answer(t(lang, "invalid_number"))
+        return
+    await state.update_data(custom_price_per_gb=price)
+    await state.set_state(forms.ShopAdminCustom.price_per_day)
+    await event.answer(t(lang, "admin_ask_custom_price_day"))
+
+
+@router.message(forms.ShopAdminCustom.price_per_day)
+async def custom_price_day(event: types.Message, state: FSMContext):
+    data = await state.get_data()
+    lang = data.get("lang", "fa")
+    try:
+        price = _parse_nonneg_int(event.text or "")
+    except ValueError:
+        await event.answer(t(lang, "invalid_number"))
+        return
+    await state.update_data(custom_price_per_day=price)
+    await state.set_state(forms.ShopAdminCustom.price_per_ip)
+    await event.answer(t(lang, "admin_ask_custom_price_ip"))
+
+
+@router.message(forms.ShopAdminCustom.price_per_ip)
+async def custom_price_ip(event: types.Message, state: FSMContext):
+    data = await state.get_data()
+    lang = data.get("lang", "fa")
+    try:
+        price = _parse_nonneg_int(event.text or "")
+    except ValueError:
+        await event.answer(t(lang, "invalid_number"))
+        return
+    await state.update_data(custom_price_per_ip=price)
+    await state.set_state(forms.ShopAdminCustom.min_gb)
+    await event.answer(t(lang, "admin_ask_custom_min_gb"))
+
+
+@router.message(forms.ShopAdminCustom.min_gb)
+async def custom_min_gb(event: types.Message, state: FSMContext):
+    data = await state.get_data()
+    lang = data.get("lang", "fa")
+    try:
+        value = _parse_pos_int(event.text or "")
+    except ValueError:
+        await event.answer(t(lang, "invalid_number"))
+        return
+    await state.update_data(custom_min_gb=value)
+    await state.set_state(forms.ShopAdminCustom.max_gb)
+    await event.answer(t(lang, "admin_ask_custom_max_gb"))
+
+
+@router.message(forms.ShopAdminCustom.max_gb)
+async def custom_max_gb(event: types.Message, state: FSMContext):
+    data = await state.get_data()
+    lang = data.get("lang", "fa")
+    try:
+        value = _parse_pos_int(event.text or "")
+        if value < int(data.get("custom_min_gb") or 1):
+            raise ValueError
+    except ValueError:
+        await event.answer(t(lang, "invalid_number"))
+        return
+    await state.update_data(custom_max_gb=value)
+    await state.set_state(forms.ShopAdminCustom.min_days)
+    await event.answer(t(lang, "admin_ask_custom_min_days"))
+
+
+@router.message(forms.ShopAdminCustom.min_days)
+async def custom_min_days(event: types.Message, state: FSMContext):
+    data = await state.get_data()
+    lang = data.get("lang", "fa")
+    try:
+        value = _parse_pos_int(event.text or "")
+    except ValueError:
+        await event.answer(t(lang, "invalid_number"))
+        return
+    await state.update_data(custom_min_days=value)
+    await state.set_state(forms.ShopAdminCustom.max_days)
+    await event.answer(t(lang, "admin_ask_custom_max_days"))
+
+
+@router.message(forms.ShopAdminCustom.max_days)
+async def custom_max_days(event: types.Message, state: FSMContext):
+    data = await state.get_data()
+    lang = data.get("lang", "fa")
+    try:
+        value = _parse_pos_int(event.text or "")
+        if value < int(data.get("custom_min_days") or 1):
+            raise ValueError
+    except ValueError:
+        await event.answer(t(lang, "invalid_number"))
+        return
+    await state.update_data(custom_max_days=value)
+    await state.set_state(forms.ShopAdminCustom.base_ip)
+    await event.answer(t(lang, "admin_ask_custom_base_ip"))
+
+
+@router.message(forms.ShopAdminCustom.base_ip)
+async def custom_base_ip(event: types.Message, state: FSMContext, db: AsyncSession):
+    data = await state.get_data()
+    lang = data.get("lang", "fa")
+    try:
+        value = _parse_pos_int(event.text or "")
+    except ValueError:
+        await event.answer(t(lang, "invalid_number"))
+        return
+    await state.update_data(custom_base_ip=value)
+    await state.set_state(forms.ShopAdminCustom.groups)
+    groups = await format_groups_hint(db)
+    await event.answer(t(lang, "admin_ask_custom_groups", groups=groups))
+
+
+@router.message(forms.ShopAdminCustom.groups)
+async def custom_groups(event: types.Message, db: AsyncSession, state: FSMContext, admin: AdminDetails):
+    data = await state.get_data()
+    lang = data.get("lang", "fa")
+    group_ids = normalize_group_ids(event.text or "")
+    if not group_ids:
+        groups = await format_groups_hint(db)
+        await event.answer(t(lang, "admin_ask_custom_groups", groups=groups))
+        return
+    await upsert_shop_config(
+        db,
+        admin.id,
+        custom_enabled=True,
+        custom_price_per_gb=int(data.get("custom_price_per_gb") or 0),
+        custom_price_per_day=int(data.get("custom_price_per_day") or 0),
+        custom_price_per_ip=int(data.get("custom_price_per_ip") or 0),
+        custom_min_gb=int(data.get("custom_min_gb") or 1),
+        custom_max_gb=int(data.get("custom_max_gb") or 500),
+        custom_min_days=int(data.get("custom_min_days") or 1),
+        custom_max_days=int(data.get("custom_max_days") or 365),
+        custom_base_ip=int(data.get("custom_base_ip") or 1),
+        custom_group_ids=group_ids,
+    )
+    await state.clear()
+    await event.answer(t(lang, "admin_custom_saved"))
     await _render_admin_shop(event, db, admin)
 
 

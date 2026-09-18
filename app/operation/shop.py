@@ -88,6 +88,16 @@ def _config_response(config) -> ShopConfigResponse:
         test_data_limit=int(config.test_data_limit or 0),
         test_expire_days=int(config.test_expire_days or 0),
         test_group_ids=list(config.test_group_ids or []),
+        custom_enabled=bool(getattr(config, "custom_enabled", False)),
+        custom_price_per_gb=int(getattr(config, "custom_price_per_gb", 0) or 0),
+        custom_price_per_day=int(getattr(config, "custom_price_per_day", 0) or 0),
+        custom_price_per_ip=int(getattr(config, "custom_price_per_ip", 0) or 0),
+        custom_min_gb=int(getattr(config, "custom_min_gb", 1) or 1),
+        custom_max_gb=int(getattr(config, "custom_max_gb", 500) or 500),
+        custom_min_days=int(getattr(config, "custom_min_days", 1) or 1),
+        custom_max_days=int(getattr(config, "custom_max_days", 365) or 365),
+        custom_base_ip=int(getattr(config, "custom_base_ip", 1) or 1),
+        custom_group_ids=list(getattr(config, "custom_group_ids", None) or []),
         created_at=config.created_at,
     )
 
@@ -109,7 +119,7 @@ def _plan_response(plan: ShopPlan) -> ShopPlanResponse:
 
 
 async def _order_response(db: AsyncSession, order: ShopOrder) -> ShopOrderResponse:
-    plan = await get_shop_plan(db, order.plan_id)
+    plan = await get_shop_plan(db, order.plan_id) if order.plan_id else None
     created_username = None
     if order.created_user_id:
         user = await get_user_by_id(db, order.created_user_id, load_admin=False, load_next_plan=False, load_usage_logs=False, load_groups=False)
@@ -140,8 +150,18 @@ async def _order_response(db: AsyncSession, order: ShopOrder) -> ShopOrderRespon
         has_receipt=bool(order.receipt_file_id),
         created_user_id=order.created_user_id,
         created_username=created_username,
-        plan_name=plan.name if plan else None,
-        plan_price_toman=int(plan.price_toman) if plan else None,
+        plan_name=plan.name if plan else ("Custom" if getattr(order, "is_custom", False) else None),
+        plan_price_toman=(
+            int(order.quoted_price_toman)
+            if getattr(order, "quoted_price_toman", None) is not None
+            else (int(plan.price_toman) if plan else None)
+        ),
+        requested_username=getattr(order, "requested_username", None),
+        custom_data_gb=getattr(order, "custom_data_gb", None),
+        custom_expire_days=getattr(order, "custom_expire_days", None),
+        custom_ip_limit=getattr(order, "custom_ip_limit", None),
+        quoted_price_toman=getattr(order, "quoted_price_toman", None),
+        is_custom=bool(getattr(order, "is_custom", False)),
         note=order.note,
         created_at=order.created_at,
     )
@@ -175,6 +195,18 @@ class ShopOperation(BaseOperation):
         kwargs = payload.model_dump(exclude_unset=True)
         if "cards" in kwargs and kwargs["cards"] is not None:
             kwargs["cards"] = _normalize_cards(kwargs["cards"])
+
+        existing = await get_shop_config_by_admin(db, shop_admin.id)
+        will_enable_custom = kwargs.get("custom_enabled")
+        if will_enable_custom is None and existing is not None:
+            will_enable_custom = bool(existing.custom_enabled)
+        if will_enable_custom:
+            groups = kwargs.get("custom_group_ids")
+            if groups is None and existing is not None:
+                groups = list(existing.custom_group_ids or [])
+            if not groups:
+                await self.raise_error("you must select at least one group for custom purchase", 400, db)
+
         config = await upsert_shop_config(db, shop_admin.id, **kwargs)
         return _config_response(config)
 
@@ -298,32 +330,54 @@ class ShopOperation(BaseOperation):
         if order.status != ShopOrderStatus.pending:
             await self.raise_error("Order is not pending", 400, db)
 
-        plan = await get_shop_plan(db, order.plan_id)
-        if plan is None:
+        plan = await get_shop_plan(db, order.plan_id) if order.plan_id else None
+        if not getattr(order, "is_custom", False) and plan is None:
             await self.raise_error("Plan not found", 404, db)
 
         order_kind = (getattr(order, "order_kind", None) or "purchase").lower()
         if order_kind == "renewal" or order.renew_user_id:
+            if plan is None:
+                await self.raise_error("Plan not found", 404, db)
             return await self._approve_renewal_order(db, shop_admin, order, plan)
         return await self._approve_purchase_order(db, shop_admin, order, plan)
 
     async def _approve_purchase_order(
-        self, db: AsyncSession, shop_admin: AdminDetails, order: ShopOrder, plan: ShopPlan
+        self, db: AsyncSession, shop_admin: AdminDetails, order: ShopOrder, plan: ShopPlan | None
     ) -> ShopApproveResponse:
-        username = f"tg{order.buyer_telegram_id}_{secrets.token_hex(2)}"
-        expire = None
-        if plan.expire_days and plan.expire_days > 0:
-            expire = dt.now(UTC) + td(days=plan.expire_days)
+        requested = (getattr(order, "requested_username", None) or "").strip() or None
+        username = requested or f"tg{order.buyer_telegram_id}_{secrets.token_hex(2)}"
+
+        is_custom = bool(getattr(order, "is_custom", False))
+        if is_custom:
+            config = await get_shop_config_by_admin(db, shop_admin.id)
+            group_ids = list((config.custom_group_ids if config else None) or [])
+            if not group_ids:
+                await self.raise_error("Custom purchase groups are not configured", 400, db)
+            gb = int(order.custom_data_gb or 0)
+            days = int(order.custom_expire_days or 0)
+            data_limit = gb * (1024**3) if gb > 0 else None
+            expire = dt.now(UTC) + td(days=days) if days > 0 else None
+            ip_limit = order.custom_ip_limit
+            hwid_limit = None
+        else:
+            assert plan is not None
+            group_ids = list(plan.group_ids or [])
+            data_limit = plan.data_limit or None
+            expire = None
+            if plan.expire_days and plan.expire_days > 0:
+                expire = dt.now(UTC) + td(days=plan.expire_days)
+            ip_limit = plan.ip_limit
+            hwid_limit = plan.hwid_limit
 
         try:
             new_user = UserCreate(
                 username=username,
                 status=UserStatus.active,
-                data_limit=plan.data_limit or None,
+                data_limit=data_limit,
                 expire=expire,
-                group_ids=list(plan.group_ids or []),
-                ip_limit=plan.ip_limit,
-                hwid_limit=plan.hwid_limit,
+                group_ids=group_ids,
+                ip_limit=ip_limit,
+                hwid_limit=hwid_limit,
                 note=f"shop order #{order.id}",
             )
             user = await self.user_operator.create_user(db, new_user, shop_admin, skip_role_limits=True)
@@ -405,7 +459,7 @@ class ShopOperation(BaseOperation):
         return await _order_response(db, order)
 
     async def _notify_buyer_approved(
-        self, db: AsyncSession, admin: AdminDetails, order: ShopOrder, plan: ShopPlan, user, *, renewal: bool = False
+        self, db: AsyncSession, admin: AdminDetails, order: ShopOrder, plan: ShopPlan | None, user, *, renewal: bool = False
     ) -> None:
         try:
             from app.telegram import get_bot
@@ -436,13 +490,14 @@ class ShopOperation(BaseOperation):
                     except Exception:
                         logger.debug("Failed to notify shop buyer %s", order.buyer_telegram_id, exc_info=True)
 
+                plan_name = plan.name if plan else ("Custom" if getattr(order, "is_custom", False) else "?")
                 await notify_owner_order_approved(
                     db=db,
                     bot=bot,
                     approver=admin,
                     order_id=order.id,
                     buyer_label=order.buyer_username or str(order.buyer_telegram_id),
-                    plan_name=plan.name,
+                    plan_name=plan_name,
                     username=user.username,
                     renewal=renewal,
                 )

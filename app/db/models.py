@@ -1435,6 +1435,16 @@ class ShopConfig(Base, CreatedAtUTCMixin):
     test_data_limit: Mapped[int] = mapped_column(BigInteger, default=1024**3)
     test_expire_days: Mapped[int] = mapped_column(Integer, default=1)
     test_group_ids: Mapped[list[int] | None] = mapped_column(PostgresJSONB, default_factory=list)
+    custom_enabled: Mapped[bool] = mapped_column(server_default="0", default=False)
+    custom_price_per_gb: Mapped[int] = mapped_column(BigInteger, default=0)
+    custom_price_per_day: Mapped[int] = mapped_column(BigInteger, default=0)
+    custom_price_per_ip: Mapped[int] = mapped_column(BigInteger, default=0)
+    custom_min_gb: Mapped[int] = mapped_column(Integer, default=1)
+    custom_max_gb: Mapped[int] = mapped_column(Integer, default=500)
+    custom_min_days: Mapped[int] = mapped_column(Integer, default=1)
+    custom_max_days: Mapped[int] = mapped_column(Integer, default=365)
+    custom_base_ip: Mapped[int] = mapped_column(Integer, default=1)
+    custom_group_ids: Mapped[list[int] | None] = mapped_column(PostgresJSONB, default_factory=list)
 
 
 class ShopPlan(Base, CreatedAtUTCMixin):
@@ -1454,9 +1464,9 @@ class ShopPlan(Base, CreatedAtUTCMixin):
 class ShopOrder(Base, CreatedAtUTCMixin):
     __tablename__ = "shop_orders"
 
-    plan_id: Mapped[int] = fk_id_column("shop_plans.id", ondelete="CASCADE")
     admin_id: Mapped[int] = fk_id_column("admins.id", ondelete="CASCADE")
     buyer_telegram_id: Mapped[int] = mapped_column(BigInteger, index=True)
+    plan_id: Mapped[int | None] = fk_id_column("shop_plans.id", ondelete="CASCADE", default=None)
     buyer_username: Mapped[str | None] = mapped_column(String(64), default=None)
     status: Mapped[ShopOrderStatus] = mapped_column(
         SQLEnum(ShopOrderStatus, name="shoporderstatus", create_constraint=True),
@@ -1468,3 +1478,9 @@ class ShopOrder(Base, CreatedAtUTCMixin):
     note: Mapped[str | None] = mapped_column(String(500), default=None)
     order_kind: Mapped[str] = mapped_column(String(16), default="purchase", server_default="purchase")  # purchase|renewal
     renew_user_id: Mapped[int | None] = fk_id_column("users.id", ondelete="SET NULL", default=None)
+    requested_username: Mapped[str | None] = mapped_column(String(128), default=None)
+    custom_data_gb: Mapped[int | None] = mapped_column(Integer, default=None)
+    custom_expire_days: Mapped[int | None] = mapped_column(Integer, default=None)
+    custom_ip_limit: Mapped[int | None] = mapped_column(Integer, default=None)
+    quoted_price_toman: Mapped[int | None] = mapped_column(BigInteger, default=None)
+    is_custom: Mapped[bool] = mapped_column(server_default="0", default=False)

@@ -14,24 +14,24 @@ from app.services.hpx_pulse.healer import (
 
 def _pulse(**kwargs):
     now = dt.now(UTC)
-    defaults = dict(
-        name="p1",
-        enabled=True,
-        status=HpxPulseStatus.running,
-        auto_heal_enabled=True,
-        iran_agent_key_hash="iran",
-        abroad_agent_key_hash="abroad",
-        iran_agent_last_seen=now,
-        abroad_agent_last_seen=now,
-        iran_agent_command=None,
-        abroad_agent_command=None,
-        last_heal_at=None,
-        last_heal_action=None,
-        heal_count_window=0,
-        last_health_check=None,
-        last_status_change=now,
-        message=None,
-    )
+    defaults = {
+        "name": "p1",
+        "enabled": True,
+        "status": HpxPulseStatus.running,
+        "auto_heal_enabled": True,
+        "iran_agent_key_hash": "iran",
+        "abroad_agent_key_hash": "abroad",
+        "iran_agent_last_seen": now,
+        "abroad_agent_last_seen": now,
+        "iran_agent_command": None,
+        "abroad_agent_command": None,
+        "last_heal_at": None,
+        "last_heal_action": None,
+        "heal_count_window": 0,
+        "last_health_check": None,
+        "last_status_change": now,
+        "message": None,
+    }
     defaults.update(kwargs)
     return SimpleNamespace(**defaults)
 

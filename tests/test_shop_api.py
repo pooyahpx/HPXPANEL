@@ -75,41 +75,64 @@ def test_shop_config_get_and_update(shop_admin):
 
 def test_shop_plan_crud_and_stats(shop_admin):
     headers = auth_headers(shop_admin["token"])
-    created = client.post(
-        "/api/shop/plans",
-        headers=headers,
-        json={
-            "name": "Web Plan 30G",
-            "data_limit": 30 * 1024**3,
-            "expire_days": 30,
-            "price_toman": 150000,
-        },
-    )
-    assert created.status_code == status.HTTP_201_CREATED, created.text
-    plan = created.json()
-    plan_id = plan["id"]
-    assert plan["name"] == "Web Plan 30G"
-    assert plan["is_active"] is True
+    from tests.api.helpers import create_core, create_group, delete_core
 
-    listed = client.get("/api/shop/plans", headers=headers)
-    assert listed.status_code == status.HTTP_200_OK
-    assert any(item["id"] == plan_id for item in listed.json())
+    core = create_core(shop_admin["token"])
+    try:
+        group = create_group(shop_admin["token"])
+        created = client.post(
+            "/api/shop/plans",
+            headers=headers,
+            json={
+                "name": "Web Plan 30G",
+                "data_limit": 30 * 1024**3,
+                "expire_days": 30,
+                "price_toman": 150000,
+                "group_ids": [group["id"]],
+            },
+        )
+        assert created.status_code == status.HTTP_201_CREATED, created.text
+        plan = created.json()
+        plan_id = plan["id"]
+        assert plan["name"] == "Web Plan 30G"
+        assert plan["is_active"] is True
+        assert plan["group_ids"] == [group["id"]]
 
-    patched = client.patch(
-        f"/api/shop/plans/{plan_id}",
-        headers=headers,
-        json={"is_active": False, "price_toman": 160000},
-    )
-    assert patched.status_code == status.HTTP_200_OK, patched.text
-    assert patched.json()["is_active"] is False
-    assert patched.json()["price_toman"] == 160000
+        listed = client.get("/api/shop/plans", headers=headers)
+        assert listed.status_code == status.HTTP_200_OK
+        assert any(item["id"] == plan_id for item in listed.json())
 
-    stats = client.get("/api/shop/stats", headers=headers)
-    assert stats.status_code == status.HTTP_200_OK, stats.text
-    assert "orders_pending" in stats.json()
+        patched = client.patch(
+            f"/api/shop/plans/{plan_id}",
+            headers=headers,
+            json={"is_active": False, "price_toman": 160000, "group_ids": [group["id"]]},
+        )
+        assert patched.status_code == status.HTTP_200_OK, patched.text
+        assert patched.json()["is_active"] is False
+        assert patched.json()["price_toman"] == 160000
+        assert patched.json()["group_ids"] == [group["id"]]
 
-    deleted = client.delete(f"/api/shop/plans/{plan_id}", headers=headers)
-    assert deleted.status_code == status.HTTP_204_NO_CONTENT, deleted.text
+        empty_groups = client.post(
+            "/api/shop/plans",
+            headers=headers,
+            json={
+                "name": "No Groups Plan",
+                "data_limit": 1024**3,
+                "expire_days": 7,
+                "price_toman": 1000,
+                "group_ids": [],
+            },
+        )
+        assert empty_groups.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY, empty_groups.text
+
+        stats = client.get("/api/shop/stats", headers=headers)
+        assert stats.status_code == status.HTTP_200_OK, stats.text
+        assert "orders_pending" in stats.json()
+
+        deleted = client.delete(f"/api/shop/plans/{plan_id}", headers=headers)
+        assert deleted.status_code == status.HTTP_204_NO_CONTENT, deleted.text
+    finally:
+        delete_core(shop_admin["token"], core["id"])
 
 
 def test_shop_order_approve_and_reject(shop_admin):

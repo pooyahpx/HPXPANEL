@@ -56,7 +56,7 @@ export interface ShopPlanCreate {
   data_limit?: number
   expire_days?: number
   price_toman?: number
-  group_ids?: number[]
+  group_ids: number[]
   ip_limit?: number | null
   hwid_limit?: number | null
   is_active?: boolean

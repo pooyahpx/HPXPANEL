@@ -54,20 +54,7 @@ def enabled_gateways(config: ShopConfig) -> list[str]:
     """Return gateway ids that are enabled and have minimum credentials."""
     out: list[str] = []
     if getattr(config, "pay_card_enabled", True):
-        cards = list(config.cards or [])
-        if cards or config.card_number:
-            out.append(GATEWAY_CARD)
-        elif not any(
-            [
-                getattr(config, "pay_zarinpal_enabled", False),
-                getattr(config, "pay_idpay_enabled", False),
-                getattr(config, "pay_nowpayments_enabled", False),
-                getattr(config, "pay_paypal_enabled", False),
-                getattr(config, "pay_stripe_enabled", False),
-            ]
-        ):
-            # Keep card as fallback when no online gateway is on (legacy shops).
-            out.append(GATEWAY_CARD)
+        out.append(GATEWAY_CARD)
     if getattr(config, "pay_zarinpal_enabled", False) and (config.pay_zarinpal_merchant_id or "").strip():
         out.append(GATEWAY_ZARINPAL)
     if getattr(config, "pay_idpay_enabled", False) and (config.pay_idpay_api_key or "").strip():

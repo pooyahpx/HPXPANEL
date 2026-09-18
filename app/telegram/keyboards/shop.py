@@ -70,7 +70,7 @@ class ShopHomeKeyboard(InlineKeyboardBuilder):
 class ShopPlansKeyboard(InlineKeyboardBuilder):
     """Plan list with prices — shown after tapping Plans."""
 
-    def __init__(self, lang: str, plans: list[ShopPlan], *, custom_enabled: bool = False, *args, **kwargs):
+    def __init__(self, lang: str, plans: list[ShopPlan], *args, custom_enabled: bool = False, **kwargs):
         super().__init__(*args, **kwargs)
         cb = ShopKeyboardCallback
         for plan in plans:

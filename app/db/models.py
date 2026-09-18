@@ -1464,9 +1464,9 @@ class ShopPlan(Base, CreatedAtUTCMixin):
 class ShopOrder(Base, CreatedAtUTCMixin):
     __tablename__ = "shop_orders"
 
-    plan_id: Mapped[int | None] = fk_id_column("shop_plans.id", ondelete="CASCADE", default=None)
     admin_id: Mapped[int] = fk_id_column("admins.id", ondelete="CASCADE")
     buyer_telegram_id: Mapped[int] = mapped_column(BigInteger, index=True)
+    plan_id: Mapped[int | None] = fk_id_column("shop_plans.id", ondelete="CASCADE", default=None)
     buyer_username: Mapped[str | None] = mapped_column(String(64), default=None)
     status: Mapped[ShopOrderStatus] = mapped_column(
         SQLEnum(ShopOrderStatus, name="shoporderstatus", create_constraint=True),

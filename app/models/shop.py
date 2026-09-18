@@ -1,7 +1,7 @@
 from datetime import datetime as dt
 from enum import Enum
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class ShopOrderKindLiteral(str, Enum):
@@ -71,10 +71,17 @@ class ShopPlanCreate(BaseModel):
     data_limit: int = Field(default=0, ge=0)
     expire_days: int = Field(default=30, ge=0)
     price_toman: int = Field(default=0, ge=0)
-    group_ids: list[int] = Field(default_factory=list)
+    group_ids: list[int] = Field(min_length=1)
     ip_limit: int | None = Field(default=None, ge=0)
     hwid_limit: int | None = Field(default=None, ge=0)
     is_active: bool = True
+
+    @field_validator("group_ids")
+    @classmethod
+    def require_at_least_one_group(cls, value: list[int]) -> list[int]:
+        if not value:
+            raise ValueError("you must select at least one group")
+        return value
 
 
 class ShopPlanUpdate(BaseModel):
@@ -86,6 +93,13 @@ class ShopPlanUpdate(BaseModel):
     ip_limit: int | None = Field(default=None, ge=0)
     hwid_limit: int | None = Field(default=None, ge=0)
     is_active: bool | None = None
+
+    @field_validator("group_ids")
+    @classmethod
+    def require_at_least_one_group_when_set(cls, value: list[int] | None) -> list[int] | None:
+        if value is not None and not value:
+            raise ValueError("you must select at least one group")
+        return value
 
 
 class ShopOrderResponse(BaseModel):

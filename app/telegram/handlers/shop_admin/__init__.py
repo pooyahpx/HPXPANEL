@@ -690,12 +690,14 @@ async def plan_groups(event: types.Message, state: FSMContext):
     lang = data.get("lang", "fa")
     raw = event.text.strip()
     group_ids: list[int] = []
-    if raw not in ("-", "0", ""):
-        try:
-            group_ids = [int(x.strip()) for x in raw.split(",") if x.strip()]
-        except ValueError:
-            await event.answer(t(lang, "invalid_number"))
-            return
+    try:
+        group_ids = [int(x.strip()) for x in raw.split(",") if x.strip()]
+    except ValueError:
+        await event.answer(t(lang, "invalid_number"))
+        return
+    if not group_ids:
+        await event.answer(t(lang, "admin_plan_groups_required"))
+        return
     await state.update_data(group_ids=group_ids)
     await state.set_state(forms.ShopAdminPlan.ip_limit)
     await event.answer(t(lang, "admin_ask_plan_ip_limit"))
@@ -824,9 +826,9 @@ def _parse_plan_field_update(field: str, raw: str) -> dict:
             raise ValueError
         return {"price_toman": price}
     if field == "group_ids":
-        if raw in ("-", "0", ""):
-            return {"group_ids": []}
         group_ids = [int(x.strip()) for x in raw.split(",") if x.strip()]
+        if not group_ids:
+            raise ValueError
         return {"group_ids": group_ids}
     if field == "ip_limit":
         ip_limit = parse_optional_limit(raw)

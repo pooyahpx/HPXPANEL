@@ -4,7 +4,8 @@ import PageTransition from '@/components/layout/page-transition'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -15,6 +16,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { useAdmin } from '@/hooks/use-admin'
 import useDirDetection from '@/hooks/use-dir-detection'
 import { cn } from '@/lib/utils'
+import { useGetGroupsSimple } from '@/service/api'
 import {
   CreateBudgetLedgerEntry,
   ShopOrder,
@@ -40,6 +42,7 @@ import {
   ArrowUpRight,
   Check,
   ImageIcon,
+  Pencil,
   Plus,
   Receipt,
   RefreshCw,
@@ -51,6 +54,77 @@ import {
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
+
+type PlanFormState = {
+  name: string
+  price_toman: string
+  data_gb: string
+  expire_days: string
+  group_ids: number[]
+}
+
+const emptyPlanForm = (): PlanFormState => ({
+  name: '',
+  price_toman: '100000',
+  data_gb: '30',
+  expire_days: '30',
+  group_ids: [],
+})
+
+function ShopPlanGroupsPicker({
+  selected,
+  onChange,
+  disabled,
+}: {
+  selected: number[]
+  onChange: (ids: number[]) => void
+  disabled?: boolean
+}) {
+  const { t } = useTranslation()
+  const { data: groupsData, isLoading } = useGetGroupsSimple(
+    { all: true },
+    {
+      query: {
+        staleTime: 5 * 60 * 1000,
+        refetchOnWindowFocus: true,
+      },
+    },
+  )
+  const groups = groupsData?.groups || []
+
+  if (isLoading) {
+    return <Skeleton className="h-28 w-full rounded-lg" />
+  }
+
+  if (!groups.length) {
+    return (
+      <div className="text-muted-foreground rounded-lg border border-dashed p-3 text-sm">
+        {t('shop.noGroups', { defaultValue: 'No groups yet. Create a group first.' })}
+      </div>
+    )
+  }
+
+  return (
+    <div className="max-h-40 space-y-2 overflow-y-auto rounded-lg border p-3">
+      {groups.map((group: { id: number; name: string }) => {
+        const checked = selected.includes(group.id)
+        return (
+          <label key={group.id} className="flex cursor-pointer items-center gap-2 text-sm">
+            <Checkbox
+              checked={checked}
+              disabled={disabled}
+              onCheckedChange={value => {
+                const next = value === true ? [...selected, group.id] : selected.filter(id => id !== group.id)
+                onChange(next)
+              }}
+            />
+            <span>{group.name}</span>
+          </label>
+        )
+      })}
+    </div>
+  )
+}
 
 const GB = 1024 ** 3
 
@@ -175,17 +249,39 @@ export default function ShopPage() {
   const [receiptOrder, setReceiptOrder] = useState<ShopOrder | null>(null)
   const [receiptUrl, setReceiptUrl] = useState<string | null>(null)
   const [receiptLoading, setReceiptLoading] = useState(false)
-  const [planForm, setPlanForm] = useState({
-    name: '',
-    price_toman: '100000',
-    data_gb: '30',
-    expire_days: '30',
-  })
+  const [planForm, setPlanForm] = useState<PlanFormState>(emptyPlanForm)
+  const [editingPlan, setEditingPlan] = useState<ShopPlan | null>(null)
+  const [editForm, setEditForm] = useState<PlanFormState>(emptyPlanForm)
   const [welcomeNote, setWelcomeNote] = useState('')
   const [cardNote, setCardNote] = useState('')
   const [cardNumber, setCardNumber] = useState('')
   const [cardHolder, setCardHolder] = useState('')
   const [accountingFilter, setAccountingFilter] = useState<'all' | 'charge' | 'credit' | 'unsettled' | 'settled'>('all')
+
+  const { data: groupsSimple } = useGetGroupsSimple({ all: true }, { query: { staleTime: 5 * 60 * 1000, enabled: canView } })
+  const groupNameById = useMemo(() => {
+    const map = new Map<number, string>()
+    for (const group of groupsSimple?.groups || []) {
+      map.set(group.id, group.name)
+    }
+    return map
+  }, [groupsSimple])
+
+  const formatPlanGroups = (ids: number[] | undefined) => {
+    if (!ids?.length) return t('shop.noGroupsAssigned', { defaultValue: 'No groups' })
+    return ids.map(id => groupNameById.get(id) || `#${id}`).join(', ')
+  }
+
+  const openEditPlan = (plan: ShopPlan) => {
+    setEditingPlan(plan)
+    setEditForm({
+      name: plan.name,
+      price_toman: String(plan.price_toman ?? 0),
+      data_gb: String(((plan.data_limit || 0) / GB).toFixed((plan.data_limit || 0) % GB === 0 ? 0 : 1)),
+      expire_days: String(plan.expire_days ?? 0),
+      group_ids: [...(plan.group_ids || [])],
+    })
+  }
 
   const ordersQueryFilter =
     orderFilter === 'all'
@@ -494,7 +590,7 @@ export default function ShopPage() {
                 <CardHeader className="pb-4">
                   <CardTitle className="text-base">{t('shop.addPlan')}</CardTitle>
                 </CardHeader>
-                <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+                <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   <div className="space-y-2">
                     <Label>{t('shop.planName')}</Label>
                     <Input value={planForm.name} onChange={e => setPlanForm(prev => ({ ...prev, name: e.target.value }))} />
@@ -511,10 +607,23 @@ export default function ShopPage() {
                     <Label>{t('shop.expireDays')}</Label>
                     <Input value={planForm.expire_days} onChange={e => setPlanForm(prev => ({ ...prev, expire_days: e.target.value }))} />
                   </div>
+                  <div className="space-y-2 sm:col-span-2">
+                    <Label>{t('shop.planGroups', { defaultValue: 'Groups' })}</Label>
+                    <p className="text-muted-foreground text-xs">
+                      {t('shop.planGroupsHint', {
+                        defaultValue: 'Users created from this plan get these groups (required for config).',
+                      })}
+                    </p>
+                    <ShopPlanGroupsPicker
+                      selected={planForm.group_ids}
+                      onChange={group_ids => setPlanForm(prev => ({ ...prev, group_ids }))}
+                      disabled={createPlan.isPending}
+                    />
+                  </div>
                   <div className="flex items-end">
                     <Button
                       className="w-full"
-                      disabled={createPlan.isPending || !planForm.name.trim()}
+                      disabled={createPlan.isPending || !planForm.name.trim() || planForm.group_ids.length === 0}
                       onClick={async () => {
                         try {
                           await createPlan.mutateAsync({
@@ -522,8 +631,9 @@ export default function ShopPage() {
                             price_toman: Number(planForm.price_toman) || 0,
                             data_limit: Math.max(0, Math.round(Number(planForm.data_gb) * GB)) || 0,
                             expire_days: Number(planForm.expire_days) || 0,
+                            group_ids: planForm.group_ids,
                           })
-                          setPlanForm({ name: '', price_toman: '100000', data_gb: '30', expire_days: '30' })
+                          setPlanForm(emptyPlanForm())
                           toast.success(t('shop.planCreated'))
                         } catch (error: any) {
                           toast.error(error?.data?.detail || t('shop.actionFailed'))
@@ -552,6 +662,7 @@ export default function ShopPage() {
                         <TableHead className="px-4 py-3.5">{t('shop.price')}</TableHead>
                         <TableHead className="px-4 py-3.5">{t('shop.data')}</TableHead>
                         <TableHead className="px-4 py-3.5">{t('shop.expire')}</TableHead>
+                        <TableHead className="px-4 py-3.5">{t('shop.planGroups', { defaultValue: 'Groups' })}</TableHead>
                         <TableHead className="px-4 py-3.5">{t('shop.active')}</TableHead>
                         {canManage ? <TableHead className="px-4 py-3.5 text-end">{t('shop.actions')}</TableHead> : null}
                       </TableRow>
@@ -566,11 +677,25 @@ export default function ShopPage() {
                           <TableCell className="px-4 py-4">{formatBytes(plan.data_limit)}</TableCell>
                           <TableCell className="px-4 py-4">{plan.expire_days ? `${plan.expire_days}d` : '∞'}</TableCell>
                           <TableCell className="px-4 py-4">
+                            <span
+                              className={cn(
+                                'text-sm',
+                                !(plan.group_ids || []).length && 'text-amber-700 dark:text-amber-400',
+                              )}
+                            >
+                              {formatPlanGroups(plan.group_ids)}
+                            </span>
+                          </TableCell>
+                          <TableCell className="px-4 py-4">
                             <Badge variant={plan.is_active ? 'default' : 'secondary'}>{plan.is_active ? t('shop.active') : t('shop.inactive')}</Badge>
                           </TableCell>
                           {canManage ? (
                             <TableCell className="px-4 py-4 text-end">
                               <div className="flex justify-end gap-2">
+                                <Button size="sm" variant="outline" onClick={() => openEditPlan(plan)}>
+                                  <Pencil className="size-3.5" />
+                                  {t('shop.editPlan', { defaultValue: 'Edit' })}
+                                </Button>
                                 <Button
                                   size="sm"
                                   variant="outline"
@@ -610,9 +735,87 @@ export default function ShopPage() {
                 </CardContent>
               </Card>
             )}
-          </TabsContent>
 
-          <TabsContent value="accounting" className="mt-0 space-y-5">
+            <Dialog
+              open={Boolean(editingPlan)}
+              onOpenChange={open => {
+                if (!open) {
+                  setEditingPlan(null)
+                  setEditForm(emptyPlanForm())
+                }
+              }}
+            >
+              <DialogContent className="sm:max-w-lg">
+                <DialogHeader>
+                  <DialogTitle>{t('shop.editPlan', { defaultValue: 'Edit plan' })}</DialogTitle>
+                </DialogHeader>
+                <div className="grid gap-4 py-2 sm:grid-cols-2">
+                  <div className="space-y-2 sm:col-span-2">
+                    <Label>{t('shop.planName')}</Label>
+                    <Input value={editForm.name} onChange={e => setEditForm(prev => ({ ...prev, name: e.target.value }))} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>{t('shop.price')}</Label>
+                    <Input value={editForm.price_toman} onChange={e => setEditForm(prev => ({ ...prev, price_toman: e.target.value }))} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>{t('shop.dataGb')}</Label>
+                    <Input value={editForm.data_gb} onChange={e => setEditForm(prev => ({ ...prev, data_gb: e.target.value }))} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>{t('shop.expireDays')}</Label>
+                    <Input value={editForm.expire_days} onChange={e => setEditForm(prev => ({ ...prev, expire_days: e.target.value }))} />
+                  </div>
+                  <div className="space-y-2 sm:col-span-2">
+                    <Label>{t('shop.planGroups', { defaultValue: 'Groups' })}</Label>
+                    <ShopPlanGroupsPicker
+                      selected={editForm.group_ids}
+                      onChange={group_ids => setEditForm(prev => ({ ...prev, group_ids }))}
+                      disabled={updatePlan.isPending}
+                    />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setEditingPlan(null)
+                      setEditForm(emptyPlanForm())
+                    }}
+                  >
+                    {t('cancel', { defaultValue: 'Cancel' })}
+                  </Button>
+                  <Button
+                    disabled={
+                      updatePlan.isPending || !editingPlan || !editForm.name.trim() || editForm.group_ids.length === 0
+                    }
+                    onClick={async () => {
+                      if (!editingPlan) return
+                      try {
+                        await updatePlan.mutateAsync({
+                          planId: editingPlan.id,
+                          body: {
+                            name: editForm.name.trim(),
+                            price_toman: Number(editForm.price_toman) || 0,
+                            data_limit: Math.max(0, Math.round(Number(editForm.data_gb) * GB)) || 0,
+                            expire_days: Number(editForm.expire_days) || 0,
+                            group_ids: editForm.group_ids,
+                          },
+                        })
+                        toast.success(t('shop.planUpdated', { defaultValue: 'Plan updated' }))
+                        setEditingPlan(null)
+                        setEditForm(emptyPlanForm())
+                      } catch (error: any) {
+                        toast.error(error?.data?.detail || t('shop.actionFailed'))
+                      }
+                    }}
+                  >
+                    {t('shop.savePlan', { defaultValue: 'Save plan' })}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </TabsContent>
             {accountingLoading ? (
               <div className="space-y-4">
                 <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

@@ -35,17 +35,19 @@ BUILTIN_CUSTOM_VARIABLE_KEYS = {variable.upper() for variable in BUILTIN_FORMAT_
 
 
 class RunMethod(StrEnum):
-    WEBHOOK = "webhook"
     LONGPOLLING = "long-polling"
+    # Kept for backward-compatible parsing of older saved settings; coerced to LONGPOLLING.
+    WEBHOOK = "webhook"
 
 
 class Telegram(BaseModel):
     enable: bool = Field(default=False)
     token: str | None = Field(default=None)
+    # Legacy fields retained so older DB payloads still load; ignored at runtime.
     webhook_url: str | None = Field(default=None)
     webhook_secret: str | None = Field(default=None)
     proxy_url: str | None = Field(default=None)
-    method: RunMethod = Field(default=RunMethod.WEBHOOK)
+    method: RunMethod = Field(default=RunMethod.LONGPOLLING)
 
     mini_app_login: bool = Field(default=True)
     mini_app_web_url: str | None = Field(default="")
@@ -63,12 +65,6 @@ class Telegram(BaseModel):
     def validate_panel_url(cls, v):
         return URLValidator.validate_url(v)
 
-    @field_validator("webhook_url")
-    def validate_webhook_url(cls, v, values):
-        method = values.data.get("method", "webhook")
-        if method == "webhook":
-            return URLValidator.validate_url(v)
-
     @field_validator("proxy_url")
     @classmethod
     def validate_proxy_url(cls, v):
@@ -83,16 +79,16 @@ class Telegram(BaseModel):
             raise ValueError("Invalid telegram token format")
         return v
 
+    @field_validator("method", mode="before")
+    @classmethod
+    def force_long_polling(cls, v):
+        return RunMethod.LONGPOLLING
+
     @model_validator(mode="after")
-    def check_enable_requires_token_and_url(self):
-        if self.enable and (
-            (self.method == RunMethod.WEBHOOK and (not self.token or not self.webhook_url or not self.webhook_secret))
-            or (self.method == RunMethod.LONGPOLLING and not self.token)
-        ):
-            if self.method == RunMethod.WEBHOOK:
-                raise ValueError("Telegram bot cannot be enabled without token, webhook_url and webhook_secret.")
-            elif self.method == RunMethod.LONGPOLLING:
-                raise ValueError("Telegram bot cannot be enabled without token.")
+    def check_enable_requires_token(self):
+        self.method = RunMethod.LONGPOLLING
+        if self.enable and not self.token:
+            raise ValueError("Telegram bot cannot be enabled without token.")
         return self
 
 

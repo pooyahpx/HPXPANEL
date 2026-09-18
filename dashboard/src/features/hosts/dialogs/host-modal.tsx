@@ -104,6 +104,8 @@ interface HostModalProps {
   form: UseFormReturn<HostFormValues>
   inboundDetails?: Array<{ tag: string; protocol: string }>
   isLoadingInbounds?: boolean
+  /** When true, skip wiping the create form (e.g. Stealth preset already applied). */
+  preserveCreateValues?: boolean
 }
 
 // Update status options constant
@@ -313,7 +315,7 @@ const ArrayInput = memo<ArrayInputProps>(({ field, placeholder, label, infoConte
 
 ArrayInput.displayName = 'ArrayInput'
 
-const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSubmit, editingHost, form, inboundDetails, isLoadingInbounds = false }) => {
+const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSubmit, editingHost, form, inboundDetails, isLoadingInbounds = false, preserveCreateValues = false }) => {
   const [openSection, setOpenSection] = useState<string | undefined>(undefined)
   const [wireguardOpenSection, setWireguardOpenSection] = useState<string | undefined>(undefined)
   const [isTransportOpen, setIsTransportOpen] = useState(false)
@@ -717,10 +719,10 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
   }
 
   useEffect(() => {
-    if (isDialogOpen && !editingHost) {
+    if (isDialogOpen && !editingHost && !preserveCreateValues) {
       resetFormToDefaults()
     }
-  }, [editingHost, isDialogOpen, resetFormToDefaults])
+  }, [editingHost, isDialogOpen, preserveCreateValues, resetFormToDefaults])
 
   useEffect(() => {
     if (!isDialogOpen) {

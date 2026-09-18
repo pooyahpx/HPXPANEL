@@ -133,6 +133,16 @@ def _to_response(db_pulse: HpxPulse) -> HpxPulseResponse:
         "packet_loss_pct": db_pulse.packet_loss_pct,
         "auto_restart_interval_minutes": db_pulse.auto_restart_interval_minutes,
         "last_auto_restart_at": db_pulse.last_auto_restart_at,
+        "auto_heal_enabled": db_pulse.auto_heal_enabled,
+        "last_heal_at": db_pulse.last_heal_at,
+        "last_heal_action": db_pulse.last_heal_action,
+        "last_health_check": db_pulse.last_health_check,
+        "backup_pulse_id": db_pulse.backup_pulse_id,
+        "auto_failover": db_pulse.auto_failover,
+        "auto_failback": db_pulse.auto_failback,
+        "failover_active": db_pulse.failover_active,
+        "priority": db_pulse.priority,
+        "last_failover_at": db_pulse.last_failover_at,
         "created_at": db_pulse.created_at,
     }
     return HpxPulseResponse.model_validate(data)
@@ -407,7 +417,16 @@ class HpxPulseOperation(BaseOperation):
                 update_data["preset"] = chosen.preset
 
         # Interval-only changes should not force an immediate agent restart.
-        soft_keys = {"auto_restart_interval_minutes", "note", "enabled"}
+        soft_keys = {
+            "auto_restart_interval_minutes",
+            "note",
+            "enabled",
+            "auto_heal_enabled",
+            "backup_pulse_id",
+            "auto_failover",
+            "auto_failback",
+            "priority",
+        }
         needs_agent_restart = bool(set(update_data.keys()) - soft_keys)
         if needs_agent_restart:
             if db_pulse.iran_agent_key_hash:
@@ -434,11 +453,17 @@ class HpxPulseOperation(BaseOperation):
         token_hash = hash_api_key(model.join_token)
         db_pulse = await get_hpx_pulse_by_join_token_hash(db, token_hash, side)
         if db_pulse is None:
-            await self.raise_error(message="Invalid join token", code=401)
+            await self.raise_error(
+                message="Invalid or unknown join token — regenerate tokens in the panel and paste the new command",
+                code=401,
+            )
 
         exp = db_pulse.iran_join_token_expires_at if side == "iran" else db_pulse.abroad_join_token_expires_at
         if exp and exp < dt.now(UTC):
-            await self.raise_error(message="Join token expired", code=401)
+            await self.raise_error(
+                message="Join token expired — open the pulse in the panel and generate fresh join tokens",
+                code=401,
+            )
 
         agent_key = _mint_token("hpxpa" if side == "abroad" else "hpxpi")
         token = await self._decrypt_token(db, db_pulse)

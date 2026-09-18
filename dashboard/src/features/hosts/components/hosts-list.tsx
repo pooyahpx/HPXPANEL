@@ -18,8 +18,9 @@ import { useEffect, useMemo, useState } from 'react'
 import { Resolver, useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { Power, PowerOff, Plus, Server, Trash2 } from 'lucide-react'
+import { Power, PowerOff, Plus, Server, Shield, Trash2 } from 'lucide-react'
 import HostModal from '../dialogs/host-modal'
+import HostStealthPresetWizard from '../dialogs/host-stealth-preset-wizard'
 import SortableHost from './sortable-host'
 import { BulkActionItem, BulkActionsBar } from '@/features/users/components/bulk-actions-bar'
 import { BulkActionAlertDialog } from '@/features/users/components/bulk-action-alert-dialog'
@@ -72,6 +73,8 @@ export default function HostsList({
   const [isUpdatingPriorities, setIsUpdatingPriorities] = useState(false)
   const [filters, setFilters] = useState<HostListFilters>({})
   const [isAdvanceSearchOpen, setIsAdvanceSearchOpen] = useState(false)
+  const [stealthWizardOpen, setStealthWizardOpen] = useState(false)
+  const [preserveCreateValues, setPreserveCreateValues] = useState(false)
   const [viewMode, setViewMode] = usePersistedViewMode('view-mode:hosts')
   const [isManualRefreshing, setIsManualRefreshing] = useState(false)
   const [selectedHostIds, setSelectedHostIds] = useState<number[]>([])
@@ -909,7 +912,7 @@ export default function HostsList({
 
   return (
     <div>
-      <div className="mb-4">
+      <div className="mb-4 space-y-3">
         <HostFilters
           filters={filters}
           onFilterChange={handleFilterChange}
@@ -920,6 +923,20 @@ export default function HostsList({
           viewMode={viewMode}
           onViewModeChange={setViewMode}
         />
+        {canCreate && (
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              className="gap-1.5"
+              onClick={() => setStealthWizardOpen(true)}
+            >
+              <Shield className="size-3.5" />
+              {t('hostStealthPresets.apply', { defaultValue: 'Apply Stealth preset' })}
+            </Button>
+          </div>
+        )}
       </div>
       {canUpdate && <BulkActionsBar selectedCount={selectedCount} onClear={clearSelection} actions={bulkActions} />}
       {(isCurrentlyLoading || filteredHosts.length > 0) && viewMode === 'grid' && (
@@ -1032,6 +1049,25 @@ export default function HostsList({
         isLoadingInbounds={isLoadingInbounds}
       />
 
+      {canCreate && (
+        <HostStealthPresetWizard
+          open={stealthWizardOpen}
+          onOpenChange={setStealthWizardOpen}
+          onApply={(values, preset) => {
+            setEditingHost(null)
+            setPreserveCreateValues(true)
+            form.reset(values)
+            onAddHost(true)
+            toast.success(
+              t('hostStealthPresets.applied', {
+                defaultValue: 'Applied {{name}} — set inbound tag and address, then create',
+                name: preset.title,
+              }),
+            )
+          }}
+        />
+      )}
+
       {(canCreate || canUpdate) && (
         <HostModal
           isDialogOpen={isDialogOpen}
@@ -1041,8 +1077,7 @@ export default function HostsList({
             if (open && !editingHost && !canCreate) return
             if (!open) {
               setEditingHost(null)
-              form.reset(hostFormDefaultValues)
-            } else if (!editingHost) {
+              setPreserveCreateValues(false)
               form.reset(hostFormDefaultValues)
             }
             onAddHost(open)
@@ -1051,6 +1086,7 @@ export default function HostsList({
           editingHost={!!editingHost}
           inboundDetails={inbounds}
           isLoadingInbounds={isLoadingInbounds}
+          preserveCreateValues={preserveCreateValues}
         />
       )}
       {activeBulkActionConfig && (

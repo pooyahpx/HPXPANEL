@@ -33,6 +33,7 @@ class HpxTunnelBase(BaseModel):
     priority: int = Field(default=0, ge=0, le=100)
     alert_on_down: bool = True
     note: str | None = Field(default=None, max_length=512)
+    auto_failback: bool = True
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -72,6 +73,7 @@ class HpxTunnelUpdate(BaseModel):
     alert_on_down: bool | None = None
     note: str | None = Field(default=None, max_length=512)
     auto_heal_enabled: bool | None = None
+    auto_failback: bool | None = None
 
 
 class HpxTunnelResponse(HpxTunnelBase):
@@ -95,6 +97,10 @@ class HpxTunnelResponse(HpxTunnelBase):
     auto_heal_enabled: bool = True
     last_heal_at: dt | None = None
     last_heal_action: str | None = None
+    auto_failback: bool = True
+    failover_active: bool = False
+    failover_of_tunnel_id: int | None = None
+    last_failover_at: dt | None = None
 
 
 class HpxTunnelsResponse(BaseModel):

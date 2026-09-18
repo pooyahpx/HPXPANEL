@@ -31,6 +31,10 @@ export interface HpxTunnelResponse {
   container_name: string
   backup_tunnel_id?: number | null
   auto_failover: boolean
+  auto_failback?: boolean
+  failover_active?: boolean
+  failover_of_tunnel_id?: number | null
+  last_failover_at?: string | null
   priority: number
   alert_on_down: boolean
   note?: string | null

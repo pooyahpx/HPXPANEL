@@ -1293,6 +1293,12 @@ class HpxTunnel(Base, CreatedAtUTCMixin):
     last_heal_at: Mapped[dt | None] = mapped_column(DateTime(timezone=True), default=None)
     last_heal_action: Mapped[str | None] = mapped_column(String(256), default=None)
     heal_count_window: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    auto_failback: Mapped[bool] = mapped_column(server_default="1", default=True)
+    failover_active: Mapped[bool] = mapped_column(server_default="0", default=False)
+    failover_of_tunnel_id: Mapped[int | None] = fk_id_column(
+        "hpx_tunnels.id", ondelete="SET NULL", default=None, nullable=True
+    )
+    last_failover_at: Mapped[dt | None] = mapped_column(DateTime(timezone=True), default=None)
 
 
 class HpxPulseStatus(str, Enum):
@@ -1353,6 +1359,19 @@ class HpxPulse(Base, CreatedAtUTCMixin):
     last_status_change: Mapped[dt | None] = mapped_column(DateTime(timezone=True), default=None)
     auto_restart_interval_minutes: Mapped[int | None] = mapped_column(Integer, default=None)
     last_auto_restart_at: Mapped[dt | None] = mapped_column(DateTime(timezone=True), default=None)
+    auto_heal_enabled: Mapped[bool] = mapped_column(server_default="1", default=True)
+    last_heal_at: Mapped[dt | None] = mapped_column(DateTime(timezone=True), default=None)
+    last_heal_action: Mapped[str | None] = mapped_column(String(256), default=None)
+    heal_count_window: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    last_health_check: Mapped[dt | None] = mapped_column(DateTime(timezone=True), default=None)
+    backup_pulse_id: Mapped[int | None] = fk_id_column(
+        "hpx_pulses.id", ondelete="SET NULL", default=None, nullable=True
+    )
+    auto_failover: Mapped[bool] = mapped_column(server_default="0", default=False)
+    auto_failback: Mapped[bool] = mapped_column(server_default="1", default=True)
+    failover_active: Mapped[bool] = mapped_column(server_default="0", default=False)
+    priority: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    last_failover_at: Mapped[dt | None] = mapped_column(DateTime(timezone=True), default=None)
 
 
 class TelegramSubDelivery(Base):

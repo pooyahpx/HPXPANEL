@@ -41,6 +41,11 @@ async def create_hpx_pulse(
         auto_restart_interval_minutes=(
             model.auto_restart_interval_minutes if model.auto_restart_interval_minutes and model.auto_restart_interval_minutes > 0 else None
         ),
+        auto_heal_enabled=model.auto_heal_enabled,
+        backup_pulse_id=model.backup_pulse_id,
+        auto_failover=model.auto_failover,
+        auto_failback=model.auto_failback,
+        priority=model.priority,
     )
     db.add(db_pulse)
     await db.flush()

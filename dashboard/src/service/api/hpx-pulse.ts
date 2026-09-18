@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { fetcher } from '@/service/http'
 
-export type PulseGoal = 'stealth' | 'balanced' | 'speed'
+export type PulseGoal = 'stealth' | 'balanced' | 'speed' | 'mobile' | 'hard' | 'fast'
+
 export type PulseStatus =
   | 'pending_claim'
   | 'running'
@@ -69,6 +70,16 @@ export interface HpxPulseResponse {
   latency_ms?: number | null
   auto_restart_interval_minutes?: number | null
   last_auto_restart_at?: string | null
+  auto_heal_enabled?: boolean
+  last_heal_at?: string | null
+  last_heal_action?: string | null
+  last_health_check?: string | null
+  backup_pulse_id?: number | null
+  auto_failover?: boolean
+  auto_failback?: boolean
+  failover_active?: boolean
+  priority?: number
+  last_failover_at?: string | null
   created_at: string
 }
 
@@ -101,6 +112,11 @@ export interface HpxPulseCreate {
   sni_hint?: string | null
   note?: string | null
   auto_restart_interval_minutes?: number | null
+  auto_heal_enabled?: boolean
+  backup_pulse_id?: number | null
+  auto_failover?: boolean
+  auto_failback?: boolean
+  priority?: number
 }
 
 export interface HpxPulseUpdate {
@@ -116,6 +132,11 @@ export interface HpxPulseUpdate {
   note?: string | null
   enabled?: boolean
   auto_restart_interval_minutes?: number | null
+  auto_heal_enabled?: boolean
+  backup_pulse_id?: number | null
+  auto_failover?: boolean
+  auto_failback?: boolean
+  priority?: number
 }
 
 export interface HpxPulseActionResponse {

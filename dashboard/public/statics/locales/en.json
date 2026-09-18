@@ -524,7 +524,8 @@
     "repairSuccess": "Repair applied",
     "diagnoseOk": "No issues detected",
     "repairSkipped": "Could not repair",
-    "mtuHint": "Use 1000 for ICMP tunnels (recommended)."
+    "mtuHint": "Use 1000 for ICMP tunnels (recommended).",
+    "failbackEnabled": "Auto-failback"
   },
   "hpxPulse": {
     "title": "HPX Pulse",
@@ -624,7 +625,23 @@
       "error": "Error",
       "unhealthy": "Unhealthy",
       "partial": "Partial"
-    }
+    },
+    "intent": "Intent",
+    "intentMobile": "Mobile — stealth + balance",
+    "intentHard": "Hard — aggressive stealth",
+    "intentFast": "Fast — turbo / KCP / QUIC",
+    "intentHint": "Pick how you want the tunnel to feel — advisor ranks Stealth presets.",
+    "failoverSection": "Path failover",
+    "backupPulseId": "Backup pulse ID",
+    "priority": "Priority",
+    "autoFailover": "Auto-failover to backup",
+    "autoFailback": "Auto-failback when primary recovers",
+    "autoHeal": "Auto-heal stale agents",
+    "failoverEnabled": "Failover",
+    "failoverActive": "On backup path",
+    "lastHeal": "Heal",
+    "enginePin": "Engine pin",
+    "topProfiles": "Top Stealth / tunnel presets"
   },
   "groups": "Groups",
   "documentation": "Documentation",
@@ -4509,5 +4526,17 @@
     "commandCopied": "Update command copied",
     "closeBanner": "Close update notification",
     "needsUpdate": "Needs update"
+  },
+  "hostStealthPresets": {
+    "title": "HPX Stealth presets",
+    "description": "One-page Reality / Hysteria2 / fragment presets. Pick an intent, apply, then finish inbound tag in the host form.",
+    "intent": "Intent",
+    "all": "All",
+    "mobile": "Mobile",
+    "hard": "Hard DPI",
+    "fast": "Fast",
+    "apply": "Apply Stealth preset",
+    "applied": "Applied {{name}} — set inbound tag and address, then create",
+    "hint": "Click a preset to apply"
   }
 }

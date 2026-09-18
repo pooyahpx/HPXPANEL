@@ -3,7 +3,7 @@ from typing import Literal
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
-PulseGoal = Literal["stealth", "balanced", "speed"]
+PulseGoal = Literal["stealth", "balanced", "speed", "mobile", "hard", "fast"]
 PulseSide = Literal["iran", "abroad"]
 PulseEngine = Literal["hpx", "native"]
 PulseStatus = Literal[
@@ -70,6 +70,11 @@ class HpxPulseCreate(BaseModel):
     sni_hint: str | None = Field(default=None, max_length=255)
     note: str | None = Field(default=None, max_length=512)
     auto_restart_interval_minutes: int | None = Field(default=None, ge=0, le=10080)
+    auto_heal_enabled: bool = True
+    backup_pulse_id: int | None = Field(default=None, ge=1)
+    auto_failover: bool = False
+    auto_failback: bool = True
+    priority: int = Field(default=0, ge=0, le=100)
 
 
 class HpxPulseUpdate(BaseModel):
@@ -85,6 +90,11 @@ class HpxPulseUpdate(BaseModel):
     note: str | None = Field(default=None, max_length=512)
     enabled: bool | None = None
     auto_restart_interval_minutes: int | None = Field(default=None, ge=0, le=10080)
+    auto_heal_enabled: bool | None = None
+    backup_pulse_id: int | None = Field(default=None, ge=1)
+    auto_failover: bool | None = None
+    auto_failback: bool | None = None
+    priority: int | None = Field(default=None, ge=0, le=100)
 
 
 class HpxPulseResponse(BaseModel):
@@ -121,6 +131,16 @@ class HpxPulseResponse(BaseModel):
     packet_loss_pct: float | None = None
     auto_restart_interval_minutes: int | None = None
     last_auto_restart_at: dt | None = None
+    auto_heal_enabled: bool = True
+    last_heal_at: dt | None = None
+    last_heal_action: str | None = None
+    last_health_check: dt | None = None
+    backup_pulse_id: int | None = None
+    auto_failover: bool = False
+    auto_failback: bool = True
+    failover_active: bool = False
+    priority: int = 0
+    last_failover_at: dt | None = None
     created_at: dt
 
     model_config = ConfigDict(from_attributes=True)

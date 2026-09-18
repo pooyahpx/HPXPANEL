@@ -66,6 +66,17 @@ async def advise_hpx_pulse(
     return await pulse_operator.advise_pulse(model)
 
 
+@router.get("/engine")
+async def get_pulse_engine_info(
+    _: AdminDetails = Depends(require_permission("hpx_pulse", "read")),
+):
+    """Pinned HPX tunnel engine version used by Pulse agents."""
+    return {
+        "engine_version": engine_mirror.engine_version(),
+        "release_tag": engine_mirror.release_tag(),
+    }
+
+
 @router.post(
     "", response_model=HpxPulseActionResponse, status_code=status.HTTP_201_CREATED, responses={409: responses._409}
 )

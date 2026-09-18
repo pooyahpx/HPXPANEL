@@ -816,6 +816,8 @@ export default function ShopPage() {
               </DialogContent>
             </Dialog>
           </TabsContent>
+
+          <TabsContent value="accounting" className="mt-0 space-y-5">
             {accountingLoading ? (
               <div className="space-y-4">
                 <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

@@ -11,6 +11,7 @@ from app.shop.payments import (
     GATEWAY_STRIPE,
     GATEWAY_ZARINPAL,
     PaymentCreateResult,
+    PaymentGatewayError,
     _mask_secret,
     create_payment,
     enabled_gateways,
@@ -24,28 +25,28 @@ from app.shop.payments import (
 
 
 def _cfg(**kwargs):
-    base = dict(
-        pay_card_enabled=True,
-        pay_zarinpal_enabled=False,
-        pay_zarinpal_merchant_id=None,
-        pay_zarinpal_sandbox=False,
-        pay_idpay_enabled=False,
-        pay_idpay_api_key=None,
-        pay_idpay_sandbox=True,
-        pay_nowpayments_enabled=False,
-        pay_nowpayments_api_key=None,
-        pay_nowpayments_ipn_secret=None,
-        pay_paypal_enabled=False,
-        pay_paypal_client_id=None,
-        pay_paypal_client_secret=None,
-        pay_paypal_sandbox=True,
-        pay_stripe_enabled=False,
-        pay_stripe_secret_key=None,
-        pay_stripe_webhook_secret=None,
-        pay_callback_base_url="https://panel.example.com",
-        pay_fx_toman_per_usd=600_000,
-        pay_unpaid_expire_minutes=60,
-    )
+    base = {
+        "pay_card_enabled": True,
+        "pay_zarinpal_enabled": False,
+        "pay_zarinpal_merchant_id": None,
+        "pay_zarinpal_sandbox": False,
+        "pay_idpay_enabled": False,
+        "pay_idpay_api_key": None,
+        "pay_idpay_sandbox": True,
+        "pay_nowpayments_enabled": False,
+        "pay_nowpayments_api_key": None,
+        "pay_nowpayments_ipn_secret": None,
+        "pay_paypal_enabled": False,
+        "pay_paypal_client_id": None,
+        "pay_paypal_client_secret": None,
+        "pay_paypal_sandbox": True,
+        "pay_stripe_enabled": False,
+        "pay_stripe_secret_key": None,
+        "pay_stripe_webhook_secret": None,
+        "pay_callback_base_url": "https://panel.example.com",
+        "pay_fx_toman_per_usd": 600_000,
+        "pay_unpaid_expire_minutes": 60,
+    }
     base.update(kwargs)
     return SimpleNamespace(**base)
 
@@ -153,7 +154,7 @@ def test_stripe_signature_ok_and_fail():
     event = verify_stripe_signature(cfg, body, f"t={ts},v1={v1}")
     assert event["type"] == "checkout.session.completed"
 
-    with pytest.raises(Exception):
+    with pytest.raises(PaymentGatewayError):
         verify_stripe_signature(cfg, body, f"t={ts},v1=deadbeef")
 
 

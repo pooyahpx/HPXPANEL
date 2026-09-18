@@ -1,10 +1,11 @@
-import pytest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
 from app.db.models import ShopOrderStatus
-from app.operation.shop import ShopOperation
 from app.operation import OperatorType
+from app.operation.shop import ShopOperation
 
 
 @pytest.mark.asyncio

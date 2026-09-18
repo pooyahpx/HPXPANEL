@@ -266,9 +266,8 @@ async def upsert_shop_config(
         config.pay_card_enabled = pay_card_enabled
     if pay_zarinpal_enabled is not None:
         config.pay_zarinpal_enabled = pay_zarinpal_enabled
-    if pay_zarinpal_merchant_id is not None:
-        if "••••" not in pay_zarinpal_merchant_id:
-            config.pay_zarinpal_merchant_id = pay_zarinpal_merchant_id or None
+    if pay_zarinpal_merchant_id is not None and "••••" not in pay_zarinpal_merchant_id:
+        config.pay_zarinpal_merchant_id = pay_zarinpal_merchant_id or None
     if pay_zarinpal_sandbox is not None:
         config.pay_zarinpal_sandbox = pay_zarinpal_sandbox
     if pay_idpay_enabled is not None:
@@ -285,9 +284,8 @@ async def upsert_shop_config(
         config.pay_nowpayments_ipn_secret = pay_nowpayments_ipn_secret or None
     if pay_paypal_enabled is not None:
         config.pay_paypal_enabled = pay_paypal_enabled
-    if pay_paypal_client_id is not None:
-        if "••••" not in pay_paypal_client_id:
-            config.pay_paypal_client_id = pay_paypal_client_id or None
+    if pay_paypal_client_id is not None and "••••" not in pay_paypal_client_id:
+        config.pay_paypal_client_id = pay_paypal_client_id or None
     if pay_paypal_client_secret is not None and "••••" not in pay_paypal_client_secret:
         config.pay_paypal_client_secret = pay_paypal_client_secret or None
     if pay_paypal_sandbox is not None:
@@ -515,9 +513,7 @@ async def list_pending_orders(db: AsyncSession, admin_id: int) -> list[ShopOrder
     filtered: list[ShopOrder] = []
     for order in rows:
         method = (getattr(order, "payment_method", None) or "card").lower()
-        if method == "card" and order.receipt_file_id:
-            filtered.append(order)
-        elif getattr(order, "payment_paid", False):
+        if method == "card" and order.receipt_file_id or getattr(order, "payment_paid", False):
             filtered.append(order)
     return filtered
 

@@ -22,7 +22,7 @@ def upgrade() -> None:
         batch_op.add_column(sa.Column("last_heal_action", sa.String(length=256), nullable=True))
         batch_op.add_column(sa.Column("heal_count_window", sa.Integer(), nullable=False, server_default="0"))
         batch_op.add_column(sa.Column("last_health_check", sa.DateTime(timezone=True), nullable=True))
-        batch_op.add_column(sa.Column("backup_pulse_id", sa.Integer(), nullable=True))
+        batch_op.add_column(sa.Column("backup_pulse_id", sa.BigInteger(), nullable=True))
         batch_op.add_column(sa.Column("auto_failover", sa.Boolean(), nullable=False, server_default="0"))
         batch_op.add_column(sa.Column("auto_failback", sa.Boolean(), nullable=False, server_default="1"))
         batch_op.add_column(sa.Column("failover_active", sa.Boolean(), nullable=False, server_default="0"))
@@ -39,7 +39,7 @@ def upgrade() -> None:
     with op.batch_alter_table("hpx_tunnels", schema=None) as batch_op:
         batch_op.add_column(sa.Column("auto_failback", sa.Boolean(), nullable=False, server_default="1"))
         batch_op.add_column(sa.Column("failover_active", sa.Boolean(), nullable=False, server_default="0"))
-        batch_op.add_column(sa.Column("failover_of_tunnel_id", sa.Integer(), nullable=True))
+        batch_op.add_column(sa.Column("failover_of_tunnel_id", sa.BigInteger(), nullable=True))
         batch_op.add_column(sa.Column("last_failover_at", sa.DateTime(timezone=True), nullable=True))
         batch_op.create_foreign_key(
             "fk_hpx_tunnels_failover_of_tunnel_id",

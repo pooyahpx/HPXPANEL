@@ -259,6 +259,8 @@ PAY_GW_NOWPAYMENTS = 4
 PAY_GW_PAYPAL = 5
 PAY_GW_STRIPE = 6
 PAY_GW_CALLBACK = 7
+PAY_GW_FX = 8
+PAY_GW_EXPIRE = 9
 
 PAY_GW_BY_ID = {
     PAY_GW_CARD: "card",
@@ -326,8 +328,18 @@ class ShopAdminPaymentsKeyboard(InlineKeyboardBuilder):
             text=t(lang, "btn_set_callback_url"),
             callback_data=cb(action=ShopAdminAction.set_pay, id=PAY_GW_CALLBACK),
         )
+        fx_rate = int(getattr(config, "pay_fx_toman_per_usd", None) or 600_000)
+        expire_m = int(getattr(config, "pay_unpaid_expire_minutes", None) or 60)
+        self.button(
+            text=t(lang, "btn_set_fx", rate=f"{fx_rate:,}"),
+            callback_data=cb(action=ShopAdminAction.set_pay, id=PAY_GW_FX),
+        )
+        self.button(
+            text=t(lang, "btn_set_expire", minutes=expire_m),
+            callback_data=cb(action=ShopAdminAction.set_pay, id=PAY_GW_EXPIRE),
+        )
         self.button(text=t(lang, "btn_back"), callback_data=cb(action=ShopAdminAction.home))
-        self.adjust(1, 2, 2, 2, 2, 2, 1, 1)
+        self.adjust(1, 2, 2, 2, 2, 2, 1, 1, 1, 1)
 
 
 class ShopAdminCardsKeyboard(InlineKeyboardBuilder):

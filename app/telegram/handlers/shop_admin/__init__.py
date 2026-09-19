@@ -24,6 +24,8 @@ from app.operation import OperatorType
 from app.telegram.keyboards.shop import (
     PAY_GW_CALLBACK,
     PAY_GW_CARD,
+    PAY_GW_EXPIRE,
+    PAY_GW_FX,
     PAY_GW_IDPAY,
     PAY_GW_NOWPAYMENTS,
     PAY_GW_PAYPAL,
@@ -39,7 +41,7 @@ from app.telegram.keyboards.shop import (
 from app.telegram.utils import forms
 from app.telegram.utils.filters import IsAdminFilter
 from app.telegram.utils.i18n import format_bytes, format_price, rich, t
-from app.telegram.utils.shared import add_to_messages_to_delete, parse_gb_input
+from app.telegram.utils.shared import add_to_messages_to_delete, delete_messages, parse_gb_input
 from app.telegram.utils.shop_helpers import (
     MAX_SHOP_CARDS,
     card_note_preview,
@@ -745,6 +747,8 @@ async def _render_payments(event: types.CallbackQuery, db: AsyncSession, admin: 
         nowpayments=t(lang, "yes") if config.pay_nowpayments_enabled else t(lang, "no"),
         paypal=t(lang, "yes") if config.pay_paypal_enabled else t(lang, "no"),
         stripe=t(lang, "yes") if config.pay_stripe_enabled else t(lang, "no"),
+        fx=f"{int(getattr(config, 'pay_fx_toman_per_usd', None) or 600_000):,}",
+        expire=int(getattr(config, "pay_unpaid_expire_minutes", None) or 60),
     )
     try:
         await event.message.edit_text(text, reply_markup=ShopAdminPaymentsKeyboard(lang, config).as_markup())
@@ -818,6 +822,8 @@ async def ask_payment_setup(
         PAY_GW_PAYPAL: "admin_ask_paypal_client_id",
         PAY_GW_STRIPE: "admin_ask_stripe_secret",
         PAY_GW_CALLBACK: "admin_ask_callback_url",
+        PAY_GW_FX: "admin_ask_fx",
+        PAY_GW_EXPIRE: "admin_ask_expire",
     }
     prompt = prompts.get(gw_id)
     if not prompt:
@@ -836,11 +842,13 @@ async def save_payment_value(event: types.Message, db: AsyncSession, state: FSMC
     lang = data.get("lang", "fa")
     gw_id = int(data.get("pay_gw_id") or 0)
     raw = (event.text or "").strip()
+    # Never leave gateway secrets sitting in chat history.
+    await delete_messages(event, state, message_ids=[event.message_id])
+
     if gw_id == PAY_GW_CALLBACK:
         await upsert_shop_config(db, admin.id, pay_callback_base_url=raw)
         await state.clear()
         await event.answer(t(lang, "admin_pay_saved"))
-        # re-open payments from a synthetic path
         config = await get_shop_config_by_admin(db, admin.id)
         text = rich(
             lang,
@@ -852,8 +860,30 @@ async def save_payment_value(event: types.Message, db: AsyncSession, state: FSMC
             nowpayments=t(lang, "yes") if config and config.pay_nowpayments_enabled else t(lang, "no"),
             paypal=t(lang, "yes") if config and config.pay_paypal_enabled else t(lang, "no"),
             stripe=t(lang, "yes") if config and config.pay_stripe_enabled else t(lang, "no"),
+            fx=f"{int(getattr(config, 'pay_fx_toman_per_usd', None) or 600_000):,}" if config else "600,000",
+            expire=int(getattr(config, "pay_unpaid_expire_minutes", None) or 60) if config else 60,
         )
         await event.answer(text, reply_markup=ShopAdminPaymentsKeyboard(lang, config).as_markup())
+        return
+    if gw_id == PAY_GW_FX:
+        try:
+            rate = int(raw.replace(",", "").replace("٬", "").strip())
+        except ValueError:
+            await event.answer(t(lang, "admin_pay_invalid_number"))
+            return
+        await upsert_shop_config(db, admin.id, pay_fx_toman_per_usd=rate)
+        await state.clear()
+        await event.answer(t(lang, "admin_pay_saved"))
+        return
+    if gw_id == PAY_GW_EXPIRE:
+        try:
+            minutes = int(raw.replace(",", "").strip())
+        except ValueError:
+            await event.answer(t(lang, "admin_pay_invalid_number"))
+            return
+        await upsert_shop_config(db, admin.id, pay_unpaid_expire_minutes=minutes)
+        await state.clear()
+        await event.answer(t(lang, "admin_pay_saved"))
         return
     if gw_id == PAY_GW_ZARINPAL:
         await upsert_shop_config(db, admin.id, pay_zarinpal_merchant_id=raw, pay_zarinpal_enabled=True)
@@ -890,6 +920,7 @@ async def save_payment_value2(event: types.Message, db: AsyncSession, state: FSM
     lang = data.get("lang", "fa")
     gw_id = int(data.get("pay_gw_id") or 0)
     raw = (event.text or "").strip()
+    await delete_messages(event, state, message_ids=[event.message_id])
     if gw_id == PAY_GW_NOWPAYMENTS:
         await upsert_shop_config(
             db,

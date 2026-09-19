@@ -184,10 +184,14 @@ const statusTone = (status: ShopOrderStatus) => {
   switch (status) {
     case 'pending':
       return 'border-amber-500/35 bg-amber-500/10 text-amber-700 dark:text-amber-400'
+    case 'awaiting_payment':
+      return 'border-sky-500/35 bg-sky-500/10 text-sky-700 dark:text-sky-400'
     case 'approved':
       return 'border-emerald-500/35 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
     case 'rejected':
       return 'border-destructive/35 bg-destructive/10 text-destructive'
+    case 'expired':
+      return 'border-muted-foreground/35 bg-muted text-muted-foreground'
   }
 }
 
@@ -288,6 +292,8 @@ export default function ShopPage() {
   const [payStripeSecret, setPayStripeSecret] = useState('')
   const [payStripeWebhook, setPayStripeWebhook] = useState('')
   const [payCallbackUrl, setPayCallbackUrl] = useState('')
+  const [payFxRate, setPayFxRate] = useState('600000')
+  const [payExpireMinutes, setPayExpireMinutes] = useState('60')
   const [accountingFilter, setAccountingFilter] = useState<'all' | 'charge' | 'credit' | 'unsettled' | 'settled'>('all')
 
   const { data: groupsSimple } = useGetGroupsSimple({ all: true }, { query: { staleTime: 5 * 60 * 1000, enabled: canView } })
@@ -366,7 +372,7 @@ export default function ShopPage() {
     setCustomGroupIds([...(config.custom_group_ids || [])])
     setPayCardEnabled(config.pay_card_enabled !== false)
     setPayZarinpalEnabled(Boolean(config.pay_zarinpal_enabled))
-    setPayZarinpalMerchant(config.pay_zarinpal_merchant_id || '')
+    setPayZarinpalMerchant(config.pay_zarinpal_merchant_id?.includes('••••') ? '' : config.pay_zarinpal_merchant_id || '')
     setPayZarinpalSandbox(Boolean(config.pay_zarinpal_sandbox))
     setPayIdpayEnabled(Boolean(config.pay_idpay_enabled))
     setPayIdpayKey(config.pay_idpay_api_key?.includes('••••') ? '' : config.pay_idpay_api_key || '')
@@ -375,13 +381,15 @@ export default function ShopPage() {
     setPayNowKey(config.pay_nowpayments_api_key?.includes('••••') ? '' : config.pay_nowpayments_api_key || '')
     setPayNowIpn(config.pay_nowpayments_ipn_secret?.includes('••••') ? '' : config.pay_nowpayments_ipn_secret || '')
     setPayPaypalEnabled(Boolean(config.pay_paypal_enabled))
-    setPayPaypalClientId(config.pay_paypal_client_id || '')
+    setPayPaypalClientId(config.pay_paypal_client_id?.includes('••••') ? '' : config.pay_paypal_client_id || '')
     setPayPaypalSecret(config.pay_paypal_client_secret?.includes('••••') ? '' : config.pay_paypal_client_secret || '')
     setPayPaypalSandbox(config.pay_paypal_sandbox !== false)
     setPayStripeEnabled(Boolean(config.pay_stripe_enabled))
     setPayStripeSecret(config.pay_stripe_secret_key?.includes('••••') ? '' : config.pay_stripe_secret_key || '')
     setPayStripeWebhook(config.pay_stripe_webhook_secret?.includes('••••') ? '' : config.pay_stripe_webhook_secret || '')
     setPayCallbackUrl(config.pay_callback_base_url || '')
+    setPayFxRate(String(config.pay_fx_toman_per_usd ?? 600000))
+    setPayExpireMinutes(String(config.pay_unpaid_expire_minutes ?? 60))
   }, [config])
 
   useEffect(() => {
@@ -510,8 +518,10 @@ export default function ShopPage() {
               {([
                 ['all', t('shop.allOrders')],
                 ['pending', t('shop.status.pending')],
+                ['awaiting_payment', t('shop.status.awaitingPayment', { defaultValue: 'Awaiting payment' })],
                 ['approved', t('shop.status.approved')],
                 ['rejected', t('shop.status.rejected')],
+                ['expired', t('shop.status.expired', { defaultValue: 'Expired' })],
                 ['renewal', t('shop.renewals', { defaultValue: 'Renewals' })],
               ] as const).map(([key, label]) => (
                 <Button
@@ -585,7 +595,11 @@ export default function ShopPage() {
                             </TableCell>
                             <TableCell className="px-4 py-4">
                               <Badge variant="outline" className={cn('capitalize', statusTone(order.status))}>
-                                {t(`shop.status.${order.status}`)}
+                                {order.status === 'awaiting_payment'
+                                  ? t('shop.status.awaitingPayment', { defaultValue: 'Awaiting payment' })
+                                  : order.status === 'expired'
+                                    ? t('shop.status.expired', { defaultValue: 'Expired' })
+                                    : t(`shop.status.${order.status}`)}
                               </Badge>
                             </TableCell>
                             <TableCell className="px-4 py-4">
@@ -1316,6 +1330,28 @@ export default function ShopPage() {
                         onChange={e => setPayCallbackUrl(e.target.value)}
                       />
                     </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label>{t('shop.fxRate', { defaultValue: 'Toman per 1 USD' })}</Label>
+                        <Input
+                          value={payFxRate}
+                          disabled={!canManage}
+                          inputMode="numeric"
+                          placeholder="600000"
+                          onChange={e => setPayFxRate(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>{t('shop.unpaidExpireMinutes', { defaultValue: 'Unpaid invoice TTL (minutes)' })}</Label>
+                        <Input
+                          value={payExpireMinutes}
+                          disabled={!canManage}
+                          inputMode="numeric"
+                          placeholder="60"
+                          onChange={e => setPayExpireMinutes(e.target.value)}
+                        />
+                      </div>
+                    </div>
                     <div className="flex items-center justify-between gap-4 rounded-md border p-3">
                       <div className="font-medium">{t('shop.payCard', { defaultValue: 'Card-to-card' })}</div>
                       <Switch checked={payCardEnabled} disabled={!canManage} onCheckedChange={setPayCardEnabled} />
@@ -1393,7 +1429,7 @@ export default function ShopPage() {
                             custom_group_ids: customGroupIds,
                             pay_card_enabled: payCardEnabled,
                             pay_zarinpal_enabled: payZarinpalEnabled,
-                            pay_zarinpal_merchant_id: payZarinpalMerchant || null,
+                            ...(payZarinpalMerchant ? { pay_zarinpal_merchant_id: payZarinpalMerchant } : {}),
                             pay_zarinpal_sandbox: payZarinpalSandbox,
                             pay_idpay_enabled: payIdpayEnabled,
                             ...(payIdpayKey ? { pay_idpay_api_key: payIdpayKey } : {}),
@@ -1402,13 +1438,15 @@ export default function ShopPage() {
                             ...(payNowKey ? { pay_nowpayments_api_key: payNowKey } : {}),
                             ...(payNowIpn ? { pay_nowpayments_ipn_secret: payNowIpn } : {}),
                             pay_paypal_enabled: payPaypalEnabled,
-                            pay_paypal_client_id: payPaypalClientId || null,
+                            ...(payPaypalClientId ? { pay_paypal_client_id: payPaypalClientId } : {}),
                             ...(payPaypalSecret ? { pay_paypal_client_secret: payPaypalSecret } : {}),
                             pay_paypal_sandbox: payPaypalSandbox,
                             pay_stripe_enabled: payStripeEnabled,
                             ...(payStripeSecret ? { pay_stripe_secret_key: payStripeSecret } : {}),
                             ...(payStripeWebhook ? { pay_stripe_webhook_secret: payStripeWebhook } : {}),
                             pay_callback_base_url: payCallbackUrl || null,
+                            pay_fx_toman_per_usd: Math.max(1000, Number(payFxRate) || 600000),
+                            pay_unpaid_expire_minutes: Math.max(5, Number(payExpireMinutes) || 60),
                           })
                           toast.success(t('shop.saved'))
                         } catch (error: any) {

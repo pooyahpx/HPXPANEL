@@ -11,6 +11,7 @@ from app.db.crud.admin import build_admin_details, get_admin_by_id
 from app.db.crud.shop import (
     create_shop_plan,
     delete_shop_plan,
+    expire_unpaid_shop_orders,
     get_or_create_telegram_profile,
     get_owner_admin,
     get_shop_bot_stats,
@@ -102,7 +103,7 @@ def _config_response(config) -> ShopConfigResponse:
         custom_group_ids=list(getattr(config, "custom_group_ids", None) or []),
         pay_card_enabled=bool(getattr(config, "pay_card_enabled", True)),
         pay_zarinpal_enabled=bool(getattr(config, "pay_zarinpal_enabled", False)),
-        pay_zarinpal_merchant_id=getattr(config, "pay_zarinpal_merchant_id", None),
+        pay_zarinpal_merchant_id=_mask_cfg(getattr(config, "pay_zarinpal_merchant_id", None)),
         pay_zarinpal_sandbox=bool(getattr(config, "pay_zarinpal_sandbox", False)),
         pay_idpay_enabled=bool(getattr(config, "pay_idpay_enabled", False)),
         pay_idpay_api_key=_mask_cfg(getattr(config, "pay_idpay_api_key", None)),
@@ -111,13 +112,15 @@ def _config_response(config) -> ShopConfigResponse:
         pay_nowpayments_api_key=_mask_cfg(getattr(config, "pay_nowpayments_api_key", None)),
         pay_nowpayments_ipn_secret=_mask_cfg(getattr(config, "pay_nowpayments_ipn_secret", None)),
         pay_paypal_enabled=bool(getattr(config, "pay_paypal_enabled", False)),
-        pay_paypal_client_id=getattr(config, "pay_paypal_client_id", None),
+        pay_paypal_client_id=_mask_cfg(getattr(config, "pay_paypal_client_id", None)),
         pay_paypal_client_secret=_mask_cfg(getattr(config, "pay_paypal_client_secret", None)),
         pay_paypal_sandbox=bool(getattr(config, "pay_paypal_sandbox", True)),
         pay_stripe_enabled=bool(getattr(config, "pay_stripe_enabled", False)),
         pay_stripe_secret_key=_mask_cfg(getattr(config, "pay_stripe_secret_key", None)),
         pay_stripe_webhook_secret=_mask_cfg(getattr(config, "pay_stripe_webhook_secret", None)),
         pay_callback_base_url=getattr(config, "pay_callback_base_url", None),
+        pay_fx_toman_per_usd=max(1000, int(getattr(config, "pay_fx_toman_per_usd", None) or 600_000)),
+        pay_unpaid_expire_minutes=max(5, int(getattr(config, "pay_unpaid_expire_minutes", None) or 60)),
         enabled_gateways=_enabled_gateways(config),
         created_at=config.created_at,
     )
@@ -300,6 +303,7 @@ class ShopOperation(BaseOperation):
         limit: int = 50,
     ) -> ShopOrderListResponse:
         shop_admin = await self._resolve_shop_admin(db, admin)
+        await expire_unpaid_shop_orders(db, admin_id=shop_admin.id)
         orders, total = await list_orders_for_admin(
             db, shop_admin.id, status=status, order_kind=order_kind, offset=offset, limit=limit
         )
@@ -387,11 +391,15 @@ class ShopOperation(BaseOperation):
             return None
         if order.status == ShopOrderStatus.approved:
             return None
-        if order.status != ShopOrderStatus.pending:
+        if order.status not in (ShopOrderStatus.pending, ShopOrderStatus.awaiting_payment):
             return None
         if not getattr(order, "payment_paid", False):
             await update_shop_order_payment(db, order, payment_paid=True)
             order = await get_shop_order(db, order_id)
+        if order is None:
+            return None
+        if order.status == ShopOrderStatus.awaiting_payment:
+            await update_order_status(db, order, ShopOrderStatus.pending)
         db_admin = await get_admin_by_id(db, order.admin_id, load_users=False, load_usage_logs=False)
         if db_admin is None:
             logger.error("Shop order %s admin %s missing for auto-approve", order_id, order.admin_id)

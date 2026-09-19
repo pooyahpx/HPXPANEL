@@ -1206,6 +1206,8 @@ class ShopOrderStatus(str, Enum):
     pending = "pending"
     approved = "approved"
     rejected = "rejected"
+    awaiting_payment = "awaiting_payment"
+    expired = "expired"
 
 
 class TelegramProfile(Base):
@@ -1464,6 +1466,8 @@ class ShopConfig(Base, CreatedAtUTCMixin):
     pay_stripe_secret_key: Mapped[str | None] = mapped_column(String(256), default=None)
     pay_stripe_webhook_secret: Mapped[str | None] = mapped_column(String(256), default=None)
     pay_callback_base_url: Mapped[str | None] = mapped_column(String(512), default=None)
+    pay_fx_toman_per_usd: Mapped[int] = mapped_column(BigInteger, default=600_000)
+    pay_unpaid_expire_minutes: Mapped[int] = mapped_column(Integer, default=60)
 
 
 class ShopPlan(Base, CreatedAtUTCMixin):

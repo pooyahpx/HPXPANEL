@@ -206,6 +206,8 @@ async def upsert_shop_config(
     pay_stripe_secret_key: str | None = None,
     pay_stripe_webhook_secret: str | None = None,
     pay_callback_base_url: str | None = None,
+    pay_fx_toman_per_usd: int | None = None,
+    pay_unpaid_expire_minutes: int | None = None,
 ) -> ShopConfig:
     config = await get_shop_config_by_admin(db, admin_id)
     if config is None:
@@ -264,7 +266,7 @@ async def upsert_shop_config(
         config.pay_card_enabled = pay_card_enabled
     if pay_zarinpal_enabled is not None:
         config.pay_zarinpal_enabled = pay_zarinpal_enabled
-    if pay_zarinpal_merchant_id is not None:
+    if pay_zarinpal_merchant_id is not None and "••••" not in pay_zarinpal_merchant_id:
         config.pay_zarinpal_merchant_id = pay_zarinpal_merchant_id or None
     if pay_zarinpal_sandbox is not None:
         config.pay_zarinpal_sandbox = pay_zarinpal_sandbox
@@ -282,7 +284,7 @@ async def upsert_shop_config(
         config.pay_nowpayments_ipn_secret = pay_nowpayments_ipn_secret or None
     if pay_paypal_enabled is not None:
         config.pay_paypal_enabled = pay_paypal_enabled
-    if pay_paypal_client_id is not None:
+    if pay_paypal_client_id is not None and "••••" not in pay_paypal_client_id:
         config.pay_paypal_client_id = pay_paypal_client_id or None
     if pay_paypal_client_secret is not None and "••••" not in pay_paypal_client_secret:
         config.pay_paypal_client_secret = pay_paypal_client_secret or None
@@ -296,6 +298,10 @@ async def upsert_shop_config(
         config.pay_stripe_webhook_secret = pay_stripe_webhook_secret or None
     if pay_callback_base_url is not None:
         config.pay_callback_base_url = (pay_callback_base_url or "").strip().rstrip("/") or None
+    if pay_fx_toman_per_usd is not None:
+        config.pay_fx_toman_per_usd = max(1000, int(pay_fx_toman_per_usd))
+    if pay_unpaid_expire_minutes is not None:
+        config.pay_unpaid_expire_minutes = max(5, min(10080, int(pay_unpaid_expire_minutes)))
     await db.commit()
     await db.refresh(config)
     return config
@@ -393,13 +399,20 @@ async def create_shop_order(
     kind = (order_kind or "purchase").strip().lower()
     if kind not in ("purchase", "renewal"):
         kind = "purchase"
+    method = (payment_method or "card").strip().lower() or "card"
+    if payment_paid:
+        initial_status = ShopOrderStatus.pending
+    elif method != "card" and not receipt_file_id:
+        initial_status = ShopOrderStatus.awaiting_payment
+    else:
+        initial_status = ShopOrderStatus.pending
     order = ShopOrder(
         plan_id=plan_id,
         admin_id=admin_id,
         buyer_telegram_id=buyer_telegram_id,
         buyer_username=buyer_username,
         receipt_file_id=receipt_file_id,
-        status=ShopOrderStatus.pending,
+        status=initial_status,
         order_kind=kind,
         renew_user_id=renew_user_id if kind == "renewal" else None,
         requested_username=requested_username,
@@ -408,7 +421,7 @@ async def create_shop_order(
         custom_ip_limit=custom_ip_limit,
         quoted_price_toman=quoted_price_toman,
         is_custom=bool(is_custom),
-        payment_method=payment_method,
+        payment_method=method,
         payment_ref=payment_ref,
         payment_url=payment_url,
         payment_paid=bool(payment_paid),
@@ -453,8 +466,44 @@ async def get_shop_order(db: AsyncSession, order_id: int) -> ShopOrder | None:
     return await db.get(ShopOrder, order_id)
 
 
+async def expire_unpaid_shop_orders(
+    db: AsyncSession,
+    *,
+    admin_id: int | None = None,
+    now: datetime | None = None,
+) -> int:
+    """Mark stale awaiting_payment orders as expired. Returns count expired."""
+    from datetime import timedelta as td
+
+    moment = now or datetime.now(UTC)
+    configs_stmt = select(ShopConfig)
+    if admin_id is not None:
+        configs_stmt = configs_stmt.where(ShopConfig.admin_id == admin_id)
+    configs = list((await db.execute(configs_stmt)).scalars().all())
+    if not configs:
+        return 0
+    expired_count = 0
+    for config in configs:
+        minutes = int(getattr(config, "pay_unpaid_expire_minutes", 60) or 60)
+        cutoff = moment - td(minutes=max(5, minutes))
+        stmt = select(ShopOrder).where(
+            ShopOrder.admin_id == config.admin_id,
+            ShopOrder.status == ShopOrderStatus.awaiting_payment,
+            ShopOrder.payment_paid.is_(False),
+            ShopOrder.created_at < cutoff,
+        )
+        rows = list((await db.execute(stmt)).scalars().all())
+        for order in rows:
+            order.status = ShopOrderStatus.expired
+            expired_count += 1
+    if expired_count:
+        await db.commit()
+    return expired_count
+
+
 async def list_pending_orders(db: AsyncSession, admin_id: int) -> list[ShopOrder]:
-    """Pending orders that need admin review (exclude unpaid online invoices)."""
+    """Pending orders that need admin review (card receipts / paid leftovers)."""
+    await expire_unpaid_shop_orders(db, admin_id=admin_id)
     stmt = (
         select(ShopOrder)
         .where(ShopOrder.admin_id == admin_id, ShopOrder.status == ShopOrderStatus.pending)
@@ -464,12 +513,7 @@ async def list_pending_orders(db: AsyncSession, admin_id: int) -> list[ShopOrder
     filtered: list[ShopOrder] = []
     for order in rows:
         method = (getattr(order, "payment_method", None) or "card").lower()
-        if method == "card":
-            if order.receipt_file_id:
-                filtered.append(order)
-            continue
-        # Online gateways auto-approve on pay; only show if somehow still pending & paid
-        if getattr(order, "payment_paid", False):
+        if method == "card" and order.receipt_file_id or getattr(order, "payment_paid", False):
             filtered.append(order)
     return filtered
 

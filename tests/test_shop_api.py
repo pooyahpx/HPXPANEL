@@ -88,16 +88,35 @@ def test_shop_payment_gateway_config(shop_admin):
             "pay_paypal_enabled": False,
             "pay_idpay_enabled": False,
             "pay_nowpayments_enabled": False,
+            "pay_fx_toman_per_usd": 720000,
+            "pay_unpaid_expire_minutes": 30,
         },
     )
     assert updated.status_code == status.HTTP_200_OK, updated.text
     data = updated.json()
     assert data["pay_card_enabled"] is True
     assert data["pay_zarinpal_enabled"] is True
-    assert data["pay_zarinpal_merchant_id"] == "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+    # Secrets must be masked in API responses
+    assert data["pay_zarinpal_merchant_id"] != "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+    assert "••••" in (data["pay_zarinpal_merchant_id"] or "")
     assert data["pay_callback_base_url"] == "https://panel.example.com"
+    assert data["pay_fx_toman_per_usd"] == 720000
+    assert data["pay_unpaid_expire_minutes"] == 30
     assert "zarinpal" in data["enabled_gateways"]
     assert "card" in data["enabled_gateways"]
+
+    # Masked payload must not overwrite stored secret
+    keep = client.put(
+        "/api/shop/config",
+        headers=headers,
+        json={"pay_zarinpal_merchant_id": data["pay_zarinpal_merchant_id"]},
+    )
+    assert keep.status_code == status.HTTP_200_OK, keep.text
+    again = client.get("/api/shop/config", headers=headers)
+    assert again.status_code == status.HTTP_200_OK
+    assert again.json()["pay_zarinpal_enabled"] is True
+    assert "••••" in (again.json()["pay_zarinpal_merchant_id"] or "")
+    assert "zarinpal" in again.json()["enabled_gateways"]
 
 
 def test_shop_plan_crud_and_stats(shop_admin):
@@ -320,5 +339,71 @@ def test_shop_custom_order_approve_with_requested_username(shop_admin):
         assert approved.json()["username"] == "mycustomuser"
         assert approved.json()["order"]["is_custom"] is True
         assert approved.json()["order"]["custom_data_gb"] == 5
+    finally:
+        delete_core(shop_admin["token"], core["id"])
+
+
+def test_shop_online_order_awaiting_payment_and_expire(shop_admin):
+    headers = auth_headers(shop_admin["token"])
+    from datetime import UTC, datetime, timedelta
+
+    from tests.api.helpers import create_core, create_group, delete_core
+
+    core = create_core(shop_admin["token"])
+    try:
+        group = create_group(shop_admin["token"])
+        plan = client.post(
+            "/api/shop/plans",
+            headers=headers,
+            json={
+                "name": "Online Plan",
+                "data_limit": 1024**3,
+                "expire_days": 7,
+                "price_toman": 50000,
+                "group_ids": [group["id"]],
+            },
+        ).json()
+
+        client.put(
+            "/api/shop/config",
+            headers=headers,
+            json={"pay_unpaid_expire_minutes": 30, "pay_fx_toman_per_usd": 600000},
+        )
+
+        async def _seed():
+            from app.db.crud.shop import create_shop_order, expire_unpaid_shop_orders, get_shop_order
+            from app.db.models import ShopOrderStatus
+
+            async with TestSession() as session:
+                order = await create_shop_order(
+                    session,
+                    plan_id=plan["id"],
+                    admin_id=shop_admin["id"],
+                    buyer_telegram_id=920001,
+                    buyer_username="online_buyer",
+                    payment_method="zarinpal",
+                    payment_ref="AUTH-TEST-1",
+                    payment_url="https://pay.example/x",
+                )
+                assert order.status == ShopOrderStatus.awaiting_payment
+                order_id = order.id
+                # Force created_at into the past beyond TTL
+                order.created_at = datetime.now(UTC) - timedelta(minutes=120)
+                await session.commit()
+
+                expired = await expire_unpaid_shop_orders(session, admin_id=shop_admin["id"])
+                assert expired >= 1
+                refreshed = await get_shop_order(session, order_id)
+                assert refreshed is not None
+                assert refreshed.status == ShopOrderStatus.expired
+                return order_id
+
+        order_id = asyncio.run(_seed())
+        listed = client.get("/api/shop/orders?status=expired", headers=headers)
+        assert listed.status_code == status.HTTP_200_OK, listed.text
+        assert any(o["id"] == order_id for o in listed.json()["orders"])
+        pending = client.get("/api/shop/orders?status=pending", headers=headers)
+        assert pending.status_code == status.HTTP_200_OK
+        assert all(o["id"] != order_id for o in pending.json()["orders"])
     finally:
         delete_core(shop_admin["token"], core["id"])

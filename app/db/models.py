@@ -1217,6 +1217,7 @@ class TelegramProfile(Base):
     lang: Mapped[str] = mapped_column(String(8), default="fa")
     join_notified: Mapped[bool] = mapped_column(server_default="0", default=False)
     test_claimed: Mapped[bool] = mapped_column(server_default="0", default=False)
+    preferred_shop_admin_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True, default=None)
     updated_at: Mapped[dt] = mapped_column(DateTime(timezone=True), default_factory=lambda: dt.now(UTC), init=False)
 
 
@@ -1413,6 +1414,34 @@ class CreateBudgetLedger(Base):
     price_per_day: Mapped[int | None] = mapped_column(BigInteger, nullable=True, default=None)
     pricing_mode: Mapped[str | None] = mapped_column(String(16), nullable=True, default=None)
     tier_gb: Mapped[int | None] = mapped_column(Integer, nullable=True, default=None)
+    detail: Mapped[str | None] = mapped_column(String(500), nullable=True, default=None)
+    settled_with_owner: Mapped[bool] = mapped_column(default=False, server_default="0")
+    settled_at: Mapped[dt | None] = mapped_column(DateTime(timezone=True), nullable=True, default=None)
+    settled_by_admin_id: Mapped[int | None] = mapped_column(SqliteCompatibleBigInteger, nullable=True, default=None)
+    created_at: Mapped[dt] = mapped_column(
+        DateTime(timezone=True), nullable=False, default_factory=lambda: dt.now(UTC), init=False
+    )
+
+
+class ShopRevenueLedger(Base):
+    """Append-only sales ledger for paid shop orders (card + online gateways)."""
+
+    __tablename__ = "shop_revenue_ledger"
+    __table_args__ = (
+        Index("ix_shop_revenue_ledger_admin_created", "admin_id", "created_at"),
+        Index("ix_shop_revenue_ledger_payment_method", "payment_method"),
+        UniqueConstraint("order_id", name="uq_shop_revenue_ledger_order_id"),
+    )
+
+    id: Mapped[int] = mapped_column(SqliteCompatibleBigInteger, primary_key=True, init=False, autoincrement=True)
+    admin_id: Mapped[int] = fk_id_column("admins.id", ondelete="CASCADE")
+    order_id: Mapped[int] = fk_id_column("shop_orders.id", ondelete="CASCADE")
+    entry_type: Mapped[str] = mapped_column(String(32), nullable=False)  # sale|refund
+    amount_toman: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    payment_method: Mapped[str] = mapped_column(String(32), nullable=False, default="card")
+    payment_ref: Mapped[str | None] = mapped_column(String(128), nullable=True, default=None)
+    buyer_telegram_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True, default=None)
+    username: Mapped[str | None] = mapped_column(String(128), nullable=True, default=None)
     detail: Mapped[str | None] = mapped_column(String(500), nullable=True, default=None)
     settled_with_owner: Mapped[bool] = mapped_column(default=False, server_default="0")
     settled_at: Mapped[dt | None] = mapped_column(DateTime(timezone=True), nullable=True, default=None)

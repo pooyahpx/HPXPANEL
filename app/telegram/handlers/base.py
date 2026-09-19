@@ -5,7 +5,7 @@ from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.crud.admin import build_admin_details, claim_owner_telegram_id, get_owner
-from app.db.crud.shop import get_enabled_shop_config, get_telegram_lang
+from app.db.crud.shop import get_telegram_lang
 from app.models.admin import AdminDetails, verify_password
 from app.operation import OperatorType
 from app.operation.system import SystemOperation
@@ -16,7 +16,7 @@ from app.telegram.keyboards.shop import LangKeyboard, ShopHomeKeyboard
 from app.telegram.utils import forms
 from app.telegram.utils.i18n import t
 from app.telegram.utils.shared import delete_messages
-from app.telegram.utils.shop_helpers import notify_admins_user_joined
+from app.telegram.utils.shop_helpers import get_buyer_shop_config, notify_admins_user_joined
 from app.telegram.utils.texts import Message as Texts
 
 system_operator = SystemOperation(OperatorType.TELEGRAM)
@@ -31,6 +31,8 @@ async def open_main_menu(
     lang: str,
     *,
     edit: bool = False,
+    state: FSMContext | None = None,
+    start_arg: str | None = None,
 ):
     from app.telegram.handlers.shop import render_shop_home
 
@@ -52,14 +54,26 @@ async def open_main_menu(
         await message.answer(text=text, reply_markup=markup)
         return
 
-    config = await get_enabled_shop_config(db)
-    if config and config.enabled:
+    config = await get_buyer_shop_config(
+        db,
+        state,
+        telegram_id=message.from_user.id if message.from_user else None,
+        start_arg=start_arg,
+        require_selection=True,
+    )
+    shops_ok = config is not None and config.enabled
+    if not shops_ok:
+        # Still open home when any shop is enabled (picker / preferred).
+        from app.db.crud.shop import list_enabled_shop_configs
+
+        shops_ok = bool(await list_enabled_shop_configs(db))
+    if shops_ok:
         if edit:
             try:
                 await message.delete()
             except TelegramBadRequest:
                 pass
-        await render_shop_home(message, db, lang)
+        await render_shop_home(message, db, lang, state, start_arg=start_arg)
         return
 
     text = t(lang, "shop_disabled")
@@ -110,7 +124,21 @@ async def command_start_handler(
         bot = get_bot()
         await notify_admins_user_joined(db, bot, event.from_user)
 
-    await open_main_menu(message, db, admin, lang, edit=isinstance(event, types.CallbackQuery))
+    start_arg = None
+    if isinstance(event, types.Message) and event.text:
+        parts = event.text.split(maxsplit=1)
+        if len(parts) > 1:
+            start_arg = parts[1].strip() or None
+
+    await open_main_menu(
+        message,
+        db,
+        admin,
+        lang,
+        edit=isinstance(event, types.CallbackQuery),
+        state=state,
+        start_arg=start_arg,
+    )
     if isinstance(event, types.CallbackQuery):
         await event.answer()
 

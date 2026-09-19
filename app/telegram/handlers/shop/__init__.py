@@ -5,14 +5,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.crud.shop import (
     create_shop_order,
-    get_enabled_shop_config,
     get_shop_plan,
     get_telegram_lang,
     has_test_claimed,
     list_active_plans,
     list_buyer_orders,
     list_buyer_renewable_accounts,
+    list_enabled_shop_configs,
     mark_test_claimed,
+    set_preferred_shop_admin,
     set_telegram_lang,
 )
 from app.db.models import ShopOrderStatus, UserStatus
@@ -32,6 +33,7 @@ from app.telegram.keyboards.shop import (
     ShopPlansKeyboard,
     ShopRenewAccountsKeyboard,
     ShopRenewPlansKeyboard,
+    ShopSellerKeyboard,
     ShopUsernameKeyboard,
 )
 from app.telegram.utils import forms
@@ -40,6 +42,7 @@ from app.telegram.utils.shop_helpers import (
     buyer_show_test_button,
     continue_card_checkout,
     continue_online_checkout,
+    get_buyer_shop_config,
     normalize_group_ids,
     notify_admins_user_joined,
     notify_all_admins_order,
@@ -68,13 +71,68 @@ async def _home_markup(db: AsyncSession, lang: str, telegram_id: int, config):
     return ShopHomeKeyboard(lang, show_test=show_test).as_markup()
 
 
-async def render_shop_home(message: types.Message, db: AsyncSession, lang: str):
-    config = await get_enabled_shop_config(db)
-    if not config or not config.enabled:
+async def render_shop_home(
+    message: types.Message,
+    db: AsyncSession,
+    lang: str,
+    state: FSMContext | None = None,
+    *,
+    start_arg: str | None = None,
+):
+    telegram_id = message.from_user.id if message.from_user else None
+    if state is not None and start_arg:
+        cfg = await get_buyer_shop_config(
+            db, state, telegram_id=telegram_id, start_arg=start_arg, require_selection=True
+        )
+        if cfg is not None:
+            await state.update_data(shop_admin_id=cfg.admin_id, admin_id=cfg.admin_id)
+            if telegram_id is not None:
+                await set_preferred_shop_admin(db, telegram_id, cfg.admin_id)
+
+    shops = await list_enabled_shop_configs(db)
+    selected = await get_buyer_shop_config(
+        db, state, telegram_id=telegram_id, start_arg=start_arg, require_selection=True
+    )
+    if not shops:
+        await message.answer(t(lang, "shop_disabled"), reply_markup=ShopHomeKeyboard(lang).as_markup())
+        return
+    if len(shops) > 1 and selected is None:
+        sellers = [(int(cfg.admin_id), admin.username or str(cfg.admin_id)) for cfg, admin in shops]
+        await message.answer(
+            t(lang, "choose_shop_seller"),
+            reply_markup=ShopSellerKeyboard(lang, sellers).as_markup(),
+        )
+        return
+
+    config = selected or shops[0][0]
+    if state is not None:
+        await state.update_data(shop_admin_id=config.admin_id, admin_id=config.admin_id)
+    if telegram_id is not None:
+        await set_preferred_shop_admin(db, telegram_id, config.admin_id)
+    if not config.enabled:
         await message.answer(t(lang, "shop_disabled"), reply_markup=ShopHomeKeyboard(lang).as_markup())
         return
     markup = await _home_markup(db, lang, message.chat.id, config)
     await message.answer(_shop_home_text(lang, config), reply_markup=markup)
+
+
+@router.callback_query(ShopKeyboard.Callback.filter(ShopAction.pick_seller == F.action))
+async def pick_shop_seller(
+    event: types.CallbackQuery,
+    callback_data: ShopKeyboardCallback,
+    db: AsyncSession,
+    state: FSMContext,
+):
+    lang = await get_telegram_lang(db, event.from_user.id) or "fa"
+    admin_id = int(callback_data.plan_id or 0)
+    await state.update_data(shop_admin_id=admin_id, admin_id=admin_id)
+    await set_preferred_shop_admin(db, event.from_user.id, admin_id)
+    await event.answer()
+    try:
+        await event.message.delete()
+    except TelegramBadRequest:
+        pass
+    await render_shop_home(event.message, db, lang, state)
 
 
 @router.callback_query(LangKeyboard.Callback.filter())
@@ -118,9 +176,11 @@ async def change_language(event: types.CallbackQuery, db: AsyncSession):
 
 
 @router.callback_query(ShopKeyboard.Callback.filter(ShopAction.plans == F.action))
-async def shop_plans(event: types.CallbackQuery, db: AsyncSession):
+async def shop_plans(event: types.CallbackQuery, db: AsyncSession,
+    state: FSMContext,
+):
     lang = await _lang(db, event.from_user.id)
-    config = await get_enabled_shop_config(db)
+    config = await get_buyer_shop_config(db, state, telegram_id=event.from_user.id)
     if not config or not config.enabled:
         await event.message.edit_text(t(lang, "shop_disabled"), reply_markup=ShopHomeKeyboard(lang).as_markup())
         await event.answer()
@@ -150,7 +210,7 @@ async def _start_username_choice(event: types.CallbackQuery, state: FSMContext, 
 @router.callback_query(ShopKeyboard.Callback.filter(ShopAction.buy == F.action))
 async def buy_plan(event: types.CallbackQuery, callback_data: ShopKeyboard.Callback, db: AsyncSession, state: FSMContext):
     lang = await _lang(db, event.from_user.id)
-    config = await get_enabled_shop_config(db)
+    config = await get_buyer_shop_config(db, state, telegram_id=event.from_user.id)
     plan = await get_shop_plan(db, callback_data.plan_id)
     if not config or not config.enabled or not plan or not plan.is_active:
         await event.answer(t(lang, "shop_disabled"), show_alert=True)
@@ -172,7 +232,7 @@ async def buy_plan(event: types.CallbackQuery, callback_data: ShopKeyboard.Callb
 @router.callback_query(ShopKeyboard.Callback.filter(ShopAction.custom == F.action))
 async def buy_custom(event: types.CallbackQuery, db: AsyncSession, state: FSMContext):
     lang = await _lang(db, event.from_user.id)
-    config = await get_enabled_shop_config(db)
+    config = await get_buyer_shop_config(db, state, telegram_id=event.from_user.id)
     groups = normalize_group_ids(config.custom_group_ids) if config else []
     if not config or not config.enabled or not config.custom_enabled or not groups:
         await event.answer(t(lang, "custom_not_ready"), show_alert=True)
@@ -224,7 +284,7 @@ async def username_custom_value(event: types.Message, db: AsyncSession, state: F
 async def _after_username_chosen(event: types.CallbackQuery, db: AsyncSession, state: FSMContext, lang: str):
     data = await state.get_data()
     if data.get("is_custom"):
-        config = await get_enabled_shop_config(db)
+        config = await get_buyer_shop_config(db, state, telegram_id=event.from_user.id)
         if not config:
             await event.answer(t(lang, "shop_disabled"), show_alert=True)
             return
@@ -240,7 +300,7 @@ async def _after_username_chosen(event: types.CallbackQuery, db: AsyncSession, s
 async def _continue_after_username_message(event: types.Message, db: AsyncSession, state: FSMContext, lang: str):
     data = await state.get_data()
     if data.get("is_custom"):
-        config = await get_enabled_shop_config(db)
+        config = await get_buyer_shop_config(db, state, telegram_id=event.from_user.id)
         if not config:
             await event.answer(t(lang, "shop_disabled"))
             return
@@ -252,7 +312,7 @@ async def _continue_after_username_message(event: types.Message, db: AsyncSessio
 
 async def _show_fixed_pay(event: types.CallbackQuery, db: AsyncSession, state: FSMContext, lang: str):
     data = await state.get_data()
-    config = await get_enabled_shop_config(db)
+    config = await get_buyer_shop_config(db, state, telegram_id=event.from_user.id)
     plan = await get_shop_plan(db, data.get("plan_id")) if data.get("plan_id") else None
     if not config or not plan:
         await event.answer(t(lang, "shop_disabled"), show_alert=True)
@@ -280,7 +340,7 @@ async def _show_fixed_pay(event: types.CallbackQuery, db: AsyncSession, state: F
 
 async def _show_fixed_pay_message(event: types.Message, db: AsyncSession, state: FSMContext, lang: str):
     data = await state.get_data()
-    config = await get_enabled_shop_config(db)
+    config = await get_buyer_shop_config(db, state, telegram_id=event.from_user.id)
     plan = await get_shop_plan(db, data.get("plan_id")) if data.get("plan_id") else None
     if not config or not plan:
         await event.answer(t(lang, "shop_disabled"))
@@ -310,7 +370,7 @@ async def _show_fixed_pay_message(event: types.Message, db: AsyncSession, state:
 async def custom_gb(event: types.Message, db: AsyncSession, state: FSMContext):
     data = await state.get_data()
     lang = data.get("lang") or await _lang(db, event.from_user.id)
-    config = await get_enabled_shop_config(db)
+    config = await get_buyer_shop_config(db, state, telegram_id=event.from_user.id)
     if not config:
         await event.answer(t(lang, "shop_disabled"))
         return
@@ -338,7 +398,7 @@ async def custom_gb(event: types.Message, db: AsyncSession, state: FSMContext):
 async def custom_days(event: types.Message, db: AsyncSession, state: FSMContext):
     data = await state.get_data()
     lang = data.get("lang") or await _lang(db, event.from_user.id)
-    config = await get_enabled_shop_config(db)
+    config = await get_buyer_shop_config(db, state, telegram_id=event.from_user.id)
     if not config:
         await event.answer(t(lang, "shop_disabled"))
         return
@@ -370,7 +430,7 @@ async def custom_days(event: types.Message, db: AsyncSession, state: FSMContext)
 async def custom_ip_base(event: types.CallbackQuery, db: AsyncSession, state: FSMContext):
     data = await state.get_data()
     lang = data.get("lang") or await _lang(db, event.from_user.id)
-    config = await get_enabled_shop_config(db)
+    config = await get_buyer_shop_config(db, state, telegram_id=event.from_user.id)
     if not config:
         await event.answer(t(lang, "shop_disabled"), show_alert=True)
         return
@@ -383,7 +443,7 @@ async def custom_ip_base(event: types.CallbackQuery, db: AsyncSession, state: FS
 async def custom_ip_value(event: types.Message, db: AsyncSession, state: FSMContext):
     data = await state.get_data()
     lang = data.get("lang") or await _lang(db, event.from_user.id)
-    config = await get_enabled_shop_config(db)
+    config = await get_buyer_shop_config(db, state, telegram_id=event.from_user.id)
     if not config:
         await event.answer(t(lang, "shop_disabled"))
         return
@@ -461,9 +521,11 @@ async def _show_custom_pay(event: types.CallbackQuery, db: AsyncSession, state: 
 
 
 @router.callback_query(ShopKeyboard.Callback.filter(ShopAction.home == F.action))
-async def shop_home(event: types.CallbackQuery, db: AsyncSession):
+async def shop_home(event: types.CallbackQuery, db: AsyncSession,
+    state: FSMContext,
+):
     lang = await _lang(db, event.from_user.id)
-    config = await get_enabled_shop_config(db)
+    config = await get_buyer_shop_config(db, state, telegram_id=event.from_user.id)
     if not config or not config.enabled:
         await event.message.edit_text(t(lang, "shop_disabled"), reply_markup=ShopHomeKeyboard(lang).as_markup())
         await event.answer()
@@ -474,7 +536,9 @@ async def shop_home(event: types.CallbackQuery, db: AsyncSession):
 
 
 @router.callback_query(ShopKeyboard.Callback.filter(ShopAction.test == F.action))
-async def claim_test_config(event: types.CallbackQuery, db: AsyncSession, admin: AdminDetails | None):
+async def claim_test_config(event: types.CallbackQuery, db: AsyncSession, admin: AdminDetails | None,
+    state: FSMContext,
+):
     lang = await _lang(db, event.from_user.id)
     await event.answer()
 
@@ -485,7 +549,7 @@ async def claim_test_config(event: types.CallbackQuery, db: AsyncSession, admin:
         await _fail("test_admin_blocked")
         return
 
-    config = await get_enabled_shop_config(db)
+    config = await get_buyer_shop_config(db, state, telegram_id=event.from_user.id)
     group_ids = normalize_group_ids(config.test_group_ids if config else None)
     if not config or not config.enabled or not config.test_enabled or not group_ids:
         await _fail("test_disabled")
@@ -561,7 +625,9 @@ async def claim_test_config(event: types.CallbackQuery, db: AsyncSession, admin:
 
 
 @router.callback_query(ShopKeyboard.Callback.filter(ShopAction.my_orders == F.action))
-async def my_orders(event: types.CallbackQuery, db: AsyncSession):
+async def my_orders(event: types.CallbackQuery, db: AsyncSession,
+    state: FSMContext,
+):
     lang = await _lang(db, event.from_user.id)
     orders = await list_buyer_orders(db, event.from_user.id)
     if not orders:
@@ -592,15 +658,17 @@ async def my_orders(event: types.CallbackQuery, db: AsyncSession):
                 )
             )
         text = "\n".join(lines)
-    config = await get_enabled_shop_config(db)
+    config = await get_buyer_shop_config(db, state, telegram_id=event.from_user.id)
     await event.message.edit_text(text, reply_markup=await _home_markup(db, lang, event.from_user.id, config))
     await event.answer()
 
 
 @router.callback_query(ShopKeyboard.Callback.filter(ShopAction.renew == F.action))
-async def renew_home(event: types.CallbackQuery, db: AsyncSession):
+async def renew_home(event: types.CallbackQuery, db: AsyncSession,
+    state: FSMContext,
+):
     lang = await _lang(db, event.from_user.id)
-    config = await get_enabled_shop_config(db)
+    config = await get_buyer_shop_config(db, state, telegram_id=event.from_user.id)
     if not config or not config.enabled:
         await event.message.edit_text(t(lang, "shop_disabled"), reply_markup=ShopHomeKeyboard(lang).as_markup())
         await event.answer()
@@ -623,9 +691,11 @@ async def renew_home(event: types.CallbackQuery, db: AsyncSession):
 
 
 @router.callback_query(ShopKeyboard.Callback.filter(ShopAction.renew_pick == F.action))
-async def renew_pick_account(event: types.CallbackQuery, callback_data: ShopKeyboard.Callback, db: AsyncSession):
+async def renew_pick_account(event: types.CallbackQuery, callback_data: ShopKeyboard.Callback, db: AsyncSession,
+    state: FSMContext,
+):
     lang = await _lang(db, event.from_user.id)
-    config = await get_enabled_shop_config(db)
+    config = await get_buyer_shop_config(db, state, telegram_id=event.from_user.id)
     if not config or not config.enabled or not callback_data.user_id:
         await event.answer(t(lang, "shop_disabled"), show_alert=True)
         return
@@ -651,7 +721,7 @@ async def renew_buy_plan(
     event: types.CallbackQuery, callback_data: ShopKeyboard.Callback, db: AsyncSession, state: FSMContext
 ):
     lang = await _lang(db, event.from_user.id)
-    config = await get_enabled_shop_config(db)
+    config = await get_buyer_shop_config(db, state, telegram_id=event.from_user.id)
     plan = await get_shop_plan(db, callback_data.plan_id)
     if not config or not config.enabled or not plan or not plan.is_active or not callback_data.user_id:
         await event.answer(t(lang, "shop_disabled"), show_alert=True)
@@ -689,7 +759,7 @@ async def renew_buy_plan(
 @router.callback_query(ShopKeyboard.Callback.filter(ShopAction.support == F.action))
 async def support_start(event: types.CallbackQuery, db: AsyncSession, state: FSMContext):
     lang = await _lang(db, event.from_user.id)
-    config = await get_enabled_shop_config(db)
+    config = await get_buyer_shop_config(db, state, telegram_id=event.from_user.id)
     if not config or not config.enabled:
         await event.answer(t(lang, "shop_disabled"), show_alert=True)
         return
@@ -729,7 +799,7 @@ async def support_message(event: types.Message, db: AsyncSession, state: FSMCont
             pass
 
     await state.clear()
-    config = await get_enabled_shop_config(db)
+    config = await get_buyer_shop_config(db, state, telegram_id=event.from_user.id)
     markup = await _home_markup(db, lang, event.from_user.id, config) if config else ShopHomeKeyboard(lang).as_markup()
     await event.answer(t(lang, "support_sent"), reply_markup=markup)
 
@@ -751,7 +821,7 @@ async def choose_pay_method(event: types.CallbackQuery, callback_data: ShopKeybo
         await event.answer(t(lang, "payment_create_failed"), show_alert=True)
         return
     gateway = gateways[index]
-    config = await get_enabled_shop_config(db)
+    config = await get_buyer_shop_config(db, state, telegram_id=event.from_user.id)
     if not config:
         await event.answer(t(lang, "shop_disabled"), show_alert=True)
         return

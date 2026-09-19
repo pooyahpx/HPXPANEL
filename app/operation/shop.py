@@ -43,6 +43,8 @@ from app.models.shop import (
     ShopPlanCreate,
     ShopPlanResponse,
     ShopPlanUpdate,
+    ShopRevenueLedgerEntry,
+    ShopRevenueLedgerListResponse,
     ShopStatsResponse,
 )
 from app.models.user import UserCreate, UserModify
@@ -299,13 +301,22 @@ class ShopOperation(BaseOperation):
         *,
         status: ShopOrderStatus | None = None,
         order_kind: str | None = None,
+        payment_method: str | None = None,
+        payment_paid: bool | None = None,
         offset: int = 0,
         limit: int = 50,
     ) -> ShopOrderListResponse:
         shop_admin = await self._resolve_shop_admin(db, admin)
         await expire_unpaid_shop_orders(db, admin_id=shop_admin.id)
         orders, total = await list_orders_for_admin(
-            db, shop_admin.id, status=status, order_kind=order_kind, offset=offset, limit=limit
+            db,
+            shop_admin.id,
+            status=status,
+            order_kind=order_kind,
+            payment_method=payment_method,
+            payment_paid=payment_paid,
+            offset=offset,
+            limit=limit,
         )
         return ShopOrderListResponse(
             orders=[await _order_response(db, order) for order in orders],
@@ -457,6 +468,7 @@ class ShopOperation(BaseOperation):
             await self.raise_error(str(exc)[:180], 400, db)
 
         order = await update_order_status(db, order, ShopOrderStatus.approved, created_user_id=user.id)
+        await self._record_shop_sale(db, order, user.username)
         await self._notify_buyer_approved(db, shop_admin, order, plan, user, renewal=False)
         return ShopApproveResponse(
             order=await _order_response(db, order),
@@ -504,12 +516,36 @@ class ShopOperation(BaseOperation):
             await self.raise_error(str(exc)[:180], 400, db)
 
         order = await update_order_status(db, order, ShopOrderStatus.approved, created_user_id=user.id)
+        await self._record_shop_sale(db, order, user.username)
         await self._notify_buyer_approved(db, shop_admin, order, plan, user, renewal=True)
         return ShopApproveResponse(
             order=await _order_response(db, order),
             username=user.username,
             subscription_url=getattr(user, "subscription_url", None),
         )
+
+    async def _record_shop_sale(self, db: AsyncSession, order: ShopOrder, username: str | None = None) -> None:
+        from app.db.crud.shop_revenue_ledger import record_shop_sale
+
+        amount = int(getattr(order, "quoted_price_toman", None) or 0)
+        if amount <= 0 and order.plan_id:
+            plan = await get_shop_plan(db, order.plan_id)
+            if plan is not None:
+                amount = int(plan.price_toman or 0)
+        try:
+            await record_shop_sale(
+                db,
+                admin_id=order.admin_id,
+                order_id=order.id,
+                amount_toman=amount,
+                payment_method=getattr(order, "payment_method", None),
+                payment_ref=getattr(order, "payment_ref", None),
+                buyer_telegram_id=order.buyer_telegram_id,
+                username=username or order.buyer_username,
+                detail=f"order #{order.id}",
+            )
+        except Exception:
+            logger.exception("Failed to record shop revenue for order %s", order.id)
 
     async def reject_order(
         self,
@@ -701,3 +737,59 @@ class ShopOperation(BaseOperation):
             settled_by_admin_id=entry.settled_by_admin_id,
             created_at=entry.created_at,
         )
+
+    async def list_shop_revenue(
+        self,
+        db: AsyncSession,
+        admin: AdminDetails,
+        *,
+        admin_id: int | None = None,
+        payment_method: str | None = None,
+        settled: bool | None = None,
+        offset: int = 0,
+        limit: int = 50,
+    ) -> ShopRevenueLedgerListResponse:
+        from app.db.crud.shop_revenue_ledger import list_shop_revenue, shop_revenue_totals_by_gateway
+
+        if admin.is_owner:
+            target_admin_id = admin_id
+        else:
+            if admin.id is None:
+                raise HTTPException(status_code=403, detail="Admin id required")
+            if admin_id is not None and int(admin_id) != int(admin.id):
+                raise HTTPException(status_code=403, detail="Not allowed to view other admins")
+            target_admin_id = int(admin.id)
+
+        rows, total = await list_shop_revenue(
+            db,
+            admin_id=target_admin_id,
+            payment_method=payment_method,
+            settled=settled,
+            offset=offset,
+            limit=limit,
+        )
+        totals = await shop_revenue_totals_by_gateway(db, admin_id=target_admin_id)
+        return ShopRevenueLedgerListResponse(
+            entries=[ShopRevenueLedgerEntry.model_validate(r) for r in rows],
+            total=total,
+            by_gateway=[{"payment_method": m, "orders": c, "amount_toman": a} for m, c, a in totals],
+        )
+
+    async def settle_shop_revenue_entry(
+        self,
+        db: AsyncSession,
+        admin: AdminDetails,
+        entry_id: int,
+        *,
+        settled: bool = True,
+    ) -> ShopRevenueLedgerEntry:
+        from app.db.crud.shop_revenue_ledger import set_shop_revenue_settled
+
+        if not admin.is_owner:
+            raise HTTPException(status_code=403, detail="Only owner can settle shop revenue entries")
+        entry = await set_shop_revenue_settled(
+            db, entry_id, settled=settled, settled_by_admin_id=admin.id
+        )
+        if entry is None:
+            await self.raise_error("Revenue entry not found", 404, db)
+        return ShopRevenueLedgerEntry.model_validate(entry)

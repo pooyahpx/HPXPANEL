@@ -40,6 +40,7 @@ class ShopAction(str, Enum):
     support = "support"
     test = "test"
     back = "back"
+    pick_seller = "psel"
 
 
 class ShopKeyboardCallback(CallbackData, prefix="shop"):
@@ -66,6 +67,21 @@ class ShopHomeKeyboard(InlineKeyboardBuilder):
             self.adjust(2, 1, 2, 1)
         else:
             self.adjust(2, 2, 1)
+
+
+class ShopSellerKeyboard(InlineKeyboardBuilder):
+    """Buyer picks which admin shop to buy from when multiple are enabled."""
+
+    def __init__(self, lang: str, sellers: list[tuple[int, str]], *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        cb = ShopKeyboardCallback
+        for admin_id, username in sellers:
+            label = f"@{username}" if username else f"#{admin_id}"
+            self.button(
+                text=label,
+                callback_data=cb(action=ShopAction.pick_seller, plan_id=int(admin_id)),
+            )
+        self.adjust(1)
 
 
 class ShopPlansKeyboard(InlineKeyboardBuilder):

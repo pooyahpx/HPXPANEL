@@ -1,0 +1,5 @@
+{
+  "floor": 8000,
+  "baseline_raw": 3224,
+  "note": "Display = floor + max(0, ghcr_raw - baseline_raw). Floor restores the prior ~8k public count; new GHCR pulls increase from there."
+}

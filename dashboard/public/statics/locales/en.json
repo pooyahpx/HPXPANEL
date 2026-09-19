@@ -568,7 +568,7 @@
     "loadError": "Could not load Pulse tunnels",
     "loadErrorHint": "Update panel to latest version, run DB migration, and verify hpx_pulse permissions.",
     "panelUrlWarning": "Copy commands exactly — panel URL must match this browser address on both servers.",
-    "advise": "Preview recommendation (optional)",
+    "advise": "Preview ranked tunnels",
     "profiles": "Recommended profiles",
     "goal": "Goal",
     "iranIp": "Iran public IP",
@@ -652,7 +652,8 @@
     "intentMobile": "Mobile — stealth + balance",
     "intentHard": "Hard — aggressive stealth",
     "intentFast": "Fast — turbo / KCP / QUIC",
-    "intentHint": "Pick how you want the tunnel to feel — advisor ranks Stealth presets.",
+    "intentHint": "Hard/Mobile rank TCP Stealth & WSS. Fast ranks KCP / QUIC / UDP — then preview again.",
+    "topProfilesHint": "UDP family still exists — with Hard/Mobile they rank below Stealth; pick Fast and preview to surface them.",
     "failoverSection": "Path failover",
     "backupPulseId": "Backup pulse ID",
     "priority": "Priority",
@@ -663,7 +664,7 @@
     "failoverActive": "On backup path",
     "lastHeal": "Heal",
     "enginePin": "Engine pin",
-    "topProfiles": "Top Stealth / tunnel presets"
+    "topProfiles": "Ranked tunnel presets (TCP / WSS / KCP / UDP / QUIC)"
   },
   "groups": "Groups",
   "documentation": "Documentation",

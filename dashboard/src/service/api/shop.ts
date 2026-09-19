@@ -206,6 +206,35 @@ export interface CreateBudgetLedgerList {
   total: number
 }
 
+export interface ShopRevenueLedgerEntry {
+  id: number
+  admin_id: number
+  order_id: number
+  entry_type: string
+  amount_toman: number
+  payment_method: string
+  payment_ref?: string | null
+  buyer_telegram_id?: number | null
+  username?: string | null
+  detail?: string | null
+  settled_with_owner?: boolean
+  settled_at?: string | null
+  settled_by_admin_id?: number | null
+  created_at?: string | null
+}
+
+export interface ShopRevenueGatewayTotal {
+  payment_method: string
+  orders: number
+  amount_toman: number
+}
+
+export interface ShopRevenueLedgerList {
+  entries: ShopRevenueLedgerEntry[]
+  total: number
+  by_gateway: ShopRevenueGatewayTotal[]
+}
+
 export const shopKeys = {
   all: ['shop'] as const,
   config: ['shop', 'config'] as const,
@@ -213,6 +242,7 @@ export const shopKeys = {
   plans: ['shop', 'plans'] as const,
   orders: (filter?: Record<string, unknown>) => ['shop', 'orders', filter] as const,
   accounting: (adminId?: number, settled?: boolean) => ['shop', 'accounting', adminId, settled] as const,
+  revenue: (filter?: Record<string, unknown>) => ['shop', 'revenue', filter] as const,
 }
 
 export const getShopConfig = () => fetcher<ShopConfig>('/api/shop/config')
@@ -226,10 +256,19 @@ export const updateShopPlan = (planId: number, body: ShopPlanUpdate) =>
   fetcher<ShopPlan>(`/api/shop/plans/${planId}`, { method: 'PATCH', body })
 export const deleteShopPlan = (planId: number) =>
   fetcher<void>(`/api/shop/plans/${planId}`, { method: 'DELETE' })
-export const getShopOrders = (params?: { status?: ShopOrderStatus; order_kind?: ShopOrderKind; offset?: number; limit?: number }) => {
+export const getShopOrders = (params?: {
+  status?: ShopOrderStatus
+  order_kind?: ShopOrderKind
+  payment_method?: string
+  payment_paid?: boolean
+  offset?: number
+  limit?: number
+}) => {
   const search = new URLSearchParams()
   if (params?.status) search.set('status', params.status)
   if (params?.order_kind) search.set('order_kind', params.order_kind)
+  if (params?.payment_method) search.set('payment_method', params.payment_method)
+  if (params?.payment_paid != null) search.set('payment_paid', String(params.payment_paid))
   if (params?.offset != null) search.set('offset', String(params.offset))
   if (params?.limit != null) search.set('limit', String(params.limit))
   const q = search.toString()
@@ -257,13 +296,39 @@ export const settleShopAccounting = (entryId: number, settled: boolean) =>
     body: { settled },
   })
 
+export const getShopRevenue = (params?: {
+  admin_id?: number
+  payment_method?: string
+  settled?: boolean
+  offset?: number
+  limit?: number
+}) => {
+  const search = new URLSearchParams()
+  if (params?.admin_id != null) search.set('admin_id', String(params.admin_id))
+  if (params?.payment_method) search.set('payment_method', params.payment_method)
+  if (params?.settled != null) search.set('settled', String(params.settled))
+  if (params?.offset != null) search.set('offset', String(params.offset))
+  if (params?.limit != null) search.set('limit', String(params.limit))
+  const q = search.toString()
+  return fetcher<ShopRevenueLedgerList>(`/api/shop/revenue${q ? `?${q}` : ''}`)
+}
+
+export const settleShopRevenue = (entryId: number, settled: boolean) =>
+  fetcher<ShopRevenueLedgerEntry>(`/api/shop/revenue/${entryId}/settle`, {
+    method: 'POST',
+    body: { settled },
+  })
+
 export const useShopConfig = (enabled = true) =>
   useQuery({ queryKey: shopKeys.config, queryFn: getShopConfig, enabled, staleTime: 10_000 })
 export const useShopStats = (enabled = true) =>
   useQuery({ queryKey: shopKeys.stats, queryFn: getShopStats, enabled, staleTime: 10_000 })
 export const useShopPlans = (enabled = true) =>
   useQuery({ queryKey: shopKeys.plans, queryFn: getShopPlans, enabled, staleTime: 10_000 })
-export const useShopOrders = (filter?: { status?: ShopOrderStatus; order_kind?: ShopOrderKind }, enabled = true) =>
+export const useShopOrders = (
+  filter?: { status?: ShopOrderStatus; order_kind?: ShopOrderKind; payment_method?: string; payment_paid?: boolean },
+  enabled = true,
+) =>
   useQuery({
     queryKey: shopKeys.orders(filter),
     queryFn: () => getShopOrders(filter),
@@ -274,6 +339,16 @@ export const useShopAccounting = (adminId?: number, enabled = true, settled?: bo
   useQuery({
     queryKey: shopKeys.accounting(adminId, settled),
     queryFn: () => getShopAccounting(adminId, settled),
+    enabled,
+    staleTime: 10_000,
+  })
+export const useShopRevenue = (
+  filter?: { admin_id?: number; payment_method?: string; settled?: boolean },
+  enabled = true,
+) =>
+  useQuery({
+    queryKey: shopKeys.revenue(filter),
+    queryFn: () => getShopRevenue(filter),
     enabled,
     staleTime: 10_000,
   })
@@ -334,5 +409,12 @@ export function useSettleShopAccounting() {
   return useMutation({
     mutationFn: ({ entryId, settled }: { entryId: number; settled: boolean }) => settleShopAccounting(entryId, settled),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['shop', 'accounting'] }),
+  })
+}
+export function useSettleShopRevenue() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ entryId, settled }: { entryId: number; settled: boolean }) => settleShopRevenue(entryId, settled),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['shop', 'revenue'] }),
   })
 }

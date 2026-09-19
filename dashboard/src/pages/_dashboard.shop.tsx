@@ -32,9 +32,11 @@ import {
   useShopPlans,
   useShopStats,
   useShopAccounting,
+  useShopRevenue,
   useUpdateShopConfig,
   useUpdateShopPlan,
   useSettleShopAccounting,
+  useSettleShopRevenue,
 } from '@/service/api/shop'
 import { hasPermission } from '@/utils/rbac'
 import {
@@ -254,6 +256,8 @@ export default function ShopPage() {
   const canManage = hasPermission(admin, 'users', 'create')
   const isOwner = Boolean(admin?.role?.is_owner)
   const [orderFilter, setOrderFilter] = useState<'all' | ShopOrderStatus | 'renewal'>('pending')
+  const [paymentFilter, setPaymentFilter] = useState<'all' | 'card' | 'online' | 'paid' | 'unpaid'>('all')
+  const [revenueFilter, setRevenueFilter] = useState<'all' | 'unsettled' | 'settled'>('all')
   const [receiptOrder, setReceiptOrder] = useState<ShopOrder | null>(null)
   const [receiptUrl, setReceiptUrl] = useState<string | null>(null)
   const [receiptLoading, setReceiptLoading] = useState(false)
@@ -323,12 +327,19 @@ export default function ShopPage() {
     })
   }
 
-  const ordersQueryFilter =
-    orderFilter === 'all'
-      ? undefined
-      : orderFilter === 'renewal'
-        ? { order_kind: 'renewal' as const }
-        : { status: orderFilter }
+  const ordersQueryFilter = useMemo(() => {
+    const base =
+      orderFilter === 'all'
+        ? ({} as { status?: ShopOrderStatus; order_kind?: 'renewal'; payment_method?: string; payment_paid?: boolean })
+        : orderFilter === 'renewal'
+          ? { order_kind: 'renewal' as const }
+          : { status: orderFilter }
+    if (paymentFilter === 'card') base.payment_method = 'card'
+    else if (paymentFilter === 'online') base.payment_method = 'online'
+    else if (paymentFilter === 'paid') base.payment_paid = true
+    else if (paymentFilter === 'unpaid') base.payment_paid = false
+    return Object.keys(base).length ? base : undefined
+  }, [orderFilter, paymentFilter])
 
   const { data: config, isLoading: configLoading, refetch: refetchConfig } = useShopConfig(canView)
   const { data: stats, isLoading: statsLoading, refetch: refetchStats } = useShopStats(canView)
@@ -344,6 +355,12 @@ export default function ShopPage() {
     canView,
     accountingSettledParam,
   )
+  const revenueSettledParam =
+    revenueFilter === 'settled' ? true : revenueFilter === 'unsettled' ? false : undefined
+  const { data: revenueData, isLoading: revenueLoading, refetch: refetchRevenue } = useShopRevenue(
+    { settled: revenueSettledParam },
+    canView,
+  )
 
   const updateConfig = useUpdateShopConfig()
   const createPlan = useCreateShopPlan()
@@ -352,6 +369,7 @@ export default function ShopPage() {
   const approveOrder = useApproveShopOrder()
   const rejectOrder = useRejectShopOrder()
   const settleAccounting = useSettleShopAccounting()
+  const settleRevenue = useSettleShopRevenue()
 
   useEffect(() => {
     if (!config) return
@@ -447,12 +465,16 @@ export default function ShopPage() {
     })
   }, [accountingEntries, accountingFilter])
 
+  const revenueEntries = revenueData?.entries ?? []
+  const revenueByGateway = revenueData?.by_gateway ?? []
+
   const refreshAll = () => {
     refetchConfig()
     refetchStats()
     refetchPlans()
     refetchOrders()
     refetchAccounting()
+    refetchRevenue()
   }
 
   if (!canView) {
@@ -498,7 +520,7 @@ export default function ShopPage() {
         </div>
 
         <Tabs defaultValue="orders" className="w-full space-y-5">
-          <TabsList className="grid h-auto w-full grid-cols-2 gap-1 p-1 sm:w-auto sm:inline-grid sm:grid-cols-4">
+          <TabsList className="grid h-auto w-full grid-cols-2 gap-1 p-1 sm:w-auto sm:inline-grid sm:grid-cols-5">
             <TabsTrigger value="orders" className="px-4 py-2.5">
               {t('shop.orders')}
             </TabsTrigger>
@@ -507,6 +529,9 @@ export default function ShopPage() {
             </TabsTrigger>
             <TabsTrigger value="accounting" className="px-4 py-2.5">
               {t('shop.accounting', { defaultValue: 'Accounting' })}
+            </TabsTrigger>
+            <TabsTrigger value="revenue" className="px-4 py-2.5">
+              {t('shop.revenue', { defaultValue: 'Revenue' })}
             </TabsTrigger>
             <TabsTrigger value="settings" className="px-4 py-2.5">
               {t('shop.settings')}
@@ -534,6 +559,24 @@ export default function ShopPage() {
                 </Button>
               ))}
             </div>
+            <div className="flex flex-wrap gap-2">
+              {([
+                ['all', t('shop.paymentAll', { defaultValue: 'All payments' })],
+                ['card', t('shop.paymentCard', { defaultValue: 'Card' })],
+                ['online', t('shop.paymentOnline', { defaultValue: 'Online' })],
+                ['paid', t('shop.paymentPaid', { defaultValue: 'Paid' })],
+                ['unpaid', t('shop.paymentUnpaid', { defaultValue: 'Unpaid' })],
+              ] as const).map(([key, label]) => (
+                <Button
+                  key={key}
+                  size="sm"
+                  variant={paymentFilter === key ? 'default' : 'outline'}
+                  onClick={() => setPaymentFilter(key)}
+                >
+                  {label}
+                </Button>
+              ))}
+            </div>
 
             {ordersLoading ? (
               <Skeleton className="h-72 w-full rounded-xl" />
@@ -550,6 +593,8 @@ export default function ShopPage() {
                           <TableHead className="min-w-[140px] px-4 py-3.5">{t('shop.buyer')}</TableHead>
                           <TableHead className="min-w-[160px] px-4 py-3.5">{t('shop.plan')}</TableHead>
                           <TableHead className="w-[88px] px-4 py-3.5">{t('shop.receipt')}</TableHead>
+                          <TableHead className="w-[110px] px-4 py-3.5">{t('shop.payment', { defaultValue: 'Payment' })}</TableHead>
+                          <TableHead className="w-[90px] px-4 py-3.5">{t('shop.paid', { defaultValue: 'Paid' })}</TableHead>
                           <TableHead className="w-[110px] px-4 py-3.5">{t('shop.statusLabel')}</TableHead>
                           <TableHead className="w-[100px] px-4 py-3.5">{t('shop.kind', { defaultValue: 'Kind' })}</TableHead>
                           <TableHead className="min-w-[120px] px-4 py-3.5">{t('shop.user')}</TableHead>
@@ -592,6 +637,28 @@ export default function ShopPage() {
                               ) : (
                                 <span className="text-muted-foreground text-xs">{t('shop.noReceipt')}</span>
                               )}
+                            </TableCell>
+                            <TableCell className="px-4 py-4">
+                              <Badge variant="outline" className="font-normal capitalize">
+                                {(order.payment_method || 'card').toLowerCase() === 'card'
+                                  ? t('shop.paymentCard', { defaultValue: 'Card' })
+                                  : (order.payment_method || 'online').toLowerCase()}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="px-4 py-4">
+                              <Badge
+                                variant="outline"
+                                className={cn(
+                                  'font-normal',
+                                  order.payment_paid
+                                    ? 'border-emerald-500/35 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
+                                    : 'border-amber-500/35 bg-amber-500/10 text-amber-700 dark:text-amber-400',
+                                )}
+                              >
+                                {order.payment_paid
+                                  ? t('shop.paymentPaid', { defaultValue: 'Paid' })
+                                  : t('shop.paymentUnpaid', { defaultValue: 'Unpaid' })}
+                              </Badge>
                             </TableCell>
                             <TableCell className="px-4 py-4">
                               <Badge variant="outline" className={cn('capitalize', statusTone(order.status))}>
@@ -1179,6 +1246,155 @@ export default function ShopPage() {
                                   </TableCell>
                                   <TableCell className="text-muted-foreground max-w-[240px] truncate px-4 py-3.5 text-xs" title={entry.detail || undefined}>
                                     {entry.detail || '—'}
+                                  </TableCell>
+                                </TableRow>
+                              )
+                            })
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </CardContent>
+                </Card>
+              </>
+            )}
+          </TabsContent>
+
+          <TabsContent value="revenue" className="mt-0 space-y-5">
+            {revenueLoading ? (
+              <Skeleton className="h-72 w-full rounded-xl" />
+            ) : !(revenueEntries.length) && !(revenueByGateway.length) ? (
+              <EmptyState
+                icon={Wallet}
+                title={t('shop.revenueEmpty', { defaultValue: 'No shop revenue yet' })}
+                description={t('shop.revenueEmptyHint', {
+                  defaultValue: 'Approved paid orders appear here, grouped by payment gateway.',
+                })}
+              />
+            ) : (
+              <>
+                {revenueByGateway.length ? (
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {revenueByGateway.map(row => (
+                      <Card key={row.payment_method} className="border-border/60">
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-sm font-medium capitalize">{row.payment_method}</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-1">
+                          <div className="text-2xl font-semibold tabular-nums">
+                            {formatPrice(row.amount_toman)}{' '}
+                            <span className="text-muted-foreground text-sm font-normal">{t('shop.toman')}</span>
+                          </div>
+                          <div className="text-muted-foreground text-xs">
+                            {t('shop.revenueOrders', {
+                              defaultValue: '{{count}} orders',
+                              count: row.orders,
+                            })}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                ) : null}
+
+                <div className="flex flex-wrap gap-2">
+                  {([
+                    ['all', t('shop.allOrders')],
+                    ['unsettled', t('shop.accountingUnsettled', { defaultValue: 'Unsettled' })],
+                    ['settled', t('shop.accountingSettled', { defaultValue: 'Settled' })],
+                  ] as const).map(([key, label]) => (
+                    <Button
+                      key={key}
+                      size="sm"
+                      variant={revenueFilter === key ? 'default' : 'outline'}
+                      onClick={() => setRevenueFilter(key)}
+                    >
+                      {label}
+                    </Button>
+                  ))}
+                </div>
+
+                <Card className="border-border/60 overflow-hidden">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base">
+                      {t('shop.revenueLedger', { defaultValue: 'Gateway revenue ledger' })}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="hover:bg-transparent">
+                            <TableHead className="w-14 px-4 py-3.5">#</TableHead>
+                            <TableHead className="px-4 py-3.5">{t('shop.accountingWhen', { defaultValue: 'When' })}</TableHead>
+                            <TableHead className="px-4 py-3.5">{t('shop.payment', { defaultValue: 'Payment' })}</TableHead>
+                            <TableHead className="px-4 py-3.5">{t('shop.accountingAmount', { defaultValue: 'Amount' })}</TableHead>
+                            <TableHead className="px-4 py-3.5">{t('shop.order', { defaultValue: 'Order' })}</TableHead>
+                            <TableHead className="px-4 py-3.5">{t('shop.user')}</TableHead>
+                            <TableHead className="px-4 py-3.5">{t('shop.accountingSettle', { defaultValue: 'Settled' })}</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {revenueEntries.length === 0 ? (
+                            <TableRow>
+                              <TableCell colSpan={7} className="text-muted-foreground px-4 py-8 text-center text-sm">
+                                {t('shop.accountingFilterEmpty', { defaultValue: 'No entries for this filter.' })}
+                              </TableCell>
+                            </TableRow>
+                          ) : (
+                            revenueEntries.map(entry => {
+                              const settled = Boolean(entry.settled_with_owner)
+                              return (
+                                <TableRow key={entry.id}>
+                                  <TableCell className="px-4 py-3.5 font-mono text-xs">{entry.id}</TableCell>
+                                  <TableCell className="px-4 py-3.5 text-sm">
+                                    {formatAccountingDate(entry.created_at)}
+                                  </TableCell>
+                                  <TableCell className="px-4 py-3.5 capitalize">{entry.payment_method}</TableCell>
+                                  <TableCell className="px-4 py-3.5 tabular-nums">
+                                    {formatPrice(entry.amount_toman)}
+                                  </TableCell>
+                                  <TableCell className="px-4 py-3.5 font-mono text-xs">#{entry.order_id}</TableCell>
+                                  <TableCell className="px-4 py-3.5 font-mono text-xs">
+                                    {entry.username || entry.buyer_telegram_id || '—'}
+                                  </TableCell>
+                                  <TableCell className="px-4 py-3.5">
+                                    <div className="flex items-center gap-2">
+                                      <Badge
+                                        variant="outline"
+                                        className={cn(
+                                          'font-normal',
+                                          settled
+                                            ? 'border-emerald-500/35 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
+                                            : 'border-amber-500/35 bg-amber-500/10 text-amber-700 dark:text-amber-400',
+                                        )}
+                                      >
+                                        {settled
+                                          ? t('shop.accountingSettled', { defaultValue: 'Settled' })
+                                          : t('shop.accountingUnsettled', { defaultValue: 'Unsettled' })}
+                                      </Badge>
+                                      {isOwner ? (
+                                        <Switch
+                                          checked={settled}
+                                          disabled={settleRevenue.isPending}
+                                          onCheckedChange={async checked => {
+                                            try {
+                                              await settleRevenue.mutateAsync({
+                                                entryId: entry.id,
+                                                settled: checked,
+                                              })
+                                              toast.success(
+                                                checked
+                                                  ? t('shop.accountingSettleOn', { defaultValue: 'Marked as settled with owner' })
+                                                  : t('shop.accountingSettleOff', { defaultValue: 'Settlement cleared' }),
+                                              )
+                                            } catch (error: any) {
+                                              toast.error(error?.data?.detail || t('shop.actionFailed'))
+                                            }
+                                          }}
+                                        />
+                                      ) : null}
+                                    </div>
                                   </TableCell>
                                 </TableRow>
                               )

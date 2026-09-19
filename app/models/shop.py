@@ -276,3 +276,32 @@ class CreateBudgetLedgerListResponse(BaseModel):
 
 class CreateBudgetSettleRequest(BaseModel):
     settled: bool = True
+
+
+class ShopRevenueLedgerEntry(BaseModel):
+    id: int
+    admin_id: int
+    order_id: int
+    entry_type: str
+    amount_toman: int
+    payment_method: str
+    payment_ref: str | None = None
+    buyer_telegram_id: int | None = None
+    username: str | None = None
+    detail: str | None = None
+    settled_with_owner: bool = False
+    settled_at: dt | None = None
+    settled_by_admin_id: int | None = None
+    created_at: dt | None = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ShopRevenueLedgerListResponse(BaseModel):
+    entries: list[ShopRevenueLedgerEntry]
+    total: int
+    by_gateway: list[dict[str, int | str]] = Field(default_factory=list)
+
+
+class ShopRevenueSettleRequest(BaseModel):
+    settled: bool = True

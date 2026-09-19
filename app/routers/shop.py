@@ -20,6 +20,9 @@ from app.models.shop import (
     ShopPlanCreate,
     ShopPlanResponse,
     ShopPlanUpdate,
+    ShopRevenueLedgerEntry,
+    ShopRevenueLedgerListResponse,
+    ShopRevenueSettleRequest,
     ShopStatsResponse,
 )
 from app.operation import OperatorType
@@ -112,6 +115,8 @@ async def delete_shop_plan(
 async def list_shop_orders(
     status_filter: Annotated[ShopOrderStatus | None, Query(alias="status")] = None,
     order_kind: Annotated[str | None, Query()] = None,
+    payment_method: Annotated[str | None, Query()] = None,
+    payment_paid: Annotated[bool | None, Query()] = None,
     offset: Annotated[int, Query(ge=0)] = 0,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     db: AsyncSession = Depends(get_db),
@@ -120,8 +125,16 @@ async def list_shop_orders(
     kind = (order_kind or "").strip().lower() or None
     if kind and kind not in ("purchase", "renewal"):
         kind = None
+    method = (payment_method or "").strip().lower() or None
     return await shop_operator.list_orders(
-        db, admin, status=status_filter, order_kind=kind, offset=offset, limit=limit
+        db,
+        admin,
+        status=status_filter,
+        order_kind=kind,
+        payment_method=method,
+        payment_paid=payment_paid,
+        offset=offset,
+        limit=limit,
     )
 
 
@@ -186,6 +199,40 @@ async def settle_create_budget_entry(
     """Mark a create-budget ledger row as settled (or unsettled) with the owner."""
     settled = True if payload is None else bool(payload.settled)
     return await shop_operator.settle_create_budget_entry(db, admin, entry_id, settled=settled)
+
+
+@router.get("/revenue", response_model=ShopRevenueLedgerListResponse)
+async def list_shop_revenue(
+    admin_id: Annotated[int | None, Query()] = None,
+    payment_method: Annotated[str | None, Query()] = None,
+    settled: Annotated[bool | None, Query()] = None,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    db: AsyncSession = Depends(get_db),
+    admin: AdminDetails = Depends(require_permission("users", "read")),
+):
+    """Paid shop-order revenue ledger with per-gateway totals."""
+    method = (payment_method or "").strip().lower() or None
+    return await shop_operator.list_shop_revenue(
+        db,
+        admin,
+        admin_id=admin_id,
+        payment_method=method,
+        settled=settled,
+        offset=offset,
+        limit=limit,
+    )
+
+
+@router.post("/revenue/{entry_id}/settle", response_model=ShopRevenueLedgerEntry)
+async def settle_shop_revenue_entry(
+    entry_id: int,
+    payload: ShopRevenueSettleRequest | None = None,
+    db: AsyncSession = Depends(get_db),
+    admin: AdminDetails = Depends(require_permission("users", "update")),
+):
+    settled = True if payload is None else bool(payload.settled)
+    return await shop_operator.settle_shop_revenue_entry(db, admin, entry_id, settled=settled)
 
 
 def _payment_done_html(ok: bool, order_id: int | None = None) -> HTMLResponse:

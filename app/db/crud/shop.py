@@ -51,6 +51,17 @@ async def set_telegram_lang(db: AsyncSession, telegram_id: int, lang: str) -> Te
     return await get_or_create_telegram_profile(db, telegram_id, lang=lang)
 
 
+async def set_preferred_shop_admin(
+    db: AsyncSession, telegram_id: int, admin_id: int | None
+) -> TelegramProfile:
+    profile = await get_or_create_telegram_profile(db, telegram_id)
+    profile.preferred_shop_admin_id = int(admin_id) if admin_id is not None else None
+    profile.updated_at = datetime.now(UTC)
+    await db.commit()
+    await db.refresh(profile)
+    return profile
+
+
 async def mark_join_notified(db: AsyncSession, telegram_id: int) -> bool:
     profile = await get_or_create_telegram_profile(db, telegram_id)
     if profile.join_notified:
@@ -155,6 +166,30 @@ async def get_owner_admin(db: AsyncSession) -> Admin | None:
 
 async def get_enabled_shop_config(db: AsyncSession) -> ShopConfig | None:
     stmt = select(ShopConfig).where(ShopConfig.enabled.is_(True)).order_by(ShopConfig.id.asc()).limit(1)
+    return (await db.execute(stmt)).scalar_one_or_none()
+
+
+async def list_enabled_shop_configs(db: AsyncSession) -> list[tuple[ShopConfig, Admin]]:
+    """Enabled shops with their admin (for multi-shop buyer picker)."""
+    stmt = (
+        select(ShopConfig, Admin)
+        .join(Admin, Admin.id == ShopConfig.admin_id)
+        .where(ShopConfig.enabled.is_(True))
+        .order_by(ShopConfig.id.asc())
+    )
+    return list((await db.execute(stmt)).all())
+
+
+async def get_enabled_shop_config_by_admin_username(db: AsyncSession, username: str) -> ShopConfig | None:
+    uname = (username or "").strip().lstrip("@")
+    if not uname:
+        return None
+    stmt = (
+        select(ShopConfig)
+        .join(Admin, Admin.id == ShopConfig.admin_id)
+        .where(ShopConfig.enabled.is_(True), Admin.username == uname)
+        .limit(1)
+    )
     return (await db.execute(stmt)).scalar_one_or_none()
 
 
@@ -524,6 +559,8 @@ async def list_orders_for_admin(
     *,
     status: ShopOrderStatus | None = None,
     order_kind: str | None = None,
+    payment_method: str | None = None,
+    payment_paid: bool | None = None,
     offset: int = 0,
     limit: int = 50,
 ) -> tuple[list[ShopOrder], int]:
@@ -532,6 +569,26 @@ async def list_orders_for_admin(
         filters.append(ShopOrder.status == status)
     if order_kind:
         filters.append(ShopOrder.order_kind == order_kind)
+    if payment_method:
+        from sqlalchemy import or_
+
+        method = payment_method.strip().lower()
+        if method == "card":
+            filters.append(
+                or_(
+                    ShopOrder.payment_method.is_(None),
+                    ShopOrder.payment_method == "",
+                    ShopOrder.payment_method == "card",
+                )
+            )
+        elif method == "online":
+            filters.append(ShopOrder.payment_method.is_not(None))
+            filters.append(ShopOrder.payment_method != "")
+            filters.append(ShopOrder.payment_method != "card")
+        else:
+            filters.append(ShopOrder.payment_method == method)
+    if payment_paid is not None:
+        filters.append(ShopOrder.payment_paid.is_(payment_paid))
     base = select(ShopOrder).where(*filters)
     total = int((await db.execute(select(func.count()).select_from(base.subquery()))).scalar_one() or 0)
     stmt = base.order_by(ShopOrder.id.desc()).offset(offset).limit(limit)

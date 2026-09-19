@@ -313,6 +313,8 @@ def test_shop_custom_order_approve_with_requested_username(shop_admin):
             },
         )
 
+        requested = unique_name("mycustom")
+
         async def _seed():
             from app.db.crud.shop import create_shop_order
 
@@ -324,7 +326,7 @@ def test_shop_custom_order_approve_with_requested_username(shop_admin):
                     buyer_telegram_id=910001,
                     buyer_username="custom_buyer",
                     receipt_file_id="file-custom",
-                    requested_username="mycustomuser",
+                    requested_username=requested,
                     custom_data_gb=5,
                     custom_expire_days=10,
                     custom_ip_limit=2,
@@ -336,7 +338,7 @@ def test_shop_custom_order_approve_with_requested_username(shop_admin):
         order_id = asyncio.run(_seed())
         approved = client.post(f"/api/shop/orders/{order_id}/approve", headers=headers)
         assert approved.status_code == status.HTTP_200_OK, approved.text
-        assert approved.json()["username"] == "mycustomuser"
+        assert approved.json()["username"] == requested
         assert approved.json()["order"]["is_custom"] is True
         assert approved.json()["order"]["custom_data_gb"] == 5
     finally:

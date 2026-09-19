@@ -7,12 +7,68 @@ from aiogram.types import Message, User as TgUser
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.crud.admin import list_admins_with_telegram
-from app.db.crud.shop import get_owner_admin, get_telegram_lang, has_test_claimed, mark_join_notified
+from app.db.crud.shop import (
+    get_enabled_shop_config,
+    get_enabled_shop_config_by_admin_username,
+    get_or_create_telegram_profile,
+    get_owner_admin,
+    get_shop_config_by_admin,
+    get_telegram_lang,
+    has_test_claimed,
+    list_enabled_shop_configs,
+    mark_join_notified,
+    set_preferred_shop_admin,
+)
 from app.db.models import ShopConfig
 from app.models.admin import AdminDetails
 from app.telegram.utils.i18n import rich, t
 
 MAX_SHOP_CARDS = 3
+
+
+async def get_buyer_shop_config(
+    db: AsyncSession,
+    state=None,
+    *,
+    telegram_id: int | None = None,
+    start_arg: str | None = None,
+    require_selection: bool = False,
+) -> ShopConfig | None:
+    """Resolve which enabled shop a buyer is shopping from (multi-shop aware)."""
+    if start_arg:
+        raw = start_arg.strip()
+        if raw.lower().startswith("shop_"):
+            raw = raw[5:]
+        if raw.lower().startswith("seller_"):
+            raw = raw[7:]
+        if raw:
+            by_name = await get_enabled_shop_config_by_admin_username(db, raw)
+            if by_name is not None:
+                if telegram_id is not None:
+                    await set_preferred_shop_admin(db, telegram_id, by_name.admin_id)
+                return by_name
+
+    shop_admin_id = None
+    if state is not None:
+        data = await state.get_data()
+        shop_admin_id = data.get("shop_admin_id") or data.get("admin_id")
+    if shop_admin_id is None and telegram_id is not None:
+        profile = await get_or_create_telegram_profile(db, telegram_id)
+        shop_admin_id = profile.preferred_shop_admin_id
+    if shop_admin_id is not None:
+        cfg = await get_shop_config_by_admin(db, int(shop_admin_id))
+        if cfg is not None and cfg.enabled:
+            return cfg
+
+    shops = await list_enabled_shop_configs(db)
+    if not shops:
+        return None
+    if len(shops) == 1:
+        return shops[0][0]
+    if require_selection:
+        return None
+    # Multiple shops and no selection yet — keep legacy first-enabled fallback for mid-flow.
+    return await get_enabled_shop_config(db)
 
 
 def shop_cards(config: ShopConfig | None) -> list[dict[str, str]]:
@@ -561,8 +617,11 @@ async def start_checkout(event, db, state, lang: str, *, summary_text: str) -> N
     from app.shop.payments import GATEWAY_CARD, enabled_gateways
     from app.telegram.keyboards.shop import ShopPayMethodKeyboard
     from app.telegram.utils import forms
+    from app.telegram.utils.shop_helpers import get_buyer_shop_config
 
-    config = await get_enabled_shop_config(db)
+    config = await get_buyer_shop_config(db, state)
+    if not config:
+        config = await get_enabled_shop_config(db)
     if not config:
         target = event.message if isinstance(event, types.CallbackQuery) else event
         await target.answer(t(lang, "shop_disabled"))

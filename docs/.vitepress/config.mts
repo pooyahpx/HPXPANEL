@@ -15,6 +15,7 @@ const enSidebar = [
       { text: 'Features', link: '/en/features' },
       { text: 'Users & limits', link: '/en/users' },
       { text: 'Subscriptions', link: '/en/subscriptions' },
+      { text: 'Shop & gateways', link: '/en/shop' },
     ],
   },
   {
@@ -42,6 +43,7 @@ const faSidebar = [
       { text: 'ویژگی‌ها', link: '/fa/features' },
       { text: 'کاربران و محدودیت‌ها', link: '/fa/users' },
       { text: 'سابسکریپشن', link: '/fa/subscriptions' },
+      { text: 'فروشگاه و درگاه‌ها', link: '/fa/shop' },
     ],
   },
   {

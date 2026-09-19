@@ -2682,7 +2682,7 @@
     "loadError": "بارگذاری تونل‌های Pulse ناموفق بود",
     "loadErrorHint": "پنل را آپدیت کنید، migration را اجرا کنید، و دسترسی hpx_pulse را بررسی کنید.",
     "panelUrlWarning": "دستور را دقیق کپی کنید — URL پنل باید با آدرسی که در مرورگر باز است یکی باشد.",
-    "advise": "پیش‌نمایش پیشنهاد (اختیاری)",
+    "advise": "پیش‌نمایش تونل‌های رتبه‌بندی‌شده",
     "profiles": "پروفایل‌های پیشنهادی",
     "goal": "هدف",
     "iranIp": "IP عمومی ایران",
@@ -2766,7 +2766,8 @@
     "intentMobile": "موبایل — stealth + balance",
     "intentHard": "سخت — stealth تهاجمی",
     "intentFast": "سریع — turbo / KCP / QUIC",
-    "intentHint": "حس تونل را انتخاب کن — advisor پریست‌های Stealth را رتبه‌بندی می‌کند.",
+    "intentHint": "Hard/Mobile → Stealth و WSS بالاترند. Fast → KCP / QUIC / UDP بالا می‌آیند؛ بعد دوباره Preview بزن.",
+    "topProfilesHint": "خانواده UDP حذف نشده — با Hard/Mobile زیرین Stealth می‌مانند؛ Intent را Fast بگذار و Preview بزن.",
     "failoverSection": "Failover مسیر",
     "backupPulseId": "شناسه Pulse پشتیبان",
     "priority": "اولویت",
@@ -2777,7 +2778,7 @@
     "failoverActive": "روی مسیر پشتیبان",
     "lastHeal": "ترمیم",
     "enginePin": "نسخه engine",
-    "topProfiles": "برترین پریست‌های Stealth / تونل"
+    "topProfiles": "پریست‌های رتبه‌بندی‌شده (TCP / WSS / KCP / UDP / QUIC)"
   },
   "success": "موفق",
   "error": "خطا",

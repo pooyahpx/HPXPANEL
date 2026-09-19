@@ -280,7 +280,10 @@ export default function HpxPulseWizard({ open, onOpenChange, onCreated, editingP
                     </SelectContent>
                   </Select>
                   <p className="text-muted-foreground text-xs">
-                    {t('hpxPulse.intentHint', { defaultValue: 'Pick how you want the tunnel to feel — advisor ranks Stealth presets.' })}
+                    {t('hpxPulse.intentHint', {
+                      defaultValue:
+                        'Hard/Mobile rank TCP Stealth & WSS. Fast ranks KCP / QUIC / UDP turbo tunnels — then preview again.',
+                    })}
                   </p>
                 </FormItem>
               )} />
@@ -484,37 +487,45 @@ export default function HpxPulseWizard({ open, onOpenChange, onCreated, editingP
 
             <Button type="button" variant="secondary" onClick={previewAdvise} disabled={adviseMutation.isPending}>
               <Sparkles className="size-4" />
-              {t('hpxPulse.advise', { defaultValue: 'Rank Stealth presets' })}
+              {t('hpxPulse.advise', { defaultValue: 'Preview ranked tunnels' })}
             </Button>
 
             {advice && (
               <div className="space-y-2 rounded-lg border p-3">
                 <p className="text-sm font-medium">
-                  {t('hpxPulse.topProfiles', { defaultValue: 'Top Stealth / tunnel presets' })}
+                  {t('hpxPulse.topProfiles', { defaultValue: 'Ranked tunnel presets (TCP / WSS / KCP / UDP / QUIC)' })}
                 </p>
-                {advice.profiles.slice(0, 3).map(p => (
-                  <button
-                    key={p.profile_id}
-                    type="button"
-                    onClick={() => setSelectedProfile(p.profile_id)}
-                    className={cn(
-                      'w-full rounded-md border p-2 text-start text-xs transition-colors',
-                      (selectedProfile ?? advice.recommended_profile_id) === p.profile_id && 'border-primary bg-primary/5',
-                    )}
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="font-medium">{fa ? p.title_fa : p.title}</span>
-                      <div className="flex items-center gap-1">
-                        <Badge variant="outline" className="text-[10px] uppercase">{p.preset}</Badge>
-                        {p.carrier && (
-                          <Badge variant="secondary" className="text-[10px] uppercase">{p.carrier}</Badge>
-                        )}
-                        <Badge variant="secondary">{p.score}</Badge>
+                <p className="text-muted-foreground text-[11px]">
+                  {t('hpxPulse.topProfilesHint', {
+                    defaultValue:
+                      'UDP family (KCP / QUIC / Reverse UDP) still exists — with Hard/Mobile intents they rank below Stealth, so pick Fast and preview to surface them.',
+                  })}
+                </p>
+                <div className="max-h-64 space-y-2 overflow-y-auto">
+                  {advice.profiles.slice(0, 8).map(p => (
+                    <button
+                      key={p.profile_id}
+                      type="button"
+                      onClick={() => setSelectedProfile(p.profile_id)}
+                      className={cn(
+                        'w-full rounded-md border p-2 text-start text-xs transition-colors',
+                        (selectedProfile ?? advice.recommended_profile_id) === p.profile_id && 'border-primary bg-primary/5',
+                      )}
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="font-medium">{fa ? p.title_fa : p.title}</span>
+                        <div className="flex items-center gap-1">
+                          <Badge variant="outline" className="text-[10px] uppercase">{p.preset}</Badge>
+                          {p.carrier && (
+                            <Badge variant="secondary" className="text-[10px] uppercase">{p.carrier}</Badge>
+                          )}
+                          <Badge variant="secondary">{p.score}</Badge>
+                        </div>
                       </div>
-                    </div>
-                    <p className="text-muted-foreground mt-1">{fa ? p.reasons_fa[0] : p.reasons[0]}</p>
-                  </button>
-                ))}
+                      <p className="text-muted-foreground mt-1">{fa ? p.reasons_fa[0] : p.reasons[0]}</p>
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
 

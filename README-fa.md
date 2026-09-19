@@ -17,7 +17,7 @@
 
 <p align="center">
   <img alt="version" src="https://img.shields.io/github/v/release/pooyahpx/HPXPANEL?style=for-the-badge&label=release&color=8b5cf6">
-  <img alt="downloads" src="https://img.shields.io/github/downloads/pooyahpx/HPXPANEL/total?style=for-the-badge&label=downloads&color=22c55e">
+  <a href="https://github.com/pooyahpx/HPXPANEL/pkgs/container/hpxpanel"><img alt="downloads" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fghcr-badge.elias.eu.org%2Fapi%2Fpooyahpx%2FHPXPANEL%2Fhpxpanel&query=%24.downloadCount&style=for-the-badge&label=downloads&color=22c55e"></a>
   <img alt="build" src="https://img.shields.io/github/actions/workflow/status/pooyahpx/HPXPANEL/build.yml?style=for-the-badge&label=CI">
   <img alt="license" src="https://img.shields.io/github/license/pooyahpx/HPXPANEL?style=for-the-badge">
 </p>

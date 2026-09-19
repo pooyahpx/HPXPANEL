@@ -1,0 +1,92 @@
+# Update README downloads badge (GHCR pulls + 8k floor)
+#
+# Public display = floor + max(0, ghcr_raw - baseline_raw)
+# so the counter starts at ~8k and rises with real GHCR pulls.
+
+name: Update downloads badge
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+  release:
+    types: [published]
+  push:
+    branches: [main]
+    paths:
+      - "docs/badges/downloads.meta.json"
+      - ".github/workflows/update-downloads-badge.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-downloads-badge
+  cancel-in-progress: true
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Recompute downloads badge
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          import json
+          import urllib.request
+          from pathlib import Path
+
+          meta = json.loads(Path("docs/badges/downloads.meta.json").read_text(encoding="utf-8"))
+          floor = int(meta["floor"])
+          baseline = int(meta["baseline_raw"])
+
+          with urllib.request.urlopen(
+              "https://ghcr-badge.elias.eu.org/api/pooyahpx/HPXPANEL/hpxpanel", timeout=30
+          ) as resp:
+              payload = json.load(resp)
+          raw = int(payload.get("downloadCountRaw") or 0)
+          display = floor + max(0, raw - baseline)
+
+          def compact(n: int) -> str:
+              if n >= 1_000_000:
+                  v = n / 1_000_000
+                  s = f"{v:.1f}".rstrip("0").rstrip(".")
+                  return f"{s}M"
+              if n >= 1000:
+                  v = n / 1000
+                  if v >= 100:
+                      return f"{int(v)}k"
+                  s = f"{v:.1f}".rstrip("0").rstrip(".")
+                  return f"{s}k"
+              return str(n)
+
+          badge = {
+              "schemaVersion": 1,
+              "label": "downloads",
+              "message": compact(display),
+              "color": "22c55e",
+              "namedLogo": "github",
+              "cacheSeconds": 3600,
+          }
+          Path("docs/badges/downloads.json").write_text(
+              json.dumps(badge, indent=2) + "\n", encoding="utf-8"
+          )
+          print(f"ghcr_raw={raw} baseline={baseline} floor={floor} display={display} message={badge['message']}")
+          PY
+
+      - name: Commit badge if changed
+        run: |
+          if git diff --quiet -- docs/badges/downloads.json; then
+            echo "No badge change"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/badges/downloads.json
+          git commit -m "chore: refresh downloads badge from GHCR (+8k floor)"
+          git push

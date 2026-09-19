@@ -1,5 +1,5 @@
 {
   "floor": 8000,
   "baseline_raw": 3224,
-  "note": "Display = floor + max(0, ghcr_raw - baseline_raw). Floor restores the prior ~8k public count; new GHCR pulls increase from there."
+  "note": "Display = floor + max(0, ghcr_raw - baseline_raw). Badge uses two decimals under 100k (e.g. 8.06k) so small GHCR growth is visible."
 }

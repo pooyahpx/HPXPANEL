@@ -38,6 +38,7 @@ jobs:
           set -euo pipefail
           python3 <<'PY'
           import json
+          import urllib.error
           import urllib.request
           from pathlib import Path
 
@@ -45,10 +46,19 @@ jobs:
           floor = int(meta["floor"])
           baseline = int(meta["baseline_raw"])
 
-          with urllib.request.urlopen(
-              "https://ghcr-badge.elias.eu.org/api/pooyahpx/HPXPANEL/hpxpanel", timeout=30
-          ) as resp:
-              payload = json.load(resp)
+          try:
+              with urllib.request.urlopen(
+                  urllib.request.Request(
+                      "https://ghcr-badge.elias.eu.org/api/pooyahpx/HPXPANEL/hpxpanel",
+                      headers={"User-Agent": "HPXPANEL-downloads-badge"},
+                  ),
+                  timeout=30,
+              ) as resp:
+                  payload = json.load(resp)
+          except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+              print(f"Skipping badge refresh; GHCR stats unavailable: {exc}")
+              raise SystemExit(0)
+
           raw = int(payload.get("downloadCountRaw") or 0)
           display = floor + max(0, raw - baseline)
 

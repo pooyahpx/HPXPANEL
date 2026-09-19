@@ -63,15 +63,17 @@ jobs:
           display = floor + max(0, raw - baseline)
 
           def compact(n: int) -> str:
+              # Keep two decimals under 100k so growth from the 8k floor is visible
+              # (one decimal stays "8k" until ~8.1k ≈ +100 pulls).
               if n >= 1_000_000:
                   v = n / 1_000_000
-                  s = f"{v:.1f}".rstrip("0").rstrip(".")
+                  s = f"{v:.2f}".rstrip("0").rstrip(".")
                   return f"{s}M"
+              if n >= 100_000:
+                  return f"{n // 1000}k"
               if n >= 1000:
                   v = n / 1000
-                  if v >= 100:
-                      return f"{int(v)}k"
-                  s = f"{v:.1f}".rstrip("0").rstrip(".")
+                  s = f"{v:.2f}".rstrip("0").rstrip(".")
                   return f"{s}k"
               return str(n)
 

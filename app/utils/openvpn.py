@@ -11,9 +11,10 @@ from app.db.models import CoreType
 from app.models.proxy import OpenVPNSettings, ProxyTable
 from app.utils.openvpn_pki import (
     cert_fingerprint_sha256,
-    cert_serial_hex,
+    cert_serial_decimal,
     sign_client_certificate,
 )
+from app.utils.system import random_password
 
 
 async def get_openvpn_core_for_inbounds(inbound_tags: set[str]) -> OpenVPNConfig | None:
@@ -45,15 +46,23 @@ async def ensure_openvpn_credentials(
         return proxy_settings
 
     openvpn = proxy_settings.openvpn
+    if not openvpn.username:
+        openvpn.username = random_password()
+    if not openvpn.password:
+        openvpn.password = random_password()
+
     if openvpn.client_cert and openvpn.client_key and not force:
-        if not openvpn.serial or not openvpn.fingerprint:
-            openvpn.serial = cert_serial_hex(openvpn.client_cert)
+        # Keep serial in decimal form so it matches OpenVPN's tls_serial_0.
+        openvpn.serial = cert_serial_decimal(openvpn.client_cert)
+        if not openvpn.fingerprint:
             openvpn.fingerprint = cert_fingerprint_sha256(openvpn.client_cert)
+        proxy_settings.openvpn = openvpn
         return proxy_settings
 
     inbound_tags = await tags_from_groups(groups)
     core = await get_openvpn_core_for_inbounds(inbound_tags)
     if core is None:
+        proxy_settings.openvpn = openvpn
         return proxy_settings
 
     ca_key = str(core.get("ca_key") or "").strip()
@@ -70,7 +79,7 @@ async def ensure_openvpn_credentials(
     )
     openvpn.client_cert = client_cert
     openvpn.client_key = client_key
-    openvpn.serial = cert_serial_hex(client_cert)
+    openvpn.serial = cert_serial_decimal(client_cert)
     openvpn.fingerprint = cert_fingerprint_sha256(client_cert)
     proxy_settings.openvpn = openvpn
     return proxy_settings

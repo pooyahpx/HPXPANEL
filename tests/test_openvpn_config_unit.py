@@ -23,6 +23,8 @@ def test_openvpn_configuration_renders_client_profile():
     settings = {
         "client_cert": "-----BEGIN CERTIFICATE-----\nCLIENT\n-----END CERTIFICATE-----\n",
         "client_key": "-----BEGIN PRIVATE KEY-----\nKEY\n-----END PRIVATE KEY-----\n",
+        "username": "ovpn-user",
+        "password": "ovpn-pass",
     }
 
     conf = OpenVPNConfiguration()
@@ -31,6 +33,9 @@ def test_openvpn_configuration_renders_client_profile():
 
     assert "client" in body
     assert "remote 203.0.113.1 1194" in body
+    assert "<auth-user-pass>" in body
+    assert "ovpn-user" in body
+    assert "ovpn-pass" in body
     assert "<ca>" in body
     assert "<cert>" in body
     assert "<key>" in body

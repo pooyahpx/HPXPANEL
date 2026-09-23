@@ -81,6 +81,8 @@ def test_proxy_table_includes_openvpn_defaults():
 
     assert dumped["openvpn"]["serial"] == ""
     assert dumped["openvpn"]["fingerprint"] == ""
+    assert dumped["openvpn"]["username"]
+    assert dumped["openvpn"]["password"]
 
 
 def test_protocol_enum_values_are_append_only():

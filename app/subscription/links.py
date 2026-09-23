@@ -414,11 +414,18 @@ class StandardLinks(BaseSubscription):
         return f"naive+{scheme}://{user}:{password}@{address}:{inbound.port}#{urlparse.quote(remark)}"
 
     def _build_credential_vpn(self, remark: str, address: str, inbound: SubscriptionInboundData, settings: dict) -> str:
-        user = urlparse.quote(settings.get("username") or "", safe="")
-        password = urlparse.quote(settings.get("password") or "", safe="")
+        user_raw = settings.get("username") or ""
+        password_raw = settings.get("password") or ""
+        if not user_raw or not password_raw:
+            return ""
+        user = urlparse.quote(user_raw, safe="")
+        password = urlparse.quote(password_raw, safe="")
         scheme = inbound.protocol or "vpn"
         port = inbound.port or 0
-        return f"{scheme}://{user}:{password}@{address}:{port}#{urlparse.quote(remark)}"
+        qs = ""
+        if inbound.protocol == "l2tp" and inbound.l2tp_psk:
+            qs = "?" + urlparse.urlencode({"psk": inbound.l2tp_psk})
+        return f"{scheme}://{user}:{password}@{address}:{port}{qs}#{urlparse.quote(remark)}"
 
     def _build_mtproto(self, remark: str, address: str, inbound: SubscriptionInboundData, settings: dict) -> str:
         secret = settings.get("secret") or ""

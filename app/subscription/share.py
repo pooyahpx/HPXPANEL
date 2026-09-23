@@ -288,8 +288,12 @@ async def process_host(
     if inbound.inbound_tag not in inbounds:
         return
 
-    # Get user settings for this protocol
-    settings = proxies.get(inbound.protocol)
+    # L2TP stores credentials under ikev2 (ProxyTable.l2tp is a property alias;
+    # model.dict() never emits a "l2tp" key).
+    if inbound.protocol == "l2tp":
+        settings = proxies.get("ikev2")
+    else:
+        settings = proxies.get(inbound.protocol)
     if not settings:
         return
     settings = dict(settings)
@@ -302,11 +306,6 @@ async def process_host(
     # Each WG interface only gets the user's peer IP from its own subnet.
     if inbound.protocol in ("wireguard", "wg_c", "amneziawg"):
         settings["peer_ips"] = pick_peer_ip_for_inbound(inbound.wireguard_local_address, settings.get("peer_ips") or [])
-
-    # Alias l2tp credentials onto the same settings bag used by ikev2 when needed.
-    if inbound.protocol == "l2tp" and not settings.get("username"):
-        ikev2 = proxies.get("ikev2") or {}
-        settings = {**ikev2, **settings}
     # Update format variables
     format_variables.update({"PROTOCOL": inbound.protocol})
     format_variables.update({"TRANSPORT": inbound.network})

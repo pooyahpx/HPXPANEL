@@ -21,20 +21,27 @@ import { cn } from '@/lib/utils'
 import {
   downloadBackupFile,
   importBackupArchive,
+  useBackupInstallTokens,
   useBackups,
+  useCreateBackupInstallToken,
   useRestoreBackup,
+  useRevokeBackupInstallToken,
   useRunBackup,
   useUpdateBackupConfig,
+  useUpdateBackupInstallToken,
   useValidateBackup,
   type BackupConfig,
+  type BackupInstallTokenResponse,
 } from '@/service/api/backup'
 import { formatBytes } from '@/utils/formatByte'
 import { isOwner } from '@/utils/rbac'
-import { AlertTriangle, CloudUpload, Database, Download, HardDriveDownload, Loader2, RefreshCcw, RotateCcw, Save, ShieldCheck } from 'lucide-react'
+import { AlertTriangle, CloudUpload, Database, Download, HardDriveDownload, KeyRound, Loader2, RefreshCcw, RotateCcw, Save, ShieldCheck, Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Textarea } from '@/components/ui/textarea'
 const defaultConfig: BackupConfig = {
   auto_enabled: false,
   schedule_hours: 24,
@@ -53,8 +60,14 @@ export default function BackupSettings() {
   const runBackup = useRunBackup()
   const restoreBackup = useRestoreBackup()
   const validateBackup = useValidateBackup()
+  const createInstallToken = useCreateBackupInstallToken()
+  const { data: installTokensData, isLoading: installTokensLoading } = useBackupInstallTokens(owner)
+  const updateInstallToken = useUpdateBackupInstallToken()
+  const revokeInstallToken = useRevokeBackupInstallToken()
   const [config, setConfig] = useState<BackupConfig>(defaultConfig)
   const [restoreId, setRestoreId] = useState<string | null>(null)
+  const [revokeToken, setRevokeToken] = useState<string | null>(null)
+  const [installLink, setInstallLink] = useState<BackupInstallTokenResponse | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -106,6 +119,41 @@ export default function BackupSettings() {
       await refetch()
     } catch (error: any) {
       toast.error(error?.data?.detail || t('settings.backup.importFailed'))
+    }
+  }
+
+  const handleInstallToken = async (backupId: string) => {
+    try {
+      const result = await createInstallToken.mutateAsync(backupId)
+      setInstallLink(result)
+      await navigator.clipboard.writeText(result.install_command)
+      toast.success(t('settings.backup.installTokenCopied', { defaultValue: 'Install command copied' }))
+    } catch (error: any) {
+      toast.error(error?.data?.detail || t('settings.backup.installTokenFailed', { defaultValue: 'Could not create install token' }))
+    }
+  }
+
+  const handleToggleToken = async (token: string, enabled: boolean) => {
+    try {
+      await updateInstallToken.mutateAsync({ token, enabled })
+      toast.success(
+        enabled
+          ? t('settings.backup.installTokenEnabled', { defaultValue: 'Install token enabled' })
+          : t('settings.backup.installTokenDisabled', { defaultValue: 'Install token disabled' }),
+      )
+    } catch (error: any) {
+      toast.error(error?.data?.detail || t('settings.backup.installTokenFailed', { defaultValue: 'Could not update install token' }))
+    }
+  }
+
+  const handleRevokeToken = async () => {
+    if (!revokeToken) return
+    try {
+      await revokeInstallToken.mutateAsync(revokeToken)
+      toast.success(t('settings.backup.installTokenRevoked', { defaultValue: 'Install token revoked' }))
+      setRevokeToken(null)
+    } catch (error: any) {
+      toast.error(error?.data?.detail || t('settings.backup.installTokenFailed', { defaultValue: 'Could not revoke install token' }))
     }
   }
 
@@ -260,6 +308,17 @@ export default function BackupSettings() {
                             <Download className="h-4 w-4" />
                           </Button>
                           {owner && (
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              title={t('settings.backup.installToken', { defaultValue: 'Install with this backup' })}
+                              disabled={createInstallToken.isPending}
+                              onClick={() => handleInstallToken(item.id)}
+                            >
+                              <KeyRound className="h-4 w-4" />
+                            </Button>
+                          )}
+                          {owner && (
                             <Button size="icon" variant="ghost" onClick={() => setRestoreId(item.id)}>
                               <RotateCcw className="h-4 w-4" />
                             </Button>
@@ -281,6 +340,94 @@ export default function BackupSettings() {
         </CardContent>
       </Card>
 
+      {owner && (
+        <Card className="rounded-none">
+          <CardHeader>
+            <CardTitle>{t('settings.backup.installTokensTitle', { defaultValue: 'Install tokens' })}</CardTitle>
+            <CardDescription>
+              {t('settings.backup.installTokensDescription', {
+                defaultValue: 'See which IP / datacenter used a restore link, and disable or revoke access.',
+              })}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {installTokensLoading ? (
+              <div className="text-muted-foreground flex items-center gap-2 text-sm">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                {t('loading')}
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>{t('settings.backup.created', { defaultValue: 'Created' })}</TableHead>
+                    <TableHead>{t('settings.backup.backupId', { defaultValue: 'Backup' })}</TableHead>
+                    <TableHead>{t('settings.backup.lastIp', { defaultValue: 'Last IP' })}</TableHead>
+                    <TableHead>{t('settings.backup.datacenter', { defaultValue: 'Datacenter' })}</TableHead>
+                    <TableHead>{t('settings.backup.uses', { defaultValue: 'Uses' })}</TableHead>
+                    <TableHead>{t('settings.backup.enabled', { defaultValue: 'Enabled' })}</TableHead>
+                    <TableHead className="text-end">{t('actions')}</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {installTokensData?.items?.length ? (
+                    installTokensData.items.map(item => (
+                      <TableRow key={item.token} className={item.revoked ? 'opacity-60' : undefined}>
+                        <TableCell className="font-mono text-xs">
+                          {item.created_at ? new Date(item.created_at).toLocaleString() : '—'}
+                        </TableCell>
+                        <TableCell className="max-w-[140px] truncate font-mono text-xs" title={item.backup_id}>
+                          {item.backup_id}
+                        </TableCell>
+                        <TableCell className="font-mono text-xs" dir="ltr">
+                          {item.last_used_ip || '—'}
+                          {item.last_used_country_code ? (
+                            <span className="text-muted-foreground ml-1">({item.last_used_country_code})</span>
+                          ) : null}
+                        </TableCell>
+                        <TableCell className="max-w-[180px] truncate text-xs" title={item.last_used_isp || ''}>
+                          {item.last_used_isp || '—'}
+                          {item.last_used_city ? (
+                            <span className="text-muted-foreground block truncate">{item.last_used_city}</span>
+                          ) : null}
+                        </TableCell>
+                        <TableCell>{item.use_count}</TableCell>
+                        <TableCell>
+                          <Switch
+                            checked={item.enabled && !item.revoked}
+                            disabled={item.revoked || updateInstallToken.isPending}
+                            onCheckedChange={v => handleToggleToken(item.token, v)}
+                          />
+                        </TableCell>
+                        <TableCell className="text-end">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            title={t('settings.backup.revokeToken', { defaultValue: 'Revoke' })}
+                            disabled={item.revoked || revokeInstallToken.isPending}
+                            onClick={() => setRevokeToken(item.token)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-muted-foreground py-8 text-center text-sm">
+                        {t('settings.backup.installTokensEmpty', {
+                          defaultValue: 'No install tokens yet. Create one from a backup row.',
+                        })}
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       <AlertDialog open={Boolean(restoreId)} onOpenChange={open => !open && setRestoreId(null)}>
         <AlertDialogContent dir={dir}>
           <AlertDialogHeader>
@@ -295,6 +442,65 @@ export default function BackupSettings() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <AlertDialog open={Boolean(revokeToken)} onOpenChange={open => !open && setRevokeToken(null)}>
+        <AlertDialogContent dir={dir}>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('settings.backup.revokeTokenTitle', { defaultValue: 'Revoke install token?' })}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('settings.backup.revokeTokenPrompt', {
+                defaultValue: 'The restore URL will stop working immediately. This cannot be undone.',
+              })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t('cancel')}</AlertDialogCancel>
+            <AlertDialogAction className={cn('bg-destructive text-destructive-foreground')} onClick={handleRevokeToken} disabled={revokeInstallToken.isPending}>
+              {t('settings.backup.revokeTokenConfirm', { defaultValue: 'Revoke' })}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Dialog open={Boolean(installLink)} onOpenChange={open => !open && setInstallLink(null)}>
+        <DialogContent dir={dir} className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>{t('settings.backup.installTokenTitle', { defaultValue: 'Install with backup' })}</DialogTitle>
+            <DialogDescription>
+              {t('settings.backup.installTokenHint', {
+                defaultValue:
+                  'Keep this panel online until the new server finishes downloading. Token expires automatically.',
+              })}
+            </DialogDescription>
+          </DialogHeader>
+          {installLink ? (
+            <div className="space-y-3">
+              <p className="text-muted-foreground text-xs">
+                {t('settings.backup.installTokenExpires', {
+                  defaultValue: 'Expires',
+                })}
+                : {new Date(installLink.expires_at).toLocaleString()}
+              </p>
+              <Textarea className="font-mono text-xs" readOnly rows={5} value={installLink.install_command} dir="ltr" />
+              <p className="text-muted-foreground text-xs break-all" dir="ltr">
+                {installLink.restore_url}
+              </p>
+            </div>
+          ) : null}
+          <DialogFooter>
+            <Button
+              type="button"
+              onClick={async () => {
+                if (!installLink) return
+                await navigator.clipboard.writeText(installLink.install_command)
+                toast.success(t('settings.backup.installTokenCopied', { defaultValue: 'Install command copied' }))
+              }}
+            >
+              {t('copy', { defaultValue: 'Copy' })}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

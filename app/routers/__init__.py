@@ -45,6 +45,7 @@ routers = [
     system.router,
     settings.router,
     backup.router,
+    backup.public_router,
     group.router,
     core.router,
     client_template.router,

@@ -52,6 +52,56 @@ export const restoreBackup = (backupId: string, dryRun = false) =>
 
 export const validateBackup = (backupId: string) => restoreBackup(backupId, true)
 
+export interface BackupInstallTokenResponse {
+  token: string
+  backup_id: string
+  filename: string
+  expires_at: string
+  restore_url: string
+  install_command: string
+  note?: string
+}
+
+export interface BackupInstallTokenListItem {
+  token: string
+  backup_id: string
+  filename: string
+  created_at?: string | null
+  expires_at?: string | null
+  enabled: boolean
+  revoked: boolean
+  consumed: boolean
+  use_count: number
+  last_used_at?: string | null
+  last_used_ip?: string | null
+  last_used_country?: string | null
+  last_used_country_code?: string | null
+  last_used_city?: string | null
+  last_used_isp?: string | null
+  last_used_asn?: string | null
+}
+
+export const createBackupInstallToken = (
+  backupId: string,
+  body?: { panel_base_url?: string; database?: string; ttl_hours?: number },
+) =>
+  fetcher<BackupInstallTokenResponse>(`/api/backup/${backupId}/install-token`, {
+    method: 'POST',
+    body: body ?? { database: 'timescaledb', ttl_hours: 72 },
+  })
+
+export const getBackupInstallTokens = () =>
+  fetcher<{ items: BackupInstallTokenListItem[] }>('/api/backup/install-tokens')
+
+export const updateBackupInstallToken = (token: string, enabled: boolean) =>
+  fetcher(`/api/backup/install-tokens/${encodeURIComponent(token)}`, {
+    method: 'PATCH',
+    body: { enabled },
+  })
+
+export const revokeBackupInstallToken = (token: string) =>
+  fetcher(`/api/backup/install-tokens/${encodeURIComponent(token)}/revoke`, { method: 'POST' })
+
 export const importBackupArchive = async (file: File) => {
   const form = new FormData()
   form.append('file', file)
@@ -107,3 +157,35 @@ export const useValidateBackup = () =>
   useMutation({
     mutationFn: (backupId: string) => validateBackup(backupId),
   })
+
+export const useCreateBackupInstallToken = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (backupId: string) => createBackupInstallToken(backupId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['backup', 'install-tokens'] }),
+  })
+}
+
+export const useBackupInstallTokens = (enabled = true) =>
+  useQuery({
+    queryKey: ['backup', 'install-tokens'],
+    queryFn: getBackupInstallTokens,
+    enabled,
+    refetchInterval: 5000,
+  })
+
+export const useUpdateBackupInstallToken = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ token, enabled }: { token: string; enabled: boolean }) => updateBackupInstallToken(token, enabled),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['backup', 'install-tokens'] }),
+  })
+}
+
+export const useRevokeBackupInstallToken = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (token: string) => revokeBackupInstallToken(token),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['backup', 'install-tokens'] }),
+  })
+}

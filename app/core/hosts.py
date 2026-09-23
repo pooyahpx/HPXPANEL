@@ -12,7 +12,7 @@ from app import on_shutdown, on_startup
 from app.core.manager import core_manager
 from app.db import GetDB
 from app.db.crud.host import get_host_by_id, get_hosts, upsert_inbounds
-from app.db.models import ProxyHostSecurity
+from app.db.models import CoreType, ProxyHostSecurity
 from app.models.host import BaseHost, FinalMask, TransportSettings, WireGuardHostOverrides
 from app.models.subscription import (
     GRPCTransportConfig,
@@ -32,6 +32,19 @@ from app.utils.logger import get_logger
 from app.utils.openvpn import get_openvpn_core_for_inbounds
 from config import runtime_settings
 from role import Role
+
+
+async def _l2tp_psk_for_inbound(inbound_tag: str) -> str:
+    """Pull the shared IPsec PSK from the L2TP core that owns this inbound tag."""
+    if not inbound_tag:
+        return ""
+    cores = await core_manager.get_cores()
+    for core in cores.values():
+        if core.type != CoreType.l2tp:
+            continue
+        if inbound_tag in set(core.inbounds or []):
+            return str(core.get("psk") or "")
+    return ""
 
 
 def _string_list(value) -> list[str]:
@@ -142,6 +155,7 @@ async def _prepare_subscription_inbound_data(
         "gre",
         "mtproto",
     ):
+        l2tp_psk = await _l2tp_psk_for_inbound(host.inbound_tag) if protocol == "l2tp" else ""
         return SubscriptionInboundData(
             remark=host.remark,
             inbound_tag=host.inbound_tag,
@@ -152,6 +166,7 @@ async def _prepare_subscription_inbound_data(
             tls_config=TLSConfig(),
             transport_config=TCPTransportConfig(path="", host=[]),
             mux_settings=None,
+            l2tp_psk=l2tp_psk,
             fragment_settings=host.fragment_settings.model_dump() if host.fragment_settings else None,
             noise_settings=host.noise_settings.model_dump() if host.noise_settings else None,
             finalmask=final_mask_settings,

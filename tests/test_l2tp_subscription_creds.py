@@ -37,7 +37,7 @@ async def test_process_host_l2tp_uses_ikev2_credentials():
 @pytest.mark.asyncio
 async def test_process_host_l2tp_ignores_empty_l2tp_key():
     """Even a truthy empty-username l2tp bag must not win over ikev2."""
-    inbound, settings = await process_host(
+    _, settings = await process_host(
         _l2tp_inbound(),
         format_variables={},
         inbounds=["l2tp-main"],

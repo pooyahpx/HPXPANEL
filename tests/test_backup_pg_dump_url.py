@@ -37,4 +37,4 @@ def test_require_cli_missing_binary(monkeypatch):
         backup_service._require_cli("pg_dump")
         assert False, "expected RuntimeError"
     except RuntimeError as exc:
-        assert "postgresql-client" in str(exc)
+        assert "postgresql-client-17" in str(exc)

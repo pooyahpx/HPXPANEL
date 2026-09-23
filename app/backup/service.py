@@ -109,8 +109,8 @@ def _require_cli(binary: str) -> None:
     if shutil.which(binary):
         return
     hint = {
-        "pg_dump": "postgresql-client",
-        "psql": "postgresql-client",
+        "pg_dump": "postgresql-client-17",
+        "psql": "postgresql-client-17",
         "mysqldump": "default-mysql-client",
     }.get(binary, binary)
     raise RuntimeError(

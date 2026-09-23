@@ -32,16 +32,23 @@ ENV PATH="/code/.venv/bin:$PATH"
 
 # curl: healthchecks · docker CLI: spawn FOREIGN tunnel containers via host socket
 # iproute2/iptables/ping: manage TAP iface + health when network_mode=host
-# postgresql-client / default-mysql-client: panel Backup now (pg_dump / mysqldump / psql)
+# postgresql-client-17: panel Backup now — must match TimescaleDB/Postgres 17 (not bookworm's pg15)
+# default-mysql-client: mysqldump for MySQL/MariaDB panel backups
 ARG TARGETARCH
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
+    gnupg \
+    && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+      | gpg --dearmor -o /usr/share/keyrings/postgresql-archive-keyring.gpg \
+    && echo "deb [signed-by=/usr/share/keyrings/postgresql-archive-keyring.gpg] http://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" \
+      > /etc/apt/sources.list.d/pgdg.list \
+    && apt-get update && apt-get install -y --no-install-recommends \
     default-mysql-client \
     iproute2 \
     iptables \
     iputils-ping \
-    postgresql-client \
+    postgresql-client-17 \
     && DOCKER_ARCH="$TARGETARCH" \
     && if [ "$DOCKER_ARCH" = "amd64" ] || [ -z "$DOCKER_ARCH" ]; then DOCKER_ARCH=x86_64; fi \
     && if [ "$DOCKER_ARCH" = "arm64" ]; then DOCKER_ARCH=aarch64; fi \

@@ -82,6 +82,43 @@ def _sync_database_url() -> str:
     return url
 
 
+def _dump_database_url() -> str:
+    """Connection URL for dump/restore CLI tools.
+
+    Panel app traffic goes through PgBouncer (:6432, transaction pooling).
+    ``pg_dump`` / ``psql`` need the real Postgres/TimescaleDB listener (:5432).
+    """
+    url = _sync_database_url()
+    if not database_settings.is_postgresql:
+        return url
+    parsed = urlparse(url)
+    if parsed.port != 6432:
+        return url
+    netloc = parsed.netloc
+    if "@" in netloc:
+        userinfo, hostport = netloc.rsplit("@", 1)
+        host_only = hostport.rsplit(":", 1)[0]
+        netloc = f"{userinfo}@{host_only}:5432"
+    else:
+        host_only = netloc.rsplit(":", 1)[0]
+        netloc = f"{host_only}:5432"
+    return parsed._replace(netloc=netloc).geturl()
+
+
+def _require_cli(binary: str) -> None:
+    if shutil.which(binary):
+        return
+    hint = {
+        "pg_dump": "postgresql-client",
+        "psql": "postgresql-client",
+        "mysqldump": "default-mysql-client",
+    }.get(binary, binary)
+    raise RuntimeError(
+        f"{binary} is not installed in the panel image (package: {hint}). "
+        "Update to a panel image that includes database client tools, or run: hpxpanel backup"
+    )
+
+
 def _dump_sqlite(target: Path) -> Path:
     source = _sqlite_db_path()
     if not source.exists():
@@ -100,15 +137,17 @@ def _run_command(command: list[str], *, env: dict | None = None) -> None:
 
 
 def _dump_postgresql(target: Path) -> Path:
+    _require_cli("pg_dump")
     output = target / "database.sql"
-    command = ["pg_dump", "--no-owner", "--no-acl", "--format=plain", "--file", str(output), _sync_database_url()]
+    command = ["pg_dump", "--no-owner", "--no-acl", "--format=plain", "--file", str(output), _dump_database_url()]
     _run_command(command)
     return output
 
 
 def _dump_mysql(target: Path) -> Path:
+    _require_cli("mysqldump")
     output = target / "database.sql"
-    command = ["mysqldump", "--single-transaction", "--result-file", str(output), _sync_database_url()]
+    command = ["mysqldump", "--single-transaction", "--result-file", str(output), _dump_database_url()]
     _run_command(command)
     return output
 
@@ -348,11 +387,12 @@ def restore_backup(backup_id: str, *, dry_run: bool = False) -> list[str]:
                 return checks
 
             if engine == "postgresql":
+                _require_cli("psql")
                 sql_name = manifest.database_file
                 temp_sql = Path(tmp) / f"restore_{backup_id}.sql"
                 with archive.open(sql_name) as src, temp_sql.open("wb") as dst:
                     shutil.copyfileobj(src, dst)
-                _run_command(["psql", _sync_database_url(), "-v", "ON_ERROR_STOP=1", "-f", str(temp_sql)])
+                _run_command(["psql", _dump_database_url(), "-v", "ON_ERROR_STOP=1", "-f", str(temp_sql)])
                 return checks
 
             if engine == "mysql":

@@ -284,6 +284,9 @@ class SubscriptionInboundData(BaseModel):
     openvpn_device: str = Field("tun")
     openvpn_dns: list[str] = Field(default_factory=list)
 
+    # L2TP/IPsec: shared pre-shared key from the L2TP core (not per-user)
+    l2tp_psk: str = Field("")
+
     # Flow (from inbound, user can override)
     inbound_flow: str = Field("")
 

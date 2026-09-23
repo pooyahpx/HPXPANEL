@@ -234,6 +234,25 @@ pg_restore_all_user_databases() {
 restore_command() {
     colorized_echo blue "Starting restore process..."
 
+    local restore_file_arg=""
+    local restore_yes=0
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+        --file)
+            restore_file_arg="${2:-}"
+            shift 2
+            ;;
+        --yes | -y)
+            restore_yes=1
+            shift
+            ;;
+        *)
+            colorized_echo red "Unknown restore option: $1"
+            exit 1
+            ;;
+        esac
+    done
+
     # Check if HPXPANEL is installed
     if ! is_hpxpanel_installed; then
         colorized_echo red "HPXPANEL's not installed!"
@@ -322,6 +341,16 @@ restore_command() {
     >"$log_file"
     echo "Restore Log - $(date)" >>"$log_file"
 
+    local selected_file=""
+    if [ -n "$restore_file_arg" ]; then
+        if [ ! -f "$restore_file_arg" ]; then
+            colorized_echo red "Restore file not found: $restore_file_arg"
+            rm -rf "$temp_restore_dir"
+            exit 1
+        fi
+        selected_file="$restore_file_arg"
+        colorized_echo blue "Using backup file: $selected_file"
+    else
     # List available backup files (find all backup-related files in backup directory)
     local backup_candidates=()
     while IFS= read -r -d '' file; do
@@ -443,7 +472,9 @@ restore_command() {
         fi
     done
 
-    local selected_file="${backup_files[$((selection-1))]}"
+    selected_file="${backup_files[$((selection-1))]}"
+    fi  # end interactive file picker (--file skipped this block)
+
     local selected_filename=$(basename "$selected_file")
 
     colorized_echo blue "Selected backup: $selected_filename"
@@ -784,6 +815,9 @@ restore_command() {
         colorized_echo blue "Container: $container_name"
     fi
 
+    if [ "$restore_yes" -eq 1 ]; then
+        colorized_echo yellow "Non-interactive restore (--yes): proceeding without prompt."
+    else
     while true; do
         printf "Do you want to proceed with the restore? (yes/no): "
         read -r confirm
@@ -797,6 +831,7 @@ restore_command() {
             colorized_echo red "Please answer yes or no."
         fi
     done
+    fi
 
     # Stop HPXPANEL services before restore for clean state
     colorized_echo blue "Stopping HPXPANEL services for clean restore..."

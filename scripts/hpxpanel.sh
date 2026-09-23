@@ -1784,6 +1784,7 @@ install_command() {
     ssl_domain=""
     ssl_http_port="80"
     KEEP_EXISTING_DB_DATA=0
+    RESTORE_URL=""
 
     # Parse options
     while [[ $# -gt 0 ]]; do
@@ -1867,6 +1868,14 @@ install_command() {
                 colorized_echo red "Invalid SSL HTTP challenge port: $ssl_http_port"
                 exit 1
             fi
+            shift 2
+            ;;
+        --restore-url)
+            if [ -z "${2:-}" ]; then
+                colorized_echo red "Error: --restore-url requires a value."
+                exit 1
+            fi
+            RESTORE_URL="$2"
             shift 2
             ;;
         *)
@@ -1977,6 +1986,27 @@ install_command() {
     fi
 
     up_hpxpanel
+
+    if [ -n "${RESTORE_URL:-}" ]; then
+        colorized_echo blue "Downloading backup from restore URL..."
+        mkdir -p "$APP_DIR/backup"
+        local restore_archive="$APP_DIR/backup/install_restore_$(date +%Y%m%d%H%M%S).zip"
+        if ! curl -fsSL --retry 3 --retry-delay 2 -o "$restore_archive" "$RESTORE_URL"; then
+            colorized_echo red "Failed to download backup from --restore-url"
+            colorized_echo yellow "Panel is installed empty. Retry later with: hpxpanel restore"
+            exit 1
+        fi
+        colorized_echo green "Backup downloaded to $restore_archive"
+        colorized_echo blue "Restoring backup into this panel (non-interactive)..."
+        if ! restore_command --file "$restore_archive" --yes; then
+            colorized_echo red "Automatic restore failed. Archive kept at $restore_archive"
+            colorized_echo yellow "You can retry with: hpxpanel restore"
+            exit 1
+        fi
+        colorized_echo green "Backup restored. Restarting panel services..."
+        down_hpxpanel || true
+        up_hpxpanel
+    fi
 
     echo
     colorized_echo blue "=============================="
@@ -2733,6 +2763,7 @@ usage() {
     colorized_echo yellow "  install         $(tput sgr0)– Install HPXPANEL (auto-installs Docker + all deps)"
     colorized_echo cyan "  One-liner:"
     echo "    sudo bash -c \"\$(curl -fsSL https://github.com/pooyahpx/HPXPANEL/raw/main/scripts/hpxpanel.sh)\" @ install --database timescaledb"
+    echo "    sudo bash -c \"\$(curl -fsSL https://github.com/pooyahpx/HPXPANEL/raw/main/scripts/hpxpanel.sh)\" @ install --database timescaledb --restore-url \"https://OLD_PANEL/api/public/install-restore/TOKEN\""
     echo
     colorized_echo yellow "  update          $(tput sgr0)– Update to latest version"
     colorized_echo yellow "  uninstall       $(tput sgr0)– Uninstall HPXPANEL"

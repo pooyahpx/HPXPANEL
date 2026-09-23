@@ -15,6 +15,7 @@ from app.backup.service import (
 from app.db.crud.settings import get_settings, modify_settings
 from app.models.backup import (
     BackupConfig,
+    BackupInstallTokenResponse,
     BackupListResponse,
     BackupManifest,
     BackupRestoreResponse,
@@ -137,3 +138,106 @@ class BackupOperation(BaseOperation):
         from app.backup.service import _resolve_archive
 
         return _resolve_archive(backup_id)
+
+    def create_install_link(
+        self,
+        backup_id: str,
+        *,
+        panel_base_url: str,
+        database: str = "timescaledb",
+        ttl_hours: int = 72,
+    ) -> BackupInstallTokenResponse:
+        from datetime import datetime
+
+        from app.backup.install_token import build_install_command, create_install_token
+
+        try:
+            row = create_install_token(backup_id, ttl_hours=ttl_hours)
+        except FileNotFoundError as exc:
+            from fastapi import HTTPException
+
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+        base = panel_base_url.rstrip("/")
+        restore_url = f"{base}/api/public/install-restore/{row['token']}"
+        expires = datetime.fromisoformat(str(row["expires_at"]))
+        return BackupInstallTokenResponse(
+            token=row["token"],
+            backup_id=row["backup_id"],
+            filename=row["filename"],
+            expires_at=expires,
+            restore_url=restore_url,
+            install_command=build_install_command(restore_url=restore_url, database=database),
+        )
+
+    def resolve_install_token_archive(
+        self,
+        token: str,
+        *,
+        consume: bool = False,
+        ip: str | None = None,
+        geo: dict | None = None,
+    ):
+        from app.backup.install_token import resolve_install_token
+
+        return resolve_install_token(token, consume=consume, ip=ip, geo=geo)
+
+    def list_install_tokens(self):
+        from datetime import datetime
+
+        from app.backup.install_token import list_install_tokens
+        from app.models.backup import BackupInstallTokenListItem, BackupInstallTokensResponse
+
+        def _dt(value):
+            if not value:
+                return None
+            try:
+                return datetime.fromisoformat(str(value))
+            except ValueError:
+                return None
+
+        items = []
+        for row in list_install_tokens(include_revoked=True):
+            items.append(
+                BackupInstallTokenListItem(
+                    token=row["token"],
+                    backup_id=row.get("backup_id") or "",
+                    filename=row.get("filename") or "",
+                    created_at=_dt(row.get("created_at")),
+                    expires_at=_dt(row.get("expires_at")),
+                    enabled=bool(row.get("enabled", True)),
+                    revoked=bool(row.get("revoked")),
+                    consumed=bool(row.get("consumed")),
+                    use_count=int(row.get("use_count") or 0),
+                    last_used_at=_dt(row.get("last_used_at")),
+                    last_used_ip=row.get("last_used_ip"),
+                    last_used_country=row.get("last_used_country"),
+                    last_used_country_code=row.get("last_used_country_code"),
+                    last_used_city=row.get("last_used_city"),
+                    last_used_isp=row.get("last_used_isp"),
+                    last_used_asn=row.get("last_used_asn"),
+                )
+            )
+        return BackupInstallTokensResponse(items=items)
+
+    def set_install_token_enabled(self, token: str, *, enabled: bool):
+        from fastapi import HTTPException
+
+        from app.backup.install_token import set_install_token_enabled
+
+        try:
+            return set_install_token_enabled(token, enabled=enabled)
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except PermissionError as exc:
+            raise HTTPException(status_code=410, detail=str(exc)) from exc
+
+    def revoke_install_token(self, token: str):
+        from fastapi import HTTPException
+
+        from app.backup.install_token import revoke_install_token
+
+        try:
+            return revoke_install_token(token)
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc

@@ -32,13 +32,16 @@ ENV PATH="/code/.venv/bin:$PATH"
 
 # curl: healthchecks · docker CLI: spawn FOREIGN tunnel containers via host socket
 # iproute2/iptables/ping: manage TAP iface + health when network_mode=host
+# postgresql-client / default-mysql-client: panel Backup now (pg_dump / mysqldump / psql)
 ARG TARGETARCH
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
+    default-mysql-client \
     iproute2 \
     iptables \
     iputils-ping \
+    postgresql-client \
     && DOCKER_ARCH="$TARGETARCH" \
     && if [ "$DOCKER_ARCH" = "amd64" ] || [ -z "$DOCKER_ARCH" ]; then DOCKER_ARCH=x86_64; fi \
     && if [ "$DOCKER_ARCH" = "arm64" ]; then DOCKER_ARCH=aarch64; fi \

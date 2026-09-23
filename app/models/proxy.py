@@ -48,6 +48,8 @@ class OpenVPNSettings(BaseModel):
     fingerprint: str = ""
     client_cert: str = ""
     client_key: str = ""
+    username: str = Field(default_factory=random_password, min_length=1)
+    password: str = Field(default_factory=random_password, min_length=1)
 
 
 class CredentialVpnSettings(BaseModel):

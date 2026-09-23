@@ -184,6 +184,13 @@ def _serialize_user_for_node(
             proxy.openvpn.serial = str(serial)
         if fingerprint is not None:
             proxy.openvpn.fingerprint = str(fingerprint)
+        if _has_proto_field(service.Openvpn, "username"):
+            username = openvpn_settings.get("username")
+            password = openvpn_settings.get("password")
+            if username:
+                proxy.openvpn.username = str(username)
+            if password:
+                proxy.openvpn.password = str(password)
     elif needs_openvpn_credentials and protocols_were_explicit:
         raise RuntimeError(
             "Installed node bridge cannot serialize OpenVPN credentials; "

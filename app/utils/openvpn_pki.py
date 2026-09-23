@@ -153,6 +153,12 @@ def cert_serial_hex(client_cert_pem: str) -> str:
     return format(cert.serial_number, "x")
 
 
+def cert_serial_decimal(client_cert_pem: str) -> str:
+    """OpenVPN management exposes tls_serial_0 as a decimal string."""
+    cert = x509.load_pem_x509_certificate(client_cert_pem.encode())
+    return str(cert.serial_number)
+
+
 def cert_fingerprint_sha256(client_cert_pem: str) -> str:
     cert = x509.load_pem_x509_certificate(client_cert_pem.encode())
     digest = cert.fingerprint(hashes.SHA256()).hex()

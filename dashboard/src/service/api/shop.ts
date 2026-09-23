@@ -279,9 +279,7 @@ export const approveShopOrder = (orderId: number) =>
 export const rejectShopOrder = (orderId: number, note?: string) =>
   fetcher<ShopOrder>(`/api/shop/orders/${orderId}/reject`, { method: 'POST', body: { note } })
 export const fetchShopOrderReceiptBlob = async (orderId: number) => {
-  const res = await fetch(`/api/shop/orders/${orderId}/receipt`, { credentials: 'include' })
-  if (!res.ok) throw new Error('receipt failed')
-  return res.blob()
+  return fetcher<Blob>(`/api/shop/orders/${orderId}/receipt`, { responseType: 'blob' })
 }
 export const getShopAccounting = (adminId?: number, settled?: boolean) => {
   const search = new URLSearchParams()

@@ -2376,6 +2376,84 @@ function UserModal({ isDialogOpen, onOpenChange, form, editingUser, editingUserI
                               </FormItem>
                             )}
                           />
+                          <div className="space-y-3 rounded-none border p-3">
+                            <div>
+                              <div className="text-sm font-medium">
+                                {t('userDialog.proxySettings.openvpnCredentialsTitle', {
+                                  defaultValue: 'OpenVPN username / password',
+                                })}
+                              </div>
+                              <p className="text-muted-foreground mt-1 text-xs">
+                                {t('userDialog.proxySettings.openvpnCredentialsDescription', {
+                                  defaultValue:
+                                    'Embedded in the .ovpn profile (auth-user-pass). Client certificates are still issued automatically.',
+                                })}
+                              </p>
+                            </div>
+                            <FormField
+                              control={form.control}
+                              name="proxy_settings.openvpn.username"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>{t('userDialog.proxySettings.openvpnUsername', { defaultValue: 'Username' })}</FormLabel>
+                                  <FormControl>
+                                    <Input
+                                      dir="ltr"
+                                      autoComplete="off"
+                                      {...field}
+                                      value={field.value ?? ''}
+                                      placeholder={t('userDialog.proxySettings.openvpnUsernamePlaceholder', { defaultValue: 'OpenVPN username' })}
+                                      onChange={event => {
+                                        field.onChange(event)
+                                        form.trigger('proxy_settings.openvpn.username')
+                                        handleFieldChange('proxy_settings.openvpn.username', event.target.value)
+                                      }}
+                                    />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                            <FormField
+                              control={form.control}
+                              name="proxy_settings.openvpn.password"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>{t('userDialog.proxySettings.openvpnPassword', { defaultValue: 'Password' })}</FormLabel>
+                                  <FormControl>
+                                    <div dir="ltr" className={`flex items-center gap-2 ${dir === 'rtl' ? 'flex-row-reverse' : 'flex-row'}`}>
+                                      <PasswordInput
+                                        autoComplete="new-password"
+                                        {...field}
+                                        value={field.value ?? ''}
+                                        placeholder={t('userDialog.proxySettings.openvpnPasswordPlaceholder', { defaultValue: 'OpenVPN password' })}
+                                        onChange={event => {
+                                          field.onChange(event)
+                                          form.trigger('proxy_settings.openvpn.password')
+                                          handleFieldChange('proxy_settings.openvpn.password', event.target.value)
+                                        }}
+                                      />
+                                      <Button
+                                        size="icon"
+                                        type="button"
+                                        variant="ghost"
+                                        onClick={() => {
+                                          const next = generatePassword()
+                                          field.onChange(next)
+                                          form.trigger('proxy_settings.openvpn.password')
+                                          handleFieldChange('proxy_settings.openvpn.password', next)
+                                        }}
+                                        title={t('userDialog.proxySettings.generateOpenvpnPassword', { defaultValue: 'Generate password' })}
+                                      >
+                                        <RefreshCcw className="h-3 w-3" />
+                                      </Button>
+                                    </div>
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                          </div>
                           <p className="text-muted-foreground mb-2 text-xs">
                             {t('userDialog.proxySettings.openvpnManaged', {
                               defaultValue:

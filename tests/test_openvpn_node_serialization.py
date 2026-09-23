@@ -19,7 +19,14 @@ from app.node.user import _serialize_user_for_node
 def test_openvpn_user_serialization_includes_serial_and_fingerprint():
     user = _serialize_user_for_node(
         42,
-        {"openvpn": {"serial": "ABC123", "fingerprint": "sha256:deadbeef"}},
+        {
+            "openvpn": {
+                "serial": "ABC123",
+                "fingerprint": "sha256:deadbeef",
+                "username": "ovpn-user",
+                "password": "ovpn-pass",
+            }
+        },
         ["ovpn-main"],
         frozenset((ProxyProtocol.openvpn,)),
         ip_limit=2,
@@ -29,6 +36,9 @@ def test_openvpn_user_serialization_includes_serial_and_fingerprint():
     assert user.inbounds == ["ovpn-main"]
     assert user.proxies.openvpn.serial == "ABC123"
     assert user.proxies.openvpn.fingerprint == "sha256:deadbeef"
+    if "username" in service.Openvpn.DESCRIPTOR.fields_by_name:
+        assert user.proxies.openvpn.username == "ovpn-user"
+        assert user.proxies.openvpn.password == "ovpn-pass"
 
 
 def test_openvpn_user_serialization_allows_empty_serial():

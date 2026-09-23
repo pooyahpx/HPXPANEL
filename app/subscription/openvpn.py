@@ -30,7 +30,12 @@ class OpenVPNConfiguration(BaseSubscription):
 
         if self._inbound is None:
             self._inbound = inbound
-            self._settings = {"client_cert": client_cert, "client_key": client_key}
+            self._settings = {
+                "client_cert": client_cert,
+                "client_key": client_key,
+                "username": str(settings.get("username") or "").strip(),
+                "password": str(settings.get("password") or "").strip(),
+            }
 
         remote = (host, inbound.port)
         if remote not in self._remotes:
@@ -44,6 +49,8 @@ class OpenVPNConfiguration(BaseSubscription):
         client_cert = self._settings["client_cert"]
         client_key = self._settings["client_key"]
         ca_cert = str(inbound.openvpn_ca_cert or "").strip()
+        username = self._settings.get("username") or ""
+        password = self._settings.get("password") or ""
 
         lines = [
             "client",
@@ -69,10 +76,18 @@ class OpenVPNConfiguration(BaseSubscription):
 
         blocks = [
             "\n".join(lines),
-            _pem_block("ca", ca_cert),
-            _pem_block("cert", client_cert),
-            _pem_block("key", client_key),
         ]
+        if username and password:
+            blocks.append(f"<auth-user-pass>\n{username}\n{password}\n</auth-user-pass>\n")
+        else:
+            blocks.append("auth-user-pass\n")
+        blocks.extend(
+            [
+                _pem_block("ca", ca_cert),
+                _pem_block("cert", client_cert),
+                _pem_block("key", client_key),
+            ]
+        )
         tls_crypt = str(inbound.openvpn_tls_crypt_key or "").strip()
         if tls_crypt:
             blocks.append(_pem_block("tls-crypt", tls_crypt))

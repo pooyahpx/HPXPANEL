@@ -72,7 +72,18 @@ export default function BackupSettings() {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const apiErrorMessage = (error: unknown, fallback: string): string => {
-    const e = error as { data?: { detail?: unknown }; message?: string; statusMessage?: string }
+    const e = error as {
+      data?: { detail?: unknown }
+      message?: string
+      statusMessage?: string
+      name?: string
+    }
+    if (e?.name === 'TimeoutError' || /timeout/i.test(String(e?.message || ''))) {
+      return t('settings.backup.restoreTimeout', {
+        defaultValue:
+          'Restore timed out. Panel DB connections were blocking the drop. On the server run: hpxpanel restore',
+      })
+    }
     const detail = e?.data?.detail
     if (typeof detail === 'string' && detail.trim()) return detail.trim()
     if (Array.isArray(detail) && detail.length > 0) {
@@ -271,6 +282,17 @@ export default function BackupSettings() {
               </Button>
               <input ref={fileInputRef} type="file" accept=".zip" className="hidden" onChange={e => e.target.files?.[0] && handleImport(e.target.files[0])} />
             </div>
+            {data?.status === 'running' && (
+              <Alert>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <AlertDescription>
+                  {t('settings.backup.restoreBackground', {
+                    defaultValue:
+                      'Restore running from the local zip on this server… refresh in about a minute. No remote panel is contacted.',
+                  })}
+                </AlertDescription>
+              </Alert>
+            )}
             {data?.last_error && (
               <Alert variant="destructive">
                 <AlertTriangle className="h-4 w-4" />

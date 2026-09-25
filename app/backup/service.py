@@ -9,6 +9,7 @@ import shutil
 import sqlite3
 import subprocess
 import tempfile
+import threading
 import zipfile
 from datetime import UTC, datetime
 from pathlib import Path
@@ -38,6 +39,8 @@ def get_state() -> dict:
 
 def _set_state(*, status: BackupStatus, error: str = "", success_at: datetime | None = None) -> None:
     _STATE["status"] = status
+    if status == BackupStatus.running:
+        _STATE["last_error"] = ""
     if error:
         _STATE["last_error"] = error
     if success_at is not None:
@@ -129,11 +132,70 @@ def _dump_sqlite(target: Path) -> Path:
     return output
 
 
-def _run_command(command: list[str], *, env: dict | None = None) -> None:
-    result = subprocess.run(command, capture_output=True, text=True, env=env, check=False)
+def _run_command(command: list[str], *, env: dict | None = None, timeout: int | None = None) -> None:
+    try:
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            env=env,
+            check=False,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired as exc:
+        label = " ".join(command[:2]) if command else "command"
+        raise RuntimeError(
+            f"{label} timed out after {timeout}s. "
+            "Other panel DB connections were likely blocking restore — run: hpxpanel restore"
+        ) from exc
     if result.returncode != 0:
         stderr = (result.stderr or result.stdout or "command failed").strip()
         raise RuntimeError(stderr[:2000])
+
+
+def _psql(dump_url: str, *extra: str, timeout: int = 300) -> None:
+    _run_command(["psql", dump_url, "-v", "ON_ERROR_STOP=1", *extra], timeout=timeout)
+
+
+def _prepare_postgres_for_restore(dump_url: str) -> None:
+    """Kick other sessions so DROP SCHEMA is not blocked forever by the live panel pool."""
+    # Same approach as hpxpanel-restore.sh: terminate peers, then drop. Retry a few
+    # times in case workers reconnect and grab locks again between the two steps.
+    last_error: Exception | None = None
+    for _ in range(3):
+        _psql(
+            dump_url,
+            "-c",
+            "SELECT pg_terminate_backend(pid) "
+            "FROM pg_stat_activity "
+            "WHERE datname = current_database() "
+            "  AND pid <> pg_backend_pid() "
+            "  AND backend_type = 'client backend';",
+            timeout=30,
+        )
+        try:
+            _psql(
+                dump_url,
+                "-c",
+                "SET lock_timeout = '15s'; "
+                "SET statement_timeout = '60s'; "
+                "DROP SCHEMA IF EXISTS public CASCADE; "
+                "CREATE SCHEMA public; "
+                "GRANT ALL ON SCHEMA public TO CURRENT_USER; "
+                "GRANT ALL ON SCHEMA public TO public;",
+                timeout=90,
+            )
+            return
+        except RuntimeError as exc:
+            last_error = exc
+            msg = str(exc).lower()
+            if "lock timeout" in msg or "canceling statement" in msg or "timed out" in msg:
+                continue
+            raise
+    raise RuntimeError(
+        "Could not reset the database schema — other panel connections keep locking it. "
+        "Cancel this dialog and run on the server: hpxpanel restore"
+    ) from last_error
 
 
 def _dump_postgresql(target: Path) -> Path:
@@ -380,6 +442,62 @@ def restore_backup(backup_id: str, *, dry_run: bool = False) -> list[str]:
         raise
 
 
+def start_restore(backup_id: str) -> tuple[list[str], bool]:
+    """Validate a local archive and start restore.
+
+    PostgreSQL restore terminates other DB sessions (same as ``hpxpanel restore``),
+    which would kill the HTTP request mid-flight (browser NetworkError). So PG
+    restore runs in a background thread after validation; the API returns immediately.
+
+    Returns ``(checks, background)`` — ``background=True`` means the caller should
+    tell the user to wait and refresh (no remote/old server is contacted; the zip
+    on this host is used).
+    """
+    if not backup_settings.allow_panel_restore:
+        raise RuntimeError(
+            "Panel restore is disabled. Set BACKUP_ALLOW_PANEL_RESTORE=true in .env, then run: hpxpanel restart -n"
+        )
+    if _STATE["status"] == BackupStatus.running:
+        raise RuntimeError("A backup or restore is already running. Wait for it to finish, or run: hpxpanel restore")
+
+    manifest, checks = validate_backup(backup_id)
+    engine = manifest.database_engine
+
+    if engine == "mysql":
+        raise ValueError(
+            "MySQL restore from the panel is not supported yet. On the server run: hpxpanel restore"
+        )
+
+    if engine == "sqlite":
+        checks = restore_backup(backup_id, dry_run=False)
+        return checks, False
+
+    if engine != "postgresql":
+        raise ValueError(f"Unsupported backup database engine: {engine}")
+
+    # Ensure the local zip exists before we return (no remote fetch).
+    _resolve_archive(backup_id)
+    _require_cli("psql")
+    _set_state(status=BackupStatus.running)
+    thread = threading.Thread(
+        target=_background_restore,
+        args=(backup_id,),
+        name=f"hpxpanel-restore-{backup_id}",
+        daemon=True,
+    )
+    thread.start()
+    checks.append("local archive queued for background restore (no remote server used)")
+    return checks, True
+
+
+def _background_restore(backup_id: str) -> None:
+    try:
+        # Skip start_restore / allow checks — already validated by the API request.
+        _restore_backup_inner(backup_id, dry_run=False)
+    except Exception as exc:
+        _set_state(status=BackupStatus.failed, error=f"Restore failed: {exc}")
+
+
 def _restore_backup_inner(backup_id: str, *, dry_run: bool = False) -> list[str]:
     manifest, checks = validate_backup(backup_id)
     if dry_run:
@@ -414,19 +532,9 @@ def _restore_backup_inner(backup_id: str, *, dry_run: bool = False) -> list[str]
                 with archive.open(sql_name) as src, temp_sql.open("wb") as dst:
                     shutil.copyfileobj(src, dst)
                 dump_url = _dump_database_url()
-                # Always reset public schema so restore works on a live panel DB
-                # (old dumps without --clean fail with "already exists" otherwise).
-                _run_command(
-                    [
-                        "psql",
-                        dump_url,
-                        "-v",
-                        "ON_ERROR_STOP=1",
-                        "-c",
-                        "DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public; GRANT ALL ON SCHEMA public TO CURRENT_USER; GRANT ALL ON SCHEMA public TO public;",
-                    ]
-                )
-                _run_command(["psql", dump_url, "-v", "ON_ERROR_STOP=1", "-f", str(temp_sql)])
+                # Terminate live panel connections first — otherwise DROP SCHEMA waits forever.
+                _prepare_postgres_for_restore(dump_url)
+                _psql(dump_url, "-f", str(temp_sql), timeout=300)
                 _set_state(status=BackupStatus.success, success_at=datetime.now(UTC))
                 return checks
 

@@ -122,11 +122,10 @@ async def import_panel_backup(
 async def restore_panel_backup(
     backup_id: str,
     dry_run: bool = Query(default=False),
-    db: AsyncSession = Depends(get_db),
     _: AdminDetails = Depends(_require_owner),
 ):
     try:
-        return await backup_operator.restore(db, backup_id, dry_run=dry_run)
+        return await backup_operator.restore(backup_id, dry_run=dry_run)
     except HTTPException:
         raise
     except Exception as exc:

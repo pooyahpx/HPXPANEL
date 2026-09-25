@@ -47,7 +47,11 @@ export const runBackup = () => fetcher<{ manifest: { id: string }; message: stri
 export const restoreBackup = (backupId: string, dryRun = false) =>
   fetcher<{ success: boolean; message: string; restart_required: boolean; dry_run?: boolean; checks?: string[] }>(
     `/api/backup/${backupId}/restore?dry_run=${dryRun ? 'true' : 'false'}`,
-    { method: 'POST' },
+    {
+      method: 'POST',
+      // Restore can take a few minutes; never hang the UI forever if the API stalls.
+      timeout: dryRun ? 60_000 : 360_000,
+    },
   )
 
 export const validateBackup = (backupId: string) => restoreBackup(backupId, true)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import io
 import json
 import os
@@ -12,7 +13,8 @@ from app.backup.service import (
     create_backup_async,
     get_state,
     list_backups,
-    restore_backup_async,
+    start_restore,
+    validate_backup_async,
 )
 from app.db.crud.settings import get_settings, modify_settings
 from app.models.backup import (
@@ -97,14 +99,31 @@ class BackupOperation(BaseOperation):
             message = f"{message} (encrypted on disk)"
         return BackupRunResponse(manifest=manifest, message=message)
 
-    async def restore(self, db: AsyncSession, backup_id: str, *, dry_run: bool = False) -> BackupRestoreResponse:
-        checks = await restore_backup_async(backup_id, dry_run=dry_run)
+    async def restore(self, backup_id: str, *, dry_run: bool = False) -> BackupRestoreResponse:
         if dry_run:
+            _, checks = await validate_backup_async(backup_id)
+            checks = [*checks, "dry-run only — no database writes"]
             return BackupRestoreResponse(
                 success=True,
-                message="Dry-run passed. Archive is intact and looks restorable.",
+                message="Dry-run passed. Local archive is intact (no remote server is contacted).",
                 restart_required=False,
                 dry_run=True,
+                checks=checks,
+            )
+
+        checks, background = await asyncio.to_thread(start_restore, backup_id)
+        if background:
+            return BackupRestoreResponse(
+                success=True,
+                message=(
+                    "Restore started from the local zip on this server "
+                    "(the old panel is not contacted). The UI may blink while the database "
+                    "is rewritten — wait about one minute, then refresh. "
+                    "If it fails, the error appears under Actions. "
+                    "Or run on the server: hpxpanel restore"
+                ),
+                restart_required=True,
+                dry_run=False,
                 checks=checks,
             )
         return BackupRestoreResponse(

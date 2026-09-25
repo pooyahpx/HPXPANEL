@@ -1168,6 +1168,7 @@
       "restoreFailed": "Restore failed",
       "restoreSuccess": "Database restored",
       "restoreInProgress": "Restoring database… this can take a minute. Keep this window open.",
+      "restoreTimeout": "Restore timed out. Panel DB connections were blocking the drop. On the server run: hpxpanel restore",
       "importFailed": "Import failed",
       "dryRun": "Validate backup",
       "dryRunSuccess": "Backup validation passed",

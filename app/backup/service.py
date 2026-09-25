@@ -129,11 +129,70 @@ def _dump_sqlite(target: Path) -> Path:
     return output
 
 
-def _run_command(command: list[str], *, env: dict | None = None) -> None:
-    result = subprocess.run(command, capture_output=True, text=True, env=env, check=False)
+def _run_command(command: list[str], *, env: dict | None = None, timeout: int | None = None) -> None:
+    try:
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            env=env,
+            check=False,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired as exc:
+        label = " ".join(command[:2]) if command else "command"
+        raise RuntimeError(
+            f"{label} timed out after {timeout}s. "
+            "Other panel DB connections were likely blocking restore — run: hpxpanel restore"
+        ) from exc
     if result.returncode != 0:
         stderr = (result.stderr or result.stdout or "command failed").strip()
         raise RuntimeError(stderr[:2000])
+
+
+def _psql(dump_url: str, *extra: str, timeout: int = 300) -> None:
+    _run_command(["psql", dump_url, "-v", "ON_ERROR_STOP=1", *extra], timeout=timeout)
+
+
+def _prepare_postgres_for_restore(dump_url: str) -> None:
+    """Kick other sessions so DROP SCHEMA is not blocked forever by the live panel pool."""
+    # Same approach as hpxpanel-restore.sh: terminate peers, then drop. Retry a few
+    # times in case workers reconnect and grab locks again between the two steps.
+    last_error: Exception | None = None
+    for _ in range(3):
+        _psql(
+            dump_url,
+            "-c",
+            "SELECT pg_terminate_backend(pid) "
+            "FROM pg_stat_activity "
+            "WHERE datname = current_database() "
+            "  AND pid <> pg_backend_pid() "
+            "  AND backend_type = 'client backend';",
+            timeout=30,
+        )
+        try:
+            _psql(
+                dump_url,
+                "-c",
+                "SET lock_timeout = '15s'; "
+                "SET statement_timeout = '60s'; "
+                "DROP SCHEMA IF EXISTS public CASCADE; "
+                "CREATE SCHEMA public; "
+                "GRANT ALL ON SCHEMA public TO CURRENT_USER; "
+                "GRANT ALL ON SCHEMA public TO public;",
+                timeout=90,
+            )
+            return
+        except RuntimeError as exc:
+            last_error = exc
+            msg = str(exc).lower()
+            if "lock timeout" in msg or "canceling statement" in msg or "timed out" in msg:
+                continue
+            raise
+    raise RuntimeError(
+        "Could not reset the database schema — other panel connections keep locking it. "
+        "Cancel this dialog and run on the server: hpxpanel restore"
+    ) from last_error
 
 
 def _dump_postgresql(target: Path) -> Path:
@@ -414,19 +473,9 @@ def _restore_backup_inner(backup_id: str, *, dry_run: bool = False) -> list[str]
                 with archive.open(sql_name) as src, temp_sql.open("wb") as dst:
                     shutil.copyfileobj(src, dst)
                 dump_url = _dump_database_url()
-                # Always reset public schema so restore works on a live panel DB
-                # (old dumps without --clean fail with "already exists" otherwise).
-                _run_command(
-                    [
-                        "psql",
-                        dump_url,
-                        "-v",
-                        "ON_ERROR_STOP=1",
-                        "-c",
-                        "DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public; GRANT ALL ON SCHEMA public TO CURRENT_USER; GRANT ALL ON SCHEMA public TO public;",
-                    ]
-                )
-                _run_command(["psql", dump_url, "-v", "ON_ERROR_STOP=1", "-f", str(temp_sql)])
+                # Terminate live panel connections first — otherwise DROP SCHEMA waits forever.
+                _prepare_postgres_for_restore(dump_url)
+                _psql(dump_url, "-f", str(temp_sql), timeout=300)
                 _set_state(status=BackupStatus.success, success_at=datetime.now(UTC))
                 return checks
 

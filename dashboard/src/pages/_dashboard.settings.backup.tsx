@@ -72,7 +72,18 @@ export default function BackupSettings() {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const apiErrorMessage = (error: unknown, fallback: string): string => {
-    const e = error as { data?: { detail?: unknown }; message?: string; statusMessage?: string }
+    const e = error as {
+      data?: { detail?: unknown }
+      message?: string
+      statusMessage?: string
+      name?: string
+    }
+    if (e?.name === 'TimeoutError' || /timeout/i.test(String(e?.message || ''))) {
+      return t('settings.backup.restoreTimeout', {
+        defaultValue:
+          'Restore timed out. Panel DB connections were blocking the drop. On the server run: hpxpanel restore',
+      })
+    }
     const detail = e?.data?.detail
     if (typeof detail === 'string' && detail.trim()) return detail.trim()
     if (Array.isArray(detail) && detail.length > 0) {

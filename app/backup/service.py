@@ -372,6 +372,15 @@ def validate_backup(backup_id: str) -> tuple[BackupManifest, list[str]]:
 
 
 def restore_backup(backup_id: str, *, dry_run: bool = False) -> list[str]:
+    try:
+        return _restore_backup_inner(backup_id, dry_run=dry_run)
+    except Exception as exc:
+        if not dry_run:
+            _set_state(status=BackupStatus.failed, error=f"Restore failed: {exc}")
+        raise
+
+
+def _restore_backup_inner(backup_id: str, *, dry_run: bool = False) -> list[str]:
     manifest, checks = validate_backup(backup_id)
     if dry_run:
         checks.append("dry-run only — no database writes")
@@ -379,7 +388,7 @@ def restore_backup(backup_id: str, *, dry_run: bool = False) -> list[str]:
 
     if not backup_settings.allow_panel_restore:
         raise RuntimeError(
-            "Panel restore is disabled. Set BACKUP_ALLOW_PANEL_RESTORE=true or use hpxpanel.sh restore on the server."
+            "Panel restore is disabled. Set BACKUP_ALLOW_PANEL_RESTORE=true in .env, then run: hpxpanel restart -n"
         )
 
     archive_path = _resolve_archive(backup_id)
@@ -395,6 +404,7 @@ def restore_backup(backup_id: str, *, dry_run: bool = False) -> list[str]:
                 target.parent.mkdir(parents=True, exist_ok=True)
                 with archive.open(db_name) as src, target.open("wb") as dst:
                     shutil.copyfileobj(src, dst)
+                _set_state(status=BackupStatus.success, success_at=datetime.now(UTC))
                 return checks
 
             if engine == "postgresql":
@@ -417,11 +427,12 @@ def restore_backup(backup_id: str, *, dry_run: bool = False) -> list[str]:
                     ]
                 )
                 _run_command(["psql", dump_url, "-v", "ON_ERROR_STOP=1", "-f", str(temp_sql)])
+                _set_state(status=BackupStatus.success, success_at=datetime.now(UTC))
                 return checks
 
             if engine == "mysql":
                 raise ValueError(
-                    "MySQL restore from the panel is not supported yet. Download the archive and restore with mysqldump on the server."
+                    "MySQL restore from the panel is not supported yet. Download the archive and restore with: hpxpanel restore"
                 )
 
     raise ValueError(f"Unsupported backup database engine: {engine}")

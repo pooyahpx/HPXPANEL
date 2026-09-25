@@ -1166,6 +1166,8 @@
       "runSuccess": "Backup completed",
       "runFailed": "Backup failed",
       "restoreFailed": "Restore failed",
+      "restoreSuccess": "Database restored",
+      "restoreInProgress": "Restoring database… this can take a minute. Keep this window open.",
       "importFailed": "Import failed",
       "dryRun": "Validate backup",
       "dryRunSuccess": "Backup validation passed",

@@ -1213,8 +1213,11 @@ find_container() {
         ;;
     postgresql)
         container_name=$($COMPOSE -f "$COMPOSE_FILE" -p "$APP_NAME" ps -q postgresql 2>/dev/null || true)
+        [ -z "$container_name" ] && container_name=$($COMPOSE -f "$COMPOSE_FILE" -p "$APP_NAME" ps -q timescaledb 2>/dev/null || true)
         [ -z "$container_name" ] && container_name=$($COMPOSE -f "$COMPOSE_FILE" -p "$APP_NAME" ps --format json postgresql 2>/dev/null | jq -r 'if type == "array" then .[] else . end | .Name' 2>/dev/null | head -n 1 || true)
+        [ -z "$container_name" ] && container_name=$($COMPOSE -f "$COMPOSE_FILE" -p "$APP_NAME" ps --format json timescaledb 2>/dev/null | jq -r 'if type == "array" then .[] else . end | .Name' 2>/dev/null | head -n 1 || true)
         [ -z "$container_name" ] && container_name=$(docker ps --filter "name=${APP_NAME}" --filter "name=postgresql" --format '{{.ID}}' 2>/dev/null | head -n 1 || true)
+        [ -z "$container_name" ] && container_name=$(docker ps --filter "name=${APP_NAME}" --filter "name=timescaledb" --format '{{.ID}}' 2>/dev/null | head -n 1 || true)
         [ -z "$container_name" ] && container_name="${APP_NAME}-postgresql-1"
         ;;
     timescaledb)

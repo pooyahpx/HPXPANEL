@@ -798,9 +798,16 @@ restore_command() {
             db_type="mysql"
             colorized_echo green "✓ Detected MySQL database"
         elif [[ "$SQLALCHEMY_DATABASE_URL" =~ ^postgresql[^:]*:// ]]; then
-            # Check if it's timescaledb - use set +e to prevent failure on file not found
+            # Prefer TimescaleDB when this host (or the dump) uses it. Panel UI zips
+            # have no docker-compose.yml, so also check the live compose file + dump.
             set +e
-            if grep -q "image: timescale/timescaledb" "$temp_restore_dir/docker-compose.yml" 2>/dev/null; then
+            local live_compose="${COMPOSE_FILE:-$APP_DIR/docker-compose.yml}"
+            if grep -q "image: timescale/timescaledb" "$temp_restore_dir/docker-compose.yml" 2>/dev/null \
+                || grep -q "image: timescale/timescaledb" "$live_compose" 2>/dev/null \
+                || grep -qiE 'CREATE[[:space:]]+EXTENSION[[:space:]]+(IF[[:space:]]+NOT[[:space:]]+EXISTS[[:space:]]+)?["'\'']?timescaledb' \
+                    "$temp_restore_dir/db_backup.sql" 2>/dev/null \
+                || grep -qiE 'CREATE[[:space:]]+EXTENSION[[:space:]]+(IF[[:space:]]+NOT[[:space:]]+EXISTS[[:space:]]+)?["'\'']?timescaledb' \
+                    "$temp_restore_dir/database.sql" 2>/dev/null; then
                 db_type="timescaledb"
                 colorized_echo green "✓ Detected TimescaleDB database"
             else
@@ -1126,15 +1133,24 @@ restore_command() {
                 else
                     colorized_echo red "One or more databases failed to restore. Check log: $log_file"
                 fi
-            elif [ "$db_type" = "timescaledb" ]; then
+            elif [ "$db_type" = "timescaledb" ] || grep -qiE 'CREATE[[:space:]]+EXTENSION[[:space:]]+(IF[[:space:]]+NOT[[:space:]]+EXISTS[[:space:]]+)?["'\'']?timescaledb' "$temp_restore_dir/db_backup.sql" 2>/dev/null; then
                 # TimescaleDB requires special restore procedure to handle version mismatches.
-                # A plain psql restore fails when the backup was taken with a different
-                # TimescaleDB version because DROP EXTENSION / CREATE EXTENSION cycles
-                # break when the shared library is already loaded with the new version.
-                # The fix: drop & recreate the database, then use the official
-                # timescaledb_pre_restore() / timescaledb_post_restore() wrapper.
-                # See: https://docs.timescale.com/self-hosted/latest/backup-and-restore/
-                colorized_echo blue "Using TimescaleDB-safe restore procedure..."
+                # Also used when db_type was mis-detected as postgresql but the dump has
+                # the timescaledb extension (common for Settings→Backup panel zips).
+                if [ "$db_type" != "timescaledb" ]; then
+                    colorized_echo yellow "Dump contains timescaledb — switching to TimescaleDB-safe restore."
+                    db_type="timescaledb"
+                    local ts_container
+                    ts_container=$(find_container timescaledb)
+                    if [ -n "$ts_container" ]; then
+                        local verified_ts
+                        verified_ts=$(verify_and_start_container "$ts_container" timescaledb)
+                        if [ -n "$verified_ts" ]; then
+                            container_name="$verified_ts"
+                        fi
+                    fi
+                fi
+                colorized_echo blue "Using TimescaleDB-safe restore procedure (container: $container_name)..."
 
                 # Use target installation's identity when available, falling back to backup values.
                 # This ensures cross-server restores work correctly when the local DB user/name
@@ -1217,6 +1233,11 @@ restore_command() {
             if [ "$restore_success" = false ]; then
                 colorized_echo red "Failed to restore $db_type database."
                 colorized_echo yellow "Check log file for details: $log_file"
+                if [ -f "$log_file" ]; then
+                    colorized_echo yellow "----- last log lines -----"
+                    tail -n 40 "$log_file" 2>/dev/null || true
+                    colorized_echo yellow "--------------------------"
+                fi
                 rm -rf "$temp_restore_dir"
                 exit 1
             fi

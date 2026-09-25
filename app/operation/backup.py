@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import io
 import json
+import os
 import zipfile
 
 from fastapi import UploadFile
@@ -120,15 +122,25 @@ class BackupOperation(BaseOperation):
         filename = upload.filename or "imported_backup.zip"
         if not filename.endswith(".zip"):
             raise ValueError("Only .zip backup archives are supported")
-        target = get_backup_dir() / filename
-        target.write_bytes(await upload.read())
-        if is_encrypted_archive(target):
-            payload = open_archive_bytes(target)
-            with zipfile.ZipFile(__import__("io").BytesIO(payload)) as archive:
-                manifest = BackupManifest.model_validate(json.loads(archive.read("manifest.json")))
-        else:
-            with zipfile.ZipFile(target) as archive:
-                manifest = BackupManifest.model_validate(json.loads(archive.read("manifest.json")))
+
+        raw = await upload.read()
+        # Always store as {manifest.id}.zip — restore / install-token look up by id.
+        peek = get_backup_dir() / f".import_{os.getpid()}.zip"
+        peek.write_bytes(raw)
+        try:
+            if is_encrypted_archive(peek):
+                payload = open_archive_bytes(peek)
+                with zipfile.ZipFile(io.BytesIO(payload)) as archive:
+                    manifest = BackupManifest.model_validate(json.loads(archive.read("manifest.json")))
+            else:
+                with zipfile.ZipFile(peek) as archive:
+                    manifest = BackupManifest.model_validate(json.loads(archive.read("manifest.json")))
+            target = get_backup_dir() / f"{manifest.id}.zip"
+            if peek.resolve() != target.resolve():
+                target.write_bytes(raw)
+        finally:
+            peek.unlink(missing_ok=True)
+
         return BackupRunResponse(
             manifest=manifest,
             message="Backup archive imported. You can restore it from the list.",

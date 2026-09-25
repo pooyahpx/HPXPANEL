@@ -139,7 +139,18 @@ def _run_command(command: list[str], *, env: dict | None = None) -> None:
 def _dump_postgresql(target: Path) -> Path:
     _require_cli("pg_dump")
     output = target / "database.sql"
-    command = ["pg_dump", "--no-owner", "--no-acl", "--format=plain", "--file", str(output), _dump_database_url()]
+    # --clean/--if-exists so panel restore can overwrite an existing DB.
+    command = [
+        "pg_dump",
+        "--no-owner",
+        "--no-acl",
+        "--clean",
+        "--if-exists",
+        "--format=plain",
+        "--file",
+        str(output),
+        _dump_database_url(),
+    ]
     _run_command(command)
     return output
 
@@ -392,7 +403,20 @@ def restore_backup(backup_id: str, *, dry_run: bool = False) -> list[str]:
                 temp_sql = Path(tmp) / f"restore_{backup_id}.sql"
                 with archive.open(sql_name) as src, temp_sql.open("wb") as dst:
                     shutil.copyfileobj(src, dst)
-                _run_command(["psql", _dump_database_url(), "-v", "ON_ERROR_STOP=1", "-f", str(temp_sql)])
+                dump_url = _dump_database_url()
+                # Always reset public schema so restore works on a live panel DB
+                # (old dumps without --clean fail with "already exists" otherwise).
+                _run_command(
+                    [
+                        "psql",
+                        dump_url,
+                        "-v",
+                        "ON_ERROR_STOP=1",
+                        "-c",
+                        "DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public; GRANT ALL ON SCHEMA public TO CURRENT_USER; GRANT ALL ON SCHEMA public TO public;",
+                    ]
+                )
+                _run_command(["psql", dump_url, "-v", "ON_ERROR_STOP=1", "-f", str(temp_sql)])
                 return checks
 
             if engine == "mysql":

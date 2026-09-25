@@ -315,18 +315,39 @@ restore_command() {
     fi
 
     local backup_dir="$APP_DIR/backup"
+    local panel_backup_dir="/var/lib/hpxpanel/backups"
     local restore_staging_root=""
     local temp_restore_dir=""
 
-    # Check if backup directory exists
-    if [ ! -d "$backup_dir" ]; then
-        colorized_echo red "Backup directory not found: $backup_dir"
+    # Panel Settings→Backup stores archives under BACKUP_DIRECTORY (default
+    # /var/lib/hpxpanel/backups). CLI full backups use $APP_DIR/backup. Search both.
+    if [ -f "$ENV_FILE" ]; then
+        local configured_backup_dir=""
+        configured_backup_dir=$(
+            grep -E '^[[:space:]]*BACKUP_DIRECTORY[[:space:]]*=' "$ENV_FILE" 2>/dev/null |
+                tail -n 1 |
+                sed -E 's/^[[:space:]]*BACKUP_DIRECTORY[[:space:]]*=[[:space:]]*//' |
+                sed -E 's/^["'"'"']//;s/["'"'"']$//' |
+                sed -E 's/[[:space:]]*$//'
+        )
+        if [ -n "$configured_backup_dir" ]; then
+            panel_backup_dir="$configured_backup_dir"
+        fi
+    fi
+
+    mkdir -p "$backup_dir" "$panel_backup_dir" 2>/dev/null || true
+    if [ ! -d "$backup_dir" ] && [ ! -d "$panel_backup_dir" ]; then
+        colorized_echo red "Could not create backup directories ($backup_dir or $panel_backup_dir)"
         exit 1
     fi
 
     # Restores can be large, so avoid /tmp by default and stage beside the
     # backup unless RESTORE_TMPDIR is explicitly set.
-    restore_staging_root="${RESTORE_TMPDIR:-$backup_dir}"
+    if [ -d "$backup_dir" ]; then
+        restore_staging_root="${RESTORE_TMPDIR:-$backup_dir}"
+    else
+        restore_staging_root="${RESTORE_TMPDIR:-$panel_backup_dir}"
+    fi
     if ! mkdir -p "$restore_staging_root"; then
         colorized_echo red "Failed to prepare restore staging directory: $restore_staging_root"
         exit 1
@@ -351,17 +372,28 @@ restore_command() {
         selected_file="$restore_file_arg"
         colorized_echo blue "Using backup file: $selected_file"
     else
-    # List available backup files (find all backup-related files in backup directory)
+    # List available backup files from CLI dir + panel Settings→Backup dir
     local backup_candidates=()
-    while IFS= read -r -d '' file; do
-        backup_candidates+=("$file")
-    done < <(find "$backup_dir" -maxdepth 1 \( -name "*backup*.gz" -o -name "*backup*.tar.gz" -o -name "*.tar.gz" -o -name "*backup*.zip" -o -name "*.zip" \) -type f -print0 2>/dev/null)
+    local search_dirs=("$backup_dir")
+    if [ "$panel_backup_dir" != "$backup_dir" ] && [ -d "$panel_backup_dir" ]; then
+        search_dirs+=("$panel_backup_dir")
+    fi
+    local search_dir=""
+    for search_dir in "${search_dirs[@]}"; do
+        [ -d "$search_dir" ] || continue
+        while IFS= read -r -d '' file; do
+            backup_candidates+=("$file")
+        done < <(find "$search_dir" -maxdepth 1 \( -name "*backup*.gz" -o -name "*backup*.tar.gz" -o -name "*.tar.gz" -o -name "*backup*.zip" -o -name "hpxpanel_*.zip" -o -name "*.zip" \) -type f -print0 2>/dev/null)
+    done
 
     if [ ${#backup_candidates[@]} -eq 0 ]; then
         # Fallback: try to find any archive files
-        while IFS= read -r -d '' file; do
-            backup_candidates+=("$file")
-        done < <(find "$backup_dir" -maxdepth 1 \( -name "*.gz" -o -name "*.zip" \) -type f -print0 2>/dev/null)
+        for search_dir in "${search_dirs[@]}"; do
+            [ -d "$search_dir" ] || continue
+            while IFS= read -r -d '' file; do
+                backup_candidates+=("$file")
+            done < <(find "$search_dir" -maxdepth 1 \( -name "*.gz" -o -name "*.zip" \) -type f -print0 2>/dev/null)
+        done
     fi
 
     local backup_files=()
@@ -369,7 +401,9 @@ restore_command() {
         local filename=$(basename "$file")
         if [[ "$filename" =~ \.part[0-9]{2}\.zip$ ]]; then
             local base_name="${filename%%.part*}"
-            if [ -f "$backup_dir/${base_name}.part00.zip" ]; then
+            local file_dir
+            file_dir=$(dirname "$file")
+            if [ -f "$file_dir/${base_name}.part00.zip" ]; then
                 [[ "$filename" =~ \.part00\.zip$ ]] || continue
             else
                 [[ "$filename" =~ \.part01\.zip$ ]] || continue
@@ -382,8 +416,11 @@ restore_command() {
     done
 
     if [ ${#backup_files[@]} -eq 0 ]; then
-        colorized_echo red "No backup files found in $backup_dir"
-        colorized_echo yellow "Looking for files with extensions: .gz, .zip, .tar.gz or containing 'backup'"
+        colorized_echo red "No backup files found in:"
+        for search_dir in "${search_dirs[@]}"; do
+            colorized_echo yellow "  - $search_dir"
+        done
+        colorized_echo yellow "Import a .zip in Settings→Backup, or copy one into those folders, or: hpxpanel restore --file /path/to/archive.zip --yes"
         exit 1
     fi
 
@@ -619,11 +656,37 @@ restore_command() {
     fi
     colorized_echo green "✓ Archive extracted successfully"
 
-    # Load environment variables from extracted .env
+    # Panel Settings→Backup zips only contain manifest.json + database.sql|sqlite
+    # (no .env / hpxpanel_data). Map them onto the CLI restore layout and use
+    # this server's .env — never contact any remote/old panel.
+    local panel_format=false
+    if [ -f "$temp_restore_dir/manifest.json" ] && {
+        [ -f "$temp_restore_dir/database.sql" ] || [ -f "$temp_restore_dir/database.sqlite3" ]
+    }; then
+        panel_format=true
+        colorized_echo blue "Detected panel Settings→Backup archive (local zip)."
+        if [ -f "$temp_restore_dir/database.sql" ] && [ ! -f "$temp_restore_dir/db_backup.sql" ]; then
+            cp "$temp_restore_dir/database.sql" "$temp_restore_dir/db_backup.sql"
+        fi
+        if [ -f "$temp_restore_dir/database.sqlite3" ] && [ ! -f "$temp_restore_dir/db_backup.sqlite" ]; then
+            cp "$temp_restore_dir/database.sqlite3" "$temp_restore_dir/db_backup.sqlite"
+        fi
+    fi
+
+    # Load environment variables from extracted .env (or this host for panel zips)
     colorized_echo blue "Loading configuration from backup..."
     local extracted_env="$temp_restore_dir/.env"
-    if [ ! -f "$extracted_env" ]; then
+    if [ "$panel_format" = true ]; then
+        extracted_env="$ENV_FILE"
+        if [ ! -f "$extracted_env" ]; then
+            colorized_echo red "Panel .env not found at $ENV_FILE (needed for panel-format restore)."
+            rm -rf "$temp_restore_dir"
+            exit 1
+        fi
+        colorized_echo blue "Using this server's .env (panel archive has no embedded .env)."
+    elif [ ! -f "$extracted_env" ]; then
         colorized_echo red "Environment file not found in backup."
+        colorized_echo yellow "If this is a Settings→Backup zip, update scripts (hpxpanel install-script) and retry."
         rm -rf "$temp_restore_dir"
         exit 1
     fi
@@ -1197,7 +1260,10 @@ restore_command() {
         colorized_echo yellow "No hpxpanel_data directory found in backup. Skipping data restore."
     fi
 
-    # Restore app directory files (full app backup support)
+    # Restore app directory files (full CLI backup support only)
+    if [ "$panel_format" = true ]; then
+        colorized_echo yellow "Panel archive: skipping app-directory file restore (database-only zip)."
+    else
     colorized_echo blue "Restoring app directory files..."
     if [ -d "$temp_restore_dir" ]; then
         if ! command -v rsync >/dev/null 2>&1; then
@@ -1210,12 +1276,14 @@ restore_command() {
             cp -r "$APP_DIR" "$APP_DIR.backup.$(date +%Y%m%d%H%M%S)" 2>>"$log_file" || true
         fi
         if ! rsync -av --exclude 'hpxpanel_data' --exclude 'db_backup.sql' --exclude 'db_backup.sqlite' --exclude "$sqlite_basename" \
+            --exclude 'manifest.json' --exclude 'database.sql' --exclude 'database.sqlite3' \
             "$temp_restore_dir/" "$APP_DIR/" >>"$log_file" 2>&1; then
             colorized_echo red "Failed to restore app directory files."
             echo "Failed to restore app directory files from $temp_restore_dir to $APP_DIR" >>"$log_file"
         else
             colorized_echo green "App directory files restored."
         fi
+    fi
     fi
 
     # Perform configuration adjustments (e.g. preserve credentials)

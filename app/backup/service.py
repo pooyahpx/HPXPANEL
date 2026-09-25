@@ -9,6 +9,7 @@ import shutil
 import sqlite3
 import subprocess
 import tempfile
+import threading
 import zipfile
 from datetime import UTC, datetime
 from pathlib import Path
@@ -38,6 +39,8 @@ def get_state() -> dict:
 
 def _set_state(*, status: BackupStatus, error: str = "", success_at: datetime | None = None) -> None:
     _STATE["status"] = status
+    if status == BackupStatus.running:
+        _STATE["last_error"] = ""
     if error:
         _STATE["last_error"] = error
     if success_at is not None:
@@ -437,6 +440,62 @@ def restore_backup(backup_id: str, *, dry_run: bool = False) -> list[str]:
         if not dry_run:
             _set_state(status=BackupStatus.failed, error=f"Restore failed: {exc}")
         raise
+
+
+def start_restore(backup_id: str) -> tuple[list[str], bool]:
+    """Validate a local archive and start restore.
+
+    PostgreSQL restore terminates other DB sessions (same as ``hpxpanel restore``),
+    which would kill the HTTP request mid-flight (browser NetworkError). So PG
+    restore runs in a background thread after validation; the API returns immediately.
+
+    Returns ``(checks, background)`` — ``background=True`` means the caller should
+    tell the user to wait and refresh (no remote/old server is contacted; the zip
+    on this host is used).
+    """
+    if not backup_settings.allow_panel_restore:
+        raise RuntimeError(
+            "Panel restore is disabled. Set BACKUP_ALLOW_PANEL_RESTORE=true in .env, then run: hpxpanel restart -n"
+        )
+    if _STATE["status"] == BackupStatus.running:
+        raise RuntimeError("A backup or restore is already running. Wait for it to finish, or run: hpxpanel restore")
+
+    manifest, checks = validate_backup(backup_id)
+    engine = manifest.database_engine
+
+    if engine == "mysql":
+        raise ValueError(
+            "MySQL restore from the panel is not supported yet. On the server run: hpxpanel restore"
+        )
+
+    if engine == "sqlite":
+        checks = restore_backup(backup_id, dry_run=False)
+        return checks, False
+
+    if engine != "postgresql":
+        raise ValueError(f"Unsupported backup database engine: {engine}")
+
+    # Ensure the local zip exists before we return (no remote fetch).
+    _resolve_archive(backup_id)
+    _require_cli("psql")
+    _set_state(status=BackupStatus.running)
+    thread = threading.Thread(
+        target=_background_restore,
+        args=(backup_id,),
+        name=f"hpxpanel-restore-{backup_id}",
+        daemon=True,
+    )
+    thread.start()
+    checks.append("local archive queued for background restore (no remote server used)")
+    return checks, True
+
+
+def _background_restore(backup_id: str) -> None:
+    try:
+        # Skip start_restore / allow checks — already validated by the API request.
+        _restore_backup_inner(backup_id, dry_run=False)
+    except Exception as exc:
+        _set_state(status=BackupStatus.failed, error=f"Restore failed: {exc}")
 
 
 def _restore_backup_inner(backup_id: str, *, dry_run: bool = False) -> list[str]:

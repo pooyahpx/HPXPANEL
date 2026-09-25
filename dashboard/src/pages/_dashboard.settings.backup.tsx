@@ -282,6 +282,17 @@ export default function BackupSettings() {
               </Button>
               <input ref={fileInputRef} type="file" accept=".zip" className="hidden" onChange={e => e.target.files?.[0] && handleImport(e.target.files[0])} />
             </div>
+            {data?.status === 'running' && (
+              <Alert>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <AlertDescription>
+                  {t('settings.backup.restoreBackground', {
+                    defaultValue:
+                      'Restore running from the local zip on this server… refresh in about a minute. No remote panel is contacted.',
+                  })}
+                </AlertDescription>
+              </Alert>
+            )}
             {data?.last_error && (
               <Alert variant="destructive">
                 <AlertTriangle className="h-4 w-4" />

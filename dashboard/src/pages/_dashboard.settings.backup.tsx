@@ -66,9 +66,30 @@ export default function BackupSettings() {
   const revokeInstallToken = useRevokeBackupInstallToken()
   const [config, setConfig] = useState<BackupConfig>(defaultConfig)
   const [restoreId, setRestoreId] = useState<string | null>(null)
+  const [restoreError, setRestoreError] = useState<string | null>(null)
   const [revokeToken, setRevokeToken] = useState<string | null>(null)
   const [installLink, setInstallLink] = useState<BackupInstallTokenResponse | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const apiErrorMessage = (error: unknown, fallback: string): string => {
+    const e = error as { data?: { detail?: unknown }; message?: string; statusMessage?: string }
+    const detail = e?.data?.detail
+    if (typeof detail === 'string' && detail.trim()) return detail.trim()
+    if (Array.isArray(detail) && detail.length > 0) {
+      const first = detail[0] as { msg?: string }
+      if (typeof first?.msg === 'string' && first.msg.trim()) return first.msg.trim()
+    }
+    if (detail && typeof detail === 'object') {
+      try {
+        return JSON.stringify(detail)
+      } catch {
+        /* ignore */
+      }
+    }
+    if (typeof e?.statusMessage === 'string' && e.statusMessage.trim()) return e.statusMessage.trim()
+    if (typeof e?.message === 'string' && e.message.trim() && e.message !== '[GET] ""') return e.message.trim()
+    return fallback
+  }
 
   useEffect(() => {
     if (data?.config) setConfig(data.config)
@@ -94,12 +115,18 @@ export default function BackupSettings() {
 
   const handleRestore = async () => {
     if (!restoreId) return
+    const id = restoreId
+    setRestoreError(null)
     try {
-      const result = await restoreBackup.mutateAsync(restoreId)
-      toast.success(result.message)
+      const result = await restoreBackup.mutateAsync(id)
+      toast.success(result.message || t('settings.backup.restoreSuccess', { defaultValue: 'Database restored' }))
       setRestoreId(null)
-    } catch (error: any) {
-      toast.error(error?.data?.detail || t('settings.backup.restoreFailed'))
+      await refetch()
+    } catch (error: unknown) {
+      const msg = apiErrorMessage(error, t('settings.backup.restoreFailed'))
+      setRestoreError(msg)
+      toast.error(msg, { duration: 15000 })
+      await refetch()
     }
   }
 
@@ -246,7 +273,8 @@ export default function BackupSettings() {
             </div>
             {data?.last_error && (
               <Alert variant="destructive">
-                <AlertDescription>{data.last_error}</AlertDescription>
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription className="break-words whitespace-pre-wrap">{data.last_error}</AlertDescription>
               </Alert>
             )}
             <Alert>
@@ -428,17 +456,50 @@ export default function BackupSettings() {
         </Card>
       )}
 
-      <AlertDialog open={Boolean(restoreId)} onOpenChange={open => !open && setRestoreId(null)}>
+      <AlertDialog
+        open={Boolean(restoreId)}
+        onOpenChange={open => {
+          // Keep dialog open while restore runs — AlertDialogAction used to close
+          // immediately, so failures looked like "nothing happened".
+          if (!open && restoreBackup.isPending) return
+          if (!open) {
+            setRestoreId(null)
+            setRestoreError(null)
+          }
+        }}
+      >
         <AlertDialogContent dir={dir}>
           <AlertDialogHeader>
             <AlertDialogTitle>{t('settings.backup.restoreTitle')}</AlertDialogTitle>
             <AlertDialogDescription>{t('settings.backup.restorePrompt')}</AlertDialogDescription>
           </AlertDialogHeader>
+          {restoreBackup.isPending && (
+            <Alert>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <AlertDescription>
+                {t('settings.backup.restoreInProgress', {
+                  defaultValue: 'Restoring database… this can take a minute. Keep this window open.',
+                })}
+              </AlertDescription>
+            </Alert>
+          )}
+          {restoreError && (
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription className="break-words whitespace-pre-wrap">{restoreError}</AlertDescription>
+            </Alert>
+          )}
           <AlertDialogFooter>
-            <AlertDialogCancel>{t('cancel')}</AlertDialogCancel>
-            <AlertDialogAction className={cn('bg-destructive text-destructive-foreground')} onClick={handleRestore} disabled={restoreBackup.isPending}>
+            <AlertDialogCancel disabled={restoreBackup.isPending}>{t('cancel')}</AlertDialogCancel>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={restoreBackup.isPending}
+              onClick={() => void handleRestore()}
+            >
+              {restoreBackup.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               {t('settings.backup.restoreConfirm')}
-            </AlertDialogAction>
+            </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

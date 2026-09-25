@@ -125,7 +125,13 @@ async def restore_panel_backup(
     db: AsyncSession = Depends(get_db),
     _: AdminDetails = Depends(_require_owner),
 ):
-    return await backup_operator.restore(db, backup_id, dry_run=dry_run)
+    try:
+        return await backup_operator.restore(db, backup_id, dry_run=dry_run)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        # Surface the real reason to the UI (unhandled RuntimeError becomes a blank 500).
+        raise HTTPException(status_code=400, detail=str(exc)[:2000] or "Restore failed") from exc
 
 
 @public_router.get("/install-restore/{token}")

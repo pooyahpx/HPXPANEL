@@ -105,6 +105,62 @@ After install, register the node in the panel with the same **Address**, **Node 
 | `/var/lib/hpx-node` | Certs + generated configs |
 | `hpx-node status` / `logs` / `update` | Manage the node |
 
+## Common `hpxpanel` commands
+
+| Command | Purpose |
+| --- | --- |
+| `hpxpanel status` | Container status |
+| `hpxpanel restart -n` | Restart without pulling |
+| `hpxpanel update` | Update image + scripts |
+| `hpxpanel install-script` | Refresh CLI scripts from git only |
+| `hpxpanel edit-env` / edit `/opt/hpxpanel/.env` | Configuration |
+| `hpxpanel ssl --domain panel.example.com` | Let's Encrypt certificate |
+| `hpxpanel backup` | Full CLI backup (includes `.env`) |
+| `hpxpanel restore` | Restore from zip (CLI or Settings→Backup archives) |
+| `hpxpanel logs` | Service logs |
+| `hpxpanel cli …` | In-container app CLI |
+
+## Public URL and Pulse / Abroad
+
+The panel container often listens on `UVICORN_PORT=8000`. If you expose it on **443** (nginx/caddy), set in `.env` **without** `:8000`:
+
+```bash
+PANEL_PUBLIC_URL=https://panel.example.com
+```
+
+Newer builds prefer the browser URL for join commands and strip internal `:8000` from public HTTPS URLs. After changing `.env`:
+
+```bash
+hpxpanel restart -n
+```
+
+Then regenerate **Tokens** in **HPX Pulse**.
+
+Test from the Abroad VPS:
+
+```bash
+curl -I --connect-timeout 10 https://panel.example.com/
+```
+
+## Backup and restore
+
+### Dashboard one-click
+
+1. Set `BACKUP_ALLOW_PANEL_RESTORE=true` in `/opt/hpxpanel/.env`
+2. `hpxpanel restart -n`
+3. **Settings → Backup** → Import or Backup now → Restore
+
+The panel restores the **local** zip (it never contacts an old server), starts TimescaleDB/Postgres via Docker when needed, and uses the TimescaleDB-safe path — no manual SSH for `docker compose up` / `hpxpanel restore`.
+
+### CLI
+
+```bash
+hpxpanel install-script
+hpxpanel restore
+# or:
+hpxpanel restore --file /var/lib/hpxpanel/backups/hpxpanel_YYYYMMDD_HHMMSS.zip --yes
+```
+
 ## Next
 
 - [Install from source](/en/source) — develop against this repository

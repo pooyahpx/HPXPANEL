@@ -117,10 +117,9 @@ class BackupOperation(BaseOperation):
                 success=True,
                 message=(
                     "Restore started from the local zip on this server "
-                    "(the old panel is not contacted). The UI may blink while the database "
-                    "is rewritten — wait about one minute, then refresh. "
-                    "If it fails, the error appears under Actions. "
-                    "Or run on the server: hpxpanel restore"
+                    "(the old panel is not contacted). The panel will bring TimescaleDB/Postgres "
+                    "up via Docker and restore in the background — wait about one minute, then refresh. "
+                    "If it fails, the error appears under Actions."
                 ),
                 restart_required=True,
                 dry_run=False,

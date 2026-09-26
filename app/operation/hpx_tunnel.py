@@ -150,12 +150,7 @@ class HpxTunnelOperation(BaseOperation):
         return encrypt_secret(password, secret)
 
     async def _panel_url(self, request_base: str | None = None) -> str | None:
-        resolved = await resolve_panel_base_url()
-        if resolved:
-            return resolved
-        if request_base:
-            return request_base.rstrip("/")
-        return None
+        return await resolve_panel_base_url(prefer=request_base)
 
     async def _issue_join_token(
         self, db: AsyncSession, db_tunnel: HpxTunnel, *, panel_url: str | None

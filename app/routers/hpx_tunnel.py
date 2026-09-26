@@ -29,6 +29,7 @@ from app.operation import OperatorType
 from app.operation.hpx_tunnel import HpxTunnelOperation
 from app.routers.dependencies import get_hpx_tunnel_list_query
 from app.utils import responses
+from app.utils.helpers import public_base_url_from_request
 
 from .authentication import require_permission
 
@@ -42,7 +43,7 @@ hpx_tunnel_operator = HpxTunnelOperation(operator_type=OperatorType.API)
 
 
 def _request_base_url(request: Request) -> str:
-    return str(request.base_url).rstrip("/")
+    return public_base_url_from_request(request)
 
 
 @router.post(

@@ -472,8 +472,10 @@ Copilot context زنده پنل را می‌خواند و می‌تواند لی
 | `hpxnode: command not found` | `hpxpanel update` |
 | **Update Node** → not reachable / API Port | نود هنوز &lt; **0.6.2** یا API Port بسته است. روی **سرور نود**: `sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXNODE/raw/v0.6.2/scripts/install.sh)" @ update -y` — فایروال API Port — Reconnect. اختیاری در `.env` پنل: `NODE_SSH_PASSWORD` / `NODE_SSH_PRIVATE_KEY` |
 | OpenVPN `Authentication Failed` | پروفایل را دوباره دانلود کن؛ احراز هویت با **certificate** است نه یوزر/پسورد |
-| Pulse از ایران به پنل نمی‌رسد | `PANEL_PUBLIC_URL=https://دامنه` در `.env`، پنل روی **443** |
+| Pulse از ایران به پنل نمی‌رسد | `PANEL_PUBLIC_URL=https://دامنه` **بدون `:8000`**، پنل روی **443**، سپس Tokens را دوباره بگیر |
+| Abroad به `:8000` وصل نمی‌شود | همان؛ دستور Join نباید `:8000` داشته باشد — `hpxpanel update` + Tokens |
 | پورت ۸۰۰۰ اشغال | پورت دیگر در installer یا `UVICORN_PORT` در `.env` |
+| ریستور از Settings | `BACKUP_ALLOW_PANEL_RESTORE=true` + restart؛ یک‌کلیک TimescaleDB را خودش بالا می‌آورد |
 | rate limit Groq | مدل `openai/gpt-oss-20b` یا صبر کن |
 
 ---

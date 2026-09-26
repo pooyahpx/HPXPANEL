@@ -783,13 +783,20 @@ panel_public_base_url() {
     local port
     port=$(get_configured_uvicorn_port)
 
-    if [ "$scheme" = "https" ] && [ "$port" = "443" ]; then
-        printf '%s://%s' "$scheme" "$host"
-    elif [ "$scheme" = "http" ] && [ "$port" = "80" ]; then
-        printf '%s://%s' "$scheme" "$host"
-    else
-        printf '%s://%s:%s' "$scheme" "$host" "$port"
+    # Public HTTPS is almost always reached on 443 (direct or via nginx).
+    # UVICORN_PORT=8000 is the container listen port — do not publish it in
+    # PANEL_PUBLIC_URL or Pulse/Abroad join commands break with "port 8000".
+    if [ "$scheme" = "https" ]; then
+        if [ "$port" = "443" ] || [ "$port" = "8000" ]; then
+            printf '%s://%s' "$scheme" "$host"
+            return 0
+        fi
     fi
+    if [ "$scheme" = "http" ] && [ "$port" = "80" ]; then
+        printf '%s://%s' "$scheme" "$host"
+        return 0
+    fi
+    printf '%s://%s:%s' "$scheme" "$host" "$port"
 }
 
 get_cert_common_name() {

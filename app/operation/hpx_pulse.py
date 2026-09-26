@@ -156,12 +156,7 @@ def _desired_status(db_pulse: HpxPulse) -> str:
 
 class HpxPulseOperation(BaseOperation):
     async def _panel_url(self, request_base: str | None = None) -> str | None:
-        resolved = await resolve_panel_base_url()
-        if resolved:
-            return resolved
-        if request_base:
-            return request_base.rstrip("/")
-        return None
+        return await resolve_panel_base_url(prefer=request_base)
 
     async def _secret_key(self, db: AsyncSession) -> str:
         return await get_jwt_secret_key(db)

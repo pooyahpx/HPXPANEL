@@ -5,6 +5,7 @@ import hashlib
 import io
 import json
 import os
+import re
 import shutil
 import sqlite3
 import subprocess
@@ -196,6 +197,186 @@ def _prepare_postgres_for_restore(dump_url: str) -> None:
         "Could not reset the database schema — other panel connections keep locking it. "
         "Cancel this dialog and run on the server: hpxpanel restore"
     ) from last_error
+
+
+def _pg_credentials() -> tuple[str, str, str]:
+    parsed = urlparse(_sync_database_url())
+    user = unquote(parsed.username or "hpxpanel")
+    password = unquote(parsed.password or "")
+    db_name = unquote((parsed.path or "/hpxpanel").lstrip("/") or "hpxpanel")
+    return user, password, db_name
+
+
+def _find_pg_docker_container() -> tuple[str, bool] | None:
+    """Return (container, is_timescaledb) via host docker.sock, or None."""
+    if not shutil.which("docker"):
+        return None
+    for label, is_ts in (("timescaledb", True), ("postgresql", False)):
+        result = subprocess.run(
+            ["docker", "ps", "-q", "--filter", f"name={label}"],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=30,
+        )
+        cid = (result.stdout or "").strip().splitlines()
+        if cid:
+            return cid[0].strip(), is_ts
+    # Also try compose-style names that are stopped — start later.
+    for label, is_ts in (("timescaledb", True), ("postgresql", False)):
+        result = subprocess.run(
+            ["docker", "ps", "-aq", "--filter", f"name={label}"],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=30,
+        )
+        cid = (result.stdout or "").strip().splitlines()
+        if cid:
+            return cid[0].strip(), is_ts
+    return None
+
+
+def _docker_psql(
+    container: str,
+    *,
+    user: str,
+    password: str,
+    database: str,
+    sql: str | None = None,
+    sql_file: Path | None = None,
+    timeout: int = 300,
+) -> None:
+    env = {**os.environ, "PGPASSWORD": password}
+    base = ["docker", "exec", "-i", "-e", "PGPASSWORD", container, "psql", "-v", "ON_ERROR_STOP=1", "-U", user, "-d", database]
+    if sql is not None:
+        _run_command([*base, "-c", sql], env=env, timeout=timeout)
+        return
+    if sql_file is None:
+        raise ValueError("sql or sql_file required")
+    with sql_file.open("rb") as handle:
+        result = subprocess.run(
+            base,
+            stdin=handle,
+            capture_output=True,
+            text=True,
+            env=env,
+            check=False,
+            timeout=timeout,
+        )
+    if result.returncode != 0:
+        stderr = (result.stderr or result.stdout or "psql failed").strip()
+        raise RuntimeError(stderr[:2000])
+
+
+def _filter_timescaledb_extension_sql(source: Path, dest: Path) -> None:
+    pattern = re.compile(
+        r"^\s*(DROP|CREATE)\s+EXTENSION\s+(IF\s+(EXISTS|NOT\s+EXISTS)\s+)?['\"]?timescaledb\b",
+        re.IGNORECASE,
+    )
+    with source.open("r", encoding="utf-8", errors="ignore") as src, dest.open("w", encoding="utf-8") as out:
+        for line in src:
+            if not pattern.search(line):
+                out.write(line)
+
+
+def _dump_looks_like_timescaledb(sql_path: Path) -> bool:
+    sample = sql_path.read_text(encoding="utf-8", errors="ignore")[:200_000]
+    return bool(re.search(r"CREATE\s+EXTENSION.*(IF\s+NOT\s+EXISTS\s+)?['\"]?timescaledb", sample, re.IGNORECASE))
+
+
+def _restore_postgresql_via_docker(sql_path: Path) -> bool:
+    """CLI-equivalent restore through docker.sock (TimescaleDB-safe when needed).
+
+    Returns False when docker/container is unavailable so the caller can fall back.
+    """
+    found = _find_pg_docker_container()
+    if found is None:
+        return False
+    container, is_ts = found
+    user, password, db_name = _pg_credentials()
+    if not password:
+        raise RuntimeError("Database password missing from SQLALCHEMY_DATABASE_URL")
+
+    # Ensure DB container is running (same as: docker compose up -d timescaledb).
+    subprocess.run(["docker", "start", container], capture_output=True, text=True, check=False, timeout=120)
+    use_ts = is_ts or _dump_looks_like_timescaledb(sql_path)
+    db_sql = db_name.replace("'", "''")
+    db_ident = db_name.replace('"', '""')
+    owner_ident = user.replace('"', '""')
+
+    _docker_psql(
+        container,
+        user=user,
+        password=password,
+        database="postgres",
+        sql=(
+            f"SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
+            f"WHERE datname = '{db_sql}' AND pid <> pg_backend_pid();"
+        ),
+        timeout=60,
+    )
+
+    if use_ts:
+        _docker_psql(
+            container,
+            user=user,
+            password=password,
+            database="postgres",
+            sql=f'DROP DATABASE IF EXISTS "{db_ident}";',
+            timeout=60,
+        )
+        _docker_psql(
+            container,
+            user=user,
+            password=password,
+            database="postgres",
+            sql=f'CREATE DATABASE "{db_ident}" OWNER "{owner_ident}";',
+            timeout=60,
+        )
+        _docker_psql(
+            container,
+            user=user,
+            password=password,
+            database=db_name,
+            sql="CREATE EXTENSION IF NOT EXISTS timescaledb;",
+            timeout=60,
+        )
+        _docker_psql(
+            container,
+            user=user,
+            password=password,
+            database=db_name,
+            sql="SELECT timescaledb_pre_restore();",
+            timeout=60,
+        )
+        filtered = sql_path.with_suffix(".filtered.sql")
+        _filter_timescaledb_extension_sql(sql_path, filtered)
+        _docker_psql(container, user=user, password=password, database=db_name, sql_file=filtered, timeout=600)
+        _docker_psql(
+            container,
+            user=user,
+            password=password,
+            database=db_name,
+            sql="SELECT timescaledb_post_restore();",
+            timeout=120,
+        )
+    else:
+        _docker_psql(
+            container,
+            user=user,
+            password=password,
+            database=db_name,
+            sql=(
+                "DROP SCHEMA IF EXISTS public CASCADE; "
+                "CREATE SCHEMA public; "
+                "GRANT ALL ON SCHEMA public TO CURRENT_USER; "
+                "GRANT ALL ON SCHEMA public TO public;"
+            ),
+            timeout=90,
+        )
+        _docker_psql(container, user=user, password=password, database=db_name, sql_file=sql_path, timeout=600)
+    return True
 
 
 def _dump_postgresql(target: Path) -> Path:
@@ -526,16 +707,34 @@ def _restore_backup_inner(backup_id: str, *, dry_run: bool = False) -> list[str]
                 return checks
 
             if engine == "postgresql":
-                _require_cli("psql")
                 sql_name = manifest.database_file
                 temp_sql = Path(tmp) / f"restore_{backup_id}.sql"
                 with archive.open(sql_name) as src, temp_sql.open("wb") as dst:
                     shutil.copyfileobj(src, dst)
+                # Prefer docker→timescaledb (same as `hpxpanel restore`) so one-click
+                # restore does not require SSH / install-script / compose up.
+                try:
+                    if _restore_postgresql_via_docker(temp_sql):
+                        _set_state(status=BackupStatus.success, success_at=datetime.now(UTC))
+                        checks.append("restored via docker timescaledb/postgresql container")
+                        return checks
+                except Exception as docker_exc:
+                    # Fall back to in-container psql; surface docker error if that also fails.
+                    docker_error = str(docker_exc)
+                else:
+                    docker_error = ""
+                _require_cli("psql")
                 dump_url = _dump_database_url()
-                # Terminate live panel connections first — otherwise DROP SCHEMA waits forever.
-                _prepare_postgres_for_restore(dump_url)
-                _psql(dump_url, "-f", str(temp_sql), timeout=300)
+                try:
+                    _prepare_postgres_for_restore(dump_url)
+                    _psql(dump_url, "-f", str(temp_sql), timeout=300)
+                except Exception as psql_exc:
+                    detail = str(psql_exc)
+                    if docker_error:
+                        detail = f"{detail} (docker restore also failed: {docker_error[:500]})"
+                    raise RuntimeError(detail) from psql_exc
                 _set_state(status=BackupStatus.success, success_at=datetime.now(UTC))
+                checks.append("restored via local psql")
                 return checks
 
             if engine == "mysql":

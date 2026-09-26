@@ -541,8 +541,10 @@ Other providers: `openai`, `openrouter`, `ollama` — see comments in `.env.exam
 | `hpxnode: command not found` | `hpxpanel update` |
 | **Update Node** → “not reachable” / API Port | Node still &lt; **0.6.2**, or API Port closed. On the **node host**: `sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXNODE/raw/v0.6.2/scripts/install.sh)" @ update -y` — open API Port — Reconnect. Optional panel `.env`: `NODE_SSH_PASSWORD` / `NODE_SSH_PRIVATE_KEY` |
 | OpenVPN `Authentication Failed` | Re-download `.ovpn` from the panel; node uses **client certificates**, not username/password. Run `hpxpanel update` on panel + node |
-| Pulse agent unreachable from Iran | Set `PANEL_PUBLIC_URL=https://your-domain` in `.env`, expose panel on **443**, `sudo hpx-pulse-agent set-panel-url …` |
+| Pulse agent unreachable from Iran | Set `PANEL_PUBLIC_URL=https://your-domain` (**no `:8000`**), expose panel on **443**, regenerate Pulse Tokens |
+| Abroad fails on `:8000` | Same — join URL must be public HTTPS without internal port; `hpxpanel update` + Tokens |
 | Port `8000` in use | Installer prompts for another port, or set `UVICORN_PORT` in `.env` |
+| Settings → Restore | `BACKUP_ALLOW_PANEL_RESTORE=true` + restart; one-click starts TimescaleDB via Docker |
 | Groq rate limit in Copilot | Switch to `openai/gpt-oss-20b` or wait; free tier has limits |
 
 ---

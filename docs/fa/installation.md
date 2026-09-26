@@ -94,6 +94,62 @@ sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXNODE/raw/main/scripts/
 | `/var/lib/hpx-node` | گواهی و کانفیگ |
 | `hpx-node status` / `logs` / `update` | مدیریت |
 
+## دستورات پرکاربرد `hpxpanel`
+
+| دستور | کار |
+| --- | --- |
+| `hpxpanel status` | وضعیت کانتینرها |
+| `hpxpanel restart -n` | ریستارت بدون pull |
+| `hpxpanel update` | آپدیت تصویر/اسکریپت |
+| `hpxpanel install-script` | فقط اسکریپت‌های CLI را از گیت تازه کن |
+| `hpxpanel edit-env` / `nano /opt/hpxpanel/.env` | ویرایش تنظیمات |
+| `hpxpanel ssl --domain panel.example.com` | گواهی Let's Encrypt |
+| `hpxpanel backup` | بکاپ کامل CLI (شامل `.env`) |
+| `hpxpanel restore` | ریستور از zip (CLI یا Settings→Backup) |
+| `hpxpanel logs` | لاگ سرویس‌ها |
+| `hpxpanel cli …` | دستورات اپ داخل کانتینر |
+
+## پورت عمومی و Pulse / Abroad
+
+پورت داخلی پنل معمولاً `UVICORN_PORT=8000` است. اگر با nginx روی **443** باز کرده‌اید، در `.env` این را بگذارید (بدون `:8000`):
+
+```bash
+PANEL_PUBLIC_URL=https://panel.example.com
+```
+
+از نسخهٔ جدید، دستورات Join در داشبورد URL واقعی مرورگر را ترجیح می‌دهند و `:8000` را از HTTPS عمومی حذف می‌کنند. بعد از تغییر `.env`:
+
+```bash
+hpxpanel restart -n
+```
+
+سپس در **HPX Pulse** دوباره **Tokens** بگیرید.
+
+تست از سرور Abroad:
+
+```bash
+curl -I --connect-timeout 10 https://panel.example.com/
+```
+
+## بکاپ و ریستور
+
+### از داشبورد (یک‌کلیک)
+
+1. در `/opt/hpxpanel/.env`: `BACKUP_ALLOW_PANEL_RESTORE=true`
+2. `hpxpanel restart -n`
+3. **Settings → Backup** → Import یا Backup now → آیکون Restore
+
+پنل zip را **محلی** ریستور می‌کند (به سرور قبلی وصل نمی‌شود)، در صورت نیاز کانتینر TimescaleDB را بالا می‌آورد و مسیر TimescaleDB-safe را اجرا می‌کند. نیازی به SSH دستی برای `docker compose up` / `hpxpanel restore` نیست.
+
+### از CLI
+
+```bash
+hpxpanel install-script   # اگر اسکریپت قدیمی است
+hpxpanel restore          # لیست zipهای /var/lib/hpxpanel/backups و /opt/hpxpanel/backup
+# یا:
+hpxpanel restore --file /var/lib/hpxpanel/backups/hpxpanel_YYYYMMDD_HHMMSS.zip --yes
+```
+
 ## بعدی
 
 - [نصب از سورس](/fa/source)

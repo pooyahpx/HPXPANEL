@@ -22,6 +22,7 @@ from app.operation.hpx_pulse import HpxPulseOperation
 from app.rate_limit import rate_limiter
 from app.services.hpx_pulse import engine_mirror
 from app.utils import responses
+from app.utils.helpers import public_base_url_from_request
 from config import rate_limit_settings
 
 from .authentication import require_permission
@@ -36,7 +37,7 @@ pulse_operator = HpxPulseOperation(operator_type=OperatorType.API)
 
 
 def _request_base_url(request: Request) -> str:
-    return str(request.base_url).rstrip("/")
+    return public_base_url_from_request(request)
 
 
 def _agent_side(x_side: str | None = Header(default=None, alias="X-HPX-Pulse-Side")) -> str:

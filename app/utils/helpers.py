@@ -189,6 +189,53 @@ def url_origin(url: str | None) -> str | None:
     return None
 
 
+def normalize_public_base_url(url: str | None) -> str | None:
+    """Return scheme://host with default ports stripped (:443 / :80).
+
+    Also drops ``:8000`` on https — that is the panel's internal UVICORN_PORT and
+    is almost never the public address when nginx/caddy terminates TLS on 443.
+    """
+    origin = url_origin(url)
+    if not origin:
+        return None
+    parsed = urlparse(origin)
+    if not parsed.scheme or not parsed.hostname:
+        return origin
+    host = parsed.hostname
+    port = parsed.port
+    scheme = parsed.scheme.lower()
+    if port is None:
+        return f"{scheme}://{host}"
+    if (scheme == "https" and port in {443, 8000}) or (scheme == "http" and port == 80):
+        return f"{scheme}://{host}"
+    return f"{scheme}://{host}:{port}"
+
+
+def public_base_url_from_request(request) -> str:
+    """Best-effort public base URL from an inbound HTTP request (proxy-aware)."""
+    headers = getattr(request, "headers", {}) or {}
+    proto = (headers.get("x-forwarded-proto") or getattr(getattr(request, "url", None), "scheme", None) or "https")
+    proto = str(proto).split(",")[0].strip() or "https"
+    host = (
+        headers.get("x-forwarded-host")
+        or headers.get("host")
+        or getattr(getattr(request, "url", None), "netloc", None)
+        or ""
+    )
+    host = str(host).split(",")[0].strip()
+    fwd_port = str(headers.get("x-forwarded-port") or "").split(",")[0].strip()
+    if (
+        host
+        and fwd_port
+        and ":" not in host.split("]")[-1]
+        and not ((proto == "https" and fwd_port in {"443", "8000"}) or (proto == "http" and fwd_port == "80"))
+    ):
+        host = f"{host}:{fwd_port}"
+    if not host:
+        return normalize_public_base_url(str(getattr(request, "base_url", "")).rstrip("/")) or ""
+    return normalize_public_base_url(f"{proto}://{host}") or f"{proto}://{host}"
+
+
 def is_absolute_url(value: str) -> bool:
     return value.startswith(("http://", "https://"))
 
@@ -212,9 +259,18 @@ def resolve_subscription_url_prefix(url_prefix: str, panel_base_url: str | None)
     return url_prefix
 
 
-async def resolve_panel_base_url() -> str | None:
+async def resolve_panel_base_url(*, prefer: str | None = None) -> str | None:
+    """Resolve the publicly reachable panel origin.
+
+    ``prefer`` (usually the dashboard request URL) wins over ``PANEL_PUBLIC_URL`` so
+    join commands match the URL the admin is actually using — not a stale ``:8000``.
+    """
     from app.settings import subscription_settings, telegram_settings
     from config import telegram_env_settings
+
+    preferred = normalize_public_base_url(prefer)
+    if preferred:
+        return preferred
 
     settings = await telegram_settings()
     for candidate in (
@@ -223,16 +279,16 @@ async def resolve_panel_base_url() -> str | None:
         settings.mini_app_web_url,
         settings.webhook_url,
     ):
-        origin = url_origin(candidate)
+        origin = normalize_public_base_url(candidate)
         if origin:
             return origin
 
     sub_settings = await subscription_settings()
     if sub_settings.url_prefix:
-        origin = url_origin(sub_settings.url_prefix)
+        origin = normalize_public_base_url(sub_settings.url_prefix)
         if origin:
             return origin
         if is_absolute_url(sub_settings.url_prefix.strip()):
-            return sub_settings.url_prefix.strip().rstrip("/")
+            return normalize_public_base_url(sub_settings.url_prefix.strip())
 
     return None

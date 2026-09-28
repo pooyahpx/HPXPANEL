@@ -3,7 +3,7 @@ import { ThemeToggle } from '@/components/common/theme-toggle'
 import { GithubStar } from '@/components/layout/github-star'
 import { GoalProgress } from '@/components/layout/goal-progress'
 import { DualTierFeatureCard } from '@/components/layout/dual-tier-feature-card'
-import { SidebarDualTier } from '@/components/layout/sidebar-dual-tier'
+import { SidebarHoverRail } from '@/components/layout/sidebar-hover-rail'
 import { NavMain } from '@/components/layout/nav-main'
 import { NavSecondary } from '@/components/layout/nav-secondary'
 import { NavUser } from '@/components/layout/nav-user'
@@ -45,7 +45,6 @@ import {
   Network,
   Palette,
   PieChart,
-  Radar,
   Send,
   Settings,
   Settings2,
@@ -248,16 +247,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             },
           ]
         : []),
-      ...(canReadHpxTunnels
-        ? [
-            {
-              title: 'hpxTunnel.title',
-              url: '/hpx-tunnel',
-              icon: Radar,
-            },
-          ]
-        : []),
-      ...(canReadHpxPulse
+      ...(canReadHpxPulse || canReadHpxTunnels
         ? [
             {
               title: 'hpxPulse.title',
@@ -472,7 +462,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const brandMark = (
     <Link
       to="/"
-      className="relative flex h-11 w-11 items-center justify-center overflow-hidden border-2 border-[hsl(var(--pixel-border))] shadow-[3px_3px_0_0_hsl(var(--pixel-border))]"
+      className="relative flex h-8 w-8 items-center justify-center overflow-hidden rounded-lg border border-sidebar-border/80 bg-sidebar-accent/30"
       aria-label="HPXPANEL home"
     >
       <img src={HPX_LOGO_URL} alt="HPXPANEL" className="h-full w-full object-cover" draggable={false} />
@@ -500,7 +490,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   // Desktop: HPXPANEL indexed sector rail + secondary module panel
   if (!isMobile) {
     return (
-      <SidebarDualTier
+      <SidebarHoverRail
         side={isRTL ? 'right' : 'left'}
         items={data.navMain}
         footerItems={dualTierFooterItems}

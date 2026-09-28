@@ -159,7 +159,10 @@ export function useAdvisePulse() {
   })
 }
 
-export function useGetHpxPulses(params?: { offset?: number; limit?: number; name?: string }) {
+export function useGetHpxPulses(
+  params?: { offset?: number; limit?: number; name?: string },
+  options?: { enabled?: boolean },
+) {
   const q = new URLSearchParams()
   if (params?.offset != null) q.set('offset', String(params.offset))
   if (params?.limit != null) q.set('limit', String(params.limit))
@@ -169,6 +172,7 @@ export function useGetHpxPulses(params?: { offset?: number; limit?: number; name
     queryKey: ['hpx-pulses', params],
     queryFn: () => fetcher<HpxPulsesResponse>(`/api/hpx_pulses${qs ? `?${qs}` : ''}`),
     refetchInterval: 5000,
+    enabled: options?.enabled ?? true,
   })
 }
 

@@ -231,15 +231,14 @@ const Dashboard = () => {
 
   return (
     <div className="flex w-full flex-col items-start gap-2">
-      <div className="animate-fade-in w-full transform-gpu" style={{ animationDuration: '400ms' }}>
+      <div className="w-full">
         <PageHeader title="dashboard" description="dashboardDescription" buttonIcon={Bookmark} buttonText="quickActions.title" onButtonClick={handleOpenQuickActions} />
         <Separator />
       </div>
 
       <div className="w-full px-3 pt-2 sm:px-4">
-        <div className="flex flex-col gap-4 sm:gap-6">
-          <div className="animate-slide-up transform-gpu" style={{ animationDuration: '500ms', animationDelay: '60ms', animationFillMode: 'both' }}>
-            <SetupChecklistCard
+        <div className="flex flex-col gap-4 sm:gap-5">
+          <SetupChecklistCard
               onCreateNode={handleCreateNode}
               onCreateCore={handleCreateCore}
               onCreateHost={handleCreateHost}
@@ -249,26 +248,16 @@ const Dashboard = () => {
               canCreateHost={canCreateHosts}
               canCreateUser={canCreateUsers}
             />
-          </div>
-          <div className="animate-slide-up transform-gpu" style={{ animationDuration: '500ms', animationDelay: '80ms', animationFillMode: 'both' }}>
-            <ServerTopologyCard
+          <ServerTopologyCard
               resourceData={systemResourceStatsData}
               usersData={systemUsersStatsData}
               canReadNodes={canReadNodes}
               canReadNodeStats={canReadNodeStats}
             />
-          </div>
-          <div className="animate-slide-up transform-gpu" style={{ animationDuration: '500ms', animationDelay: '100ms', animationFillMode: 'both' }}>
-            <DashboardStatistics resourceData={systemResourceStatsData} usersData={systemUsersStatsData} />
-          </div>
-          {canReadNodeStats && (
-            <div className="animate-slide-up transform-gpu" style={{ animationDuration: '500ms', animationDelay: '180ms', animationFillMode: 'both' }}>
-              <WorkersHealthCard />
-            </div>
-          )}
-          <Separator className="my-4" />
-          <div className="animate-slide-up transform-gpu" style={{ animationDuration: '500ms', animationDelay: '250ms', animationFillMode: 'both' }}>
-            {canReadAllUsers ? (
+          <DashboardStatistics resourceData={systemResourceStatsData} usersData={systemUsersStatsData} />
+          {canReadNodeStats && <WorkersHealthCard />}
+          <Separator className="my-3" />
+          {canReadAllUsers ? (
               <>
                 <AdminFilterCombobox
                   value={selectedAdmin?.username === 'Total' ? 'all' : (selectedAdmin?.username ?? 'all')}
@@ -297,7 +286,6 @@ const Dashboard = () => {
             ) : (
               <AdminStatisticsCard showAdminInfo={false} admin={currentAdmin} systemStats={systemUsersStatsData} currentAdmin={currentAdmin} skipStatsFetch />
             )}
-          </div>
         </div>
       </div>
 

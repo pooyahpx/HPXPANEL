@@ -314,7 +314,7 @@ export default function FleetPage() {
                           {row.type === 'tunnel' && (
                             <>
                               <Button asChild variant="outline" size="sm" className="h-8 rounded-none">
-                                <Link to="/hpx-tunnel">
+                                <Link to="/hpx-pulse?tab=icmp">
                                   <ExternalLink className="size-3.5" />
                                   {t('fleet.openTunnel', { defaultValue: 'Tunnel' })}
                                 </Link>
@@ -416,7 +416,7 @@ export default function FleetPage() {
                               {row.type === 'tunnel' && (
                                 <>
                                   <Button asChild variant="ghost" size="icon" className="size-8 rounded-none" title={t('fleet.openTunnel', { defaultValue: 'Tunnel' })}>
-                                    <Link to="/hpx-tunnel">
+                                    <Link to="/hpx-pulse?tab=icmp">
                                       <ExternalLink className="size-4" />
                                     </Link>
                                   </Button>

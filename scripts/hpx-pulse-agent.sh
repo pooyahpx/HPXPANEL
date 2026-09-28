@@ -28,14 +28,72 @@ warn() { echo "[HPX Pulse !] $*" >&2; }
 die()  { echo "[HPX Pulse x] $*" >&2; exit 1; }
 has()  { command -v "$1" >/dev/null 2>&1; }
 
+# Set HPX_INSECURE=1 (or pass --insecure) when panel TLS cert is self-signed / wrong host.
+CURL_INSECURE_ARGS=()
+if [ "${HPX_INSECURE:-0}" = "1" ] || [ "${HPX_INSECURE:-}" = "true" ]; then
+  CURL_INSECURE_ARGS=(-k)
+fi
+
 # HTTP/1.1 avoids curl error 92 (PROTOCOL_ERROR) on some filtered routes (e.g. Iran).
 hp_curl() {
-  curl --http1.1 --connect-timeout 30 --max-time 120 --retry 3 --retry-delay 2 -fsSL "$@"
+  curl --http1.1 --connect-timeout 30 --max-time 120 --retry 3 --retry-delay 2 -fsSL "${CURL_INSECURE_ARGS[@]}" "$@"
 }
 
 # Shorter timeout for panel mirror — fall back to GitHub quickly when panel port is blocked.
 hp_panel_curl() {
-  curl --http1.1 --connect-timeout 15 --max-time 120 --retry 1 --retry-delay 2 -fsSL "$@"
+  curl --http1.1 --connect-timeout 15 --max-time 120 --retry 1 --retry-delay 2 -fsSL "${CURL_INSECURE_ARGS[@]}" "$@"
+}
+
+curl_panel_post() {
+  # Usage: curl_panel_post OUTFILE BODY URL
+  # Prints http_code; stores stderr in CURL_LAST_ERR. Retries once with -k on TLS errors.
+  local outfile="$1" body="$2" url="$3"
+  local err_tmp http_code
+  err_tmp="$(mktemp)"
+  CURL_LAST_ERR=""
+  http_code=$(curl --http1.1 --connect-timeout 15 --max-time 90 -sS -w "%{http_code}" -o "$outfile" \
+    "${CURL_INSECURE_ARGS[@]}" \
+    -X POST -H "Content-Type: application/json" -d "$body" \
+    "$url" 2>"$err_tmp") || http_code="000"
+  CURL_LAST_ERR="$(tr '\n' ' ' <"$err_tmp" | sed 's/[[:space:]]\+/ /g' | cut -c1-220)"
+  rm -f "$err_tmp"
+  if [ "$http_code" = "000" ] && [ "${#CURL_INSECURE_ARGS[@]}" -eq 0 ]; then
+    case "${CURL_LAST_ERR,,}" in
+      *ssl*|*certificate*|*tls*|*schannel*|*handshake*)
+        warn "TLS verify failed for ${url} — retrying with -k (HPX_INSECURE)"
+        err_tmp="$(mktemp)"
+        http_code=$(curl --http1.1 --connect-timeout 15 --max-time 90 -sS -k -w "%{http_code}" -o "$outfile" \
+          -X POST -H "Content-Type: application/json" -d "$body" \
+          "$url" 2>"$err_tmp") || http_code="000"
+        CURL_LAST_ERR="$(tr '\n' ' ' <"$err_tmp" | sed 's/[[:space:]]\+/ /g' | cut -c1-220)"
+        rm -f "$err_tmp"
+        if [ "$http_code" != "000" ]; then
+          CURL_INSECURE_ARGS=(-k)
+          export HPX_INSECURE=1
+        fi
+        ;;
+    esac
+  fi
+  printf '%s' "$http_code"
+}
+
+probe_panel_reachability() {
+  local base="${1%/}" code err_tmp
+  err_tmp="$(mktemp)"
+  code=$(curl --http1.1 --connect-timeout 8 --max-time 12 -sS -o /dev/null -w "%{http_code}" \
+    "${CURL_INSECURE_ARGS[@]}" "${base}/api/system" 2>"$err_tmp") || code="000"
+  if [ "$code" = "000" ] && [ "${#CURL_INSECURE_ARGS[@]}" -eq 0 ]; then
+    code=$(curl --http1.1 --connect-timeout 8 --max-time 12 -sS -k -o /dev/null -w "%{http_code}" \
+      "${base}/api/system" 2>"$err_tmp") || code="000"
+  fi
+  if [ "$code" = "000" ]; then
+    warn "cannot reach panel API at ${base} ($(tr '\n' ' ' <"$err_tmp" | cut -c1-160))"
+    warn "from this Iran VPS run: curl -v --connect-timeout 10 ${base}/api/system"
+    warn "fix: firewall, DNS, or blocked :8000 — put nginx/caddy on 443 and use --panel-url https://domain"
+  else
+    log "panel reachable at ${base} (HTTP ${code})"
+  fi
+  rm -f "$err_tmp"
 }
 
 need_root() { [ "$(id -u)" -eq 0 ] || die "run as root (sudo)"; }
@@ -352,7 +410,7 @@ api_request() {
       tmp="$(mktemp)"
       local args=(--http1.1 --connect-timeout 15 --max-time 90 -sS -X "$method"
         -H "X-HPX-Pulse-Agent-Key: ${AGENT_KEY}" -H "X-HPX-Pulse-Side: ${PULSE_SIDE}" -H "Accept: application/json"
-        -w "%{http_code}" -o "$tmp")
+        -w "%{http_code}" -o "$tmp" "${CURL_INSECURE_ARGS[@]}")
       [ -n "$body" ] && args+=(-H "Content-Type: application/json" -d "$body")
       http_code=$(curl "${args[@]}" "$url" 2>/dev/null) || http_code="000"
       API_LAST_HTTP_CODE="$http_code"
@@ -907,11 +965,12 @@ cmd_join() {
       --panel-url=*) panel_url="${1#*=}"; shift ;;
       --side) side="${2:-}"; shift 2 ;;
       --side=*) side="${1#*=}"; shift ;;
+      --insecure|-k) CURL_INSECURE_ARGS=(-k); export HPX_INSECURE=1; shift ;;
       -*) die "unknown flag $1" ;;
       *) token="$1"; shift ;;
     esac
   done
-  [ -n "$token" ] && [ -n "$panel_url" ] && [ -n "$side" ] || die "usage: join TOKEN --panel-url URL --side iran|abroad"
+  [ -n "$token" ] && [ -n "$panel_url" ] && [ -n "$side" ] || die "usage: join TOKEN --panel-url URL --side iran|abroad [--insecure]"
   [ "$side" = "iran" ] || [ "$side" = "abroad" ] || die "side must be iran or abroad"
   if [ "${#token}" -lt 8 ]; then
     die "join token too short (${#token} chars) — copy the real hpxpi_/hpxpa_ token from panel (Tokens button), not the word TOKEN"
@@ -929,31 +988,41 @@ cmd_join() {
   PANEL_URL="${panel_url%/}"
   PULSE_SIDE="$side"
   log "join starting (side=${side})..."
+  [ "${#CURL_INSECURE_ARGS[@]}" -gt 0 ] && warn "TLS verify disabled (-k / HPX_INSECURE=1)"
 
   ensure_deps
   local host body claim
   host="$(hostname -f 2>/dev/null || hostname)"
   body=$(jq -nc --arg t "$token" --arg h "$host" --arg s "$side" '{join_token:$t, host:$h, side:$s}')
 
+  probe_panel_reachability "$PANEL_URL"
+
   log "claiming join token (${side})..."
-  local claim_tmp http_code base claim="" last_codes=""
+  local claim_tmp http_code base claim="" last_codes="" detail=""
   claim_tmp="$(mktemp)"
   while IFS= read -r base; do
     [ -n "$base" ] || continue
-    http_code=$(curl --http1.1 --connect-timeout 15 --max-time 90 -sS -w "%{http_code}" -o "$claim_tmp" \
-      -X POST -H "Content-Type: application/json" -d "$body" \
-      "${base}/api/hpx_pulse/agent/claim" 2>/dev/null) || http_code="000"
-    last_codes="${last_codes}${last_codes:+; }${base}→${http_code}"
+    http_code=$(curl_panel_post "$claim_tmp" "$body" "${base}/api/hpx_pulse/agent/claim")
+    if [ -n "$CURL_LAST_ERR" ]; then
+      last_codes="${last_codes}${last_codes:+; }${base}→${http_code}(${CURL_LAST_ERR})"
+    else
+      last_codes="${last_codes}${last_codes:+; }${base}→${http_code}"
+    fi
     if [ "$http_code" = "200" ]; then
       claim="$(cat "$claim_tmp")"
       [ "$base" != "${PANEL_URL%/}" ] && log "panel claim OK at ${base} (using this for agent)"
       PANEL_URL="$base"
       break
     fi
+    if [ "$http_code" = "401" ] || [ "$http_code" = "403" ]; then
+      detail="HTTP ${http_code} = bad/expired token — regenerate Tokens in panel"
+    elif [ "$http_code" = "000" ]; then
+      detail="HTTP 000 = this VPS cannot open TCP/TLS to panel (firewall / blocked port / DNS / bad cert)"
+    fi
   done < <(panel_api_bases)
   rm -f "$claim_tmp"
   if [ -z "$claim" ]; then
-    die "claim failed (${last_codes:-no URL tried}) — copy a fresh token from panel Tokens; --panel-url must match the port you open the panel with (e.g. https://domain:8000)"
+    die "claim failed (${last_codes:-no URL tried})${detail:+ — ${detail}}. Test: curl -v --connect-timeout 10 ${PANEL_URL}/api/system   Or put HTTPS on 443 and use --panel-url https://domain   Self-signed cert: add --insecure"
   fi
 
   AGENT_KEY=$(echo "$claim" | jq -r '.agent_key')

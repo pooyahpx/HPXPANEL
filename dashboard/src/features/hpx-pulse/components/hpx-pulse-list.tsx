@@ -44,6 +44,7 @@ function JoinCommandBlock({
   primary,
   alt,
   primaryHint,
+  altHint,
   onCopy,
   t,
 }: {
@@ -51,6 +52,7 @@ function JoinCommandBlock({
   primary: string
   alt?: string
   primaryHint?: string
+  altHint?: string
   onCopy: (text: string, key: string) => void
   t: (k: string, o?: { defaultValue: string }) => string
 }) {
@@ -74,13 +76,14 @@ function JoinCommandBlock({
       {alt ? (
         <div className="space-y-1.5">
           <p className="text-muted-foreground text-[10px] font-medium uppercase tracking-wide">
-            {t('hpxPulse.joinCommandAltPanel', { defaultValue: 'Alternative (panel URL)' })}
+            {altHint ??
+              t('hpxPulse.joinCommandAltPanel', { defaultValue: 'Alternative (panel URL)' })}
           </p>
           <pre className="bg-muted/60 overflow-x-auto rounded-lg border border-dashed p-3 font-mono text-[11px] leading-relaxed">
             {alt}
           </pre>
           <Button size="sm" variant="outline" className="h-8 gap-1.5" onClick={() => onCopy(alt, `${label} alt`)}>
-            <Copy className="size-3" /> {label} (panel)
+            <Copy className="size-3" /> {label} (alt)
           </Button>
         </div>
       ) : null}
@@ -573,18 +576,38 @@ export default function HpxPulseList() {
             <p className="text-muted-foreground mt-1 text-[11px] leading-relaxed">
               {t('hpxPulse.panelUrlWarning', {
                 defaultValue:
-                  'Use the exact panel URL below on both servers — a typo means agents join a different panel than this UI.',
+                  'Copy each command once. Tokens are single-use — if claim returns 401, press Tokens again for a fresh pair.',
+              })}
+            </p>
+            <p className="text-amber-700 dark:text-amber-400 mt-1 text-[11px] leading-relaxed">
+              {t('hpxPulse.iranTlsHint', {
+                defaultValue:
+                  'Iran: use the primary command (panel IP + --insecure). Domain SNI is often reset from Iranian networks — do not paste the domain-only command unless curl https://your-domain works from that VPS.',
               })}
             </p>
           </div>
           {joinCommands.iran && (
-            <JoinCommandBlock label="Iran" primary={joinCommands.iran} alt={joinCommands.iranAlt} onCopy={copy} t={t} />
+            <JoinCommandBlock
+              label="Iran"
+              primary={joinCommands.iran}
+              alt={joinCommands.iranAlt}
+              primaryHint={t('hpxPulse.joinCommandIranTls', {
+                defaultValue: 'Recommended — IP + --insecure (bypasses Iran SNI/TLS filter)',
+              })}
+              altHint={t('hpxPulse.joinCommandIranDomain', {
+                defaultValue: 'Alternative — domain (only if HTTPS to domain works from Iran)',
+              })}
+              onCopy={copy}
+              t={t}
+            />
           )}
           {joinCommands.abroad && (
             <JoinCommandBlock
               label="Abroad"
               primary={joinCommands.abroad}
+              alt={joinCommands.abroadAlt}
               primaryHint={t('hpxPulse.joinCommandPrimaryPanel', { defaultValue: 'Recommended (panel URL)' })}
+              altHint={t('hpxPulse.joinCommandPrimaryGithub', { defaultValue: 'Alternative (GitHub)' })}
               onCopy={copy}
               t={t}
             />

@@ -125,6 +125,15 @@ hpxpanel restart -n
 
 سپس در **HPX Pulse** دوباره **Tokens** بگیرید.
 
+### Join از ایران (فیلتر SNI / TLS reset)
+
+اگر از VPS ایران `curl https://دامنه-پنل` با `Connection reset` وسط TLS قطع می‌شود ولی با **IP** پنل جواب می‌دهد، از دستور **اصلی Iran** در داشبورد استفاده کنید (از v4.7.5):
+
+- `--panel-url https://IP_PANEL` + `--insecure`
+- اسکریپت از GitHub (`HPX_PREFER_GITHUB=1`)
+
+توکن‌ها یک‌بارمصرف‌اند؛ بعد از `401` دوباره **Tokens** بزنید و همان دستور را دوباره کپی نکنید.
+
 تست از سرور Abroad:
 
 ```bash

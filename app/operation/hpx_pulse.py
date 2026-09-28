@@ -54,26 +54,53 @@ def _config_hash(toml: str, side: str, pulse_id: int) -> str:
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
-def _build_join_command_github(panel_url: str | None, token: str, side: str) -> str:
-    base = (panel_url or "https://YOUR_PANEL_HOST").rstrip("/")
+def _panel_base(panel_url: str | None) -> str:
+    return (panel_url or "https://YOUR_PANEL_HOST").rstrip("/")
+
+
+def _url_with_host(panel_url: str | None, host: str) -> str:
+    """Keep scheme/port from panel_url but replace hostname with host (usually public IP)."""
+    from urllib.parse import urlparse, urlunparse
+
+    raw = _panel_base(panel_url)
+    parsed = urlparse(raw if "://" in raw else f"https://{raw}")
+    scheme = parsed.scheme or "https"
+    port = parsed.port
+    if port and not ((scheme == "https" and port == 443) or (scheme == "http" and port == 80)):
+        netloc = f"{host}:{port}"
+    else:
+        netloc = host
+    return urlunparse((scheme, netloc, "", "", "", ""))
+
+
+def _build_join_command_github(
+    panel_url: str | None,
+    token: str,
+    side: str,
+    *,
+    insecure: bool = False,
+) -> str:
+    base = _panel_base(panel_url)
     env = "HPX_PREFER_GITHUB=1 " if side == "iran" else ""
+    insecure_flag = " --insecure" if insecure else ""
     return (
         f"curl {_JOIN_CURL} \\\n"
         f"  {GITHUB_AGENT_SCRIPT} | \\\n"
         f"  sudo env {env}bash -s -- join {token} \\\n"
-        f"  --panel-url {base} --side {side}"
+        f"  --panel-url {base} --side {side}{insecure_flag}"
     )
 
 
-def _build_join_command_panel(panel_url: str | None, token: str, side: str) -> str:
-    base = (panel_url or "https://YOUR_PANEL_HOST").rstrip("/")
+def _build_join_command_panel(panel_url: str | None, token: str, side: str, *, insecure: bool = False) -> str:
+    base = _panel_base(panel_url)
     panel_script = f"{base}/api/hpx_pulse/agent/hpx-pulse-agent.sh"
     runner = "sudo env HPX_PREFER_GITHUB=1 bash" if side == "iran" else "sudo bash"
+    insecure_flag = " --insecure" if insecure else ""
     return (
         f"curl {_JOIN_CURL} \\\n"
         f"  {panel_script} | \\\n"
         f"  {runner} -s -- join {token} \\\n"
-        f"  --panel-url {base} --side {side}"
+        f"  --panel-url {base} --side {side}{insecure_flag}"
     )
 
 
@@ -172,6 +199,25 @@ class HpxPulseOperation(BaseOperation):
     async def advise_pulse(self, model: PulseAdviseRequest, *, domain: str | None = None, sni_hint: str | None = None) -> PulseAdviseResponse:
         return advise(model, domain=domain, sni_hint=sni_hint)
 
+    async def _iran_join_commands(self, panel_url: str | None, iran_token: str) -> tuple[str, str]:
+        """Iran primary = public IP + --insecure (SNI/TLS filter bypass); alt = domain."""
+        from app.services.hpx_tunnel.manager import resolve_panel_public_ip
+
+        domain_cmd = _build_join_command_github(panel_url, iran_token, "iran")
+        ip, _src = await resolve_panel_public_ip(panel_url)
+        if ip:
+            ip_url = _url_with_host(panel_url, ip)
+            # Primary for Iran: reach panel by IP so DPI/SNI on the domain cannot reset TLS.
+            return (
+                _build_join_command_github(ip_url, iran_token, "iran", insecure=True),
+                domain_cmd,
+            )
+        # No public IP resolved — keep domain command and force --insecure as safer default.
+        return (
+            _build_join_command_github(panel_url, iran_token, "iran", insecure=True),
+            _build_join_command_panel(panel_url, iran_token, "iran"),
+        )
+
     async def _issue_join_tokens(
         self, db: AsyncSession, db_pulse: HpxPulse, *, panel_url: str | None
     ) -> tuple[str, str, str, str, str, str, dt]:
@@ -192,10 +238,9 @@ class HpxPulseOperation(BaseOperation):
         db_pulse.message = "Waiting for Iran and abroad agents"
         db_pulse.last_status_change = dt.now(UTC)
         await db.flush()
-        iran_cmd = _build_join_command_github(panel_url, iran_token, "iran")
-        iran_cmd_alt = _build_join_command_panel(panel_url, iran_token, "iran")
+        iran_cmd, iran_cmd_alt = await self._iran_join_commands(panel_url, iran_token)
         abroad_cmd = _build_join_command_panel(panel_url, abroad_token, "abroad")
-        abroad_cmd_alt = ""
+        abroad_cmd_alt = _build_join_command_github(panel_url, abroad_token, "abroad")
         return iran_token, iran_cmd, iran_cmd_alt, abroad_token, abroad_cmd, abroad_cmd_alt, expires_at
 
     async def create_pulse(

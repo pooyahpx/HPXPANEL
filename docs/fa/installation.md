@@ -127,7 +127,7 @@ hpxpanel restart -n
 
 ### Join از ایران (فیلتر SNI / TLS reset)
 
-اگر از VPS ایران `curl https://دامنه-پنل` با `Connection reset` وسط TLS قطع می‌شود ولی با **IP** پنل جواب می‌دهد، از دستور **اصلی Iran** در داشبورد استفاده کنید (از v4.7.5):
+ابتدا دستور **Recommended (دامنه)** را بزنید. اگر از VPS ایران `curl https://دامنه-پنل` با `Connection reset` وسط TLS قطع شد، از دستور **Alternative** استفاده کنید:
 
 - `--panel-url https://IP_PANEL` + `--insecure`
 - اسکریپت از GitHub (`HPX_PREFER_GITHUB=1`)

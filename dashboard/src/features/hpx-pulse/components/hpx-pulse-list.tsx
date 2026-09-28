@@ -579,10 +579,10 @@ export default function HpxPulseList() {
                   'Copy each command once. Tokens are single-use — if claim returns 401, press Tokens again for a fresh pair.',
               })}
             </p>
-            <p className="text-amber-700 dark:text-amber-400 mt-1 text-[11px] leading-relaxed">
+            <p className="text-muted-foreground mt-1 text-[11px] leading-relaxed">
               {t('hpxPulse.iranTlsHint', {
                 defaultValue:
-                  'Iran: use the primary command (panel IP + --insecure). Domain SNI is often reset from Iranian networks — do not paste the domain-only command unless curl https://your-domain works from that VPS.',
+                  'Iran: use the recommended domain command first. If TLS resets from Iran, use the IP + --insecure alternative.',
               })}
             </p>
           </div>
@@ -591,11 +591,11 @@ export default function HpxPulseList() {
               label="Iran"
               primary={joinCommands.iran}
               alt={joinCommands.iranAlt}
-              primaryHint={t('hpxPulse.joinCommandIranTls', {
-                defaultValue: 'Recommended — IP + --insecure (bypasses Iran SNI/TLS filter)',
+              primaryHint={t('hpxPulse.joinCommandIranDomain', {
+                defaultValue: 'Recommended — domain',
               })}
-              altHint={t('hpxPulse.joinCommandIranDomain', {
-                defaultValue: 'Alternative — domain (only if HTTPS to domain works from Iran)',
+              altHint={t('hpxPulse.joinCommandIranTls', {
+                defaultValue: 'Alternative — IP + --insecure (if domain TLS/SNI is filtered)',
               })}
               onCopy={copy}
               t={t}

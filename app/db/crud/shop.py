@@ -243,6 +243,13 @@ async def upsert_shop_config(
     pay_callback_base_url: str | None = None,
     pay_fx_toman_per_usd: int | None = None,
     pay_unpaid_expire_minutes: int | None = None,
+    wallet_enabled: bool | None = None,
+    referral_enabled: bool | None = None,
+    referral_reward_toman: int | None = None,
+    referral_reward_data_gb: int | None = None,
+    tutorial_enabled: bool | None = None,
+    tutorial_text: str | None = None,
+    tutorial_url: str | None = None,
 ) -> ShopConfig:
     config = await get_shop_config_by_admin(db, admin_id)
     if config is None:
@@ -337,6 +344,20 @@ async def upsert_shop_config(
         config.pay_fx_toman_per_usd = max(1000, int(pay_fx_toman_per_usd))
     if pay_unpaid_expire_minutes is not None:
         config.pay_unpaid_expire_minutes = max(5, min(10080, int(pay_unpaid_expire_minutes)))
+    if wallet_enabled is not None:
+        config.wallet_enabled = wallet_enabled
+    if referral_enabled is not None:
+        config.referral_enabled = referral_enabled
+    if referral_reward_toman is not None:
+        config.referral_reward_toman = max(0, int(referral_reward_toman))
+    if referral_reward_data_gb is not None:
+        config.referral_reward_data_gb = max(0, int(referral_reward_data_gb))
+    if tutorial_enabled is not None:
+        config.tutorial_enabled = tutorial_enabled
+    if tutorial_text is not None:
+        config.tutorial_text = tutorial_text or None
+    if tutorial_url is not None:
+        config.tutorial_url = tutorial_url or None
     await db.commit()
     await db.refresh(config)
     return config

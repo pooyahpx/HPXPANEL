@@ -123,6 +123,13 @@ def _config_response(config) -> ShopConfigResponse:
         pay_callback_base_url=getattr(config, "pay_callback_base_url", None),
         pay_fx_toman_per_usd=max(1000, int(getattr(config, "pay_fx_toman_per_usd", None) or 600_000)),
         pay_unpaid_expire_minutes=max(5, int(getattr(config, "pay_unpaid_expire_minutes", None) or 60)),
+        wallet_enabled=bool(getattr(config, "wallet_enabled", False)),
+        referral_enabled=bool(getattr(config, "referral_enabled", False)),
+        referral_reward_toman=max(0, int(getattr(config, "referral_reward_toman", None) or 0)),
+        referral_reward_data_gb=max(0, int(getattr(config, "referral_reward_data_gb", None) or 0)),
+        tutorial_enabled=bool(getattr(config, "tutorial_enabled", False)),
+        tutorial_text=getattr(config, "tutorial_text", None),
+        tutorial_url=getattr(config, "tutorial_url", None),
         enabled_gateways=_enabled_gateways(config),
         created_at=config.created_at,
     )
@@ -469,6 +476,7 @@ class ShopOperation(BaseOperation):
 
         order = await update_order_status(db, order, ShopOrderStatus.approved, created_user_id=user.id)
         await self._record_shop_sale(db, order, user.username)
+        await self._maybe_apply_referral_reward(db, shop_admin.id, order)
         await self._notify_buyer_approved(db, shop_admin, order, plan, user, renewal=False)
         return ShopApproveResponse(
             order=await _order_response(db, order),
@@ -523,6 +531,22 @@ class ShopOperation(BaseOperation):
             username=user.username,
             subscription_url=getattr(user, "subscription_url", None),
         )
+
+    async def _maybe_apply_referral_reward(self, db: AsyncSession, admin_id: int, order: ShopOrder) -> None:
+        from app.db.crud.shop_wallet import apply_referral_reward
+
+        config = await get_shop_config_by_admin(db, admin_id)
+        if config is None:
+            return
+        try:
+            await apply_referral_reward(
+                db,
+                config=config,
+                buyer_telegram_id=order.buyer_telegram_id,
+                order_id=order.id,
+            )
+        except Exception:
+            logger.exception("Failed to apply referral reward for order %s", order.id)
 
     async def _record_shop_sale(self, db: AsyncSession, order: ShopOrder, username: str | None = None) -> None:
         from app.db.crud.shop_revenue_ledger import record_shop_sale

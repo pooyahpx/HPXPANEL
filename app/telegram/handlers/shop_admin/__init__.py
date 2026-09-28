@@ -119,7 +119,9 @@ def _plan_edit_text(lang: str, plan) -> str:
     )
 
 
-async def _render_plan_edit(event: types.Message | types.CallbackQuery, db: AsyncSession, admin: AdminDetails, plan_id: int):
+async def _render_plan_edit(
+    event: types.Message | types.CallbackQuery, db: AsyncSession, admin: AdminDetails, plan_id: int
+):
     lang = await _lang(db, event.from_user.id)
     plan = await get_shop_plan(db, plan_id)
     if not plan or plan.admin_id != admin.id:
@@ -173,7 +175,9 @@ async def _render_admin_shop(event: types.Message | types.CallbackQuery, db: Asy
 
 
 @router.callback_query(ShopAdminKeyboard.Callback.filter(ShopAdminAction.home == F.action))
-async def shop_admin_home(event: types.CallbackQuery, callback_data: ShopAdminKeyboard.Callback, db: AsyncSession, admin: AdminDetails):
+async def shop_admin_home(
+    event: types.CallbackQuery, callback_data: ShopAdminKeyboard.Callback, db: AsyncSession, admin: AdminDetails
+):
     if callback_data.id == -1:
         from app.telegram.handlers.base import open_main_menu
 
@@ -247,7 +251,11 @@ async def ask_card(event: types.CallbackQuery, db: AsyncSession, state: FSMConte
 
 @router.callback_query(ShopAdminKeyboard.Callback.filter(ShopAdminAction.edit_card == F.action))
 async def edit_card_start(
-    event: types.CallbackQuery, callback_data: ShopAdminKeyboard.Callback, db: AsyncSession, state: FSMContext, admin: AdminDetails
+    event: types.CallbackQuery,
+    callback_data: ShopAdminKeyboard.Callback,
+    db: AsyncSession,
+    state: FSMContext,
+    admin: AdminDetails,
 ):
     lang = await _lang(db, event.from_user.id)
     config = await get_shop_config_by_admin(db, admin.id)
@@ -291,7 +299,9 @@ async def clear_cards(event: types.CallbackQuery, db: AsyncSession, admin: Admin
     await _render_cards_list(event, db, admin)
 
 
-async def _save_cards(event: types.Message, db: AsyncSession, state: FSMContext, admin: AdminDetails, cards: list[dict[str, str]]):
+async def _save_cards(
+    event: types.Message, db: AsyncSession, state: FSMContext, admin: AdminDetails, cards: list[dict[str, str]]
+):
     data = await state.get_data()
     lang = data.get("lang", "fa")
     await upsert_shop_config(db, admin.id, cards=cards)
@@ -399,7 +409,9 @@ async def shop_stats(event: types.CallbackQuery, db: AsyncSession, admin: AdminD
 
 
 @router.callback_query(ShopAdminKeyboard.Callback.filter(ShopAdminAction.accounting == F.action))
-async def shop_accounting(event: types.CallbackQuery, db: AsyncSession, admin: AdminDetails, callback_data: ShopAdminKeyboard.Callback):
+async def shop_accounting(
+    event: types.CallbackQuery, db: AsyncSession, admin: AdminDetails, callback_data: ShopAdminKeyboard.Callback
+):
     from aiogram.utils.keyboard import InlineKeyboardBuilder
 
     from app.db.crud.admin import get_admins_simple
@@ -472,6 +484,164 @@ async def toggle_test(event: types.CallbackQuery, db: AsyncSession, admin: Admin
     enabled = not bool(config and config.test_enabled)
     await upsert_shop_config(db, admin.id, test_enabled=enabled)
     await event.answer(t(lang, "admin_test_enabled_on" if enabled else "admin_test_enabled_off"))
+    await _render_admin_shop(event, db, admin)
+
+
+@router.callback_query(ShopAdminKeyboard.Callback.filter(ShopAdminAction.toggle_wallet == F.action))
+async def toggle_wallet(event: types.CallbackQuery, db: AsyncSession, admin: AdminDetails):
+    lang = await _lang(db, event.from_user.id)
+    config = await get_shop_config_by_admin(db, admin.id)
+    enabled = not bool(config and getattr(config, "wallet_enabled", False))
+    await upsert_shop_config(db, admin.id, wallet_enabled=enabled)
+    await event.answer(t(lang, "admin_wallet_enabled_on" if enabled else "admin_wallet_enabled_off"))
+    await _render_admin_shop(event, db, admin)
+
+
+@router.callback_query(ShopAdminKeyboard.Callback.filter(ShopAdminAction.toggle_referral == F.action))
+async def toggle_referral(event: types.CallbackQuery, db: AsyncSession, admin: AdminDetails):
+    lang = await _lang(db, event.from_user.id)
+    config = await get_shop_config_by_admin(db, admin.id)
+    enabled = not bool(config and getattr(config, "referral_enabled", False))
+    await upsert_shop_config(db, admin.id, referral_enabled=enabled)
+    await event.answer(t(lang, "admin_referral_enabled_on" if enabled else "admin_referral_enabled_off"))
+    await _render_admin_shop(event, db, admin)
+
+
+@router.callback_query(ShopAdminKeyboard.Callback.filter(ShopAdminAction.toggle_tutorial == F.action))
+async def toggle_tutorial(event: types.CallbackQuery, db: AsyncSession, admin: AdminDetails):
+    lang = await _lang(db, event.from_user.id)
+    config = await get_shop_config_by_admin(db, admin.id)
+    enabled = not bool(config and getattr(config, "tutorial_enabled", False))
+    await upsert_shop_config(db, admin.id, tutorial_enabled=enabled)
+    await event.answer(t(lang, "admin_tutorial_enabled_on" if enabled else "admin_tutorial_enabled_off"))
+    await _render_admin_shop(event, db, admin)
+
+
+@router.callback_query(ShopAdminKeyboard.Callback.filter(ShopAdminAction.set_referral == F.action))
+async def ask_referral_rewards(event: types.CallbackQuery, db: AsyncSession, state: FSMContext):
+    lang = await _lang(db, event.from_user.id)
+    await state.set_state(forms.ShopAdminReferral.waiting_toman)
+    await state.update_data(lang=lang)
+    msg = await event.message.answer(t(lang, "admin_ask_referral_toman"))
+    await add_to_messages_to_delete(state, msg)
+    await event.answer()
+
+
+@router.message(forms.ShopAdminReferral.waiting_toman)
+async def referral_toman(event: types.Message, state: FSMContext):
+    data = await state.get_data()
+    lang = data.get("lang", "fa")
+    try:
+        toman = int((event.text or "").strip().replace(",", ""))
+        if toman < 0:
+            raise ValueError
+    except ValueError:
+        await event.answer(t(lang, "invalid_number"))
+        return
+    await state.update_data(referral_reward_toman=toman)
+    await state.set_state(forms.ShopAdminReferral.waiting_gb)
+    await event.answer(t(lang, "admin_ask_referral_gb"))
+
+
+@router.message(forms.ShopAdminReferral.waiting_gb)
+async def referral_gb(event: types.Message, state: FSMContext, db: AsyncSession, admin: AdminDetails):
+    data = await state.get_data()
+    lang = data.get("lang", "fa")
+    try:
+        gb = int((event.text or "").strip())
+        if gb < 0:
+            raise ValueError
+    except ValueError:
+        await event.answer(t(lang, "invalid_number"))
+        return
+    await upsert_shop_config(
+        db,
+        admin.id,
+        referral_reward_toman=int(data.get("referral_reward_toman") or 0),
+        referral_reward_data_gb=gb,
+        referral_enabled=True,
+    )
+    await state.clear()
+    await event.answer(t(lang, "admin_referral_saved"))
+    await _render_admin_shop(event, db, admin)
+
+
+@router.callback_query(ShopAdminKeyboard.Callback.filter(ShopAdminAction.set_tutorial == F.action))
+async def ask_tutorial(event: types.CallbackQuery, db: AsyncSession, state: FSMContext):
+    lang = await _lang(db, event.from_user.id)
+    await state.set_state(forms.ShopAdminTutorial.waiting_text)
+    await state.update_data(lang=lang)
+    msg = await event.message.answer(t(lang, "admin_ask_tutorial"))
+    await add_to_messages_to_delete(state, msg)
+    await event.answer()
+
+
+@router.message(forms.ShopAdminTutorial.waiting_text)
+async def save_tutorial(event: types.Message, state: FSMContext, db: AsyncSession, admin: AdminDetails):
+    data = await state.get_data()
+    lang = data.get("lang", "fa")
+    raw = (event.text or "").strip()
+    if raw in ("-", "0"):
+        await upsert_shop_config(db, admin.id, tutorial_text=None, tutorial_url=None, tutorial_enabled=False)
+    else:
+        url = None
+        text = raw
+        for token in raw.split():
+            if token.startswith(("http://", "https://")):
+                url = token
+                text = raw.replace(token, "").strip()
+                break
+        await upsert_shop_config(
+            db,
+            admin.id,
+            tutorial_text=text or None,
+            tutorial_url=url,
+            tutorial_enabled=True,
+        )
+    await state.clear()
+    await event.answer(t(lang, "admin_tutorial_saved"))
+    await _render_admin_shop(event, db, admin)
+
+
+@router.callback_query(ShopAdminKeyboard.Callback.filter(ShopAdminAction.credit_wallet == F.action))
+async def ask_credit_wallet(event: types.CallbackQuery, db: AsyncSession, state: FSMContext):
+    lang = await _lang(db, event.from_user.id)
+    await state.set_state(forms.ShopAdminWalletCredit.waiting_payload)
+    await state.update_data(lang=lang)
+    msg = await event.message.answer(t(lang, "admin_ask_wallet_credit"))
+    await add_to_messages_to_delete(state, msg)
+    await event.answer()
+
+
+@router.message(forms.ShopAdminWalletCredit.waiting_payload)
+async def credit_wallet_payload(event: types.Message, state: FSMContext, db: AsyncSession, admin: AdminDetails):
+    data = await state.get_data()
+    lang = data.get("lang", "fa")
+    parts = (event.text or "").strip().replace(",", "").split()
+    if len(parts) < 2:
+        await event.answer(t(lang, "admin_ask_wallet_credit"))
+        return
+    try:
+        telegram_id = int(parts[0])
+        amount = int(parts[1])
+    except ValueError:
+        await event.answer(t(lang, "invalid_number"))
+        return
+    from app.db.crud.shop_wallet import credit_wallet
+
+    wallet = await credit_wallet(
+        db,
+        admin_id=admin.id,
+        buyer_telegram_id=telegram_id,
+        amount_toman=amount,
+        kind="adjust",
+        note=f"admin credit by {admin.username}",
+    )
+    await upsert_shop_config(db, admin.id, wallet_enabled=True)
+    await state.clear()
+    await event.answer(
+        rich(lang, "admin_wallet_credited", id=telegram_id, amount=amount, balance=int(wallet.balance_toman or 0))
+    )
     await _render_admin_shop(event, db, admin)
 
 
@@ -1173,7 +1343,9 @@ async def list_plans(event: types.CallbackQuery, db: AsyncSession, admin: AdminD
 
 
 @router.callback_query(ShopAdminKeyboard.Callback.filter(ShopAdminAction.edit_plan == F.action))
-async def edit_plan(event: types.CallbackQuery, callback_data: ShopAdminKeyboard.Callback, db: AsyncSession, admin: AdminDetails):
+async def edit_plan(
+    event: types.CallbackQuery, callback_data: ShopAdminKeyboard.Callback, db: AsyncSession, admin: AdminDetails
+):
     await _render_plan_edit(event, db, admin, callback_data.id)
 
 
@@ -1258,7 +1430,9 @@ def _parse_plan_field_update(field: str, raw: str) -> dict:
 
 
 @router.callback_query(ShopAdminKeyboard.Callback.filter(ShopAdminAction.toggle_plan == F.action))
-async def toggle_plan(event: types.CallbackQuery, callback_data: ShopAdminKeyboard.Callback, db: AsyncSession, admin: AdminDetails):
+async def toggle_plan(
+    event: types.CallbackQuery, callback_data: ShopAdminKeyboard.Callback, db: AsyncSession, admin: AdminDetails
+):
     lang = await _lang(db, event.from_user.id)
     plan = await get_shop_plan(db, callback_data.id)
     if not plan or plan.admin_id != admin.id:
@@ -1273,7 +1447,9 @@ async def toggle_plan(event: types.CallbackQuery, callback_data: ShopAdminKeyboa
 
 
 @router.callback_query(ShopAdminKeyboard.Callback.filter(ShopAdminAction.delete_plan == F.action))
-async def delete_plan(event: types.CallbackQuery, callback_data: ShopAdminKeyboard.Callback, db: AsyncSession, admin: AdminDetails):
+async def delete_plan(
+    event: types.CallbackQuery, callback_data: ShopAdminKeyboard.Callback, db: AsyncSession, admin: AdminDetails
+):
     lang = await _lang(db, event.from_user.id)
     plan = await get_shop_plan(db, callback_data.id)
     if not plan or plan.admin_id != admin.id:
@@ -1300,7 +1476,9 @@ async def pending_orders(event: types.CallbackQuery, db: AsyncSession, admin: Ad
         plan = await get_shop_plan(db, order.plan_id)
         caption = t(
             lang,
-            "admin_new_renewal" if (getattr(order, "order_kind", None) or "purchase") == "renewal" else "admin_new_order",
+            "admin_new_renewal"
+            if (getattr(order, "order_kind", None) or "purchase") == "renewal"
+            else "admin_new_order",
             id=order.id,
             buyer=order.buyer_username or str(order.buyer_telegram_id),
             plan=plan.name if plan else "?",
@@ -1320,7 +1498,9 @@ async def pending_orders(event: types.CallbackQuery, db: AsyncSession, admin: Ad
 
 
 @router.callback_query(ShopAdminKeyboard.Callback.filter(ShopAdminAction.approve == F.action))
-async def approve_order(event: types.CallbackQuery, callback_data: ShopAdminKeyboard.Callback, db: AsyncSession, admin: AdminDetails):
+async def approve_order(
+    event: types.CallbackQuery, callback_data: ShopAdminKeyboard.Callback, db: AsyncSession, admin: AdminDetails
+):
     lang = await _lang(db, event.from_user.id)
     order = await get_shop_order(db, callback_data.id)
     if not order or order.admin_id != admin.id or order.status != ShopOrderStatus.pending:
@@ -1348,7 +1528,9 @@ async def approve_order(event: types.CallbackQuery, callback_data: ShopAdminKeyb
 
 
 @router.callback_query(ShopAdminKeyboard.Callback.filter(ShopAdminAction.reject == F.action))
-async def reject_order(event: types.CallbackQuery, callback_data: ShopAdminKeyboard.Callback, db: AsyncSession, admin: AdminDetails):
+async def reject_order(
+    event: types.CallbackQuery, callback_data: ShopAdminKeyboard.Callback, db: AsyncSession, admin: AdminDetails
+):
     lang = await _lang(db, event.from_user.id)
     order = await get_shop_order(db, callback_data.id)
     if not order or order.admin_id != admin.id or order.status != ShopOrderStatus.pending:

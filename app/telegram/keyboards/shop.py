@@ -1,5 +1,6 @@
 from enum import Enum
 
+from aiogram.enums import ButtonStyle
 from aiogram.filters.callback_data import CallbackData
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
@@ -26,6 +27,7 @@ class LangKeyboard(InlineKeyboardBuilder):
 class ShopAction(str, Enum):
     home = "home"
     plans = "plans"
+    tariffs = "tariffs"
     buy = "buy"
     custom = "custom"
     username_random = "unr"
@@ -39,6 +41,9 @@ class ShopAction(str, Enum):
     lang = "lang"
     support = "support"
     test = "test"
+    wallet = "wallet"
+    referral = "referral"
+    tutorial = "tutorial"
     back = "back"
     pick_seller = "psel"
 
@@ -53,20 +58,63 @@ class ShopHomeKeyboard(InlineKeyboardBuilder):
     class Callback(CallbackData, prefix="shophome"):
         action: ShopAction
 
-    def __init__(self, lang: str, show_test: bool = False, *args, **kwargs):
+    def __init__(
+        self,
+        lang: str,
+        show_test: bool = False,
+        show_wallet: bool = False,
+        show_referral: bool = False,
+        show_tutorial: bool = False,
+        *args,
+        **kwargs,
+    ):
         super().__init__(*args, **kwargs)
         cb = ShopKeyboardCallback
-        self.button(text=t(lang, "btn_plans"), callback_data=cb(action=ShopAction.plans))
-        self.button(text=t(lang, "btn_renew"), callback_data=cb(action=ShopAction.renew))
+        # Colored buttons (Bot API style: danger=red, success=green, primary=blue)
+        self.button(
+            text=t(lang, "btn_buy_new"),
+            callback_data=cb(action=ShopAction.plans),
+            style=ButtonStyle.DANGER,
+        )
+        self.button(
+            text=t(lang, "btn_tariffs"),
+            callback_data=cb(action=ShopAction.tariffs),
+        )
+        self.button(
+            text=t(lang, "btn_my_orders"),
+            callback_data=cb(action=ShopAction.my_orders),
+            style=ButtonStyle.PRIMARY,
+        )
+        self.button(
+            text=t(lang, "btn_renew"),
+            callback_data=cb(action=ShopAction.renew),
+            style=ButtonStyle.SUCCESS,
+        )
+        rows: list[int] = [1, 1, 2]
         if show_test:
-            self.button(text=t(lang, "btn_test"), callback_data=cb(action=ShopAction.test))
-        self.button(text=t(lang, "btn_my_orders"), callback_data=cb(action=ShopAction.my_orders))
-        self.button(text=t(lang, "btn_support"), callback_data=cb(action=ShopAction.support))
+            self.button(
+                text=t(lang, "btn_test"),
+                callback_data=cb(action=ShopAction.test),
+                style=ButtonStyle.DANGER,
+            )
+            rows.append(1)
+        extras: list[tuple[str, ShopAction]] = []
+        if show_tutorial:
+            extras.append(("btn_tutorial", ShopAction.tutorial))
+        if show_wallet:
+            extras.append(("btn_wallet", ShopAction.wallet))
+        if show_referral:
+            extras.append(("btn_referral", ShopAction.referral))
+        extras.append(("btn_support", ShopAction.support))
+        while extras:
+            chunk = extras[:2]
+            extras = extras[2:]
+            for key, action in chunk:
+                self.button(text=t(lang, key), callback_data=cb(action=action))
+            rows.append(len(chunk))
         self.button(text=t(lang, "btn_lang"), callback_data=cb(action=ShopAction.lang))
-        if show_test:
-            self.adjust(2, 1, 2, 1)
-        else:
-            self.adjust(2, 2, 1)
+        rows.append(1)
+        self.adjust(*rows)
 
 
 class ShopSellerKeyboard(InlineKeyboardBuilder):
@@ -133,16 +181,22 @@ class ShopPayMethodKeyboard(InlineKeyboardBuilder):
         cb = ShopKeyboardCallback
         labels = {
             "card": "btn_pay_card",
+            "wallet": "btn_pay_wallet",
             "zarinpal": "btn_pay_zarinpal",
             "idpay": "btn_pay_idpay",
             "nowpayments": "btn_pay_nowpayments",
             "paypal": "btn_pay_paypal",
             "stripe": "btn_pay_stripe",
         }
+        styles = {
+            "wallet": ButtonStyle.SUCCESS,
+            "card": ButtonStyle.PRIMARY,
+        }
         for index, gw in enumerate(gateways):
             self.button(
                 text=t(lang, labels.get(gw, "btn_pay_card")),
                 callback_data=cb(action=ShopAction.pay_method, plan_id=index),
+                style=styles.get(gw),
             )
         self.button(text=t(lang, "btn_back"), callback_data=cb(action=ShopAction.home))
         n = len(gateways)
@@ -199,6 +253,7 @@ class ShopKeyboard:
 
     Callback = ShopKeyboardCallback
 
+
 class ShopAdminAction(str, Enum):
     home = "home"
     toggle = "toggle"
@@ -234,6 +289,12 @@ class ShopAdminAction(str, Enum):
     payments = "pays"
     toggle_pay = "tpay"
     set_pay = "spay"
+    toggle_wallet = "twallet"
+    credit_wallet = "cwallet"
+    toggle_referral = "tref"
+    set_referral = "sref"
+    toggle_tutorial = "ttut"
+    set_tutorial = "stut"
     stats = "stats"
     accounting = "acct"
 
@@ -254,17 +315,35 @@ class ShopAdminKeyboard(InlineKeyboardBuilder):
         self.button(text=t(lang, "btn_accounting"), callback_data=self.Callback(action=ShopAdminAction.accounting))
         self.button(text=t(lang, "btn_welcome"), callback_data=self.Callback(action=ShopAdminAction.set_welcome))
         self.button(text=t(lang, "btn_card_note"), callback_data=self.Callback(action=ShopAdminAction.set_card_note))
-        self.button(text=t(lang, "btn_card_photos"), callback_data=self.Callback(action=ShopAdminAction.set_card_photos))
+        self.button(
+            text=t(lang, "btn_card_photos"), callback_data=self.Callback(action=ShopAdminAction.set_card_photos)
+        )
         self.button(text=t(lang, "btn_test_settings"), callback_data=self.Callback(action=ShopAdminAction.set_test))
         self.button(text=t(lang, "btn_toggle_test"), callback_data=self.Callback(action=ShopAdminAction.toggle_test))
         self.button(text=t(lang, "btn_custom_settings"), callback_data=self.Callback(action=ShopAdminAction.set_custom))
-        self.button(text=t(lang, "btn_toggle_custom"), callback_data=self.Callback(action=ShopAdminAction.toggle_custom))
+        self.button(
+            text=t(lang, "btn_toggle_custom"), callback_data=self.Callback(action=ShopAdminAction.toggle_custom)
+        )
         self.button(text=t(lang, "btn_payments"), callback_data=self.Callback(action=ShopAdminAction.payments))
+        self.button(
+            text=t(lang, "btn_toggle_wallet"), callback_data=self.Callback(action=ShopAdminAction.toggle_wallet)
+        )
+        self.button(
+            text=t(lang, "btn_credit_wallet"), callback_data=self.Callback(action=ShopAdminAction.credit_wallet)
+        )
+        self.button(
+            text=t(lang, "btn_toggle_referral"), callback_data=self.Callback(action=ShopAdminAction.toggle_referral)
+        )
+        self.button(text=t(lang, "btn_set_referral"), callback_data=self.Callback(action=ShopAdminAction.set_referral))
+        self.button(
+            text=t(lang, "btn_toggle_tutorial"), callback_data=self.Callback(action=ShopAdminAction.toggle_tutorial)
+        )
+        self.button(text=t(lang, "btn_set_tutorial"), callback_data=self.Callback(action=ShopAdminAction.set_tutorial))
         self.button(text=t(lang, "btn_add_plan"), callback_data=self.Callback(action=ShopAdminAction.add_plan))
         self.button(text=t(lang, "btn_list_plans"), callback_data=self.Callback(action=ShopAdminAction.list_plans))
         self.button(text=t(lang, "btn_pending"), callback_data=self.Callback(action=ShopAdminAction.pending))
         self.button(text=t(lang, "btn_back"), callback_data=self.Callback(action=ShopAdminAction.home, id=-1))
-        self.adjust(2, 2, 2, 2, 2, 2, 2, 2, 1)
+        self.adjust(2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1)
 
 
 # id encoding for payment admin callbacks

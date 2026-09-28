@@ -9,6 +9,7 @@ from app.shop.payments import (
     GATEWAY_NOWPAYMENTS,
     GATEWAY_PAYPAL,
     GATEWAY_STRIPE,
+    GATEWAY_WALLET,
     GATEWAY_ZARINPAL,
     PaymentCreateResult,
     PaymentGatewayError,
@@ -46,6 +47,7 @@ def _cfg(**kwargs):
         "pay_callback_base_url": "https://panel.example.com",
         "pay_fx_toman_per_usd": 600_000,
         "pay_unpaid_expire_minutes": 60,
+        "wallet_enabled": False,
     }
     base.update(kwargs)
     return SimpleNamespace(**base)
@@ -70,6 +72,8 @@ def test_fx_helper_and_mask():
 
 def test_enabled_gateways_requires_credentials():
     assert enabled_gateways(_cfg()) == [GATEWAY_CARD]
+    assert GATEWAY_WALLET not in enabled_gateways(_cfg())
+    assert GATEWAY_WALLET in enabled_gateways(_cfg(wallet_enabled=True))
     assert GATEWAY_ZARINPAL not in enabled_gateways(_cfg(pay_zarinpal_enabled=True))
     assert GATEWAY_ZARINPAL in enabled_gateways(
         _cfg(pay_zarinpal_enabled=True, pay_zarinpal_merchant_id="merchant-uuid-1234")

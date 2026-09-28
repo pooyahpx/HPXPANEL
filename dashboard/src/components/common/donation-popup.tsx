@@ -1,7 +1,6 @@
-﻿import { Heart, X } from 'lucide-react'
+﻿import { ArrowUpRight, Github, Sparkles, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { getAuthToken } from '@/utils/authStorage'
 import { DONATION_URL, REPO_URL } from '@/constants/Project'
@@ -246,7 +245,7 @@ export default function DonationPopup() {
 
   const handleClose = () => {
     setIsAnimating(false)
-    setTimeout(() => setIsVisible(false), 500)
+    setTimeout(() => setIsVisible(false), 280)
   }
 
   const handleDonate = () => {
@@ -262,86 +261,97 @@ export default function DonationPopup() {
   if (!isVisible) return null
 
   return (
-    <div className="pointer-events-none fixed inset-0 z-[100] flex items-center justify-center p-4">
-      {/* Backdrop */}
+    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[100] flex justify-center p-3 sm:p-5 md:justify-end md:p-6">
+      {/* Soft vignette — no heavy modal blur */}
       <div
         className={cn(
-          'pointer-events-auto absolute inset-0 bg-black/40 backdrop-blur-sm',
-          'will-change-opacity transition-opacity duration-700 ease-in-out',
+          'pointer-events-auto absolute inset-0 bg-gradient-to-t from-black/50 via-black/10 to-transparent',
+          'transition-opacity duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]',
           isAnimating ? 'opacity-100' : 'opacity-0',
         )}
         onClick={handleClose}
+        aria-hidden
       />
 
-      {/* Popup */}
-      <div
+      <aside
+        role="dialog"
+        aria-labelledby="donation-sheet-title"
+        aria-modal="true"
         className={cn(
-          'pointer-events-auto relative w-full max-w-md',
-          'transform transition-all duration-700 ease-out will-change-transform',
-          isAnimating ? 'translate-y-0 scale-100 opacity-100' : '-translate-y-8 scale-95 opacity-0',
+          'pointer-events-auto relative w-full max-w-[22rem] overflow-hidden rounded-2xl border border-white/10',
+          'bg-[#0c1118]/95 text-white shadow-[0_24px_80px_-24px_rgba(0,0,0,0.75)] backdrop-blur-xl',
+          'transition-[transform,opacity] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] will-change-transform',
+          isAnimating ? 'translate-y-0 opacity-100' : 'translate-y-6 opacity-0',
         )}
       >
-        <div className="border-primary/20 from-card via-card to-card/95 relative overflow-hidden rounded-2xl border-2 bg-gradient-to-br shadow-2xl">
-          {/* Animated gradient background */}
-          <div className="from-primary/5 to-primary/10 absolute inset-0 bg-gradient-to-br via-transparent" />
-          <div className="from-primary/0 via-primary/5 to-primary/0 absolute inset-0 bg-gradient-to-tr" />
+        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-sky-400/50 to-transparent" />
+        <div className="absolute -start-16 -top-20 size-40 rounded-full bg-sky-500/10 blur-3xl" aria-hidden />
 
-          {/* Close button */}
-          <button onClick={handleClose} className="bg-background/80 hover:bg-background absolute top-4 right-4 z-10 rounded-full p-2 transition-all duration-200 hover:scale-110" aria-label="Close">
-            <X className="h-4 w-4" />
-          </button>
+        <button
+          type="button"
+          onClick={handleClose}
+          className="absolute end-2.5 top-2.5 z-10 rounded-lg p-1.5 text-white/45 transition-colors hover:bg-white/5 hover:text-white"
+          aria-label={t('close', { defaultValue: 'Close' })}
+        >
+          <X className="size-3.5" />
+        </button>
 
-          {/* Content */}
-          <div className="relative p-8">
-            {/* Heart icon with enhanced animation */}
-            <div className="mb-6 flex justify-center">
-              <div className="relative">
-                <div className="bg-primary/30 absolute inset-0 rounded-full blur-xl" />
-                <div className="bg-primary/20 absolute -inset-2 animate-ping rounded-full" style={{ animationDuration: '2s' }} />
-                <div className="border-primary/20 from-primary/20 to-primary/10 relative rounded-full border bg-gradient-to-br p-4 backdrop-blur-sm">
-                  <Heart className="fill-primary text-primary h-10 w-10" />
-                </div>
-              </div>
+        <div className="relative space-y-4 p-4 pt-5 sm:p-5">
+          <div className="flex items-start gap-3 pe-6">
+            <div className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-sky-400/20 bg-sky-400/10 text-sky-300">
+              <Sparkles className="size-4" />
             </div>
-
-            {/* Title */}
-            <h3 className="from-primary via-primary to-primary/80 mb-3 bg-gradient-to-r bg-clip-text text-center text-2xl font-bold text-transparent">
-              {t('donation.title', { defaultValue: 'Support HPXPANEL' })}
-            </h3>
-
-            {/* Message */}
-            <p className="text-muted-foreground mb-6 px-2 text-center text-sm leading-relaxed">
-              {t('donation.message', {
-                defaultValue: 'Your support helps us improve HPXPANEL and build better features for everyone!',
-              })}
-            </p>
-
-            {/* Action buttons */}
-            <div className="flex flex-col gap-3">
-              <Button
-                onClick={handleDonate}
-                size="lg"
-                className="from-primary to-primary/90 text-primary-foreground hover:from-primary/90 hover:to-primary w-full bg-gradient-to-r font-semibold shadow-lg transition-all duration-300 hover:scale-[1.03] hover:shadow-xl active:scale-[0.98]"
-              >
-                <Heart className="mr-2 h-5 w-5 fill-current" />
-                {t('donation.donate', { defaultValue: 'Donate Now' })}
-              </Button>
-
-              <Button
-                onClick={handleGitHub}
-                variant="outline"
-                size="lg"
-                className="border-primary/30 hover:border-primary/50 hover:bg-primary/5 w-full transition-all duration-300 hover:scale-[1.03] active:scale-[0.98]"
-              >
-                <svg className="mr-2 h-5 w-5" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
-                </svg>
-                {t('donation.starOnGitHub', { defaultValue: 'Star on GitHub' })}
-              </Button>
+            <div className="min-w-0 space-y-1">
+              <p className="font-mono text-[10px] font-semibold tracking-[0.16em] text-sky-300/80 uppercase">
+                {t('donation.eyebrow', { defaultValue: 'Keep the uplink alive' })}
+              </p>
+              <h3 id="donation-sheet-title" className="text-[15px] leading-snug font-semibold tracking-tight">
+                {t('donation.title', { defaultValue: 'Support HPXPANEL' })}
+              </h3>
+              <p className="text-[12px] leading-relaxed text-white/55">
+                {t('donation.message', {
+                  defaultValue: 'Fuel the next features — donate or star the repo if HPXPANEL helps your stack.',
+                })}
+              </p>
             </div>
           </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={handleDonate}
+              className={cn(
+                'group flex h-10 items-center justify-center gap-1.5 rounded-xl bg-sky-400 px-3',
+                'text-[12px] font-semibold text-[#071018] transition-[transform,background-color] duration-150',
+                'hover:bg-sky-300 active:scale-[0.98]',
+              )}
+            >
+              {t('donation.donate', { defaultValue: 'Donate' })}
+              <ArrowUpRight className="size-3.5 opacity-70 transition-transform duration-150 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+            </button>
+            <button
+              type="button"
+              onClick={handleGitHub}
+              className={cn(
+                'group flex h-10 items-center justify-center gap-1.5 rounded-xl border border-white/12 bg-white/[0.04] px-3',
+                'text-[12px] font-medium text-white/85 transition-[transform,background-color,border-color] duration-150',
+                'hover:border-white/20 hover:bg-white/[0.07] active:scale-[0.98]',
+              )}
+            >
+              <Github className="size-3.5" />
+              {t('donation.starOnGitHub', { defaultValue: 'Star' })}
+            </button>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleClose}
+            className="w-full text-center text-[11px] text-white/35 transition-colors hover:text-white/60"
+          >
+            {t('donation.later', { defaultValue: 'Not now' })}
+          </button>
         </div>
-      </div>
+      </aside>
     </div>
   )
 }

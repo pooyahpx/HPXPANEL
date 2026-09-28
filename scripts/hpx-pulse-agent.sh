@@ -28,11 +28,18 @@ warn() { echo "[HPX Pulse !] $*" >&2; }
 die()  { echo "[HPX Pulse x] $*" >&2; exit 1; }
 has()  { command -v "$1" >/dev/null 2>&1; }
 
-# Set HPX_INSECURE=1 (or pass --insecure) when panel TLS cert is self-signed / wrong host.
+# Set HPX_INSECURE=1 (or pass --insecure) when panel TLS cert is self-signed / wrong host / IP URL.
 CURL_INSECURE_ARGS=()
-if [ "${HPX_INSECURE:-0}" = "1" ] || [ "${HPX_INSECURE:-}" = "true" ]; then
-  CURL_INSECURE_ARGS=(-k)
-fi
+
+refresh_curl_insecure() {
+  if [ "${HPX_INSECURE:-0}" = "1" ] || [ "${HPX_INSECURE:-}" = "true" ]; then
+    CURL_INSECURE_ARGS=(-k)
+  else
+    CURL_INSECURE_ARGS=()
+  fi
+}
+
+refresh_curl_insecure
 
 # Survives command-substitution subshells (set -u safe). Written by curl_panel_post.
 CURL_LAST_ERR=""
@@ -178,6 +185,7 @@ IRAN_PUBLIC_IP=${IRAN_PUBLIC_IP:-}
 ABROAD_PUBLIC_IP=${ABROAD_PUBLIC_IP:-}
 PORT_FORWARDS=${PORT_FORWARDS:-}
 HPX_AGENT_ASSETS_BASE=${HPX_AGENT_ASSETS_BASE:-}
+HPX_INSECURE=${HPX_INSECURE:-0}
 EOF
   chmod 600 "$dest"
 }
@@ -195,6 +203,7 @@ load_env_file() {
   [ -f "$file" ] || return 1
   # shellcheck disable=SC1090
   set -a; source "$file"; set +a
+  refresh_curl_insecure
   return 0
 }
 
@@ -395,8 +404,9 @@ panel_api_bases() {
   if [[ "$u" =~ ^(https?://[^:/]+):8000$ ]]; then
     _emit_base "${BASH_REMATCH[1]}"
   fi
-  # If join command has no port (assumed 443), also try :8000 (panel listen port).
-  if [[ "$u" =~ ^(https?://[^:/]+)$ ]]; then
+  # Only probe :8000 for plain http hosts — https on default 443 must not fall back to :8000
+  # (that 000 overwrites a real 401 claim error and confuses operators).
+  if [[ "$u" =~ ^(http://[^:/]+)$ ]]; then
     _emit_base "${u}:8000"
   fi
 }
@@ -1031,9 +1041,13 @@ cmd_join() {
       break
     fi
     if [ "$http_code" = "401" ] || [ "$http_code" = "403" ]; then
-      detail="HTTP ${http_code} = bad/expired token — regenerate Tokens in panel"
-    elif [ "$http_code" = "000" ]; then
-      detail="HTTP 000 = this VPS cannot open TCP/TLS to panel (firewall / blocked port / DNS / bad cert)"
+      detail="HTTP ${http_code} = bad/expired/already-used token — regenerate Tokens in panel (do not reuse the same hpxpi_/hpxpa_)"
+      break
+    fi
+    if [ "$http_code" = "000" ] && [ -z "$detail" ]; then
+      detail="HTTP 000 = this VPS cannot open TCP/TLS to panel (firewall / blocked port / DNS / SNI filter). Iran: use panel IP + --insecure from Tokens"
+    elif [ -z "$detail" ] && [ "$http_code" != "200" ]; then
+      detail="HTTP ${http_code}"
     fi
   done < <(panel_api_bases)
   rm -f "$claim_tmp"

@@ -37,6 +37,8 @@ async def get_buyer_shop_config(
     """Resolve which enabled shop a buyer is shopping from (multi-shop aware)."""
     if start_arg:
         raw = start_arg.strip()
+        if raw.lower().startswith("ref_") or raw.lower().startswith("ref-"):
+            raw = ""
         if raw.lower().startswith("shop_"):
             raw = raw[5:]
         if raw.lower().startswith("seller_"):
@@ -614,7 +616,7 @@ async def start_checkout(event, db, state, lang: str, *, summary_text: str) -> N
     from aiogram import types
 
     from app.db.crud.shop import get_enabled_shop_config
-    from app.shop.payments import GATEWAY_CARD, enabled_gateways
+    from app.shop.payments import GATEWAY_CARD, GATEWAY_WALLET, enabled_gateways
     from app.telegram.keyboards.shop import ShopPayMethodKeyboard
     from app.telegram.utils import forms
     from app.telegram.utils.shop_helpers import get_buyer_shop_config
@@ -632,6 +634,9 @@ async def start_checkout(event, db, state, lang: str, *, summary_text: str) -> N
     await state.update_data(pay_gateways=gateways, lang=lang, checkout_summary=summary_text)
     if len(gateways) == 1 and gateways[0] == GATEWAY_CARD:
         await continue_card_checkout(event, state, lang, config, summary_text)
+        return
+    if len(gateways) == 1 and gateways[0] == GATEWAY_WALLET:
+        await continue_wallet_checkout(event, db, state, lang, config, summary_text)
         return
     if len(gateways) == 1:
         await continue_online_checkout(event, db, state, lang, config, gateways[0], summary_text)
@@ -739,10 +744,115 @@ async def continue_online_checkout(event, db, state, lang: str, config, gateway:
             await event.answer(msg)
         return
 
-    text = summary_text + "\n\n" + t(
-        lang, "pay_online_link", gateway=gateway, url=result.payment_url, id=order.id
-    )
+    text = summary_text + "\n\n" + t(lang, "pay_online_link", gateway=gateway, url=result.payment_url, id=order.id)
     await state.clear()
+    if isinstance(event, types.CallbackQuery):
+        try:
+            await event.message.edit_text(text)
+        except Exception:
+            await event.message.answer(text)
+        await event.answer()
+    else:
+        await event.answer(text)
+
+
+async def continue_wallet_checkout(event, db, state, lang: str, config, summary_text: str) -> None:
+    """Pay from buyer wallet balance and auto-approve the order."""
+    from aiogram import types
+
+    from app.db.crud.shop import create_shop_order, update_shop_order_payment
+    from app.db.crud.shop_wallet import debit_wallet, get_or_create_wallet
+    from app.db.models import ShopOrderStatus
+    from app.operation import OperatorType
+    from app.operation.shop import ShopOperation
+    from app.telegram.utils.i18n import format_price
+
+    data = await state.get_data()
+    admin_id = int(data.get("admin_id") or config.admin_id)
+    buyer_id = event.from_user.id
+    amount = int(data.get("quoted_price_toman") or 0)
+    if amount <= 0 and data.get("plan_id"):
+        from app.db.crud.shop import get_shop_plan
+
+        plan = await get_shop_plan(db, int(data["plan_id"]))
+        if plan is not None:
+            amount = int(plan.price_toman or 0)
+    wallet = await get_or_create_wallet(db, admin_id, buyer_id)
+    if int(wallet.balance_toman or 0) < amount:
+        msg = t(
+            lang,
+            "wallet_insufficient",
+            balance=format_price(int(wallet.balance_toman or 0)),
+            price=format_price(amount),
+        )
+        if isinstance(event, types.CallbackQuery):
+            await event.answer(msg, show_alert=True)
+        else:
+            await event.answer(msg)
+        return
+
+    plan_id = data.get("plan_id")
+    order = await create_shop_order(
+        db,
+        plan_id=int(plan_id) if plan_id else None,
+        admin_id=admin_id,
+        buyer_telegram_id=buyer_id,
+        buyer_username=getattr(event.from_user, "username", None),
+        order_kind=data.get("order_kind") or "purchase",
+        renew_user_id=int(data["renew_user_id"]) if data.get("renew_user_id") else None,
+        requested_username=data.get("requested_username"),
+        custom_data_gb=data.get("custom_data_gb"),
+        custom_expire_days=data.get("custom_expire_days"),
+        custom_ip_limit=data.get("custom_ip_limit"),
+        quoted_price_toman=amount,
+        is_custom=bool(data.get("is_custom")),
+        payment_method="wallet",
+        payment_paid=False,
+    )
+    try:
+        await debit_wallet(
+            db,
+            admin_id=admin_id,
+            buyer_telegram_id=buyer_id,
+            amount_toman=amount,
+            kind="purchase",
+            note=f"order #{order.id}",
+            order_id=order.id,
+        )
+    except ValueError:
+        await update_shop_order_payment(db, order, payment_paid=False)
+        from app.db.crud.shop import update_order_status
+
+        await update_order_status(db, order, ShopOrderStatus.rejected, note="insufficient wallet")
+        msg = t(
+            lang,
+            "wallet_insufficient",
+            balance=format_price(int(wallet.balance_toman or 0)),
+            price=format_price(amount),
+        )
+        if isinstance(event, types.CallbackQuery):
+            await event.answer(msg, show_alert=True)
+        else:
+            await event.answer(msg)
+        return
+
+    await update_shop_order_payment(db, order, payment_paid=True, payment_ref=f"wallet-{order.id}")
+    shop_op = ShopOperation(OperatorType.TELEGRAM)
+    result = await shop_op.fulfill_paid_order(db, order.id)
+    await state.clear()
+    if result is None:
+        text = t(lang, "wallet_paid_pending", id=order.id, price=format_price(amount))
+    else:
+        text = t(
+            lang,
+            "wallet_paid_ok",
+            id=order.id,
+            username=result.username,
+            price=format_price(amount),
+        )
+        if result.subscription_url:
+            text += f"\n🔗 {result.subscription_url}"
+    text = f"{summary_text}\n\n{text}" if summary_text else text
     if isinstance(event, types.CallbackQuery):
         try:
             await event.message.edit_text(text)

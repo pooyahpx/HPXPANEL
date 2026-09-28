@@ -1218,7 +1218,32 @@ class TelegramProfile(Base):
     join_notified: Mapped[bool] = mapped_column(server_default="0", default=False)
     test_claimed: Mapped[bool] = mapped_column(server_default="0", default=False)
     preferred_shop_admin_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True, default=None)
+    referral_code: Mapped[str | None] = mapped_column(String(32), unique=True, nullable=True, default=None)
+    referred_by_telegram_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True, default=None, index=True)
+    referral_rewarded: Mapped[bool] = mapped_column(server_default="0", default=False)
     updated_at: Mapped[dt] = mapped_column(DateTime(timezone=True), default_factory=lambda: dt.now(UTC), init=False)
+
+
+class ShopBuyerWallet(Base, CreatedAtUTCMixin):
+    """Per-buyer balance scoped to a shop admin."""
+
+    __tablename__ = "shop_buyer_wallets"
+    __table_args__ = (UniqueConstraint("admin_id", "buyer_telegram_id", name="uq_shop_buyer_wallet"),)
+
+    admin_id: Mapped[int] = fk_id_column("admins.id", ondelete="CASCADE")
+    buyer_telegram_id: Mapped[int] = mapped_column(BigInteger, index=True)
+    balance_toman: Mapped[int] = mapped_column(BigInteger, default=0, server_default="0")
+
+
+class ShopWalletLedger(Base, CreatedAtUTCMixin):
+    __tablename__ = "shop_wallet_ledger"
+
+    admin_id: Mapped[int] = fk_id_column("admins.id", ondelete="CASCADE")
+    buyer_telegram_id: Mapped[int] = mapped_column(BigInteger, index=True)
+    amount_toman: Mapped[int] = mapped_column(BigInteger)  # +credit / -debit
+    kind: Mapped[str] = mapped_column(String(32), default="adjust")  # deposit|referral|purchase|adjust
+    note: Mapped[str | None] = mapped_column(String(500), default=None)
+    order_id: Mapped[int | None] = fk_id_column("shop_orders.id", ondelete="SET NULL", default=None, nullable=True)
 
 
 class TelegramSupportTicket(Base):
@@ -1497,6 +1522,14 @@ class ShopConfig(Base, CreatedAtUTCMixin):
     pay_callback_base_url: Mapped[str | None] = mapped_column(String(512), default=None)
     pay_fx_toman_per_usd: Mapped[int] = mapped_column(BigInteger, default=600_000)
     pay_unpaid_expire_minutes: Mapped[int] = mapped_column(Integer, default=60)
+    # Buyer wallet + referral (owner toggles)
+    wallet_enabled: Mapped[bool] = mapped_column(server_default="0", default=False)
+    referral_enabled: Mapped[bool] = mapped_column(server_default="0", default=False)
+    referral_reward_toman: Mapped[int] = mapped_column(BigInteger, default=0, server_default="0")
+    referral_reward_data_gb: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    tutorial_enabled: Mapped[bool] = mapped_column(server_default="0", default=False)
+    tutorial_text: Mapped[str | None] = mapped_column(String(2000), default=None)
+    tutorial_url: Mapped[str | None] = mapped_column(String(512), default=None)
 
 
 class ShopPlan(Base, CreatedAtUTCMixin):

@@ -122,3 +122,16 @@ class ManageCreateBudget(StatesGroup):
 
 class ClaimOwner(StatesGroup):
     waiting_password = State()
+
+
+class ShopAdminReferral(StatesGroup):
+    waiting_toman = State()
+    waiting_gb = State()
+
+
+class ShopAdminTutorial(StatesGroup):
+    waiting_text = State()
+
+
+class ShopAdminWalletCredit(StatesGroup):
+    waiting_payload = State()

@@ -14,6 +14,7 @@ import httpx
 from app.db.models import ShopConfig
 
 GATEWAY_CARD = "card"
+GATEWAY_WALLET = "wallet"
 GATEWAY_ZARINPAL = "zarinpal"
 GATEWAY_IDPAY = "idpay"
 GATEWAY_NOWPAYMENTS = "nowpayments"
@@ -28,7 +29,7 @@ ONLINE_GATEWAYS = (
     GATEWAY_STRIPE,
 )
 
-ALL_GATEWAYS = (GATEWAY_CARD, *ONLINE_GATEWAYS)
+ALL_GATEWAYS = (GATEWAY_CARD, GATEWAY_WALLET, *ONLINE_GATEWAYS)
 
 
 @dataclass(frozen=True)
@@ -55,6 +56,8 @@ def enabled_gateways(config: ShopConfig) -> list[str]:
     out: list[str] = []
     if getattr(config, "pay_card_enabled", True):
         out.append(GATEWAY_CARD)
+    if getattr(config, "wallet_enabled", False):
+        out.append(GATEWAY_WALLET)
     if getattr(config, "pay_zarinpal_enabled", False) and (config.pay_zarinpal_merchant_id or "").strip():
         out.append(GATEWAY_ZARINPAL)
     if getattr(config, "pay_idpay_enabled", False) and (config.pay_idpay_api_key or "").strip():

@@ -68,7 +68,31 @@ def _shop_home_text(lang: str, config) -> str:
 
 async def _home_markup(db: AsyncSession, lang: str, telegram_id: int, config):
     show_test = await buyer_show_test_button(db, telegram_id, config)
-    return ShopHomeKeyboard(lang, show_test=show_test).as_markup()
+    return ShopHomeKeyboard(
+        lang,
+        show_test=show_test,
+        show_wallet=bool(getattr(config, "wallet_enabled", False)),
+        show_referral=bool(getattr(config, "referral_enabled", False)),
+        show_tutorial=bool(getattr(config, "tutorial_enabled", False)),
+    ).as_markup()
+
+
+async def _maybe_attach_referral(db: AsyncSession, telegram_id: int | None, start_arg: str | None) -> None:
+    if not telegram_id or not start_arg:
+        return
+    raw = start_arg.strip()
+    code = None
+    lower = raw.lower()
+    if lower.startswith(("ref_", "ref-")):
+        code = raw[4:]
+    if not code:
+        return
+    from app.db.crud.shop_wallet import attach_referrer, get_profile_by_referral_code
+
+    referrer = await get_profile_by_referral_code(db, code)
+    if referrer is None:
+        return
+    await attach_referrer(db, telegram_id, int(referrer.telegram_id))
 
 
 async def render_shop_home(
@@ -80,6 +104,7 @@ async def render_shop_home(
     start_arg: str | None = None,
 ):
     telegram_id = message.from_user.id if message.from_user else None
+    await _maybe_attach_referral(db, telegram_id, start_arg)
     if state is not None and start_arg:
         cfg = await get_buyer_shop_config(
             db, state, telegram_id=telegram_id, start_arg=start_arg, require_selection=True
@@ -176,7 +201,9 @@ async def change_language(event: types.CallbackQuery, db: AsyncSession):
 
 
 @router.callback_query(ShopKeyboard.Callback.filter(ShopAction.plans == F.action))
-async def shop_plans(event: types.CallbackQuery, db: AsyncSession,
+async def shop_plans(
+    event: types.CallbackQuery,
+    db: AsyncSession,
     state: FSMContext,
 ):
     lang = await _lang(db, event.from_user.id)
@@ -197,6 +224,134 @@ async def shop_plans(event: types.CallbackQuery, db: AsyncSession,
     await event.answer()
 
 
+@router.callback_query(ShopKeyboard.Callback.filter(ShopAction.tariffs == F.action))
+async def shop_tariffs(event: types.CallbackQuery, db: AsyncSession, state: FSMContext):
+    lang = await _lang(db, event.from_user.id)
+    config = await get_buyer_shop_config(db, state, telegram_id=event.from_user.id)
+    if not config or not config.enabled:
+        await event.answer(t(lang, "shop_disabled"), show_alert=True)
+        return
+    plans = await list_active_plans(db, config.admin_id)
+    if not plans:
+        text = t(lang, "shop_empty")
+    else:
+        lines = [t(lang, "tariffs_header"), ""]
+        for plan in plans:
+            days = t(lang, "days_unlimited") if not plan.expire_days else str(plan.expire_days)
+            data = format_bytes(plan.data_limit) if plan.data_limit else t(lang, "days_unlimited")
+            lines.append(
+                t(
+                    lang,
+                    "tariff_row",
+                    name=plan.name,
+                    data=data,
+                    days=days,
+                    price=format_price(plan.price_toman),
+                )
+            )
+        text = "\n".join(lines)
+    from aiogram.utils.keyboard import InlineKeyboardBuilder
+
+    kb = InlineKeyboardBuilder()
+    kb.button(text=t(lang, "btn_back"), callback_data=ShopKeyboardCallback(action=ShopAction.home))
+    kb.adjust(1)
+    try:
+        await event.message.edit_text(text, reply_markup=kb.as_markup())
+    except TelegramBadRequest:
+        await event.message.answer(text, reply_markup=kb.as_markup())
+    await event.answer()
+
+
+@router.callback_query(ShopKeyboard.Callback.filter(ShopAction.wallet == F.action))
+async def shop_wallet(event: types.CallbackQuery, db: AsyncSession, state: FSMContext):
+    lang = await _lang(db, event.from_user.id)
+    config = await get_buyer_shop_config(db, state, telegram_id=event.from_user.id)
+    if not config or not config.enabled or not getattr(config, "wallet_enabled", False):
+        await event.answer(t(lang, "wallet_disabled"), show_alert=True)
+        return
+    from app.db.crud.shop_wallet import get_or_create_wallet
+
+    wallet = await get_or_create_wallet(db, config.admin_id, event.from_user.id)
+    text = t(lang, "wallet_balance", balance=format_price(int(wallet.balance_toman or 0)))
+    from aiogram.utils.keyboard import InlineKeyboardBuilder
+
+    kb = InlineKeyboardBuilder()
+    kb.button(text=t(lang, "btn_back"), callback_data=ShopKeyboardCallback(action=ShopAction.home))
+    kb.adjust(1)
+    try:
+        await event.message.edit_text(text, reply_markup=kb.as_markup())
+    except TelegramBadRequest:
+        await event.message.answer(text, reply_markup=kb.as_markup())
+    await event.answer()
+
+
+@router.callback_query(ShopKeyboard.Callback.filter(ShopAction.referral == F.action))
+async def shop_referral(event: types.CallbackQuery, db: AsyncSession, state: FSMContext):
+    lang = await _lang(db, event.from_user.id)
+    config = await get_buyer_shop_config(db, state, telegram_id=event.from_user.id)
+    if not config or not config.enabled or not getattr(config, "referral_enabled", False):
+        await event.answer(t(lang, "referral_disabled"), show_alert=True)
+        return
+    from app.db.crud.shop_wallet import ensure_referral_code
+    from app.telegram import get_bot
+
+    code = await ensure_referral_code(db, event.from_user.id)
+    bot = get_bot()
+    username = None
+    if bot:
+        try:
+            me = await bot.get_me()
+            username = me.username
+        except Exception:
+            username = None
+    link = f"https://t.me/{username}?start=ref_{code}" if username else f"ref_{code}"
+    reward_parts = []
+    toman = int(getattr(config, "referral_reward_toman", 0) or 0)
+    gb = int(getattr(config, "referral_reward_data_gb", 0) or 0)
+    if toman:
+        reward_parts.append(t(lang, "referral_reward_toman", amount=format_price(toman)))
+    if gb:
+        reward_parts.append(t(lang, "referral_reward_gb", gb=gb))
+    reward = " · ".join(reward_parts) if reward_parts else t(lang, "referral_reward_none")
+    text = rich(lang, "referral_info", link=link, code=code, reward=reward)
+    from aiogram.utils.keyboard import InlineKeyboardBuilder
+
+    kb = InlineKeyboardBuilder()
+    kb.button(text=t(lang, "btn_back"), callback_data=ShopKeyboardCallback(action=ShopAction.home))
+    kb.adjust(1)
+    try:
+        await event.message.edit_text(text, reply_markup=kb.as_markup())
+    except TelegramBadRequest:
+        await event.message.answer(text, reply_markup=kb.as_markup())
+    await event.answer()
+
+
+@router.callback_query(ShopKeyboard.Callback.filter(ShopAction.tutorial == F.action))
+async def shop_tutorial(event: types.CallbackQuery, db: AsyncSession, state: FSMContext):
+    lang = await _lang(db, event.from_user.id)
+    config = await get_buyer_shop_config(db, state, telegram_id=event.from_user.id)
+    if not config or not config.enabled or not getattr(config, "tutorial_enabled", False):
+        await event.answer(t(lang, "tutorial_disabled"), show_alert=True)
+        return
+    body = (getattr(config, "tutorial_text", None) or "").strip() or t(lang, "tutorial_empty")
+    url = (getattr(config, "tutorial_url", None) or "").strip()
+    text = body
+    if url:
+        text = f"{text}\n\n🔗 {url}"
+    from aiogram.utils.keyboard import InlineKeyboardBuilder
+
+    kb = InlineKeyboardBuilder()
+    if url:
+        kb.button(text=t(lang, "btn_open_tutorial"), url=url)
+    kb.button(text=t(lang, "btn_back"), callback_data=ShopKeyboardCallback(action=ShopAction.home))
+    kb.adjust(1)
+    try:
+        await event.message.edit_text(text, reply_markup=kb.as_markup())
+    except TelegramBadRequest:
+        await event.message.answer(text, reply_markup=kb.as_markup())
+    await event.answer()
+
+
 async def _start_username_choice(event: types.CallbackQuery, state: FSMContext, lang: str, data: dict):
     await state.set_state(forms.ShopBuy.choose_username)
     await state.update_data(**data, lang=lang)
@@ -208,7 +363,9 @@ async def _start_username_choice(event: types.CallbackQuery, state: FSMContext, 
 
 
 @router.callback_query(ShopKeyboard.Callback.filter(ShopAction.buy == F.action))
-async def buy_plan(event: types.CallbackQuery, callback_data: ShopKeyboard.Callback, db: AsyncSession, state: FSMContext):
+async def buy_plan(
+    event: types.CallbackQuery, callback_data: ShopKeyboard.Callback, db: AsyncSession, state: FSMContext
+):
     lang = await _lang(db, event.from_user.id)
     config = await get_buyer_shop_config(db, state, telegram_id=event.from_user.id)
     plan = await get_shop_plan(db, callback_data.plan_id)
@@ -289,9 +446,7 @@ async def _after_username_chosen(event: types.CallbackQuery, db: AsyncSession, s
             await event.answer(t(lang, "shop_disabled"), show_alert=True)
             return
         await state.set_state(forms.ShopBuy.waiting_gb)
-        await event.message.edit_text(
-            t(lang, "ask_custom_gb", min=config.custom_min_gb, max=config.custom_max_gb)
-        )
+        await event.message.edit_text(t(lang, "ask_custom_gb", min=config.custom_min_gb, max=config.custom_max_gb))
         await event.answer()
         return
     await _show_fixed_pay(event, db, state, lang)
@@ -386,7 +541,7 @@ async def custom_gb(event: types.Message, db: AsyncSession, state: FSMContext):
             max_days=config.custom_max_days,
             base_ip=config.custom_base_ip,
         )
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         await event.answer(t(lang, "ask_custom_gb", min=config.custom_min_gb, max=config.custom_max_gb))
         return
     await state.update_data(custom_data_gb=gb)
@@ -415,7 +570,7 @@ async def custom_days(event: types.Message, db: AsyncSession, state: FSMContext)
             max_days=config.custom_max_days,
             base_ip=config.custom_base_ip,
         )
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         await event.answer(t(lang, "ask_custom_days", min=config.custom_min_days, max=config.custom_max_days))
         return
     await state.update_data(custom_expire_days=days)
@@ -461,7 +616,7 @@ async def custom_ip_value(event: types.Message, db: AsyncSession, state: FSMCont
             max_days=config.custom_max_days,
             base_ip=config.custom_base_ip,
         )
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         await event.answer(
             t(lang, "ask_custom_ip", base=config.custom_base_ip),
             reply_markup=ShopIpKeyboard(lang, config.custom_base_ip).as_markup(),
@@ -521,7 +676,9 @@ async def _show_custom_pay(event: types.CallbackQuery, db: AsyncSession, state: 
 
 
 @router.callback_query(ShopKeyboard.Callback.filter(ShopAction.home == F.action))
-async def shop_home(event: types.CallbackQuery, db: AsyncSession,
+async def shop_home(
+    event: types.CallbackQuery,
+    db: AsyncSession,
     state: FSMContext,
 ):
     lang = await _lang(db, event.from_user.id)
@@ -536,7 +693,10 @@ async def shop_home(event: types.CallbackQuery, db: AsyncSession,
 
 
 @router.callback_query(ShopKeyboard.Callback.filter(ShopAction.test == F.action))
-async def claim_test_config(event: types.CallbackQuery, db: AsyncSession, admin: AdminDetails | None,
+async def claim_test_config(
+    event: types.CallbackQuery,
+    db: AsyncSession,
+    admin: AdminDetails | None,
     state: FSMContext,
 ):
     lang = await _lang(db, event.from_user.id)
@@ -625,7 +785,9 @@ async def claim_test_config(event: types.CallbackQuery, db: AsyncSession, admin:
 
 
 @router.callback_query(ShopKeyboard.Callback.filter(ShopAction.my_orders == F.action))
-async def my_orders(event: types.CallbackQuery, db: AsyncSession,
+async def my_orders(
+    event: types.CallbackQuery,
+    db: AsyncSession,
     state: FSMContext,
 ):
     lang = await _lang(db, event.from_user.id)
@@ -664,7 +826,9 @@ async def my_orders(event: types.CallbackQuery, db: AsyncSession,
 
 
 @router.callback_query(ShopKeyboard.Callback.filter(ShopAction.renew == F.action))
-async def renew_home(event: types.CallbackQuery, db: AsyncSession,
+async def renew_home(
+    event: types.CallbackQuery,
+    db: AsyncSession,
     state: FSMContext,
 ):
     lang = await _lang(db, event.from_user.id)
@@ -673,9 +837,7 @@ async def renew_home(event: types.CallbackQuery, db: AsyncSession,
         await event.message.edit_text(t(lang, "shop_disabled"), reply_markup=ShopHomeKeyboard(lang).as_markup())
         await event.answer()
         return
-    accounts = await list_buyer_renewable_accounts(
-        db, buyer_telegram_id=event.from_user.id, admin_id=config.admin_id
-    )
+    accounts = await list_buyer_renewable_accounts(db, buyer_telegram_id=event.from_user.id, admin_id=config.admin_id)
     if not accounts:
         await event.message.edit_text(
             t(lang, "renew_empty"),
@@ -691,7 +853,10 @@ async def renew_home(event: types.CallbackQuery, db: AsyncSession,
 
 
 @router.callback_query(ShopKeyboard.Callback.filter(ShopAction.renew_pick == F.action))
-async def renew_pick_account(event: types.CallbackQuery, callback_data: ShopKeyboard.Callback, db: AsyncSession,
+async def renew_pick_account(
+    event: types.CallbackQuery,
+    callback_data: ShopKeyboard.Callback,
+    db: AsyncSession,
     state: FSMContext,
 ):
     lang = await _lang(db, event.from_user.id)
@@ -699,9 +864,7 @@ async def renew_pick_account(event: types.CallbackQuery, callback_data: ShopKeyb
     if not config or not config.enabled or not callback_data.user_id:
         await event.answer(t(lang, "shop_disabled"), show_alert=True)
         return
-    accounts = await list_buyer_renewable_accounts(
-        db, buyer_telegram_id=event.from_user.id, admin_id=config.admin_id
-    )
+    accounts = await list_buyer_renewable_accounts(db, buyer_telegram_id=event.from_user.id, admin_id=config.admin_id)
     if not any(int(user.id) == int(callback_data.user_id) for user, _ in accounts):
         await event.answer(t(lang, "renew_invalid"), show_alert=True)
         return
@@ -727,9 +890,7 @@ async def renew_buy_plan(
         await event.answer(t(lang, "shop_disabled"), show_alert=True)
         return
 
-    accounts = await list_buyer_renewable_accounts(
-        db, buyer_telegram_id=event.from_user.id, admin_id=config.admin_id
-    )
+    accounts = await list_buyer_renewable_accounts(db, buyer_telegram_id=event.from_user.id, admin_id=config.admin_id)
     target = next((user for user, _ in accounts if int(user.id) == int(callback_data.user_id)), None)
     if target is None:
         await event.answer(t(lang, "renew_invalid"), show_alert=True)
@@ -765,7 +926,9 @@ async def support_start(event: types.CallbackQuery, db: AsyncSession, state: FSM
         return
     await state.set_state(forms.ShopSupport.waiting_message)
     await state.update_data(admin_id=config.admin_id, lang=lang)
-    await event.message.edit_text(t(lang, "support_prompt"), reply_markup=await _home_markup(db, lang, event.from_user.id, config))
+    await event.message.edit_text(
+        t(lang, "support_prompt"), reply_markup=await _home_markup(db, lang, event.from_user.id, config)
+    )
     await event.answer()
 
 
@@ -812,7 +975,9 @@ async def support_invalid(event: types.Message, state: FSMContext, db: AsyncSess
 
 
 @router.callback_query(ShopKeyboardCallback.filter(ShopAction.pay_method == F.action))
-async def choose_pay_method(event: types.CallbackQuery, callback_data: ShopKeyboardCallback, db: AsyncSession, state: FSMContext):
+async def choose_pay_method(
+    event: types.CallbackQuery, callback_data: ShopKeyboardCallback, db: AsyncSession, state: FSMContext
+):
     data = await state.get_data()
     lang = data.get("lang") or await _lang(db, event.from_user.id)
     gateways = list(data.get("pay_gateways") or [])
@@ -828,6 +993,11 @@ async def choose_pay_method(event: types.CallbackQuery, callback_data: ShopKeybo
     summary = data.get("checkout_summary") or ""
     if gateway == "card":
         await continue_card_checkout(event, state, lang, config, summary)
+        return
+    if gateway == "wallet":
+        from app.telegram.utils.shop_helpers import continue_wallet_checkout
+
+        await continue_wallet_checkout(event, db, state, lang, config, summary)
         return
     await continue_online_checkout(event, db, state, lang, config, gateway, summary)
 

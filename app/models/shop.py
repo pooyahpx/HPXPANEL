@@ -66,6 +66,13 @@ class ShopConfigResponse(BaseModel):
     pay_callback_base_url: str | None = None
     pay_fx_toman_per_usd: int = 600_000
     pay_unpaid_expire_minutes: int = 60
+    wallet_enabled: bool = False
+    referral_enabled: bool = False
+    referral_reward_toman: int = 0
+    referral_reward_data_gb: int = 0
+    tutorial_enabled: bool = False
+    tutorial_text: str | None = None
+    tutorial_url: str | None = None
     enabled_gateways: list[str] = Field(default_factory=list)
     created_at: dt | None = None
 
@@ -111,6 +118,13 @@ class ShopConfigUpdate(BaseModel):
     pay_callback_base_url: str | None = None
     pay_fx_toman_per_usd: int | None = Field(default=None, ge=1000)
     pay_unpaid_expire_minutes: int | None = Field(default=None, ge=5, le=10080)
+    wallet_enabled: bool | None = None
+    referral_enabled: bool | None = None
+    referral_reward_toman: int | None = Field(default=None, ge=0)
+    referral_reward_data_gb: int | None = Field(default=None, ge=0)
+    tutorial_enabled: bool | None = None
+    tutorial_text: str | None = Field(default=None, max_length=2000)
+    tutorial_url: str | None = Field(default=None, max_length=512)
 
     @model_validator(mode="after")
     def validate_custom_groups_and_bounds(self):

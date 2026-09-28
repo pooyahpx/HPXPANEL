@@ -318,9 +318,13 @@ panel_api_bases() {
   }
   _emit_base "$u"
   [ -n "${PANEL_URL_FALLBACK:-}" ] && _emit_base "${PANEL_URL_FALLBACK}"
-  # Iran VPS often cannot reach panel :8000 — try same host on 443 (nginx → panel).
+  # If join command has :8000, also try bare host (nginx/caddy on 443).
   if [[ "$u" =~ ^(https?://[^:/]+):8000$ ]]; then
     _emit_base "${BASH_REMATCH[1]}"
+  fi
+  # If join command has no port (assumed 443), also try :8000 (panel listen port).
+  if [[ "$u" =~ ^(https?://[^:/]+)$ ]]; then
+    _emit_base "${u}:8000"
   fi
 }
 
@@ -932,13 +936,14 @@ cmd_join() {
   body=$(jq -nc --arg t "$token" --arg h "$host" --arg s "$side" '{join_token:$t, host:$h, side:$s}')
 
   log "claiming join token (${side})..."
-  local claim_tmp http_code base claim=""
+  local claim_tmp http_code base claim="" last_codes=""
   claim_tmp="$(mktemp)"
   while IFS= read -r base; do
     [ -n "$base" ] || continue
     http_code=$(curl --http1.1 --connect-timeout 15 --max-time 90 -sS -w "%{http_code}" -o "$claim_tmp" \
       -X POST -H "Content-Type: application/json" -d "$body" \
       "${base}/api/hpx_pulse/agent/claim" 2>/dev/null) || http_code="000"
+    last_codes="${last_codes}${last_codes:+; }${base}→${http_code}"
     if [ "$http_code" = "200" ]; then
       claim="$(cat "$claim_tmp")"
       [ "$base" != "${PANEL_URL%/}" ] && log "panel claim OK at ${base} (using this for agent)"
@@ -948,7 +953,7 @@ cmd_join() {
   done < <(panel_api_bases)
   rm -f "$claim_tmp"
   if [ -z "$claim" ]; then
-    die "claim failed — use real token from panel Tokens button; if Iran cannot reach :8000 use --panel-url https://domain (443)"
+    die "claim failed (${last_codes:-no URL tried}) — copy a fresh token from panel Tokens; --panel-url must match the port you open the panel with (e.g. https://domain:8000)"
   fi
 
   AGENT_KEY=$(echo "$claim" | jq -r '.agent_key')

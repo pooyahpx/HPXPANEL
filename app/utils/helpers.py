@@ -190,10 +190,10 @@ def url_origin(url: str | None) -> str | None:
 
 
 def normalize_public_base_url(url: str | None) -> str | None:
-    """Return scheme://host with default ports stripped (:443 / :80).
+    """Return scheme://host[:port] with only default ports stripped (:443 / :80).
 
-    Also drops ``:8000`` on https — that is the panel's internal UVICORN_PORT and
-    is almost never the public address when nginx/caddy terminates TLS on 443.
+    Keeps non-default ports including ``:8000`` so Pulse/Abroad join commands match
+    the real panel listen address when there is no reverse proxy on 443.
     """
     origin = url_origin(url)
     if not origin:
@@ -206,7 +206,7 @@ def normalize_public_base_url(url: str | None) -> str | None:
     scheme = parsed.scheme.lower()
     if port is None:
         return f"{scheme}://{host}"
-    if (scheme == "https" and port in {443, 8000}) or (scheme == "http" and port == 80):
+    if (scheme == "https" and port == 443) or (scheme == "http" and port == 80):
         return f"{scheme}://{host}"
     return f"{scheme}://{host}:{port}"
 
@@ -228,7 +228,7 @@ def public_base_url_from_request(request) -> str:
         host
         and fwd_port
         and ":" not in host.split("]")[-1]
-        and not ((proto == "https" and fwd_port in {"443", "8000"}) or (proto == "http" and fwd_port == "80"))
+        and not ((proto == "https" and fwd_port == "443") or (proto == "http" and fwd_port == "80"))
     ):
         host = f"{host}:{fwd_port}"
     if not host:
@@ -263,7 +263,7 @@ async def resolve_panel_base_url(*, prefer: str | None = None) -> str | None:
     """Resolve the publicly reachable panel origin.
 
     ``prefer`` (usually the dashboard request URL) wins over ``PANEL_PUBLIC_URL`` so
-    join commands match the URL the admin is actually using — not a stale ``:8000``.
+    join commands use the same host:port the admin is browsing (including ``:8000``).
     """
     from app.settings import subscription_settings, telegram_settings
     from config import telegram_env_settings

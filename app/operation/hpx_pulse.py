@@ -200,22 +200,21 @@ class HpxPulseOperation(BaseOperation):
         return advise(model, domain=domain, sni_hint=sni_hint)
 
     async def _iran_join_commands(self, panel_url: str | None, iran_token: str) -> tuple[str, str]:
-        """Iran primary = public IP + --insecure (SNI/TLS filter bypass); alt = domain."""
+        """Iran primary = domain URL; alt = public IP + --insecure (SNI/TLS filter bypass)."""
         from app.services.hpx_tunnel.manager import resolve_panel_public_ip
 
         domain_cmd = _build_join_command_github(panel_url, iran_token, "iran")
         ip, _src = await resolve_panel_public_ip(panel_url)
         if ip:
             ip_url = _url_with_host(panel_url, ip)
-            # Primary for Iran: reach panel by IP so DPI/SNI on the domain cannot reset TLS.
             return (
-                _build_join_command_github(ip_url, iran_token, "iran", insecure=True),
                 domain_cmd,
+                _build_join_command_github(ip_url, iran_token, "iran", insecure=True),
             )
-        # No public IP resolved — keep domain command and force --insecure as safer default.
+        # No public IP resolved — domain primary; insecure domain as fallback.
         return (
+            domain_cmd,
             _build_join_command_github(panel_url, iran_token, "iran", insecure=True),
-            _build_join_command_panel(panel_url, iran_token, "iran"),
         )
 
     async def _issue_join_tokens(

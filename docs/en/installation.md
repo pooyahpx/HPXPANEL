@@ -138,7 +138,7 @@ Then regenerate **Tokens** in **HPX Pulse**.
 
 ### Iran join when domain TLS/SNI is filtered
 
-If `curl https://your-panel-domain` resets during TLS from an Iranian VPS but the panel **IP** works, use the **primary Iran** command from the dashboard (v4.7.5+): GitHub bootstrap with `--panel-url https://PANEL_IP --insecure`. Tokens are single-use — after HTTP 401, press **Tokens** again.
+Use the **recommended Iran** command (domain) first. If `curl https://your-panel-domain` resets during TLS from an Iranian VPS, use the **alternative** Iran command: GitHub bootstrap with `--panel-url https://PANEL_IP --insecure`. Tokens are single-use — after HTTP 401, press **Tokens** again.
 
 Test from the Abroad VPS:
 

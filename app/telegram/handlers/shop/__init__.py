@@ -33,7 +33,6 @@ from app.telegram.keyboards.shop import (
     ShopPlansKeyboard,
     ShopRenewAccountsKeyboard,
     ShopRenewPlansKeyboard,
-    ShopSellerKeyboard,
     ShopUsernameKeyboard,
 )
 from app.telegram.utils import forms
@@ -107,7 +106,7 @@ async def render_shop_home(
     await _maybe_attach_referral(db, telegram_id, start_arg)
     if state is not None and start_arg:
         cfg = await get_buyer_shop_config(
-            db, state, telegram_id=telegram_id, start_arg=start_arg, require_selection=True
+            db, state, telegram_id=telegram_id, start_arg=start_arg, require_selection=False
         )
         if cfg is not None:
             await state.update_data(shop_admin_id=cfg.admin_id, admin_id=cfg.admin_id)
@@ -116,17 +115,10 @@ async def render_shop_home(
 
     shops = await list_enabled_shop_configs(db)
     selected = await get_buyer_shop_config(
-        db, state, telegram_id=telegram_id, start_arg=start_arg, require_selection=True
+        db, state, telegram_id=telegram_id, start_arg=start_arg, require_selection=False
     )
     if not shops:
         await message.answer(t(lang, "shop_disabled"), reply_markup=ShopHomeKeyboard(lang).as_markup())
-        return
-    if len(shops) > 1 and selected is None:
-        sellers = [(int(cfg.admin_id), admin.username or str(cfg.admin_id)) for cfg, admin in shops]
-        await message.answer(
-            t(lang, "choose_shop_seller"),
-            reply_markup=ShopSellerKeyboard(lang, sellers).as_markup(),
-        )
         return
 
     config = selected or shops[0][0]
@@ -307,11 +299,16 @@ async def shop_referral(event: types.CallbackQuery, db: AsyncSession, state: FSM
     link = f"https://t.me/{username}?start=ref_{code}" if username else f"ref_{code}"
     reward_parts = []
     toman = int(getattr(config, "referral_reward_toman", 0) or 0)
-    gb = int(getattr(config, "referral_reward_data_gb", 0) or 0)
+    gb = float(getattr(config, "referral_reward_data_gb", 0) or 0)
     if toman:
         reward_parts.append(t(lang, "referral_reward_toman", amount=format_price(toman)))
-    if gb:
-        reward_parts.append(t(lang, "referral_reward_gb", gb=gb))
+    if gb > 0:
+        if gb < 1:
+            mb = round(gb * 1024)
+            reward_parts.append(t(lang, "referral_reward_mb", mb=mb))
+        else:
+            gb_label = int(gb) if float(gb).is_integer() else gb
+            reward_parts.append(t(lang, "referral_reward_gb", gb=gb_label))
     reward = " · ".join(reward_parts) if reward_parts else t(lang, "referral_reward_none")
     text = rich(lang, "referral_info", link=link, code=code, reward=reward)
     from aiogram.utils.keyboard import InlineKeyboardBuilder

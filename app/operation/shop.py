@@ -126,7 +126,7 @@ def _config_response(config) -> ShopConfigResponse:
         wallet_enabled=bool(getattr(config, "wallet_enabled", False)),
         referral_enabled=bool(getattr(config, "referral_enabled", False)),
         referral_reward_toman=max(0, int(getattr(config, "referral_reward_toman", None) or 0)),
-        referral_reward_data_gb=max(0, int(getattr(config, "referral_reward_data_gb", None) or 0)),
+        referral_reward_data_gb=max(0.0, float(getattr(config, "referral_reward_data_gb", None) or 0)),
         tutorial_enabled=bool(getattr(config, "tutorial_enabled", False)),
         tutorial_text=getattr(config, "tutorial_text", None),
         tutorial_url=getattr(config, "tutorial_url", None),

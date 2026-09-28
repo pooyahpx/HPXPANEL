@@ -295,6 +295,7 @@ class ShopAdminAction(str, Enum):
     set_referral = "sref"
     toggle_tutorial = "ttut"
     set_tutorial = "stut"
+    broadcast = "bcast"
     stats = "stats"
     accounting = "acct"
 
@@ -339,11 +340,12 @@ class ShopAdminKeyboard(InlineKeyboardBuilder):
             text=t(lang, "btn_toggle_tutorial"), callback_data=self.Callback(action=ShopAdminAction.toggle_tutorial)
         )
         self.button(text=t(lang, "btn_set_tutorial"), callback_data=self.Callback(action=ShopAdminAction.set_tutorial))
+        self.button(text=t(lang, "btn_broadcast"), callback_data=self.Callback(action=ShopAdminAction.broadcast))
         self.button(text=t(lang, "btn_add_plan"), callback_data=self.Callback(action=ShopAdminAction.add_plan))
         self.button(text=t(lang, "btn_list_plans"), callback_data=self.Callback(action=ShopAdminAction.list_plans))
         self.button(text=t(lang, "btn_pending"), callback_data=self.Callback(action=ShopAdminAction.pending))
         self.button(text=t(lang, "btn_back"), callback_data=self.Callback(action=ShopAdminAction.home, id=-1))
-        self.adjust(2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1)
+        self.adjust(2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 2, 1)
 
 
 # id encoding for payment admin callbacks

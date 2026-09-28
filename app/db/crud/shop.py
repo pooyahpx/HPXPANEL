@@ -246,7 +246,7 @@ async def upsert_shop_config(
     wallet_enabled: bool | None = None,
     referral_enabled: bool | None = None,
     referral_reward_toman: int | None = None,
-    referral_reward_data_gb: int | None = None,
+    referral_reward_data_gb: float | None = None,
     tutorial_enabled: bool | None = None,
     tutorial_text: str | None = None,
     tutorial_url: str | None = None,
@@ -351,7 +351,7 @@ async def upsert_shop_config(
     if referral_reward_toman is not None:
         config.referral_reward_toman = max(0, int(referral_reward_toman))
     if referral_reward_data_gb is not None:
-        config.referral_reward_data_gb = max(0, int(referral_reward_data_gb))
+        config.referral_reward_data_gb = max(0.0, float(referral_reward_data_gb))
     if tutorial_enabled is not None:
         config.tutorial_enabled = tutorial_enabled
     if tutorial_text is not None:
@@ -674,6 +674,12 @@ async def update_order_status(
     await db.commit()
     await db.refresh(order)
     return order
+
+
+async def list_telegram_buyer_ids(db: AsyncSession) -> list[int]:
+    """All Telegram profile IDs that have started the bot (buyers + anyone who /start-ed)."""
+    rows = (await db.execute(select(TelegramProfile.telegram_id))).scalars().all()
+    return [int(tid) for tid in rows]
 
 
 async def get_shop_bot_stats(db: AsyncSession, admin_id: int) -> dict[str, int]:

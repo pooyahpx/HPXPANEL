@@ -135,3 +135,7 @@ class ShopAdminTutorial(StatesGroup):
 
 class ShopAdminWalletCredit(StatesGroup):
     waiting_payload = State()
+
+
+class ShopAdminBroadcast(StatesGroup):
+    waiting_message = State()

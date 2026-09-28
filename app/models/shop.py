@@ -69,7 +69,7 @@ class ShopConfigResponse(BaseModel):
     wallet_enabled: bool = False
     referral_enabled: bool = False
     referral_reward_toman: int = 0
-    referral_reward_data_gb: int = 0
+    referral_reward_data_gb: float = 0
     tutorial_enabled: bool = False
     tutorial_text: str | None = None
     tutorial_url: str | None = None
@@ -121,7 +121,7 @@ class ShopConfigUpdate(BaseModel):
     wallet_enabled: bool | None = None
     referral_enabled: bool | None = None
     referral_reward_toman: int | None = Field(default=None, ge=0)
-    referral_reward_data_gb: int | None = Field(default=None, ge=0)
+    referral_reward_data_gb: float | None = Field(default=None, ge=0)
     tutorial_enabled: bool | None = None
     tutorial_text: str | None = Field(default=None, max_length=2000)
     tutorial_url: str | None = Field(default=None, max_length=512)

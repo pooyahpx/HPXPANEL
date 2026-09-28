@@ -170,7 +170,7 @@ async def apply_referral_reward(
         return False
     referrer_id = int(profile.referred_by_telegram_id)
     reward_toman = max(0, int(getattr(config, "referral_reward_toman", 0) or 0))
-    reward_gb = max(0, int(getattr(config, "referral_reward_data_gb", 0) or 0))
+    reward_gb = max(0.0, float(getattr(config, "referral_reward_data_gb", 0) or 0))
     if reward_toman <= 0 and reward_gb <= 0:
         profile.referral_rewarded = True
         await db.commit()
@@ -188,11 +188,12 @@ async def apply_referral_reward(
     if reward_gb > 0:
         user = await _latest_shop_user_for_buyer(db, config.admin_id, referrer_id)
         if user is not None:
-            add_bytes = reward_gb * (1024**3)
-            current = int(user.data_limit or 0)
-            if current > 0:
-                user.data_limit = current + add_bytes
-                await db.commit()
+            add_bytes = int(reward_gb * (1024**3))
+            if add_bytes > 0:
+                current = int(user.data_limit or 0)
+                if current > 0:
+                    user.data_limit = current + add_bytes
+                    await db.commit()
     profile = await get_or_create_telegram_profile(db, buyer_telegram_id)
     profile.referral_rewarded = True
     await db.commit()

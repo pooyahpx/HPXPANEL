@@ -4,7 +4,6 @@ from aiogram.exceptions import TelegramAPIError
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-
 GB_BYTES = 1024**3
 
 
@@ -17,6 +16,26 @@ def parse_gb_input(text: str) -> int:
     if gb == 0:
         return 0
     return int(gb * GB_BYTES)
+
+
+def parse_referral_data_gb(text: str) -> float:
+    """Parse referral data reward as GB. Accepts 0.2, 200mb, 200m, ۲۰۰مگ."""
+    raw = (text or "").strip().lower().replace(",", ".").replace("٬", ".")
+    raw = raw.replace("گیگابایت", "").replace("گیگ", "").replace("gb", "").strip()
+    mb_mode = False
+    for suffix in ("مگابایت", "مگ", "mb", "m"):
+        if raw.endswith(suffix):
+            raw = raw[: -len(suffix)].strip()
+            mb_mode = True
+            break
+    if not raw:
+        raise ValueError("empty")
+    value = float(raw)
+    if value < 0:
+        raise ValueError("negative")
+    if mb_mode:
+        return value / 1024.0
+    return value
 
 
 def readable_size(size_bytes: int):

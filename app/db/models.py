@@ -1526,7 +1526,7 @@ class ShopConfig(Base, CreatedAtUTCMixin):
     wallet_enabled: Mapped[bool] = mapped_column(server_default="0", default=False)
     referral_enabled: Mapped[bool] = mapped_column(server_default="0", default=False)
     referral_reward_toman: Mapped[int] = mapped_column(BigInteger, default=0, server_default="0")
-    referral_reward_data_gb: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    referral_reward_data_gb: Mapped[float] = mapped_column(Float, default=0, server_default="0")
     tutorial_enabled: Mapped[bool] = mapped_column(server_default="0", default=False)
     tutorial_text: Mapped[str | None] = mapped_column(String(2000), default=None)
     tutorial_url: Mapped[str | None] = mapped_column(String(512), default=None)

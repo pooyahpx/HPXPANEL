@@ -41,7 +41,7 @@ from app.telegram.keyboards.shop import (
 from app.telegram.utils import forms
 from app.telegram.utils.filters import IsAdminFilter
 from app.telegram.utils.i18n import format_bytes, format_price, rich, t
-from app.telegram.utils.shared import add_to_messages_to_delete, delete_messages, parse_gb_input
+from app.telegram.utils.shared import add_to_messages_to_delete, delete_messages, parse_gb_input, parse_referral_data_gb
 from app.telegram.utils.shop_helpers import (
     MAX_SHOP_CARDS,
     card_note_preview,
@@ -548,9 +548,7 @@ async def referral_gb(event: types.Message, state: FSMContext, db: AsyncSession,
     data = await state.get_data()
     lang = data.get("lang", "fa")
     try:
-        gb = int((event.text or "").strip())
-        if gb < 0:
-            raise ValueError
+        gb = parse_referral_data_gb(event.text or "")
     except ValueError:
         await event.answer(t(lang, "invalid_number"))
         return
@@ -643,6 +641,65 @@ async def credit_wallet_payload(event: types.Message, state: FSMContext, db: Asy
         rich(lang, "admin_wallet_credited", id=telegram_id, amount=amount, balance=int(wallet.balance_toman or 0))
     )
     await _render_admin_shop(event, db, admin)
+
+
+@router.callback_query(ShopAdminKeyboard.Callback.filter(ShopAdminAction.broadcast == F.action))
+async def ask_broadcast(event: types.CallbackQuery, db: AsyncSession, state: FSMContext):
+    lang = await _lang(db, event.from_user.id)
+    await state.set_state(forms.ShopAdminBroadcast.waiting_message)
+    await state.update_data(lang=lang)
+    msg = await event.message.answer(t(lang, "admin_ask_broadcast"))
+    await add_to_messages_to_delete(state, msg)
+    await event.answer()
+
+
+@router.message(forms.ShopAdminBroadcast.waiting_message, F.text | F.photo)
+async def send_broadcast(event: types.Message, state: FSMContext, db: AsyncSession, admin: AdminDetails):
+    data = await state.get_data()
+    lang = data.get("lang", "fa")
+    from app.db.crud.shop import list_telegram_buyer_ids
+    from app.telegram import get_bot
+
+    bot = get_bot()
+    if bot is None:
+        await state.clear()
+        await event.answer(t(lang, "admin_broadcast_failed"))
+        return
+
+    ids = await list_telegram_buyer_ids(db)
+    # Don't spam the sender; still count them if present.
+    ok = 0
+    fail = 0
+    text = (event.text or event.caption or "").strip()
+    photo_id = event.photo[-1].file_id if event.photo else None
+    if not text and not photo_id:
+        await event.answer(t(lang, "admin_ask_broadcast"))
+        return
+
+    progress = await event.answer(t(lang, "admin_broadcast_sending", total=len(ids)))
+    for tid in ids:
+        try:
+            if photo_id:
+                await bot.send_photo(tid, photo_id, caption=text or None)
+            else:
+                await bot.send_message(tid, text)
+            ok += 1
+        except Exception:
+            fail += 1
+    await state.clear()
+    try:
+        await progress.delete()
+    except Exception:
+        pass
+    await event.answer(t(lang, "admin_broadcast_done", ok=ok, fail=fail, total=len(ids)))
+    await _render_admin_shop(event, db, admin)
+
+
+@router.message(forms.ShopAdminBroadcast.waiting_message)
+async def broadcast_invalid(event: types.Message, state: FSMContext, db: AsyncSession):
+    data = await state.get_data()
+    lang = data.get("lang") or await _lang(db, event.from_user.id)
+    await event.answer(t(lang, "admin_ask_broadcast"))
 
 
 @router.callback_query(ShopAdminKeyboard.Callback.filter(ShopAdminAction.set_test == F.action))

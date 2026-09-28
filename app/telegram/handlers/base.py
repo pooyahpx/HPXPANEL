@@ -59,7 +59,7 @@ async def open_main_menu(
         state,
         telegram_id=message.from_user.id if message.from_user else None,
         start_arg=start_arg,
-        require_selection=True,
+        require_selection=False,
     )
     shops_ok = config is not None and config.enabled
     if not shops_ok:

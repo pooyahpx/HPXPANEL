@@ -40,7 +40,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { hpxTunnelFormFromResponse, hpxTunnelFormSchema, type HpxTunnelFormValues } from '@/features/hpx-tunnels/forms/hpx-tunnel-form'
 
-export default function HpxTunnelsList() {
+export default function HpxTunnelsList({ embedded = false }: { embedded?: boolean }) {
   const { t } = useTranslation()
   const dir = useDirDetection()
   const { admin } = useAdmin()
@@ -188,27 +188,37 @@ export default function HpxTunnelsList() {
         <SummaryTile icon={RefreshCw} label={t('hpxTunnel.summary.unhealthy', { defaultValue: 'Issues' })} value={String(summary.unhealthy)} tone={summary.unhealthy > 0 ? 'danger' : undefined} />
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-muted-foreground text-sm">{t('hpxTunnel.description', { defaultValue: 'Manage encrypted ICMP tunnels powered by HPX (ChaCha20).' })}</p>
-        <div className="flex gap-2">
+      {!embedded && (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-muted-foreground text-sm">{t('hpxTunnel.description', { defaultValue: 'Manage encrypted ICMP tunnels powered by HPX (ChaCha20).' })}</p>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
+              <RefreshCw className={isFetching ? 'size-4 animate-spin' : 'size-4'} />
+              {t('refresh', { defaultValue: 'Refresh' })}
+            </Button>
+            {canCreate && (
+              <Button
+                size="sm"
+                onClick={() => {
+                  setEditingTunnel(null)
+                  setWizardOpen(true)
+                }}
+              >
+                <Plus className="size-4" />
+                {t('hpxTunnel.addTunnel', { defaultValue: 'Add tunnel' })}
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+      {embedded && (
+        <div className="flex justify-end">
           <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
-            <RefreshCw className={isFetching ? 'size-4 animate-spin' : 'size-4'} />
+            <RefreshCw className={isFetching ? 'size-3.5 animate-spin' : 'size-3.5'} />
             {t('refresh', { defaultValue: 'Refresh' })}
           </Button>
-          {canCreate && (
-            <Button
-              size="sm"
-              onClick={() => {
-                setEditingTunnel(null)
-                setWizardOpen(true)
-              }}
-            >
-              <Plus className="size-4" />
-              {t('hpxTunnel.addTunnel', { defaultValue: 'Add tunnel' })}
-            </Button>
-          )}
         </div>
-      </div>
+      )}
 
       {isLoading ? (
         <div className="grid gap-4">

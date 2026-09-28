@@ -4,23 +4,34 @@ import { Card } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import PageTransition from '@/components/layout/page-transition'
 import HpxPulseList from '@/features/hpx-pulse/components/hpx-pulse-list'
+import HpxTunnelsList from '@/features/hpx-tunnels/components/hpx-tunnels-list'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAdmin } from '@/hooks/use-admin'
 import useDirDetection from '@/hooks/use-dir-detection'
 import { cn } from '@/lib/utils'
 import { useGetHpxPulses } from '@/service/api/hpx-pulse'
 import { fetcher } from '@/service/http'
-import { hasPermission } from '@/utils/rbac'
-import { Activity, CircleAlert, Gauge, Plus, RadioTower, RefreshCw, Timer, Zap } from 'lucide-react'
-import { useMemo } from 'react'
+import { canReadResourcePage, hasPermission } from '@/utils/rbac'
+import { Activity, CircleAlert, Gauge, Plus, Radar, RadioTower, RefreshCw, Timer, Zap } from 'lucide-react'
+import { useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
+import { useSearchParams } from 'react-router'
 
 export default function HpxPulsePage() {
   const { t } = useTranslation()
   const dir = useDirDetection()
   const { admin } = useAdmin()
   const canCreate = hasPermission(admin, 'hpx_pulse', 'create')
-  const { data, isFetching, refetch } = useGetHpxPulses({ limit: 50, offset: 0 })
+  const canCreateIcmp = hasPermission(admin, 'hpx_tunnels', 'create')
+  const canReadPulse = canReadResourcePage(admin, 'hpx_pulse')
+  const canReadIcmp = canReadResourcePage(admin, 'hpx_tunnels')
+  const showPulseTab = canReadPulse
+  const showIcmpTab = canReadIcmp
+  const [searchParams, setSearchParams] = useSearchParams()
+  const tabParam = searchParams.get('tab')
+  const activeTab = tabParam === 'icmp' && showIcmpTab ? 'icmp' : showPulseTab ? 'pulse' : 'icmp'
+  const { data, isFetching, refetch } = useGetHpxPulses({ limit: 50, offset: 0 }, { enabled: showPulseTab })
   const { data: engineInfo } = useQuery({
     queryKey: ['hpx-pulse-engine'],
     queryFn: () => fetcher('/api/hpx_pulse/engine', { method: 'GET' }) as Promise<{ engine_version: string; release_tag: string }>,
@@ -60,6 +71,15 @@ export default function HpxPulsePage() {
   }, [data])
 
   const fleetHealthy = overview.total > 0 && overview.attention === 0
+
+  useEffect(() => {
+    if (tabParam === 'icmp' && !showIcmpTab) {
+      setSearchParams({}, { replace: true })
+    }
+    if (tabParam !== 'icmp' && !showPulseTab && showIcmpTab) {
+      setSearchParams({ tab: 'icmp' }, { replace: true })
+    }
+  }, [tabParam, showIcmpTab, showPulseTab, setSearchParams])
 
   return (
     <div className="flex min-h-0 w-full flex-1 flex-col items-start gap-0">
@@ -108,7 +128,9 @@ export default function HpxPulsePage() {
                       </Badge>
                     </div>
                     <p className="text-muted-foreground mt-1 max-w-3xl text-xs leading-relaxed sm:text-sm">
-                      {t('hpxPulse.description')}
+                      {t('hpxPulse.descriptionMerged', {
+                        defaultValue: 'HPX Pulse tunnels plus legacy ICMP (Narnia) — one place for Iran ↔ abroad paths.',
+                      })}
                     </p>
                     <p className="text-muted-foreground font-mono text-[11px]" dir="ltr">
                       {t('hpxPulse.enginePin', { defaultValue: 'Engine pin' })}: v
@@ -130,7 +152,7 @@ export default function HpxPulsePage() {
                 >
                   <RefreshCw className={cn('size-3.5', isFetching && 'animate-spin')} />
                 </Button>
-                {canCreate && (
+                {activeTab === 'pulse' && canCreate && (
                   <Button
                     type="button"
                     size="sm"
@@ -141,9 +163,40 @@ export default function HpxPulsePage() {
                     {t('hpxPulse.add')}
                   </Button>
                 )}
+                {activeTab === 'icmp' && canCreateIcmp && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="h-9 gap-1.5"
+                    onClick={() => window.dispatchEvent(new CustomEvent('openHpxTunnelDialog'))}
+                  >
+                    <Plus className="size-3.5" />
+                    {t('hpxTunnel.addTunnel')}
+                  </Button>
+                )}
               </div>
             </div>
 
+            {showPulseTab && showIcmpTab && (
+              <Tabs
+                value={activeTab}
+                onValueChange={value => setSearchParams(value === 'icmp' ? { tab: 'icmp' } : {}, { replace: true })}
+                className="w-full max-w-md"
+              >
+                <TabsList className="grid h-9 w-full grid-cols-2">
+                  <TabsTrigger value="pulse" className="gap-1.5 text-xs">
+                    <Zap className="size-3.5" />
+                    {t('hpxPulse.tabPulse', { defaultValue: 'Pulse' })}
+                  </TabsTrigger>
+                  <TabsTrigger value="icmp" className="gap-1.5 text-xs">
+                    <Radar className="size-3.5" />
+                    {t('hpxPulse.tabIcmp', { defaultValue: 'ICMP (legacy)' })}
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+            )}
+
+            {activeTab === 'pulse' && showPulseTab && (
             <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-6">
               <Card className="border-border/70 bg-card/60 space-y-2 p-3 xl:col-span-2">
                 <div className="flex items-center justify-between gap-3">
@@ -238,11 +291,16 @@ export default function HpxPulsePage() {
                 </div>
               </Card>
             </div>
+            )}
           </div>
         </section>
       </PageTransition>
       <PageTransition isContentTransition className="flex min-h-0 flex-1 flex-col">
-        <HpxPulseList />
+        {activeTab === 'icmp' && showIcmpTab ? (
+          <HpxTunnelsList embedded />
+        ) : showPulseTab ? (
+          <HpxPulseList />
+        ) : null}
       </PageTransition>
     </div>
   )

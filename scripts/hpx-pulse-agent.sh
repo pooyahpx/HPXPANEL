@@ -34,6 +34,10 @@ if [ "${HPX_INSECURE:-0}" = "1" ] || [ "${HPX_INSECURE:-}" = "true" ]; then
   CURL_INSECURE_ARGS=(-k)
 fi
 
+# Survives command-substitution subshells (set -u safe). Written by curl_panel_post.
+CURL_LAST_ERR=""
+CURL_ERR_STATE="${TMPDIR:-/tmp}/.hpx_pulse_curl_err.$$"
+
 # HTTP/1.1 avoids curl error 92 (PROTOCOL_ERROR) on some filtered routes (e.g. Iran).
 hp_curl() {
   curl --http1.1 --connect-timeout 30 --max-time 120 --retry 3 --retry-delay 2 -fsSL "${CURL_INSECURE_ARGS[@]}" "$@"
@@ -44,18 +48,25 @@ hp_panel_curl() {
   curl --http1.1 --connect-timeout 15 --max-time 120 --retry 1 --retry-delay 2 -fsSL "${CURL_INSECURE_ARGS[@]}" "$@"
 }
 
+_curl_panel_post_save_err() {
+  local err_tmp="$1"
+  CURL_LAST_ERR="$(tr '\n' ' ' <"$err_tmp" 2>/dev/null | sed 's/[[:space:]]\+/ /g' | cut -c1-220)"
+  printf '%s' "${CURL_LAST_ERR}" >"$CURL_ERR_STATE" 2>/dev/null || true
+}
+
 curl_panel_post() {
   # Usage: curl_panel_post OUTFILE BODY URL
-  # Prints http_code; stores stderr in CURL_LAST_ERR. Retries once with -k on TLS errors.
+  # Prints http_code; stores stderr in CURL_ERR_STATE (readable after $() subshell).
   local outfile="$1" body="$2" url="$3"
   local err_tmp http_code
   err_tmp="$(mktemp)"
   CURL_LAST_ERR=""
+  : >"$CURL_ERR_STATE" 2>/dev/null || true
   http_code=$(curl --http1.1 --connect-timeout 15 --max-time 90 -sS -w "%{http_code}" -o "$outfile" \
     "${CURL_INSECURE_ARGS[@]}" \
     -X POST -H "Content-Type: application/json" -d "$body" \
     "$url" 2>"$err_tmp") || http_code="000"
-  CURL_LAST_ERR="$(tr '\n' ' ' <"$err_tmp" | sed 's/[[:space:]]\+/ /g' | cut -c1-220)"
+  _curl_panel_post_save_err "$err_tmp"
   rm -f "$err_tmp"
   if [ "$http_code" = "000" ] && [ "${#CURL_INSECURE_ARGS[@]}" -eq 0 ]; then
     case "${CURL_LAST_ERR,,}" in
@@ -65,7 +76,7 @@ curl_panel_post() {
         http_code=$(curl --http1.1 --connect-timeout 15 --max-time 90 -sS -k -w "%{http_code}" -o "$outfile" \
           -X POST -H "Content-Type: application/json" -d "$body" \
           "$url" 2>"$err_tmp") || http_code="000"
-        CURL_LAST_ERR="$(tr '\n' ' ' <"$err_tmp" | sed 's/[[:space:]]\+/ /g' | cut -c1-220)"
+        _curl_panel_post_save_err "$err_tmp"
         rm -f "$err_tmp"
         if [ "$http_code" != "000" ]; then
           CURL_INSECURE_ARGS=(-k)
@@ -75,6 +86,10 @@ curl_panel_post() {
     esac
   fi
   printf '%s' "$http_code"
+}
+
+read_curl_last_err() {
+  CURL_LAST_ERR="$(cat "$CURL_ERR_STATE" 2>/dev/null || true)"
 }
 
 probe_panel_reachability() {
@@ -89,7 +104,7 @@ probe_panel_reachability() {
   if [ "$code" = "000" ]; then
     warn "cannot reach panel API at ${base} ($(tr '\n' ' ' <"$err_tmp" | cut -c1-160))"
     warn "from this Iran VPS run: curl -v --connect-timeout 10 ${base}/api/system"
-    warn "fix: firewall, DNS, or blocked :8000 — put nginx/caddy on 443 and use --panel-url https://domain"
+    warn "fix: Iran→panel route blocked, wrong DNS, or host firewall — panel must answer from THIS VPS (try Cloudflare orange-cloud or a reachable PANEL_URL_FALLBACK)"
   else
     log "panel reachable at ${base} (HTTP ${code})"
   fi
@@ -1003,7 +1018,8 @@ cmd_join() {
   while IFS= read -r base; do
     [ -n "$base" ] || continue
     http_code=$(curl_panel_post "$claim_tmp" "$body" "${base}/api/hpx_pulse/agent/claim")
-    if [ -n "$CURL_LAST_ERR" ]; then
+    read_curl_last_err
+    if [ -n "${CURL_LAST_ERR:-}" ]; then
       last_codes="${last_codes}${last_codes:+; }${base}→${http_code}(${CURL_LAST_ERR})"
     else
       last_codes="${last_codes}${last_codes:+; }${base}→${http_code}"
@@ -1217,13 +1233,30 @@ cmd_leave() {
   need_root
   ensure_deps
   local pid="${1:-}" env_file
+  # Legacy single-file registration (pre multi-agent) still shown by status.
+  clear_legacy_agent_env() {
+    if [ ! -d "$AGENTS_DIR" ] || ! compgen -G "$AGENTS_DIR/*.env" >/dev/null; then
+      if [ -f "$ENV_FILE" ]; then
+        rm -f "$ENV_FILE"
+        log "cleared legacy ${ENV_FILE}"
+      fi
+    fi
+  }
   if [ -n "$pid" ]; then
     log "removing local pulse ${pid}..."
     remove_pulse_local_state "$pid"
+    clear_legacy_agent_env
     log "pulse ${pid} removed from this server"
     return
   fi
   if [ ! -d "$AGENTS_DIR" ] || ! compgen -G "$AGENTS_DIR/*.env" >/dev/null; then
+    if [ -f "$ENV_FILE" ]; then
+      pid="$(grep -E '^[[:space:]]*PULSE_ID=' "$ENV_FILE" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '[:space:]"')"
+      [ -n "$pid" ] && [ "$pid" != "0" ] && remove_pulse_local_state "$pid"
+      rm -f "$ENV_FILE"
+      log "cleared legacy ${ENV_FILE}"
+      return
+    fi
     log "no local pulse registrations under ${AGENTS_DIR}"
     return
   fi
@@ -1233,6 +1266,7 @@ cmd_leave() {
     log "removing local pulse ${pid}..."
     remove_pulse_local_state "$pid"
   done
+  clear_legacy_agent_env
   log "all local pulse registrations removed"
 }
 

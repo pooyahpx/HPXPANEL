@@ -836,10 +836,23 @@ enable_hpxpanel_ssl_env() {
 refresh_panel_public_url() {
     local panel_url=""
     local host=""
+    local port=""
 
     panel_url=$(grep -E '^[[:space:]]*PANEL_PUBLIC_URL[[:space:]]*=' "$ENV_FILE" 2>/dev/null \
         | grep -v '^[[:space:]]*#' | head -1 | sed 's/^[^=]*=\s*//' | tr -d '[:space:]"'"'"'' || true)
     [ -z "$panel_url" ] && return 0
+
+    port=$(get_configured_uvicorn_port)
+
+    # After UVICORN_PORT changes (e.g. to 443), drop stale :8000 from PANEL_PUBLIC_URL.
+    if [ "$port" = "443" ] && [[ "$panel_url" == *":8000"* ]]; then
+        host=$(printf '%s' "$panel_url" | sed -E 's#^https?://([^/:]+).*#\1#')
+        if [ -n "$host" ]; then
+            set_or_uncomment_env_var "PANEL_PUBLIC_URL" "https://${host}" true "$ENV_FILE"
+            colorized_echo yellow "PANEL_PUBLIC_URL cleaned: removed stale :8000 (panel is on 443)"
+            return 0
+        fi
+    fi
 
     host=$(printf '%s' "$panel_url" | sed -E 's#^https?://([^/:]+).*#\1#')
     [ -z "$host" ] && return 0

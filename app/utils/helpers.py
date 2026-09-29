@@ -211,6 +211,36 @@ def normalize_public_base_url(url: str | None) -> str | None:
     return f"{scheme}://{host}:{port}"
 
 
+def align_public_url_to_listen_port(url: str | None, *, listen_port: int | None = None) -> str | None:
+    """Drop stale ``:8000`` from public URLs once the panel listens on 443/80.
+
+    After ``UVICORN_PORT=443`` (or SSL on 443), ``PANEL_PUBLIC_URL`` / subscription
+    ``url_prefix`` often still contain ``:8000`` from the old install — that leaks
+    into subscription links. Rewrite to the default public origin.
+    """
+    origin = normalize_public_base_url(url)
+    if not origin:
+        return None
+    if listen_port is None:
+        try:
+            from config import server_settings
+
+            listen_port = int(server_settings.port)
+        except Exception:
+            return origin
+    parsed = urlparse(origin)
+    if not parsed.scheme or not parsed.hostname:
+        return origin
+    public_port = parsed.port
+    # Panel is on HTTPS default / HTTP default — strip leftover internal :8000.
+    if listen_port == 443 and public_port == 8000:
+        scheme = "https" if parsed.scheme.lower() in {"http", "https"} else parsed.scheme.lower()
+        return f"{scheme}://{parsed.hostname}"
+    if listen_port == 80 and public_port == 8000:
+        return f"http://{parsed.hostname}"
+    return origin
+
+
 def public_base_url_from_request(request) -> str:
     """Best-effort public base URL from an inbound HTTP request (proxy-aware)."""
     headers = getattr(request, "headers", {}) or {}
@@ -268,7 +298,7 @@ async def resolve_panel_base_url(*, prefer: str | None = None) -> str | None:
     from app.settings import subscription_settings, telegram_settings
     from config import telegram_env_settings
 
-    preferred = normalize_public_base_url(prefer)
+    preferred = align_public_url_to_listen_port(prefer)
     if preferred:
         return preferred
 
@@ -279,16 +309,16 @@ async def resolve_panel_base_url(*, prefer: str | None = None) -> str | None:
         settings.mini_app_web_url,
         settings.webhook_url,
     ):
-        origin = normalize_public_base_url(candidate)
+        origin = align_public_url_to_listen_port(candidate)
         if origin:
             return origin
 
     sub_settings = await subscription_settings()
     if sub_settings.url_prefix:
-        origin = normalize_public_base_url(sub_settings.url_prefix)
+        origin = align_public_url_to_listen_port(sub_settings.url_prefix)
         if origin:
             return origin
         if is_absolute_url(sub_settings.url_prefix.strip()):
-            return normalize_public_base_url(sub_settings.url_prefix.strip())
+            return align_public_url_to_listen_port(sub_settings.url_prefix.strip())
 
     return None

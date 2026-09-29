@@ -111,11 +111,14 @@ sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXNODE/raw/main/scripts/
 
 ## پورت عمومی و Pulse / Abroad
 
-پورت داخلی پنل معمولاً `UVICORN_PORT=8000` است. اگر با nginx روی **443** باز کرده‌اید، در `.env` این را بگذارید (بدون `:8000`):
+پورت داخلی پنل معمولاً `UVICORN_PORT=8000` است. اگر پنل روی **443** گوش می‌دهد، در `.env` این را بگذارید (بدون `:8000`):
 
 ```bash
-PANEL_PUBLIC_URL=https://panel.example.com
+UVICORN_PORT = 443
+PANEL_PUBLIC_URL = "https://panel.example.com"
 ```
+
+اگر ساب هنوز `:8000` نشان می‌دهد: Settings → Subscriptions → **URL Prefix** را هم بدون `:8000` بگذارید (یا خالی بگذارید تا از `PANEL_PUBLIC_URL` ساخته شود)، بعد `hpxpanel restart -n`.
 
 از نسخهٔ جدید، دستورات Join در داشبورد URL واقعی مرورگر را ترجیح می‌دهند و `:8000` را از HTTPS عمومی حذف می‌کنند. بعد از تغییر `.env`:
 

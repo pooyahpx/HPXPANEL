@@ -116,6 +116,7 @@ from app.utils.admin_create_budget import (
     quote_from_user_payload,
 )
 from app.utils.helpers import (
+    align_public_url_to_listen_port,
     fix_datetime_timezone,
     is_absolute_url,
     resolve_panel_base_url,
@@ -316,7 +317,16 @@ class UserOperation(BaseOperation):
         )
         raw_prefix = raw_prefix.strip()
         if is_absolute_url(raw_prefix):
-            url_prefix = raw_prefix.rstrip("/")
+            # Absolute prefix may still carry legacy :8000 after moving panel to 443.
+            aligned = align_public_url_to_listen_port(raw_prefix)
+            if aligned:
+                from urllib.parse import urlparse
+
+                parsed = urlparse(raw_prefix.rstrip("/"))
+                path = parsed.path.rstrip("/") if parsed.path and parsed.path != "/" else ""
+                url_prefix = f"{aligned}{path}" if path else aligned
+            else:
+                url_prefix = raw_prefix.rstrip("/")
         else:
             panel_base = await resolve_panel_base_url()
             url_prefix = resolve_subscription_url_prefix(raw_prefix, panel_base)

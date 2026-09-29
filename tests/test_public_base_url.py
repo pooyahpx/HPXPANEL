@@ -1,6 +1,10 @@
 """Public panel URL normalization for Pulse/Abroad join commands."""
 
-from app.utils.helpers import normalize_public_base_url, public_base_url_from_request
+from app.utils.helpers import (
+    align_public_url_to_listen_port,
+    normalize_public_base_url,
+    public_base_url_from_request,
+)
 
 
 def test_normalize_strips_https_443():
@@ -13,6 +17,20 @@ def test_normalize_keeps_panel_port_8000_on_https():
 
 def test_normalize_keeps_nondefault_port():
     assert normalize_public_base_url("https://pnl.example.com:8443") == "https://pnl.example.com:8443"
+
+
+def test_align_strips_stale_8000_when_listening_on_443():
+    assert (
+        align_public_url_to_listen_port("https://panel.example.com:8000/sub", listen_port=443)
+        == "https://panel.example.com"
+    )
+
+
+def test_align_keeps_8000_when_panel_still_on_8000():
+    assert (
+        align_public_url_to_listen_port("https://panel.example.com:8000", listen_port=8000)
+        == "https://panel.example.com:8000"
+    )
 
 
 class _Headers(dict):
@@ -28,8 +46,6 @@ class _Url:
 
 class _Request:
     def __init__(self, headers: dict, scheme: str = "https", netloc: str = "ignored:8000"):
-        # Starlette headers are case-insensitive; our helper lowercases keys via .get on dict —
-        # normalize keys to lower for the stub.
         self.headers = _Headers({k.lower(): v for k, v in headers.items()})
         self.url = _Url(scheme, netloc)
         self.base_url = f"{scheme}://{netloc}/"
@@ -53,7 +69,6 @@ def test_request_keeps_forwarded_host_when_proxy_on_443():
             "host": "pnl.duolingoo.ir:8000",
         }
     )
-    # Reverse-proxy publishes the public host without :8000.
     assert public_base_url_from_request(req) == "https://pnl.duolingoo.ir"
 
 

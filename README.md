@@ -432,13 +432,30 @@ hpxpanel help
 | `cli` / `tui` | Panel CLI / TUI (`forge-seal`, user ops, …) |
 | `edit-env` | Edit `/opt/hpxpanel/.env` |
 | `edit` | Edit `docker-compose.yml` |
-| `backup` / `restore` | Database backup & restore |
+| `backup` / `restore` | Database backup & restore (HPX archives only) |
 | `backup-service` | Scheduled backups (e.g. Telegram) + crontab job |
+| `cli import-panel` | Import users from **PasarGuard** / **Sanaei (3x-ui)** into HPX |
 | `core-update` | Update proxy core on all nodes |
 | `purge` | Full wipe (app + data + DB) — **destructive** |
 | `uninstall` | Remove panel (data kept unless you purged) |
 
 After editing `.env`: `hpxpanel restart`
+
+### Import from PasarGuard / Sanaei (3x-ui)
+
+Merge users/groups/hosts from another panel into live HPX (does **not** wipe HPX). Supports SQLite, PostgreSQL/TimescaleDB dumps, MySQL/MariaDB dumps, and backup zips. Full guide: [Installation → Import](https://pooyahpx.github.io/HPXPANEL/en/installation.html#import-from-pasarguard-sanaei-3x-ui).
+
+```bash
+# Dry-run
+hpxpanel cli import-panel /path/to/x-ui.db
+hpxpanel cli import-panel /path/to/pasarguard-backup.zip
+
+# Apply into current HPX DB (Timescale / Postgres / MySQL / SQLite)
+hpxpanel cli import-panel /path/to/backup.zip --apply
+hpxpanel cli import-panel /path/to/database.sql --source pasarguard --apply --conflict rename
+```
+
+Notes: subscription URLs are regenerated; nodes are not imported (re-pair afterwards). Always dry-run before `--apply`.
 
 **Install variants:**
 ```bash
@@ -545,6 +562,7 @@ Other providers: `openai`, `openrouter`, `ollama` — see comments in `.env.exam
 | Abroad fails on `:8000` | Same — join URL must be public HTTPS without internal port; `hpxpanel update` + Tokens |
 | Port `8000` in use | Installer prompts for another port, or set `UVICORN_PORT` in `.env` |
 | Settings → Restore | `BACKUP_ALLOW_PANEL_RESTORE=true` + restart; one-click starts TimescaleDB via Docker |
+| Import PasarGuard / 3x-ui | `hpxpanel cli import-panel /path/to/backup.zip` (dry-run), then `--apply` — see [docs](https://pooyahpx.github.io/HPXPANEL/en/installation.html#import-from-pasarguard-sanaei-3x-ui) |
 | Groq rate limit in Copilot | Switch to `openai/gpt-oss-20b` or wait; free tier has limits |
 
 ---

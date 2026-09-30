@@ -117,6 +117,7 @@ After install, register the node in the panel with the same **Address**, **Node 
 | `hpxpanel ssl --domain panel.example.com` | Let's Encrypt certificate |
 | `hpxpanel backup` | Full CLI backup (includes `.env`) |
 | `hpxpanel restore` | Restore from zip (CLI or Settings→Backup archives) |
+| `hpxpanel cli import-panel …` | Import PasarGuard / Sanaei (SQLite or SQL dump) |
 | `hpxpanel logs` | Service logs |
 | `hpxpanel cli …` | In-container app CLI |
 
@@ -164,6 +165,36 @@ hpxpanel restore
 # or:
 hpxpanel restore --file /var/lib/hpxpanel/backups/hpxpanel_YYYYMMDD_HHMMSS.zip --yes
 ```
+
+## Import from PasarGuard / Sanaei (3x-ui)
+
+Use `hpxpanel restore` only for **HPX** backups. To merge users from another panel, use **import-panel** (non-destructive). Rows are written into whatever DB HPX already uses (Timescale / Postgres / MySQL / SQLite).
+
+Supported inputs:
+
+| Input | Examples |
+|-------|----------|
+| SQLite | `x-ui.db`, PasarGuard `.sqlite3` |
+| PostgreSQL / TimescaleDB dump | `database.sql`, `db_backup.sql`, `pg_dump/db-*.sql` |
+| MySQL / MariaDB dump | `.sql` with `INSERT INTO` |
+| Backup zip | zip containing any of the above |
+
+```bash
+# Dry-run
+hpxpanel cli import-panel /path/to/x-ui.db
+hpxpanel cli import-panel /path/to/pasarguard-backup.zip
+hpxpanel cli import-panel /path/to/database.sql --source pasarguard
+
+# Apply (convert → current HPX DB)
+hpxpanel cli import-panel /path/to/backup.zip --apply
+hpxpanel cli import-panel /path/to/backup.zip --source sanaei --apply --conflict rename
+```
+
+Notes:
+- Subscription URLs are **regenerated** (new JWT tokens).
+- Nodes are not imported — re-pair them afterwards.
+- Always dry-run once before `--apply`.
+- Dumps are **not** restored wholesale onto Timescale; HPX parses user/group/host rows and creates them (safer than replacing the whole DB).
 
 ## Next
 

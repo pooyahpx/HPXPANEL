@@ -368,13 +368,30 @@ hpxpanel help
 | `cli` / `tui` | CLI / TUI پنل |
 | `edit-env` | ویرایش `.env` |
 | `edit` | ویرایش `docker-compose.yml` |
-| `backup` / `restore` | بکاپ و ریستور دیتابیس |
+| `backup` / `restore` | بکاپ و ریستور دیتابیس (فقط آرشیو HPX) |
 | `backup-service` | بکاپ زمان‌بندی‌شده (مثلاً تلگرام) |
+| `cli import-panel` | ایمپورت یوزر از **پاسارگارد** / **ثنایی (۳x-ui)** به HPX |
 | `core-update` | آپدیت core روی همه نودها |
 | `purge` | پاک‌سازی کامل (داده + DB) — **برگشت‌ناپذیر** |
 | `uninstall` | حذف پنل (داده می‌ماند مگر purge) |
 
 بعد از ویرایش `.env`: `hpxpanel restart`
+
+### ایمپورت از پاسارگارد / ثنایی (۳x-ui)
+
+یوزر/گروه/هاست پنل دیگر را داخل HPX زنده merge می‌کند (پنل را پاک نمی‌کند). SQLite، dump پستگرس/تایم‌اسکیل، MySQL/MariaDB و zip بکاپ. راهنما: [نصب → ایمپورت](https://pooyahpx.github.io/HPXPANEL/fa/installation.html).
+
+```bash
+# پیش‌نمایش
+hpxpanel cli import-panel /path/to/x-ui.db
+hpxpanel cli import-panel /path/to/pasarguard-backup.zip
+
+# اعمال روی دیتابیس فعلی HPX
+hpxpanel cli import-panel /path/to/backup.zip --apply
+hpxpanel cli import-panel /path/to/database.sql --source pasarguard --apply --conflict rename
+```
+
+نکته: لینک ساب از نو ساخته می‌شود؛ نودها نمی‌آیند. قبل از `--apply` حتماً dry-run بزنید.
 
 **نصب با گزینه‌ها:**
 ```bash
@@ -476,6 +493,7 @@ Copilot context زنده پنل را می‌خواند و می‌تواند لی
 | Abroad به `:8000` وصل نمی‌شود | همان؛ دستور Join نباید `:8000` داشته باشد — `hpxpanel update` + Tokens |
 | پورت ۸۰۰۰ اشغال | پورت دیگر در installer یا `UVICORN_PORT` در `.env` |
 | ریستور از Settings | `BACKUP_ALLOW_PANEL_RESTORE=true` + restart؛ یک‌کلیک TimescaleDB را خودش بالا می‌آورد |
+| ایمپورت پاسارگارد / ثنایی | `hpxpanel cli import-panel /path/to/backup.zip` سپس `--apply` — [راهنما](https://pooyahpx.github.io/HPXPANEL/fa/installation.html) |
 | rate limit Groq | مدل `openai/gpt-oss-20b` یا صبر کن |
 
 ---

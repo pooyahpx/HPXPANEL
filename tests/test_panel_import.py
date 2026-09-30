@@ -157,7 +157,7 @@ def test_detect_and_extract_pasarguard(tmp_path: Path):
     assert plan.groups[0].name == "vip"
     assert "vless-reality" in plan.groups[0].inbound_tags
     assert plan.hosts[0].remark == "FR"
-    assert "fr.example.com" in plan.hosts[0].address
+    assert plan.hosts[0].address == {"fr.example.com"}
 
 
 def test_detect_and_extract_sanaei(tmp_path: Path):

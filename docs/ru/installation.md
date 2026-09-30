@@ -68,3 +68,14 @@ sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXNODE/raw/main/scripts/
 | `/opt/hpx-node` | Compose |
 | `/var/lib/hpx-node` | Серты и конфиги |
 | `hpx-node status` / `logs` / `update` | Управление |
+
+## Импорт из PasarGuard / Sanaei (3x-ui)
+
+Слияние пользователей в текущую БД HPX (не заменяет весь дамп). Поддерживаются SQLite, PostgreSQL/TimescaleDB, MySQL и zip.
+
+```bash
+hpxpanel cli import-panel /path/to/backup.zip
+hpxpanel cli import-panel /path/to/backup.zip --apply
+```
+
+Подробнее (EN): [Installation → Import](https://pooyahpx.github.io/HPXPANEL/en/installation.html#import-from-pasarguard-sanaei-3x-ui).

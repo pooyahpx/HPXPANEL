@@ -10,6 +10,7 @@ import typer
 
 from cli import console
 from cli.admin import forge_owner_seal
+from cli.panel_import import register as register_panel_import
 
 # Installer sets this so help shows `hpxpanel cli` instead of the container binary name.
 if prog := os.environ.get("CLI_PROG_NAME"):
@@ -88,6 +89,9 @@ def version():
         f"[dim]control plane[/dim]  "
         f"v[bold green]{__version__}[/bold green]"
     )
+
+
+register_panel_import(app)
 
 
 if __name__ == "__main__":

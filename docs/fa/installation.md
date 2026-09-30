@@ -106,6 +106,7 @@ sudo bash -c "$(curl -fsSL https://github.com/pooyahpx/HPXNODE/raw/main/scripts/
 | `hpxpanel ssl --domain panel.example.com` | گواهی Let's Encrypt |
 | `hpxpanel backup` | بکاپ کامل CLI (شامل `.env`) |
 | `hpxpanel restore` | ریستور از zip (CLI یا Settings→Backup) |
+| `hpxpanel cli import-panel …` | ایمپورت از پاسارگارد / ثنایی (SQLite یا SQL dump) |
 | `hpxpanel logs` | لاگ سرویس‌ها |
 | `hpxpanel cli …` | دستورات اپ داخل کانتینر |
 
@@ -161,6 +162,37 @@ hpxpanel restore          # لیست zipهای /var/lib/hpxpanel/backups و /opt
 # یا:
 hpxpanel restore --file /var/lib/hpxpanel/backups/hpxpanel_YYYYMMDD_HHMMSS.zip --yes
 ```
+
+## ایمپورت از پاسارگارد / ثنایی (۳x-ui)
+
+بکاپ **خود HPX** را با `restore` برگردانید. برای آوردن داده از پنل‌های دیگر از **import-panel** استفاده کنید (merge؛ دیتابیس HPX را پاک نمی‌کند). داده‌ها مستقیم داخل دیتابیس فعلی HPX نوشته می‌شوند (Timescale / Postgres / MySQL / SQLite — هرچی پنلت روشه).
+
+فرمت‌های پشتیبانی‌شده:
+
+| ورودی | مثال |
+|--------|------|
+| SQLite | `x-ui.db`، `.sqlite3` پاسارگارد |
+| PostgreSQL / TimescaleDB dump | `database.sql`، `db_backup.sql`، `pg_dump/db-*.sql` |
+| MySQL / MariaDB dump | `.sql` با `INSERT INTO` |
+| Zip بکاپ | zip شامل یکی از موارد بالا |
+
+```bash
+# فقط پیش‌نمایش (dry-run)
+hpxpanel cli import-panel /path/to/x-ui.db
+hpxpanel cli import-panel /path/to/pasarguard-backup.zip
+hpxpanel cli import-panel /path/to/database.sql --source pasarguard
+
+# اعمال واقعی → تبدیل و نوشتن روی DB فعلی HPX (مثلاً Timescale)
+hpxpanel cli import-panel /path/to/backup.zip --apply
+hpxpanel cli import-panel /path/to/backup.zip --source sanaei --apply --conflict rename
+```
+
+نکته‌ها:
+- لینک سابسکریپشن **از نو** ساخته می‌شود (توکن JWT پنل جدید).
+- نودها ایمپورت نمی‌شوند؛ بعداً دوباره Pair کنید.
+- برای ثنایی، آدرس Host اگر `0.0.0.0` بود با `CHANGE_ME` می‌آید — در Hosts درستش کنید.
+- قبل از `--apply` حتماً یک‌بار بدون آن اجرا کنید.
+- dump خام را **restore کامل** روی Timescale نمی‌کند؛ ردیف‌های یوزر/گروه/هاست را می‌خواند و داخل HPX می‌سازد (امن‌تر از جایگزینی کل DB).
 
 ## بعدی
 

@@ -123,8 +123,28 @@ async def process_node_health_check(db_node: Node, node: PasarGuardNode):
                 await node_operator.connect_single_node(db, db_node.id)
             return
 
-        # Skip nodes that are already healthy and connected
+        # Refresh versions while healthy so panel shows the real NODE VERSION after updates
         if health == Health.HEALTHY and db_node.status == NodeStatus.connected:
+            try:
+                node_version, core_version = await node.get_versions()
+            except Exception as exc:  # noqa: BLE001
+                logger.debug(f"[{db_node.name}] version refresh skipped: {exc}")
+                return
+            if (node_version and node_version != (db_node.node_version or "")) or (
+                core_version and core_version != (db_node.xray_version or "")
+            ):
+                async with GetDB() as db:
+                    await NodeOperation._update_single_node_status(
+                        db,
+                        db_node.id,
+                        NodeStatus.connected,
+                        xray_version=core_version or db_node.xray_version or "",
+                        node_version=node_version or db_node.node_version or "",
+                        send_notification=False,
+                    )
+                    logger.info(
+                        f"[{db_node.name}] versions updated → node={node_version} core={core_version}"
+                    )
             return
 
         if health is Health.INVALID:

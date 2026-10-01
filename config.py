@@ -237,13 +237,13 @@ class UsageSettings(EnvSettings):
 
 
 class JobSettings(EnvSettings):
-    core_health_check_interval: int = Field(default=10, validation_alias="JOB_CORE_HEALTH_CHECK_INTERVAL")
-    record_node_usages_interval: int = Field(default=30, validation_alias="JOB_RECORD_NODE_USAGES_INTERVAL")
-    record_user_usages_interval: int = Field(default=10, validation_alias="JOB_RECORD_USER_USAGES_INTERVAL")
+    core_health_check_interval: int = Field(default=30, validation_alias="JOB_CORE_HEALTH_CHECK_INTERVAL")
+    record_node_usages_interval: int = Field(default=60, validation_alias="JOB_RECORD_NODE_USAGES_INTERVAL")
+    record_user_usages_interval: int = Field(default=30, validation_alias="JOB_RECORD_USER_USAGES_INTERVAL")
     review_users_interval: int = Field(default=30, validation_alias="JOB_REVIEW_USERS_INTERVAL")
-    review_admin_limits_interval: int = Field(default=10, validation_alias="JOB_REVIEW_ADMIN_LIMITS_INTERVAL")
+    review_admin_limits_interval: int = Field(default=30, validation_alias="JOB_REVIEW_ADMIN_LIMITS_INTERVAL")
     send_notifications_interval: int = Field(default=30, validation_alias="JOB_SEND_NOTIFICATIONS_INTERVAL")
-    gather_nodes_stats_interval: int = Field(default=25, validation_alias="JOB_GATHER_NODES_STATS_INTERVAL")
+    gather_nodes_stats_interval: int = Field(default=60, validation_alias="JOB_GATHER_NODES_STATS_INTERVAL")
     remove_old_inbounds_interval: int = Field(default=600, validation_alias="JOB_REMOVE_OLD_INBOUNDS_INTERVAL")
     remove_expired_users_interval: int = Field(default=3600, validation_alias="JOB_REMOVE_EXPIRED_USERS_INTERVAL")
     reset_user_data_usage_interval: int = Field(default=600, validation_alias="JOB_RESET_USER_DATA_USAGE_INTERVAL")
@@ -326,7 +326,7 @@ class FeatureSettings(EnvSettings):
 
 class ObservabilitySettings(EnvSettings):
     prometheus_enabled: bool = Field(default=True, validation_alias="OBSERVABILITY_PROMETHEUS_ENABLED")
-    probe_outbound_latency: bool = Field(default=True, validation_alias="OBSERVABILITY_PROBE_OUTBOUND_LATENCY")
+    probe_outbound_latency: bool = Field(default=False, validation_alias="OBSERVABILITY_PROBE_OUTBOUND_LATENCY")
     latency_probe_timeout_seconds: int = Field(default=3, ge=1, le=30, validation_alias="OBSERVABILITY_LATENCY_TIMEOUT")
     max_latency_probes: int = Field(default=12, ge=1, le=50, validation_alias="OBSERVABILITY_MAX_LATENCY_PROBES")
     system_stats_interval: int = Field(default=30, ge=10, validation_alias="JOB_GATHER_SYSTEM_STATS_INTERVAL")

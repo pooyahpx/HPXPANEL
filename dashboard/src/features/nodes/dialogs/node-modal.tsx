@@ -393,14 +393,14 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
         className="command-surface flex h-full max-h-[94dvh] max-w-full flex-col gap-0 overflow-hidden border p-0 shadow-[6px_6px_0_hsl(var(--pixel-border))] focus:outline-none sm:max-w-[92vw] lg:h-auto lg:max-w-[1100px]"
         onOpenAutoFocus={e => e.preventDefault()}
       >
-        <DialogHeader className="mission-brief relative shrink-0 space-y-0 border-b px-5 py-4 sm:px-6 sm:py-5">
+        <DialogHeader className="mission-brief relative shrink-0 space-y-0 border-b px-5 py-4 pe-20 sm:px-6 sm:py-5 sm:pe-24">
           <div className="mission-brief__index" aria-hidden="true">
             {editingNode ? 'EN' : 'CN'}
           </div>
-          <div className="relative z-10 flex flex-wrap items-start justify-between gap-4">
-            <div className="min-w-0 space-y-1">
+          <div className="relative z-10 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
+            <div className="min-w-0 flex-1 space-y-1 pe-2">
               <DialogTitle className="flex items-center gap-2.5">
-                <span className="bg-primary text-primary-foreground flex h-9 w-9 items-center justify-center border border-[hsl(var(--pixel-border))] shadow-[2px_2px_0_hsl(var(--pixel-border))]">
+                <span className="bg-primary text-primary-foreground flex h-9 w-9 shrink-0 items-center justify-center border border-[hsl(var(--pixel-border))] shadow-[2px_2px_0_hsl(var(--pixel-border))]">
                   {editingNode ? <Pencil className="h-4 w-4" /> : <Server className="h-4 w-4" />}
                 </span>
                 <span className="font-display text-xl font-bold tracking-tight uppercase sm:text-2xl">{editingNode ? t('editNode.title') : t('nodeModal.title')}</span>
@@ -410,7 +410,7 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
               </DialogDescription>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex max-w-full flex-wrap items-center gap-2 sm:max-w-[min(100%,28rem)] sm:justify-end">
               <div
                 className={cn(
                   'flex h-10 items-center gap-2 border px-3 font-mono text-[10px] font-bold tracking-[0.12em] uppercase',
@@ -447,7 +447,7 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
                   {showErrorDetails ? t('nodeModal.hideDetails') : t('nodeModal.showDetails')}
                 </Button>
               )}
-              <Button variant="outline" size="sm" onClick={checkNodeStatus} disabled={statusChecking || !form.formState.isValid} className="h-10 gap-1.5 border-2 shadow-[2px_2px_0_hsl(var(--pixel-border))]">
+              <Button variant="outline" size="sm" onClick={checkNodeStatus} disabled={statusChecking || !form.formState.isValid} className="h-10 shrink-0 gap-1.5 border-2 shadow-[2px_2px_0_hsl(var(--pixel-border))]">
                 {statusChecking ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
                 <span className="text-xs font-bold tracking-wide uppercase">{statusChecking ? t('nodeModal.statusChecking') : t('nodeModal.statusCheck')}</span>
               </Button>

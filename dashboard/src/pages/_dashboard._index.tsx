@@ -219,13 +219,15 @@ const Dashboard = () => {
 
   const { data: systemResourceStatsData } = useGetSystemResourceStats({
     query: {
-      refetchInterval: 5000,
+      refetchInterval: 30_000,
+      staleTime: 15_000,
     },
   })
 
   const { data: systemUsersStatsData } = useGetSystemUsersStats(systemUsersStatsParams, {
     query: {
-      refetchInterval: 5000,
+      refetchInterval: 30_000,
+      staleTime: 15_000,
     },
   })
 

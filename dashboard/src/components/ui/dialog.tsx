@@ -41,7 +41,7 @@ const DialogContent = React.forwardRef<React.ElementRef<typeof DialogPrimitive.C
         {children}
         <DialogPrimitive.Close
           className={cn(
-            'absolute',
+            'absolute z-20',
             dir === 'rtl' ? 'left-4' : 'right-4',
             'bg-muted text-muted-foreground data-[state=open]:bg-accent hover:bg-primary hover:text-primary-foreground focus-visible:border-primary focus-visible:ring-ring top-4 flex h-11 w-11 cursor-pointer items-center justify-center rounded-none border-2 border-[hsl(var(--pixel-border))] transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:pointer-events-none motion-reduce:transition-none',
           )}

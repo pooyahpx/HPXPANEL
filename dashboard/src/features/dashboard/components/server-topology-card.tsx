@@ -236,7 +236,8 @@ const ServerTopologyCard = ({ resourceData, usersData, canReadNodes = false, can
   const { data: realtimeStats } = useRealtimeNodesStats({
     query: {
       enabled: canReadNodeStats,
-      refetchInterval: 5_000,
+      refetchInterval: 10_000,
+      staleTime: 5_000,
     },
   })
 

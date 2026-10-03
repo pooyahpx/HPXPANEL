@@ -48,7 +48,8 @@ const WorkersHealthCard = () => {
   const [isCollapsed, setIsCollapsed] = useState(true)
   const { data, isLoading, isError } = useGetWorkersHealth({
     query: {
-      refetchInterval: pauseRefetch ? false : 5000,
+      refetchInterval: pauseRefetch ? false : 15_000,
+      staleTime: 10_000,
       retry: false,
     },
   })

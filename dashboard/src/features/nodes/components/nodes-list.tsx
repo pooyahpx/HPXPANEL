@@ -120,12 +120,11 @@ export default function NodesList() {
     refetch,
   } = useGetNodes(filters, {
     query: {
-      refetchInterval: 10000,
-      staleTime: 0,
-      gcTime: 0,
+      refetchInterval: 15_000,
+      staleTime: 8_000,
+      gcTime: 60_000,
       retry: 1,
       refetchOnMount: true,
-      refetchOnWindowFocus: true,
       placeholderData: previousData => previousData,
     },
   })

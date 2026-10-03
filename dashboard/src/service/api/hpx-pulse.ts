@@ -171,7 +171,8 @@ export function useGetHpxPulses(
   return useQuery({
     queryKey: ['hpx-pulses', params],
     queryFn: () => fetcher<HpxPulsesResponse>(`/api/hpx_pulses${qs ? `?${qs}` : ''}`),
-    refetchInterval: 5000,
+    refetchInterval: 15_000,
+    staleTime: 10_000,
     enabled: options?.enabled ?? true,
   })
 }

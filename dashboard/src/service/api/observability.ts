@@ -182,8 +182,8 @@ export const useObservabilitySummary = (options?: { enabled?: boolean; refetchIn
   useQuery({
     queryKey: ['observability', 'summary'],
     queryFn: getObservabilitySummary,
-    refetchInterval: options?.refetchInterval ?? 2000,
-    staleTime: 1000,
+    refetchInterval: options?.refetchInterval ?? 10_000,
+    staleTime: 5_000,
     enabled: options?.enabled ?? true,
   })
 

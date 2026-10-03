@@ -15,7 +15,8 @@ const UsersStatistics = () => {
 
   const { data } = useGetSystemUsersStats(undefined, {
     query: {
-      refetchInterval: 5000,
+      refetchInterval: 15_000,
+      staleTime: 10_000,
     },
   })
 

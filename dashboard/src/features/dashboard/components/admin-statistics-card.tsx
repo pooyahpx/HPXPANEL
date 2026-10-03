@@ -61,7 +61,8 @@ const AdminStatisticsCard = ({
   const { data: adminSystemStats } = useGetSystemUsersStats(systemStatsParams, {
     query: {
       enabled: shouldFetchStats,
-      refetchInterval: 5000,
+      refetchInterval: 15_000,
+      staleTime: 10_000,
     },
   })
 

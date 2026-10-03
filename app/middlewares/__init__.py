@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from starlette.middleware.httpsredirect import HTTPSRedirectMiddleware
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
@@ -22,6 +23,8 @@ def setup_middleware(app: FastAPI):
     )
     app.add_middleware(AuditMiddleware)
     app.add_middleware(RequestProcessTimeLoggingMiddleware, access_logger=get_logger("uvicorn.access"))
+    # Compress JSON/API payloads when the client accepts gzip (no UI/behavior change).
+    app.add_middleware(GZipMiddleware, minimum_size=500)
     # Starlette inserts newly-added middleware at the front of user_middleware,
     # making the last registration outermost. Proxy normalization must therefore
     # be registered last so AuditMiddleware observes the trusted client address.

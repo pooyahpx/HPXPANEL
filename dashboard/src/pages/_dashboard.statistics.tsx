@@ -65,18 +65,16 @@ const Statistics = () => {
   } = useGetSystemResourceStats({
     query: {
       enabled: canViewSystemStats && selectedServer === 'master',
-      refetchInterval: canViewSystemStats && selectedServer === 'master' ? 2000 : false,
-      staleTime: 1000,
-      refetchOnWindowFocus: true,
+      refetchInterval: canViewSystemStats && selectedServer === 'master' ? 5_000 : false,
+      staleTime: 3_000,
     },
   })
 
   const { data: usersData } = useGetSystemUsersStats(undefined, {
     query: {
       enabled: canViewSystemStats && selectedServer === 'master',
-      refetchInterval: canViewSystemStats && selectedServer === 'master' ? 2000 : false,
-      staleTime: 1000,
-      refetchOnWindowFocus: true,
+      refetchInterval: canViewSystemStats && selectedServer === 'master' ? 5_000 : false,
+      staleTime: 3_000,
     },
   })
 

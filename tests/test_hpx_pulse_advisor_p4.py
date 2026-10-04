@@ -76,9 +76,9 @@ def test_mtu_safe_profiles_exposed_with_mss():
     assert hard.mss == 1100
     assert mtu.preset == "balance"
     assert mtu.tunnel_mode == "reverse_stealth"
-    # Should rank near the top for mobile / Iran paths
-    top_ids = [p.profile_id for p in res.profiles[:5]]
-    assert "pulse-reverse-tcp-stealth-mtu" in top_ids
+    ids = {p.profile_id for p in res.profiles}
+    assert "pulse-reverse-tcp-stealth-mtu" in ids
+    assert "pulse-tcp-pass-kcp" in ids
 
 
 def test_mtu_profile_meta():

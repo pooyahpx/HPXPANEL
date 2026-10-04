@@ -901,6 +901,12 @@ sync_pulse_from_panel() {
   ABROAD_PUBLIC_IP=$(echo "$cfg" | jq -r '.abroad_public_ip // empty')
   PORT_FORWARDS=$(echo "$cfg" | jq -c '.port_forwards // []')
 
+  if [ "$command" = "diagnose" ]; then
+    write_env
+    handle_diagnose_command || true
+    return 0
+  fi
+
   if [ "$hash" != "${CONFIG_HASH:-}" ] || [ "$command" = "start" ] || [ "$command" = "restart" ]; then
     apply_tunnel_config "$toml"
     CONFIG_HASH="$hash"
@@ -957,6 +963,308 @@ finally:
     fi
   fi
   [ -n "$out" ] && echo "$out"
+}
+
+# Connect + first-byte exchange — detects classic MSS/MTU stall (connect OK, data hangs).
+probe_tcp_exchange_json() {
+  local host="$1" port="$2"
+  [ -n "$host" ] && [ -n "$port" ] || return 1
+  if ! has python3 && ! has python; then
+    echo '{"ok":false,"state":"warn","stall":false,"detail":"python missing — cannot run MSS exchange probe","fix":"install python3 on agent host"}'
+    return 0
+  fi
+  local py=python3
+  has python3 || py=python
+  "$py" -c "
+import json, socket, time, sys
+host, port = sys.argv[1], int(sys.argv[2])
+out = {'ok': False, 'state': 'fail', 'stall': False, 'ms': None, 'bytes': 0, 'detail': '', 'fix': ''}
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+s.settimeout(4.0)
+t0 = time.time()
+try:
+    s.connect((host, port))
+    out['ms'] = round((time.time() - t0) * 1000, 1)
+except Exception as e:
+    out['detail'] = 'connect failed: %s' % e
+    out['fix'] = 'Cannot TCP-connect to Iran:%s — firewall / wrong IP / tunnel down' % port
+    print(json.dumps(out)); raise SystemExit
+try:
+    s.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+except Exception:
+    pass
+# Minimal TLS ClientHello-ish bytes (works on 443); harmless noise on other ports.
+payload = bytes([0x16, 0x03, 0x01, 0x00, 0x2e, 0x01, 0x00, 0x00, 0x2a, 0x03, 0x03]) + (b'\\x00' * 32) + bytes([0x00, 0x00, 0x02, 0x00, 0x2f, 0x01, 0x00])
+try:
+    s.sendall(payload)
+except Exception as e:
+    out.update(stall=True, detail='connect ok (%.1fms) but send failed: %s' % (out['ms'] or 0, e),
+               fix='TCP connects then stalls on write — lower mss to 1200 both sides, Sync, restart tunnel')
+    print(json.dumps(out)); s.close(); raise SystemExit
+s.settimeout(4.0)
+try:
+    data = s.recv(128)
+    if data:
+        out.update(ok=True, state='ok', bytes=len(data),
+                   detail='connect+exchange ok (%.1fms, got %dB)' % (out['ms'] or 0, len(data)))
+    else:
+        out.update(stall=True,
+                   detail='connect ok (%.1fms) then EOF on first read' % (out['ms'] or 0),
+                   fix='Peer closed after connect — check abroad backend / Iran forward')
+except socket.timeout:
+    out.update(stall=True,
+               detail='stall_after_connect: TCP connected (%.1fms) but no bytes in 4s — classic MTU/MSS' % (out['ms'] or 0),
+               fix='Lower mss to 1200 on Iran+abroad TOMLs, Sync, restart both tunnel services')
+except Exception as e:
+    out['detail'] = 'recv error after connect: %s' % e
+finally:
+    try: s.close()
+    except Exception: pass
+print(json.dumps(out))
+" "$host" "$port" 2>/dev/null || echo '{"ok":false,"state":"fail","stall":false,"detail":"exchange probe crashed","fix":""}'
+}
+
+first_forward_backend() {
+  # Prints host:port for first reverse forward target (default 127.0.0.1:<listen>).
+  local raw entry target
+  raw="${PORT_FORWARDS:-}"
+  raw="${raw//[\[\]\"]/}"
+  entry="${raw%%,*}"
+  entry="${entry// /}"
+  [ -n "$entry" ] || return 1
+  if [[ "$entry" == *"="* ]]; then
+    target="${entry#*=}"
+  else
+    target="127.0.0.1:${entry}"
+  fi
+  [[ "$target" == *:* ]] || target="127.0.0.1:${target}"
+  echo "$target"
+}
+
+port_is_listening() {
+  local port="$1"
+  [ -n "$port" ] || return 1
+  if has ss; then
+    ss -tlnH "sport = :${port}" 2>/dev/null | grep -q .
+    return $?
+  fi
+  if has netstat; then
+    netstat -tln 2>/dev/null | grep -q ":${port} "
+    return $?
+  fi
+  return 1
+}
+
+toml_mss_value() {
+  local cfg
+  cfg="$(tunnel_cfg_path)"
+  [ -f "$cfg" ] || return 1
+  grep -E '^[[:space:]]*mss[[:space:]]*=' "$cfg" 2>/dev/null | head -1 | sed -E 's/.*=[[:space:]]*//' | tr -d '[:space:]'
+}
+
+build_diag_report_json() {
+  local host eng mss_val mss_ok="true" mss_detail mss_fix=""
+  local svc_ok="false" svc_detail ctl_json="null" be_json="null"
+  local tcp_ctl="null" tcp_fwd="null" tcp_ex="null"
+  local fwd_port be_target be_host be_port
+  local verdict_level="info" verdict_summary="probe collected" verdict_fix=""
+  local ts udp_detail udp_fix=""
+
+  host="$(hostname -f 2>/dev/null || hostname)"
+  eng="$("$ENGINE_BIN" --version 2>/dev/null | head -1 | tr -d '\r' || echo unknown)"
+  ts="$(date +%s 2>/dev/null || echo 0)"
+  mss_val="$(toml_mss_value || true)"
+  if [ -z "$mss_val" ]; then
+    mss_ok="false"
+    mss_detail="mss not set in TOML (path may use full 1500 MTU segments)"
+    mss_fix="Sync from panel (default mss=1280) or set mss=1200 both sides"
+  else
+    mss_detail="mss=${mss_val}"
+    if [ "$mss_val" -gt 1280 ] 2>/dev/null; then
+      mss_ok="false"
+      mss_fix="High MSS — if TCP stalls, lower to 1200 and Sync"
+    fi
+  fi
+
+  if tunnel_service_active; then
+    svc_ok="true"
+    svc_detail="active ($(tunnel_service_name))"
+  else
+    svc_detail="inactive ($(tunnel_service_name))"
+  fi
+
+  if [ "${PULSE_SIDE:-}" = "iran" ] && [[ "${TUNNEL_MODE:-}" == reverse_* ]]; then
+    if tunnel_port_listening; then
+      ctl_json=$(jq -nc --arg d "listening :${CONTROL_PORT}" '{ok:true, detail:$d}')
+    else
+      ctl_json=$(jq -nc --arg d "NOT listening :${CONTROL_PORT}" --arg f "systemctl status $(tunnel_service_name); check bind_addr" '{ok:false, detail:$d, fix:$f}')
+    fi
+  fi
+
+  if [ "${PULSE_SIDE:-}" = "abroad" ] && [[ "${TUNNEL_MODE:-}" == reverse_* ]]; then
+    be_target="$(first_forward_backend || true)"
+    if [ -n "$be_target" ]; then
+      be_host="${be_target%:*}"
+      be_port="${be_target##*:}"
+      if port_is_listening "$be_port"; then
+        be_json=$(jq -nc --arg d "listening ${be_host}:${be_port}" '{ok:true, detail:$d}')
+      else
+        be_json=$(jq -nc --arg d "NOT listening ${be_host}:${be_port}" --arg f "Start Xray/inbound on abroad ${be_host}:${be_port}" '{ok:false, detail:$d, fix:$f}')
+      fi
+    fi
+
+    if [ -n "${IRAN_PUBLIC_IP:-}" ] && [ -n "${CONTROL_PORT:-}" ]; then
+      local cms
+      cms="$(measure_tcp_ms "$IRAN_PUBLIC_IP" "$CONTROL_PORT" || true)"
+      if [ -n "$cms" ]; then
+        tcp_ctl=$(jq -nc --argjson ms "$cms" --arg d "connect ok (${cms}ms)" '{ok:true, state:"ok", ms:$ms, detail:$d}')
+      else
+        tcp_ctl=$(jq -nc --arg d "connect failed Iran:${CONTROL_PORT}" --arg f "Open Iran firewall for control port; verify iran_public_ip" '{ok:false, state:"fail", detail:$d, fix:$f}')
+      fi
+    fi
+
+    fwd_port="$(first_forward_listen_port || true)"
+    if [ -n "${IRAN_PUBLIC_IP:-}" ] && [ -n "$fwd_port" ]; then
+      local fms
+      fms="$(measure_tcp_ms "$IRAN_PUBLIC_IP" "$fwd_port" || true)"
+      if [ -n "$fms" ]; then
+        tcp_fwd=$(jq -nc --argjson ms "$fms" --arg d "connect ok (${fms}ms) Iran:${fwd_port}" '{ok:true, state:"ok", ms:$ms, detail:$d}')
+        tcp_ex="$(probe_tcp_exchange_json "$IRAN_PUBLIC_IP" "$fwd_port")"
+      else
+        tcp_fwd=$(jq -nc --arg d "connect failed Iran:${fwd_port}" --arg f "Open Iran firewall TCP ${fwd_port}; ensure abroad backend up" '{ok:false, state:"fail", detail:$d, fix:$f}')
+        tcp_ex=$(jq -nc --arg d "skipped — forward connect failed" '{ok:false, state:"fail", stall:false, detail:$d}')
+      fi
+    fi
+  fi
+
+  udp_detail="UDP often works when TCP stalls (smaller datagrams bypass MSS clamp). If users say UDP OK / TCP broken → check forward_exchange stall."
+  udp_fix="If stall_after_connect: set mss=1200 both sides + Sync + restart tunnel"
+
+  # Verdict
+  if echo "${tcp_ex:-}" | jq -e '.stall == true' >/dev/null 2>&1; then
+    verdict_level="fail"
+    verdict_summary="$(echo "$tcp_ex" | jq -r '.detail')"
+    verdict_fix="$(echo "$tcp_ex" | jq -r '.fix // empty')"
+  elif echo "${tcp_fwd:-}" | jq -e '.ok == false' >/dev/null 2>&1; then
+    verdict_level="fail"
+    verdict_summary="$(echo "$tcp_fwd" | jq -r '.detail')"
+    verdict_fix="$(echo "$tcp_fwd" | jq -r '.fix // empty')"
+  elif echo "${tcp_ctl:-}" | jq -e '.ok == false' >/dev/null 2>&1; then
+    verdict_level="fail"
+    verdict_summary="$(echo "$tcp_ctl" | jq -r '.detail')"
+    verdict_fix="$(echo "$tcp_ctl" | jq -r '.fix // empty')"
+  elif echo "${be_json:-}" | jq -e '.ok == false' >/dev/null 2>&1; then
+    verdict_level="fail"
+    verdict_summary="$(echo "$be_json" | jq -r '.detail')"
+    verdict_fix="$(echo "$be_json" | jq -r '.fix // empty')"
+  elif echo "${tcp_ex:-}" | jq -e '.ok == true' >/dev/null 2>&1; then
+    verdict_level="ok"
+    verdict_summary="TCP path healthy (connect + first-byte exchange OK)"
+  elif [ "${PULSE_SIDE:-}" = "iran" ]; then
+    if echo "${ctl_json:-}" | jq -e '.ok == true' >/dev/null 2>&1; then
+      verdict_level="ok"
+      verdict_summary="Iran control listening — wait for abroad path probe"
+    else
+      verdict_level="fail"
+      verdict_summary="$(echo "${ctl_json:-null}" | jq -r '.detail // "Iran local checks failed"')"
+      verdict_fix="$(echo "${ctl_json:-null}" | jq -r '.fix // empty')"
+    fi
+  fi
+
+  jq -nc \
+    --arg side "${PULSE_SIDE:-unknown}" \
+    --arg host "$host" \
+    --arg eng "$eng" \
+    --argjson ts "${ts:-0}" \
+    --argjson svc "$(jq -nc --argjson ok "$svc_ok" --arg d "$svc_detail" '{ok:$ok, detail:$d}')" \
+    --argjson ctl "$ctl_json" \
+    --argjson be "$be_json" \
+    --argjson mss "$(jq -nc --argjson ok "$mss_ok" --arg d "$mss_detail" --arg f "$mss_fix" '{ok:$ok, detail:$d, fix:$f}')" \
+    --argjson tctl "$tcp_ctl" \
+    --argjson tfwd "$tcp_fwd" \
+    --argjson tex "$tcp_ex" \
+    --arg ud "$udp_detail" \
+    --arg uf "$udp_fix" \
+    --arg vl "$verdict_level" \
+    --arg vs "$verdict_summary" \
+    --arg vf "$verdict_fix" \
+    '{
+      side:$side, host:$host, engine_version:$eng, ts:$ts,
+      tunnel_service:$svc,
+      control_listen:(if $ctl == null then null else $ctl end),
+      backend_listen:(if $be == null then null else $be end),
+      mss:$mss,
+      tcp:{
+        control:(if $tctl == null then null else $tctl end),
+        forward:(if $tfwd == null then null else $tfwd end),
+        forward_exchange:(if $tex == null then null else $tex end)
+      },
+      udp:{detail:$ud, fix:$uf},
+      verdict:{level:$vl, summary:$vs, fix:$vf}
+    }'
+}
+
+post_deep_diag_heartbeat() {
+  local diag lat_json="null" fwd_json="null" msg="HPX deep diagnose" running="false" link="false" hb_ok=0
+  tunnel_service_active && running="true"
+  tunnel_link_up && link="true"
+  diag="$(build_diag_report_json)" || diag="{}"
+  if echo "$diag" | jq -e '.tcp.forward_exchange.stall == true' >/dev/null 2>&1; then
+    fwd_json="false"
+    msg="$(echo "$diag" | jq -r '.verdict.summary // "TCP stall after connect (MSS)"')"
+  elif echo "$diag" | jq -e '.tcp.forward.ok == true' >/dev/null 2>&1; then
+    fwd_json="true"
+    lat_json="$(echo "$diag" | jq -r '.tcp.forward.ms // empty')"
+    [ -n "$lat_json" ] || lat_json="null"
+    msg="$(echo "$diag" | jq -r '.verdict.summary // "user path OK"')"
+  elif echo "$diag" | jq -e '.tcp.control.ok == true' >/dev/null 2>&1; then
+    fwd_json="false"
+    lat_json="$(echo "$diag" | jq -r '.tcp.control.ms // empty')"
+    [ -n "$lat_json" ] || lat_json="null"
+    msg="$(echo "$diag" | jq -r '.verdict.summary // "control OK, forward down"')"
+  elif echo "$diag" | jq -e '.verdict.summary != null' >/dev/null 2>&1; then
+    msg="$(echo "$diag" | jq -r '.verdict.summary')"
+  fi
+  [ "$lat_json" = "null" ] || [ -n "$lat_json" ] || lat_json="null"
+
+  api_request POST "/api/hpx_pulse/agent/heartbeat" \
+    "$(jq -nc \
+      --arg s "running" \
+      --arg h "$(hostname -f 2>/dev/null || hostname)" \
+      --arg m "$msg" \
+      --argjson tr "$running" \
+      --argjson iu "$link" \
+      --argjson lm "$lat_json" \
+      --argjson fo "$fwd_json" \
+      --argjson d "$diag" \
+      '{status:$s, host:$h, tunnel_running:$tr, iface_up:$iu, latency_ms:($lm|tonumber? // null), forward_ok:$fo, message:$m, diag:$d}')" \
+    >/dev/null && hb_ok=1
+  [ "$hb_ok" = 1 ]
+}
+
+handle_diagnose_command() {
+  log "panel diagnose — running TCP/UDP path probes (pulse ${PULSE_ID:-?})"
+  if post_deep_diag_heartbeat; then
+    api POST "/api/hpx_pulse/agent/ack" \
+      "$(jq -nc '{command:"diagnose", status:"running", message:"HPX deep diagnose posted"}')" >/dev/null || true
+    log "diagnose report posted to panel"
+  else
+    warn "diagnose heartbeat failed (HTTP ${API_LAST_HTTP_CODE:-?})"
+    return 1
+  fi
+}
+
+maybe_handle_diagnose_command() {
+  local cfg command
+  cfg=$(api_request GET "/api/hpx_pulse/agent/config") || return 0
+  command=$(echo "$cfg" | jq -r '.agent_command // empty')
+  [ "$command" = "diagnose" ] || return 0
+  TUNNEL_MODE=$(echo "$cfg" | jq -r '.tunnel_mode // "direct_l3"')
+  CONTROL_PORT=$(echo "$cfg" | jq -r '.control_port // empty')
+  IRAN_PUBLIC_IP=$(echo "$cfg" | jq -r '.iran_public_ip // empty')
+  ABROAD_PUBLIC_IP=$(echo "$cfg" | jq -r '.abroad_public_ip // empty')
+  PORT_FORWARDS=$(echo "$cfg" | jq -c '.port_forwards // []')
+  handle_diagnose_command
 }
 
 measure_icmp_ms() {
@@ -1049,6 +1357,8 @@ send_heartbeat() {
     warn "heartbeat to panel failed (HTTP ${API_LAST_HTTP_CODE:-?}) — keeping tunnel; try: hpx-pulse-agent set-panel-url https://domain (no :8000)"
   else
     _reset_revoke_streak "${PULSE_ID:-}"
+    # Fast path: Diagnose UI queues "diagnose" — pick up on 5s ping, not only 30s sync.
+    maybe_handle_diagnose_command || true
   fi
   [ "$hb_ok" = 1 ]
 }
@@ -1171,18 +1481,19 @@ cmd_sync() {
       [ -f "$f" ] && load_env_file "$f" && break
     done
   }
-  # Pull latest agent script once so firewall/ping fixes apply without re-join.
-  if hp_curl "https://raw.githubusercontent.com/pooyahpx/HPXPANEL/main/scripts/hpx-pulse-agent.sh" \
-      -o "$INSTALL_DIR/hpx-pulse-agent.sh.new" 2>/dev/null \
-    || { [ -n "${PANEL_URL:-}" ] \
+  # Pull latest agent script once so firewall/ping/diagnose fixes apply without re-join.
+  # Prefer panel-hosted copy (matches this panel version), then GitHub.
+  if { [ -n "${PANEL_URL:-}" ] \
       && hp_curl "${PANEL_URL%/}/api/hpx_pulse/agent/hpx-pulse-agent.sh" \
-        -o "$INSTALL_DIR/hpx-pulse-agent.sh.new" 2>/dev/null; }; then
+        -o "$INSTALL_DIR/hpx-pulse-agent.sh.new" 2>/dev/null; } \
+    || hp_curl "https://raw.githubusercontent.com/pooyahpx/HPXPANEL/main/scripts/hpx-pulse-agent.sh" \
+      -o "$INSTALL_DIR/hpx-pulse-agent.sh.new" 2>/dev/null; then
     if [ -s "$INSTALL_DIR/hpx-pulse-agent.sh.new" ] \
       && ! cmp -s "$INSTALL_DIR/hpx-pulse-agent.sh.new" "$INSTALL_DIR/hpx-pulse-agent.sh" 2>/dev/null; then
       mv "$INSTALL_DIR/hpx-pulse-agent.sh.new" "$INSTALL_DIR/hpx-pulse-agent.sh"
       chmod 755 "$INSTALL_DIR/hpx-pulse-agent.sh"
       ln -sfn "$INSTALL_DIR/hpx-pulse-agent.sh" "$BIN_LINK"
-      log "agent updated from GitHub — re-exec sync"
+      log "agent updated — re-exec sync"
       exec "$BIN_LINK" sync
     fi
     rm -f "$INSTALL_DIR/hpx-pulse-agent.sh.new"

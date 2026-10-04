@@ -28,6 +28,118 @@ def _seconds_ago(value: dt | None) -> int | None:
     return max(0, int((dt.now(UTC) - seen).total_seconds()))
 
 
+def _checks_from_one_agent_diag(report: dict, side: str) -> list[PulseDiagCheck]:
+    """Turn one side's agent probe JSON into Diagnose rows."""
+    checks: list[PulseDiagCheck] = []
+    g = f"Agent probe · {side or report.get('side') or '?'}"
+    age = None
+    ts = report.get("ts")
+    if isinstance(ts, (int, float)):
+        age = max(0, int(dt.now(UTC).timestamp() - ts))
+    checks.append(
+        PulseDiagCheck(
+            g,
+            "Report age",
+            "ok" if age is not None and age < 120 else "warn",
+            f"{age}s ago · host={report.get('host') or '—'} · engine={report.get('engine_version') or '—'}",
+            "Click Diagnose again and wait ~10s for a fresh agent probe" if age is None or age >= 120 else "",
+        )
+    )
+
+    for key, title in (
+        ("tunnel_service", "Tunnel systemd"),
+        ("control_listen", "Control port listen (Iran)"),
+        ("backend_listen", "Backend listen (abroad localhost)"),
+        ("mss", "MSS in TOML"),
+    ):
+        item = report.get(key)
+        if not isinstance(item, dict):
+            continue
+        ok = bool(item.get("ok"))
+        level: DiagLevel = "ok" if ok else "fail"
+        if key == "mss" and not ok:
+            level = "warn"
+        checks.append(
+            PulseDiagCheck(
+                g,
+                title,
+                level,
+                str(item.get("detail") or ("ok" if ok else "fail")),
+                str(item.get("fix") or ""),
+            )
+        )
+
+    tcp = report.get("tcp") if isinstance(report.get("tcp"), dict) else {}
+    for key, title in (
+        ("control", "TCP → Iran control"),
+        ("forward", "TCP → Iran forward"),
+        ("forward_exchange", "TCP data after connect (MSS test)"),
+    ):
+        item = tcp.get(key) if isinstance(tcp, dict) else None
+        if not isinstance(item, dict):
+            continue
+        state = item.get("state") or ("ok" if item.get("ok") else "fail")
+        level = "ok" if state == "ok" else ("warn" if state == "warn" else "fail")
+        if item.get("stall"):
+            level = "fail"
+        detail = str(item.get("detail") or state)
+        fix = str(item.get("fix") or "")
+        if item.get("stall"):
+            fix = fix or (
+                "TCP connects then stalls on first bytes — classic MTU/MSS. "
+                "Lower mss to 1200 on both TOMLs, Sync, restart tunnel services."
+            )
+        checks.append(PulseDiagCheck(g, title, level, detail, fix))
+
+    udp = report.get("udp") if isinstance(report.get("udp"), dict) else {}
+    if isinstance(udp, dict) and udp.get("detail"):
+        checks.append(
+            PulseDiagCheck(
+                g,
+                "UDP note",
+                "info",
+                str(udp.get("detail")),
+                str(udp.get("fix") or ""),
+            )
+        )
+
+    verdict = report.get("verdict")
+    if isinstance(verdict, dict) and verdict.get("summary"):
+        level = "fail" if verdict.get("level") == "fail" else ("warn" if verdict.get("level") == "warn" else "info")
+        checks.append(
+            PulseDiagCheck(
+                g,
+                "Verdict",
+                level,
+                str(verdict.get("summary")),
+                str(verdict.get("fix") or ""),
+            )
+        )
+    return checks
+
+
+def _checks_from_agent_diag(pulse: HpxPulse) -> list[PulseDiagCheck]:
+    """Turn last agent probe JSON into Diagnose rows (supports multi-side reports)."""
+    report = pulse.diag_report if isinstance(pulse.diag_report, dict) else None
+    if not report:
+        return []
+    sides = report.get("sides")
+    if isinstance(sides, dict) and sides:
+        checks: list[PulseDiagCheck] = []
+        # Abroad path probes first — they catch MSS stalls.
+        for side_name in ("abroad", "iran"):
+            side_report = sides.get(side_name)
+            if isinstance(side_report, dict):
+                checks.extend(_checks_from_one_agent_diag(side_report, side_name))
+        for side_name, side_report in sides.items():
+            if side_name in {"abroad", "iran"}:
+                continue
+            if isinstance(side_report, dict):
+                checks.extend(_checks_from_one_agent_diag(side_report, str(side_name)))
+        return checks
+    return _checks_from_one_agent_diag(report, str(report.get("side") or "?"))
+
+
 def diagnose_pulse_record(pulse: HpxPulse) -> list[PulseDiagCheck]:
     """Explain why a Pulse may show disconnected / no ping — without SSH."""
     checks: list[PulseDiagCheck] = []
@@ -41,7 +153,7 @@ def diagnose_pulse_record(pulse: HpxPulse) -> list[PulseDiagCheck]:
             "Status",
             "info" if pulse.status == HpxPulseStatus.running else "warn",
             f"{pulse.status}" + (f" — {pulse.message}" if pulse.message else ""),
-            "" if pulse.status == HpxPulseStatus.running else "Open Diagnose on agents or Sync, then check Iran firewall + abroad backend",
+            "" if pulse.status == HpxPulseStatus.running else "Open Diagnose, wait 10s, open again — agents push live TCP probes",
         )
     )
     checks.append(
@@ -83,7 +195,6 @@ def diagnose_pulse_record(pulse: HpxPulse) -> list[PulseDiagCheck]:
             )
         )
 
-    # Agents
     for side, claimed, host, seen in (
         ("Iran", bool(pulse.iran_agent_key_hash), pulse.iran_agent_host, pulse.iran_agent_last_seen),
         ("Abroad", bool(pulse.abroad_agent_key_hash), pulse.abroad_agent_host, pulse.abroad_agent_last_seen),
@@ -107,7 +218,7 @@ def diagnose_pulse_record(pulse: HpxPulse) -> list[PulseDiagCheck]:
                     f"{side} agent",
                     "fail",
                     f"silent ({age if age is not None else 'never'}s ago, host={host or '—'})",
-                    f"On {side} VPS: sudo hpx-pulse-agent sync && sudo hpx-pulse-agent ping — check PANEL_URL / firewall",
+                    f"On {side} VPS: sudo hpx-pulse-agent sync && sudo hpx-pulse-agent ping",
                 )
             )
         else:
@@ -120,7 +231,6 @@ def diagnose_pulse_record(pulse: HpxPulse) -> list[PulseDiagCheck]:
                 )
             )
 
-    # Ping / path
     if pulse.latency_ms is None:
         if is_reverse:
             checks.append(
@@ -129,7 +239,7 @@ def diagnose_pulse_record(pulse: HpxPulse) -> list[PulseDiagCheck]:
                     "Live ping",
                     "fail",
                     "no RTT — abroad cannot TCP-reach Iran control or forward port",
-                    "1) Iran firewall: control + forward TCP ports  2) Abroad Xray on 127.0.0.1:<forward>  3) If UDP apps work but TCP stalls → Sync (mss=1360) or lower mss to 1280",
+                    "Iran firewall TCP for control+forwards; abroad Xray on 127.0.0.1:<forward>",
                 )
             )
         else:
@@ -138,8 +248,8 @@ def diagnose_pulse_record(pulse: HpxPulse) -> list[PulseDiagCheck]:
                     g,
                     "Live ping",
                     "warn",
-                    "no ICMP RTT on L3 peer (ICMP often blocked) — not the same as tunnel health",
-                    "Check bp0 + tunnel service. If ICMP ping works but TCP pages stall → mss_clamp / Sync",
+                    "no ICMP RTT on L3 peer (ICMP often blocked) — not tunnel health",
+                    "Check bp0 + tunnel service",
                 )
             )
     else:
@@ -148,26 +258,28 @@ def diagnose_pulse_record(pulse: HpxPulse) -> list[PulseDiagCheck]:
         msg_l = (pulse.message or "").lower()
         if pulse.latency_ms > 300:
             level = "warn"
-            fix = "High RTT — try preset speed or a closer abroad VPS"
+            fix = "High RTT — try preset speed or closer abroad VPS"
         if "control ok" in msg_l and ("closed" in msg_l or "forward" in msg_l):
             level = "fail"
-            fix = "Tunnel control is up but user TCP port is dead — open Iran forward ports; ensure abroad backend listens"
-        detail = f"{pulse.latency_ms:.1f} ms (TCP path RTT — not ICMP)"
+            fix = "Control up, user TCP port dead — Iran forward firewall / abroad backend"
+        detail = f"{pulse.latency_ms:.1f} ms (TCP path RTT)"
         if pulse.message:
             detail += f" — {pulse.message}"
         checks.append(PulseDiagCheck(g, "Live ping", level, detail, fix))
 
-    # Classic: UDP works, TCP stalls after connect → MSS/MTU.
-    if is_reverse and pulse.status in {HpxPulseStatus.running, HpxPulseStatus.unhealthy, HpxPulseStatus.partial}:
+    checks.extend(_checks_from_agent_diag(pulse))
+
+    if is_reverse:
         checks.append(
             PulseDiagCheck(
                 g,
                 "TCP vs UDP",
                 "info",
-                "If UDP (e.g. QUIC/WireGuard apps) works but TCP sites stall: path MTU — Pulse now sets mss=1360; Sync both agents",
-                "Still broken? Edit TOML mss=1280 on both sides or Sync after panel update, then restart tunnel",
+                "UDP-through-tunnel OK + TCP sites fail ⇒ almost always MSS/MTU (default mss=1280 now)",
+                "Diagnose twice (queue probe → wait 10s → Diagnose). If stall_after_connect: set mss=1200 both sides + Sync",
             )
         )
+
     if pulse.status == HpxPulseStatus.unhealthy:
         msg = (pulse.message or "").lower()
         if "silent" in msg:
@@ -177,7 +289,7 @@ def diagnose_pulse_record(pulse: HpxPulse) -> list[PulseDiagCheck]:
                     "Root cause hint",
                     "fail",
                     pulse.message or "agent silent",
-                    "Agent lost panel reachability or process died — re-join only if Tokens were regenerated",
+                    "Re-join only if Tokens were regenerated",
                 )
             )
         elif "forward" in msg or "443" in msg or "closed" in msg:
@@ -187,7 +299,7 @@ def diagnose_pulse_record(pulse: HpxPulse) -> list[PulseDiagCheck]:
                     "Root cause hint",
                     "fail",
                     pulse.message or "forward path down",
-                    "Control tunnel may be up but user port is closed — open Iran firewall for forward ports; ensure abroad backend listens",
+                    "Open Iran forward ports; ensure abroad backend listens",
                 )
             )
         elif "cannot reach" in msg or "control" in msg:
@@ -197,17 +309,16 @@ def diagnose_pulse_record(pulse: HpxPulse) -> list[PulseDiagCheck]:
                     "Root cause hint",
                     "fail",
                     pulse.message or "control path down",
-                    "Abroad cannot dial Iran:control_port — check Iran public IP, tunnel port firewall, and that Iran agent is listening",
+                    "Abroad cannot dial Iran:control_port",
                 )
             )
 
-    stale_threshold = AGENT_STALE_SECONDS
     checks.append(
         PulseDiagCheck(
             g,
             "Watchdog",
             "info",
-            f"agent stale after {stale_threshold}s · auto_heal={pulse.auto_heal_enabled} · last_heal={pulse.last_heal_action or '—'}",
+            f"agent stale after {AGENT_STALE_SECONDS}s · auto_heal={pulse.auto_heal_enabled} · last_heal={pulse.last_heal_action or '—'}",
         )
     )
     return checks

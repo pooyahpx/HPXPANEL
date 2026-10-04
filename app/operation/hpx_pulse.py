@@ -421,18 +421,30 @@ class HpxPulseOperation(BaseOperation):
         if db_pulse is None:
             await self.raise_error(message="Pulse not found", code=404)
         summary = diagnose_summary(diagnose_pulse_record(db_pulse))
-        # Nudge agents to refresh path metrics on next poll.
+        # Queue live TCP/UDP probes on next agent poll (~5s ping timer).
         update: dict = {"last_health_check": dt.now(UTC)}
+        probe_queued = False
         if db_pulse.iran_agent_key_hash:
-            update["iran_agent_command"] = "sync"
+            update["iran_agent_command"] = "diagnose"
+            probe_queued = True
         if db_pulse.abroad_agent_key_hash:
-            update["abroad_agent_command"] = "sync"
+            update["abroad_agent_command"] = "diagnose"
+            probe_queued = True
         await update_hpx_pulse(db, db_pulse, update)
         await db.commit()
+        hint = None
+        if probe_queued:
+            hint = (
+                "Live probe queued on agents — wait ~10s then Diagnose again "
+                "to see TCP exchange / stall_after_connect (MSS) results"
+            )
         return HpxPulseDiagnoseResponse(
             pulse_id=db_pulse.id,
             name=db_pulse.name,
             engine_pin=engine_version(),
+            diag_report=db_pulse.diag_report if isinstance(db_pulse.diag_report, dict) else None,
+            probe_queued=probe_queued,
+            hint=hint,
             **summary,
         )
 
@@ -644,6 +656,22 @@ class HpxPulseOperation(BaseOperation):
             update_data["latency_ms"] = model.latency_ms
         if model.packet_loss_pct is not None:
             update_data["packet_loss_pct"] = model.packet_loss_pct
+        if model.diag is not None:
+            incoming = dict(model.diag)
+            incoming.setdefault("side", side)
+            existing = db_pulse.diag_report if isinstance(db_pulse.diag_report, dict) else {}
+            sides = dict(existing.get("sides") or {})
+            # Preserve flat legacy single-side reports under sides.<side>.
+            if "sides" not in existing and existing.get("side"):
+                sides[str(existing["side"])] = {k: v for k, v in existing.items() if k != "sides"}
+            sides[side] = incoming
+            update_data["diag_report"] = {
+                "ts": incoming.get("ts"),
+                "sides": sides,
+            }
+            verdict = incoming.get("verdict") if isinstance(incoming.get("verdict"), dict) else None
+            if verdict and verdict.get("summary") and model.message is None:
+                update_data["message"] = str(verdict["summary"])[:240]
         if db_pulse.iran_agent_key_hash and db_pulse.abroad_agent_key_hash:
             if model.forward_ok is False:
                 update_data["status"] = HpxPulseStatus.unhealthy
@@ -655,7 +683,7 @@ class HpxPulseOperation(BaseOperation):
                 model.tunnel_running or model.iface_up
             ):
                 update_data["status"] = HpxPulseStatus.running
-                if model.message is None:
+                if model.message is None and "message" not in update_data:
                     update_data["message"] = "HPX tunnel active"
             elif db_pulse.status in {HpxPulseStatus.starting, HpxPulseStatus.partial}:
                 update_data["status"] = HpxPulseStatus.starting

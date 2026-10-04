@@ -117,7 +117,7 @@ carrier = "{carrier}"
 preset = "{preset}"
 mtu = {mtu}
 auto_mtu = true
-mss_clamp = 1360
+mss_clamp = 1280
 iface = "bp0"
 {ports}"""
 
@@ -144,7 +144,7 @@ carrier = "{carrier}"
 preset = "{preset}"
 mtu = {mtu}
 auto_mtu = true
-mss_clamp = 1360
+mss_clamp = 1280
 iface = "bp0"
 {ports}"""
 
@@ -157,7 +157,7 @@ def render_iran_server(
     preset: str,
     port_forwards: list[str] | None = None,
     domain: str | None = None,
-    mss: int = 1360,
+    mss: int = 1280,
 ) -> str:
     ports = _reverse_ports_block(port_forwards or [])
     tls = _server_tls_block(transport, domain)
@@ -186,7 +186,7 @@ def render_abroad_client(
     token: str,
     transport: str,
     preset: str,
-    mss: int = 1360,
+    mss: int = 1280,
 ) -> str:
     mux = _mux_block(transport)
     mss_line = f"mss = {mss}\n" if mss and mss > 0 else ""

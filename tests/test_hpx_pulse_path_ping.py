@@ -10,6 +10,21 @@ def test_path_ping_request_defaults():
     assert req.target == "control"
 
 
+def test_path_ping_compact_command_fits_legacy_column():
+    """agent_command was String(16); compact pp:* must always fit before widen migration."""
+    cases = [
+        ("tcp", 4, "control"),
+        ("udp", 8, "forward"),
+        ("tcp", 20, "control"),
+        ("udp", 20, "forward"),
+    ]
+    for proto, count, target in cases:
+        proto_s = "t" if proto == "tcp" else "u"
+        target_s = "c" if target == "control" else "f"
+        cmd = f"pp:{proto_s}:{count}:{target_s}"
+        assert len(cmd) <= 16, cmd
+
+
 def test_path_ping_request_udp_forward():
     req = HpxPulsePathPingRequest(proto="udp", count=8, target="forward")
     assert req.proto == "udp"

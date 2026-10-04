@@ -987,7 +987,7 @@ sync_pulse_from_panel() {
   fi
 
   case "$command" in
-    path-ping|path-ping:*)
+    path-ping|path-ping:*|pp|pp:*)
       write_env
       handle_path_ping_command "$command" || true
       return 0
@@ -1629,7 +1629,7 @@ handle_diagnose_command() {
   fi
 }
 
-# Panel queues: path-ping:tcp:4:control | path-ping:udp:8:forward
+# Panel queues: pp:t:4:c | pp:u:8:f  (also legacy path-ping:tcp:4:control)
 run_path_ping_samples() {
   local proto="$1" count="$2" target_kind="$3"
   local host="${IRAN_PUBLIC_IP:-}" port="" i ms status detail replies_json="[]" ok_n=0
@@ -1718,13 +1718,34 @@ finally:
 }
 
 handle_path_ping_command() {
-  local raw="${1:-path-ping:tcp:4:control}"
+  local raw="${1:-pp:t:4:c}"
   local proto=tcp count=4 target=control
-  # path-ping:proto:count:target
-  IFS=':' read -r _ proto count target <<< "${raw}"
-  proto="${proto:-tcp}"
-  count="${count:-4}"
-  target="${target:-control}"
+  # Formats:
+  #   pp:t:4:c | pp:u:8:f
+  #   path-ping:tcp:4:control | path-ping:udp:8:forward
+  #   path-ping | pp  (defaults)
+  if [[ "$raw" == pp:* ]]; then
+    IFS=':' read -r _ proto count target <<< "${raw}"
+    case "$proto" in
+      t|tcp) proto=tcp ;;
+      u|udp) proto=udp ;;
+      *) proto=tcp ;;
+    esac
+    case "$target" in
+      c|control) target=control ;;
+      f|forward) target=forward ;;
+      *) target=control ;;
+    esac
+  elif [[ "$raw" == path-ping:* ]]; then
+    IFS=':' read -r _ proto count target <<< "${raw}"
+    proto="${proto:-tcp}"
+    count="${count:-4}"
+    target="${target:-control}"
+  else
+    proto=tcp
+    count=4
+    target=control
+  fi
   [[ "$count" =~ ^[0-9]+$ ]] || count=4
   [ "$count" -ge 1 ] || count=1
   [ "$count" -le 20 ] || count=20
@@ -1776,7 +1797,7 @@ maybe_handle_diagnose_command() {
       fi
       handle_diagnose_command
       ;;
-    path-ping|path-ping:*)
+    path-ping|path-ping:*|pp|pp:*)
       TUNNEL_MODE=$(echo "$cfg" | jq -r '.tunnel_mode // "direct_l3"')
       CONTROL_PORT=$(echo "$cfg" | jq -r '.control_port // empty')
       IRAN_PUBLIC_IP=$(echo "$cfg" | jq -r '.iran_public_ip // empty')

@@ -16,17 +16,17 @@
     --border: 218 18% 68%;
     --input: 0 0% 100%;
     --input-placeholder: 215 16% 47%;
-    --primary: 224 76% 52%;
+    --primary: 158 64% 40%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 220 20% 92%;
+    --secondary: 220 18% 92%;
     --secondary-foreground: 222 47% 14%;
-    --accent: 221 70% 92%;
-    --accent-foreground: 224 65% 28%;
+    --accent: 158 40% 92%;
+    --accent-foreground: 160 60% 22%;
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
-    --ring: 224 76% 52%;
-    --radius: 0;
-    --hover-primary: 224 76% 44%;
+    --ring: 158 64% 40%;
+    --radius: 0.85rem;
+    --hover-primary: 158 64% 34%;
     --hover-secondary: 220 18% 85%;
     --hover-destructive: 0 72% 43%;
     --success: 152 55% 36%;
@@ -35,66 +35,66 @@
     --bg-destructive-10: 12 76% 53%;
     --hover-destructive-20: 12 76% 53%;
     --bg-muted-50: 220 18% 93%;
-    --bg-accent-50: 221 70% 94%;
+    --bg-accent-50: 158 40% 94%;
     --bg-muted-40: 220 18% 93%;
     --border-muted-40: 218 18% 76%;
-    --sidebar-background: 222 40% 10%;
+    --sidebar-background: 222 40% 9%;
     --sidebar-foreground: 214 32% 94%;
-    --sidebar-primary: 220 86% 62%;
+    --sidebar-primary: 158 70% 48%;
     --sidebar-primary-foreground: 222 47% 10%;
-    --sidebar-accent: 222 30% 17%;
+    --sidebar-accent: 222 30% 15%;
     --sidebar-accent-foreground: 214 32% 96%;
-    --sidebar-border: 220 24% 24%;
-    --sidebar-ring: 220 86% 62%;
+    --sidebar-border: 220 24% 20%;
+    --sidebar-ring: 158 70% 48%;
     --sidebar-foreground-70: 215 20% 70%;
-    --snow-color: 220 86% 62%;
+    --snow-color: 158 70% 48%;
     --neon-green: 152 70% 48%;
     --background-custom: 220 25% 97%;
-    --chart-1: 224 76% 52%;
+    --chart-1: 158 64% 40%;
     --chart-2: 0 72% 51%;
     --chart-3: 38 92% 50%;
-    --chart-4: 152 55% 40%;
+    --chart-4: 199 89% 48%;
     --chart-5: 280 40% 48%;
     --scrollbar-track: 220 25% 97%;
     --scrollbar-thumb: 218 15% 58%;
     --scrollbar-thumb-hover: 222 24% 38%;
-    --scrollbar-thumb-active: 224 76% 48%;
-    --surface-glow: 224 76% 58%;
-    --mesh-a: 220 80% 91%;
-    --mesh-b: 245 60% 94%;
-    --mesh-c: 190 55% 93%;
+    --scrollbar-thumb-active: 158 64% 40%;
+    --surface-glow: 158 70% 48%;
+    --mesh-a: 158 50% 90%;
+    --mesh-b: 200 55% 92%;
+    --mesh-c: 170 45% 93%;
     --color-bone: #f8fafc;
     --color-ink: #0f172a;
-    --color-sky-cobalt: #315fdb;
-    --color-sky-cobalt-pressed: #2449ad;
+    --color-sky-cobalt: #10b981;
+    --color-sky-cobalt-pressed: #059669;
     --color-sunset-vermillion: #dc3f3f;
-    --pixel-border: 222 35% 20%;
+    --pixel-border: 222 20% 28%;
   }
 
   .dark {
-    --background: 222 47% 7%;
-    --foreground: 214 32% 94%;
-    --muted: 222 28% 15%;
-    --muted-foreground: 215 20% 70%;
-    --card: 222 38% 10%;
+    --background: 222 47% 6%;
+    --foreground: 210 40% 96%;
+    --muted: 222 28% 13%;
+    --muted-foreground: 215 20% 68%;
+    --card: 222 36% 9%;
     --card-foreground: var(--foreground);
-    --popover: 222 38% 10%;
+    --popover: 222 36% 9%;
     --popover-foreground: var(--foreground);
-    --border: 220 20% 32%;
-    --input: 222 30% 14%;
+    --border: 220 18% 22%;
+    --input: 222 28% 12%;
     --input-placeholder: 215 16% 58%;
-    --primary: 220 86% 64%;
-    --primary-foreground: 222 47% 9%;
-    --secondary: 222 25% 18%;
+    --primary: 158 72% 46%;
+    --primary-foreground: 160 80% 6%;
+    --secondary: 222 24% 16%;
     --secondary-foreground: 214 32% 94%;
-    --accent: 222 32% 20%;
-    --accent-foreground: 214 40% 96%;
+    --accent: 160 28% 16%;
+    --accent-foreground: 158 60% 82%;
     --destructive: 0 72% 58%;
     --destructive-foreground: 0 0% 100%;
-    --ring: 220 86% 64%;
-    --radius: 0;
-    --hover-primary: 220 86% 72%;
-    --hover-secondary: 222 24% 24%;
+    --ring: 158 72% 46%;
+    --radius: 0.85rem;
+    --hover-primary: 158 72% 54%;
+    --hover-secondary: 222 24% 22%;
     --hover-destructive: 0 72% 50%;
     --success: 152 60% 44%;
     --hover-success: 152 60% 38%;
@@ -102,40 +102,40 @@
     --bg-destructive-10: 12 78% 55%;
     --hover-destructive-20: 12 78% 55%;
     --bg-muted-50: 222 28% 15%;
-    --bg-accent-50: 222 32% 18%;
+    --bg-accent-50: 160 28% 16%;
     --bg-muted-40: 222 28% 15%;
     --border-muted-40: 220 20% 28%;
-    --sidebar-background: 224 50% 6%;
+    --sidebar-background: 224 50% 5%;
     --sidebar-foreground: 214 32% 94%;
-    --sidebar-primary: 220 86% 66%;
-    --sidebar-primary-foreground: 222 47% 9%;
-    --sidebar-accent: 222 32% 16%;
+    --sidebar-primary: 158 72% 48%;
+    --sidebar-primary-foreground: 160 80% 6%;
+    --sidebar-accent: 222 32% 14%;
     --sidebar-accent-foreground: 214 40% 96%;
-    --sidebar-border: 220 24% 20%;
-    --sidebar-ring: 220 86% 66%;
+    --sidebar-border: 220 24% 18%;
+    --sidebar-ring: 158 72% 48%;
     --sidebar-foreground-70: 215 20% 68%;
-    --snow-color: 220 86% 66%;
+    --snow-color: 158 72% 48%;
     --neon-green: 152 70% 52%;
-    --background-custom: 222 47% 7%;
-    --chart-1: 220 86% 64%;
+    --background-custom: 222 47% 6%;
+    --chart-1: 158 72% 46%;
     --chart-2: 0 72% 58%;
     --chart-3: 38 92% 58%;
-    --chart-4: 152 60% 48%;
+    --chart-4: 199 89% 55%;
     --chart-5: 280 50% 62%;
-    --scrollbar-track: 222 47% 7%;
-    --scrollbar-thumb: 220 18% 32%;
+    --scrollbar-track: 222 47% 6%;
+    --scrollbar-thumb: 220 18% 28%;
     --scrollbar-thumb-hover: 215 20% 48%;
-    --scrollbar-thumb-active: 220 86% 64%;
-    --surface-glow: 220 70% 48%;
-    --mesh-a: 224 45% 15%;
-    --mesh-b: 245 35% 13%;
-    --mesh-c: 190 30% 12%;
+    --scrollbar-thumb-active: 158 72% 46%;
+    --surface-glow: 158 70% 42%;
+    --mesh-a: 158 40% 12%;
+    --mesh-b: 200 35% 11%;
+    --mesh-c: 170 30% 10%;
     --color-bone: #f8fafc;
     --color-ink: #0f172a;
-    --color-sky-cobalt: #5c83ef;
-    --color-sky-cobalt-pressed: #315fdb;
+    --color-sky-cobalt: #34d399;
+    --color-sky-cobalt-pressed: #10b981;
     --color-sunset-vermillion: #f05b5b;
-    --pixel-border: 215 24% 58%;
+    --pixel-border: 215 18% 40%;
   }
 }
 
@@ -208,13 +208,13 @@
   h2,
   h3,
   .font-display {
-    font-family: 'Chakra Petch', Vazirmatn, Inter, ui-sans-serif, system-ui, sans-serif;
-    letter-spacing: 0.01em;
+    font-family: 'Fira Sans', Vazirmatn, ui-sans-serif, system-ui, sans-serif;
+    letter-spacing: -0.02em;
     font-weight: 700;
   }
 
   .font-hud {
-    font-family: Inter, Vazirmatn, ui-sans-serif, system-ui, sans-serif;
+    font-family: 'Fira Sans', Vazirmatn, ui-sans-serif, system-ui, sans-serif;
     letter-spacing: 0.01em;
   }
 
@@ -223,7 +223,7 @@
   kbd,
   pre,
   [data-mono] {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-family: 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     letter-spacing: 0;
   }
 

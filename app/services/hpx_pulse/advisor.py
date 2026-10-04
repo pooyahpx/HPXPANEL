@@ -109,6 +109,23 @@ _PROFILES: dict[str, dict] = {
         "preset": "turbo",
         "base_score": 75,
     },
+    # First-class "TCP for users, UDP on the wire" — what operators mean by fixing TCP.
+    "pulse-tcp-pass-kcp": {
+        "title": "TCP Pass — KCP backhaul",
+        "title_fa": "رد کردن TCP با KCP (روی UDP)",
+        "tunnel_mode": "reverse_kcp",
+        "carrier": "kcp",
+        "preset": "turbo",
+        "base_score": 97,
+    },
+    "pulse-tcp-pass-quic": {
+        "title": "TCP Pass — QUIC backhaul",
+        "title_fa": "رد کردن TCP با QUIC (روی UDP)",
+        "tunnel_mode": "reverse_quic",
+        "carrier": "quic",
+        "preset": "turbo",
+        "base_score": 95,
+    },
     "pulse-reverse-udp": {
         "title": "Escape / Reverse UDP",
         "title_fa": "فرار / Reverse UDP",
@@ -333,10 +350,20 @@ def advise(
             reasons.append("HTTP WebSocket carrier — when only HTTP gets through")
             reasons_fa.append("حامل WebSocket — وقتی فقط HTTP رد می‌شود")
 
-        elif pid == "pulse-reverse-kcp":
+        elif pid in {"pulse-reverse-kcp", "pulse-tcp-pass-kcp"}:
             score = _score_reverse_base(goal, low_cpu, score, reasons, reasons_fa)
-            reasons.append("UDP carrier — bypasses TCP/WS MSS stalls (Backhaul-class UDP)")
-            reasons_fa.append("حامل UDP — رد شدن از stall تی‌سی‌پی/WS (هم‌خانواده Backhaul UDP)")
+            reasons.append(
+                "User TCP (443/configs) stays TCP on Iran — Iran↔abroad carrier is UDP+KCP "
+                "(bypasses TCP MSS stalls; Backhaul-class)"
+            )
+            reasons_fa.append(
+                "کانفیگ‌های TCP روی ایران می‌مانند — لینک ایران↔خارج روی UDP+KCP است "
+                "(رد شدن از stall تی‌سی‌پی؛ هم‌خانواده Backhaul)"
+            )
+            if pid == "pulse-tcp-pass-kcp":
+                score += 8
+                reasons.append("Dedicated TCP Pass profile — pick this when Stealth/TCP/WS all stall")
+                reasons_fa.append("پروفایل اختصاصی رد کردن TCP — وقتی Stealth/TCP/WS همه می‌میرند")
             if loss >= 8 or req.udp_reachable is True or intent in {"fast", "hard", "mobile"}:
                 bump = 40 if intent in {"hard", "mobile"} else (15 if loss >= 8 or intent == "fast" else 5)
                 score += bump
@@ -357,10 +384,16 @@ def advise(
             if goal == "speed" or intent in {"fast", "hard", "mobile"}:
                 score += 36 if intent in {"hard", "mobile"} else 8
 
-        elif pid == "pulse-reverse-quic":
+        elif pid in {"pulse-reverse-quic", "pulse-tcp-pass-quic"}:
             score = _score_reverse_base(goal, low_cpu, score, reasons, reasons_fa)
-            reasons.append("Encrypted UDP with self-tuning congestion control")
-            reasons_fa.append("UDP رمزنگاری‌شده با کنترل ازدحام خودکار")
+            reasons.append(
+                "User TCP on Iran, QUIC/UDP on the Iran↔abroad hop — encrypted UDP congestion control"
+            )
+            reasons_fa.append(
+                "TCP کاربر روی ایران؛ لینک ایران↔خارج روی QUIC/UDP — کنترل ازدحام رمزشده"
+            )
+            if pid == "pulse-tcp-pass-quic":
+                score += 6
             if intent in {"fast", "hard", "mobile"}:
                 score += 38 if intent in {"hard", "mobile"} else 10
 
@@ -443,9 +476,14 @@ def advise(
             )
         )
 
-    # Prefer UDP escape carriers on hard/mobile when scores tie at the 100 cap
-    # (TCP/WS often stall on Iran paths while UDP still works).
-    _udp_escape = {"pulse-reverse-kcp", "pulse-reverse-quic", "pulse-reverse-udp", "pulse-clean-udp"}
+    _udp_escape = {
+        "pulse-tcp-pass-kcp",
+        "pulse-tcp-pass-quic",
+        "pulse-reverse-kcp",
+        "pulse-reverse-quic",
+        "pulse-reverse-udp",
+        "pulse-clean-udp",
+    }
     prefer_udp = intent in {"hard", "mobile", "fast"}
     options.sort(
         key=lambda o: (o.score, 1 if prefer_udp and o.profile_id in _udp_escape else 0),
@@ -456,16 +494,16 @@ def advise(
     if low_cpu:
         warnings.append("1 CPU core — Reverse TCP Stealth (Balance) is the recommended default")
     if loss > 15:
-        warnings.append("High packet loss — consider pulse-reverse-kcp")
+        warnings.append("High packet loss — consider pulse-tcp-pass-kcp / pulse-reverse-kcp")
     if intent == "hard":
         warnings.append(
-            "Hard intent: if TCP/WS stall, pick Escape/KCP or QUIC (UDP) — same engine family as Backhaul UDP"
+            "Hard intent: pick «TCP Pass — KCP» when Stealth/TCP/WS stall — user configs stay TCP, wire is UDP"
         )
     if intent == "mobile":
-        warnings.append("Mobile intent prefers Balance + Reverse Stealth / WSS; use Escape/KCP if TCP stalls")
+        warnings.append("Mobile: Stealth/WSS if TCP works; else «TCP Pass — KCP»")
     if intent in {"mobile", "hard", "stealth", "balanced"}:
         warnings.append(
-            "If Diagnose shows stall_after_connect: try Safe/MTU first; if still broken use Escape/KCP (UDP)"
+            "If Diagnose shows stall_after_connect: Safe/MTU first; if still broken use TCP Pass (KCP/QUIC)"
         )
 
     return PulseAdviseResponse(

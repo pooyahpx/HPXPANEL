@@ -761,6 +761,11 @@ open_iran_firewall() {
   case "${TUNNEL_MODE:-}" in reverse_*) ;; *) return 0 ;; esac
 
   local ports=()
+  local udp_control=0
+  case "${TUNNEL_MODE:-}" in
+    reverse_kcp|reverse_quic|reverse_udp) udp_control=1 ;;
+  esac
+
   [ -n "${CONTROL_PORT:-}" ] && ports+=("$CONTROL_PORT")
   local raw pf left
   raw="${PORT_FORWARDS:-}"
@@ -771,22 +776,44 @@ open_iran_firewall() {
     left="${left// /}"
     [[ "$left" =~ ^[0-9]+$ ]] && ports+=("$left")
   done
-  for p in "${ports[@]}"; do
+
+  _allow_port() {
+    local p="$1" proto="$2"
     if has ufw && ufw status 2>/dev/null | grep -qi "Status: active"; then
-      ufw allow "${p}/tcp" >/dev/null 2>&1 || true
-      log "ufw allow ${p}/tcp"
+      ufw allow "${p}/${proto}" >/dev/null 2>&1 || true
+      log "ufw allow ${p}/${proto}"
     elif has firewall-cmd; then
-      firewall-cmd --permanent --add-port="${p}/tcp" >/dev/null 2>&1 || true
+      firewall-cmd --permanent --add-port="${p}/${proto}" >/dev/null 2>&1 || true
       firewall-cmd --reload >/dev/null 2>&1 || true
-      log "firewalld allow ${p}/tcp"
+      log "firewalld allow ${p}/${proto}"
     elif has iptables; then
-      iptables -C INPUT -p tcp --dport "$p" -j ACCEPT 2>/dev/null \
-        || iptables -I INPUT -p tcp --dport "$p" -j ACCEPT
-      log "iptables allow ${p}/tcp"
+      iptables -C INPUT -p "$proto" --dport "$p" -j ACCEPT 2>/dev/null \
+        || iptables -I INPUT -p "$proto" --dport "$p" -j ACCEPT
+      log "iptables allow ${p}/${proto}"
     else
-      warn "open firewall manually: allow TCP ${p}"
+      warn "open firewall manually: allow ${proto} ${p}"
+    fi
+  }
+
+  for p in "${ports[@]}"; do
+    # User forward ports are always TCP (Xray/VLESS listen).
+    if [ -n "${CONTROL_PORT:-}" ] && [ "$p" = "$CONTROL_PORT" ] && [ "$udp_control" = 1 ]; then
+      _allow_port "$p" udp
+    else
+      _allow_port "$p" tcp
     fi
   done
+
+  # TCPMSS clamp on forward ports — helps end-user TCP even when carrier is UDP.
+  if has iptables; then
+    for p in "${ports[@]}"; do
+      [ -n "${CONTROL_PORT:-}" ] && [ "$p" = "$CONTROL_PORT" ] && continue
+      iptables -t mangle -C POSTROUTING -p tcp --tcp-flags SYN,RST SYN --dport "$p" -j TCPMSS --clamp-mss-to-pmtu 2>/dev/null \
+        || iptables -t mangle -A POSTROUTING -p tcp --tcp-flags SYN,RST SYN --dport "$p" -j TCPMSS --clamp-mss-to-pmtu 2>/dev/null || true
+      iptables -t mangle -C POSTROUTING -p tcp --tcp-flags SYN,RST SYN --sport "$p" -j TCPMSS --clamp-mss-to-pmtu 2>/dev/null \
+        || iptables -t mangle -A POSTROUTING -p tcp --tcp-flags SYN,RST SYN --sport "$p" -j TCPMSS --clamp-mss-to-pmtu 2>/dev/null || true
+    done
+  fi
 }
 
 # Abroad must have the target service listening (e.g. Xray on 127.0.0.1:443).

@@ -100,20 +100,31 @@ read_curl_last_err() {
 }
 
 probe_panel_reachability() {
+  # Prefer unauthenticated /health (200). /api/system returns 401 without JWT and
+  # was scaring operators even when the panel was fine.
   local base="${1%/}" code err_tmp
   err_tmp="$(mktemp)"
   code=$(curl --http1.1 --connect-timeout 8 --max-time 12 -sS -o /dev/null -w "%{http_code}" \
-    "${CURL_INSECURE_ARGS[@]}" "${base}/api/system" 2>"$err_tmp") || code="000"
+    "${CURL_INSECURE_ARGS[@]}" "${base}/health" 2>"$err_tmp") || code="000"
   if [ "$code" = "000" ] && [ "${#CURL_INSECURE_ARGS[@]}" -eq 0 ]; then
     code=$(curl --http1.1 --connect-timeout 8 --max-time 12 -sS -k -o /dev/null -w "%{http_code}" \
-      "${base}/api/system" 2>"$err_tmp") || code="000"
+      "${base}/health" 2>"$err_tmp") || code="000"
+  fi
+  # Legacy panels / reversed proxies: accept any HTTP response as "reachable".
+  if [ "$code" = "000" ]; then
+    code=$(curl --http1.1 --connect-timeout 8 --max-time 12 -sS -o /dev/null -w "%{http_code}" \
+      "${CURL_INSECURE_ARGS[@]}" "${base}/api/system" 2>"$err_tmp") || code="000"
   fi
   if [ "$code" = "000" ]; then
-    warn "cannot reach panel API at ${base} ($(tr '\n' ' ' <"$err_tmp" | cut -c1-160))"
-    warn "from this Iran VPS run: curl -v --connect-timeout 10 ${base}/api/system"
-    warn "fix: Iran→panel route blocked, wrong DNS, or host firewall — panel must answer from THIS VPS (try Cloudflare orange-cloud or a reachable PANEL_URL_FALLBACK)"
+    warn "cannot reach panel at ${base} ($(tr '\n' ' ' <"$err_tmp" | cut -c1-160))"
+    warn "from this VPS run: curl -v --connect-timeout 10 ${base}/health"
+    warn "fix: route blocked, wrong DNS, or host firewall — panel must answer from THIS host"
+  elif [ "$code" = "401" ] || [ "$code" = "403" ]; then
+    log "panel reachable at ${base} ✓"
+  elif [ "$code" = "200" ] || [ "$code" = "204" ]; then
+    log "panel reachable at ${base} ✓"
   else
-    log "panel reachable at ${base} (HTTP ${code})"
+    log "panel reachable at ${base} ✓ (HTTP ${code})"
   fi
   rm -f "$err_tmp"
 }
@@ -517,6 +528,9 @@ verify_registrations_with_panel() {
     fi
     if panel_registration_revoked; then
       cleanup_revoked_pulse "$pid"
+    elif [ "${API_LAST_HTTP_CODE:-000}" = "000" ]; then
+      # Brief blip while joining another pulse on the same host — keep quiet.
+      :
     else
       warn "pulse ${pid} config fetch failed (HTTP ${API_LAST_HTTP_CODE:-?}) — keeping local tunnel (panel may be restarting)"
     fi
@@ -546,6 +560,13 @@ prune_orphan_configs() {
 
 ensure_engine() {
   if [ -x "$ENGINE_BIN" ] && [ "${HPX_ENGINE_FORCE:-0}" != "1" ]; then
+    local ver=""
+    ver="$("$ENGINE_BIN" --version 2>/dev/null | head -1 | tr -d '\r' || true)"
+    if [ -n "$ver" ]; then
+      log "engine already installed — ${ver}"
+    else
+      log "engine already installed — ${ENGINE_BIN}"
+    fi
     return 0
   fi
   if [ "${HPX_ENGINE_FORCE:-0}" = "1" ]; then
@@ -553,6 +574,7 @@ ensure_engine() {
   fi
   if [ -x /usr/local/bin/backpack ] && [ ! -x "$ENGINE_BIN" ] && [ "${HPX_ENGINE_FORCE:-0}" != "1" ]; then
     ln -sf /usr/local/bin/backpack "$ENGINE_BIN"
+    log "engine linked from backpack — ${ENGINE_BIN}"
     return 0
   fi
   log "Installing HPX tunnel engine..."
@@ -596,6 +618,7 @@ ensure_engine() {
   rm -f "$installer"
   [ "$install_ok" = 1 ] || die "HPX tunnel engine install failed — see README: HPX Pulse engine manual install"
   [ -x "$ENGINE_BIN" ] || die "HPX tunnel engine binary missing after install"
+  log "engine ready — $("$ENGINE_BIN" --version 2>/dev/null | head -1 || echo "$ENGINE_BIN")"
 }
 
 engine_bin() {

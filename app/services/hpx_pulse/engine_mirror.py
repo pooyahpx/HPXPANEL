@@ -47,7 +47,7 @@ def engine_version() -> str:
         return path.removeprefix("v").strip()
     if _VERSION_FILE.is_file():
         return _VERSION_FILE.read_text(encoding="utf-8").strip().removeprefix("v")
-    return "1.7.5"
+    return "1.8.5"
 
 
 def asset_name(arch: str) -> str:

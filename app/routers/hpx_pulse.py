@@ -11,6 +11,7 @@ from app.models.hpx_pulse import (
     HpxPulseAgentConfigResponse,
     HpxPulseAgentHeartbeatRequest,
     HpxPulseCreate,
+    HpxPulseDiagnoseResponse,
     HpxPulseResponse,
     HpxPulsesResponse,
     HpxPulseUpdate,
@@ -227,6 +228,15 @@ async def sync_hpx_pulse(
     admin: AdminDetails = Depends(require_permission("hpx_pulse", "update")),
 ):
     return await pulse_operator.sync_pulse(db, admin=admin, pulse_id=pulse_id)
+
+
+@router.post("/{pulse_id}/diagnose", response_model=HpxPulseDiagnoseResponse, responses={404: responses._404})
+async def diagnose_hpx_pulse(
+    pulse_id: int,
+    db: AsyncSession = Depends(get_db),
+    admin: AdminDetails = Depends(require_permission("hpx_pulse", "read")),
+):
+    return await pulse_operator.diagnose_pulse(db, admin=admin, pulse_id=pulse_id)
 
 
 @router.patch(

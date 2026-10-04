@@ -216,3 +216,24 @@ class HpxPulseAgentAckRequest(BaseModel):
     command: str
     status: str
     message: str | None = None
+
+
+class HpxPulseDiagCheck(BaseModel):
+    group: str
+    name: str
+    level: Literal["ok", "warn", "fail", "info"]
+    detail: str
+    fix: str = ""
+
+
+class HpxPulseDiagnoseResponse(BaseModel):
+    pulse_id: int
+    name: str
+    ok: int
+    warn: int
+    fail: int
+    healthy: bool
+    headline: str
+    primary_fix: str = ""
+    checks: list[HpxPulseDiagCheck]
+    engine_pin: str | None = None

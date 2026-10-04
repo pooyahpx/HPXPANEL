@@ -1,16 +1,19 @@
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Skeleton } from '@/components/ui/skeleton'
 import HpxPulseWizard from '@/features/hpx-pulse/wizard/hpx-pulse-wizard'
 import {
   useDeleteHpxPulse,
+  useDiagnoseHpxPulse,
   useGetHpxPulses,
   useRegeneratePulseTokens,
   useSyncHpxPulse,
   useUpdateHpxPulse,
+  type HpxPulseDiagnoseResponse,
   type HpxPulseResponse,
 } from '@/service/api/hpx-pulse'
 import { useAdmin } from '@/hooks/use-admin'
@@ -24,6 +27,7 @@ import {
   Plus,
   RefreshCw,
   Save,
+  Stethoscope,
   Timer,
   Trash2,
   Zap,
@@ -309,21 +313,25 @@ function PulseCard({
   onDelete,
   onRegenerate,
   onSync,
+  onDiagnose,
   onAutoSync,
   onEdit,
   canUpdate,
   canDelete,
   syncLoading,
+  diagnoseLoading,
 }: {
   pulse: HpxPulseResponse
   onDelete: () => void
   onRegenerate: () => void
   onSync: () => void
+  onDiagnose: () => void
   onAutoSync: (minutes: number) => Promise<void>
   onEdit: () => void
   canUpdate: boolean
   canDelete: boolean
   syncLoading: boolean
+  diagnoseLoading: boolean
 }) {
   const { t, i18n } = useTranslation()
   const fa = i18n.language?.startsWith('fa')
@@ -410,6 +418,10 @@ function PulseCard({
           </div>
 
           <div className="flex flex-wrap gap-1">
+            <Button size="sm" variant="outline" className="h-8 gap-1.5" onClick={onDiagnose} disabled={diagnoseLoading}>
+              <Stethoscope className={cn('size-3.5', diagnoseLoading && 'animate-pulse')} />
+              {t('hpxPulse.diagnose', { defaultValue: 'Diagnose' })}
+            </Button>
             {canUpdate && (pulse.iran_claimed || pulse.abroad_claimed) && (
               <Button size="sm" variant="outline" className="h-8 gap-1.5" onClick={onSync} disabled={syncLoading}>
                 <RefreshCw className={cn('size-3.5', syncLoading && 'animate-spin')} />
@@ -531,11 +543,14 @@ export default function HpxPulseList() {
   const deleteMutation = useDeleteHpxPulse()
   const regenMutation = useRegeneratePulseTokens()
   const syncMutation = useSyncHpxPulse()
+  const diagnoseMutation = useDiagnoseHpxPulse()
   const updateMutation = useUpdateHpxPulse()
   const [wizardOpen, setWizardOpen] = useState(false)
   const [editingPulse, setEditingPulse] = useState<HpxPulseResponse | null>(null)
   const [joinCommands, setJoinCommands] = useState<JoinCommandSet | null>(null)
   const [syncingId, setSyncingId] = useState<number | null>(null)
+  const [diagnosingId, setDiagnosingId] = useState<number | null>(null)
+  const [diagResult, setDiagResult] = useState<HpxPulseDiagnoseResponse | null>(null)
 
   useEffect(() => {
     const handler = () => {
@@ -654,9 +669,28 @@ export default function HpxPulseList() {
               canUpdate={canUpdate}
               canDelete={canDelete}
               syncLoading={syncingId === pulse.id}
+              diagnoseLoading={diagnosingId === pulse.id}
               onEdit={() => {
                 setEditingPulse(pulse)
                 setWizardOpen(true)
+              }}
+              onDiagnose={async () => {
+                setDiagnosingId(pulse.id)
+                try {
+                  const res = await diagnoseMutation.mutateAsync(pulse.id)
+                  setDiagResult(res)
+                  if (res.fail > 0) {
+                    toast.error(res.headline)
+                  } else if (res.warn > 0) {
+                    toast.message(res.headline)
+                  } else {
+                    toast.success(res.headline)
+                  }
+                } catch (e) {
+                  toast.error((e as Error)?.message ?? t('error', { defaultValue: 'Error' }))
+                } finally {
+                  setDiagnosingId(null)
+                }
               }}
               onSync={async () => {
                 setSyncingId(pulse.id)
@@ -727,6 +761,68 @@ export default function HpxPulseList() {
           refetch()
         }}
       />
+
+      <Dialog open={!!diagResult} onOpenChange={open => !open && setDiagResult(null)}>
+        <DialogContent className="max-h-[85dvh] max-w-lg overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Stethoscope className="size-4" />
+              {t('hpxPulse.diagnoseTitle', { defaultValue: 'Pulse diagnose' })}
+              {diagResult ? ` · ${diagResult.name}` : ''}
+            </DialogTitle>
+            <DialogDescription>
+              {diagResult?.headline}
+              {diagResult?.engine_pin ? ` · engine pin v${diagResult.engine_pin}` : ''}
+            </DialogDescription>
+          </DialogHeader>
+          {diagResult && (
+            <div className="space-y-3">
+              <div className="flex flex-wrap gap-2 text-[11px]">
+                <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400">
+                  ok {diagResult.ok}
+                </Badge>
+                <Badge variant="outline" className="border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400">
+                  warn {diagResult.warn}
+                </Badge>
+                <Badge variant="outline" className="border-destructive/30 bg-destructive/10 text-destructive">
+                  fail {diagResult.fail}
+                </Badge>
+              </div>
+              {diagResult.primary_fix ? (
+                <p className="border-primary/30 bg-primary/5 rounded-lg border p-3 text-sm leading-relaxed">
+                  <span className="text-muted-foreground text-[10px] font-semibold tracking-wide uppercase">Fix · </span>
+                  {diagResult.primary_fix}
+                </p>
+              ) : null}
+              <ul className="space-y-2">
+                {diagResult.checks.map((c, i) => (
+                  <li key={`${c.name}-${i}`} className="rounded-lg border p-3 text-sm">
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="font-medium">{c.name}</span>
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          'h-5 shrink-0 text-[10px] uppercase',
+                          c.level === 'ok' && 'border-emerald-500/30 text-emerald-700 dark:text-emerald-400',
+                          c.level === 'warn' && 'border-amber-500/30 text-amber-700 dark:text-amber-400',
+                          c.level === 'fail' && 'border-destructive/30 text-destructive',
+                          c.level === 'info' && 'text-muted-foreground',
+                        )}
+                      >
+                        {c.level}
+                      </Badge>
+                    </div>
+                    <p className="text-muted-foreground mt-1 text-xs leading-relaxed" dir="ltr">
+                      {c.detail}
+                    </p>
+                    {c.fix ? <p className="text-foreground/90 mt-1.5 text-xs leading-relaxed">{c.fix}</p> : null}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

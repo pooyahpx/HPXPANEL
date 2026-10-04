@@ -212,6 +212,36 @@ export function useSyncHpxPulse() {
   })
 }
 
+export interface HpxPulseDiagCheck {
+  group: string
+  name: string
+  level: 'ok' | 'warn' | 'fail' | 'info'
+  detail: string
+  fix?: string
+}
+
+export interface HpxPulseDiagnoseResponse {
+  pulse_id: number
+  name: string
+  ok: number
+  warn: number
+  fail: number
+  healthy: boolean
+  headline: string
+  primary_fix: string
+  checks: HpxPulseDiagCheck[]
+  engine_pin?: string | null
+}
+
+export function useDiagnoseHpxPulse() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) =>
+      fetcher<HpxPulseDiagnoseResponse>(`/api/hpx_pulse/${id}/diagnose`, { method: 'POST' }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['hpx-pulses'] }),
+  })
+}
+
 export function useUpdateHpxPulse() {
   const qc = useQueryClient()
   return useMutation({

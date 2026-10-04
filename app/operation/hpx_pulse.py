@@ -27,6 +27,7 @@ from app.models.hpx_pulse import (
     HpxPulseAgentConfigResponse,
     HpxPulseAgentHeartbeatRequest,
     HpxPulseCreate,
+    HpxPulseDiagnoseResponse,
     HpxPulseResponse,
     HpxPulsesResponse,
     HpxPulseUpdate,
@@ -35,7 +36,8 @@ from app.models.hpx_pulse import (
 )
 from app.operation import BaseOperation
 from app.services.hpx_pulse.advisor import advise, profile_meta
-from app.services.hpx_pulse.engine_mirror import agent_assets_base
+from app.services.hpx_pulse.diagnose import diagnose_pulse_record, diagnose_summary
+from app.services.hpx_pulse.engine_mirror import agent_assets_base, engine_version
 from app.services.hpx_pulse.tunnel_render import mint_tunnel_token, render_for_side
 from app.utils.crypto import decrypt_secret, encrypt_secret, hash_api_key
 from app.utils.helpers import resolve_panel_base_url
@@ -409,6 +411,29 @@ class HpxPulseOperation(BaseOperation):
         return HpxPulseActionResponse(
             pulse=_to_response(db_pulse),
             message="Sync queued for connected agents",
+        )
+
+    async def diagnose_pulse(
+        self, db: AsyncSession, *, admin: AdminDetails, pulse_id: int
+    ) -> HpxPulseDiagnoseResponse:
+        _ = admin
+        db_pulse = await get_hpx_pulse_by_id(db, pulse_id)
+        if db_pulse is None:
+            await self.raise_error(message="Pulse not found", code=404)
+        summary = diagnose_summary(diagnose_pulse_record(db_pulse))
+        # Nudge agents to refresh path metrics on next poll.
+        update: dict = {"last_health_check": dt.now(UTC)}
+        if db_pulse.iran_agent_key_hash:
+            update["iran_agent_command"] = "sync"
+        if db_pulse.abroad_agent_key_hash:
+            update["abroad_agent_command"] = "sync"
+        await update_hpx_pulse(db, db_pulse, update)
+        await db.commit()
+        return HpxPulseDiagnoseResponse(
+            pulse_id=db_pulse.id,
+            name=db_pulse.name,
+            engine_pin=engine_version(),
+            **summary,
         )
 
     async def update_pulse(

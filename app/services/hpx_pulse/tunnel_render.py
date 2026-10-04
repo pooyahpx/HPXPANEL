@@ -171,7 +171,7 @@ keepalive_period = 75
 heartbeat = 20
 log_level = "error"
 sniffer = false
-accept_udp = false
+accept_udp = true
 {tls}{mux}{ports}"""
 
 

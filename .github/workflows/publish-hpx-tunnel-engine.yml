@@ -5,13 +5,13 @@ on:
   workflow_dispatch:
     inputs:
       upstream_tag:
-        description: "Source engine tag to build from (e.g. v1.7.5)"
+        description: "Source engine tag to build from (e.g. v1.8.5)"
         required: true
-        default: "v1.7.5"
+        default: "v1.8.5"
       engine_version:
-        description: "HPX tunnel engine version label (e.g. 1.7.5)"
+        description: "HPX tunnel engine version label (e.g. 1.8.5)"
         required: true
-        default: "1.7.5"
+        default: "1.8.5"
 
 permissions:
   contents: write
@@ -32,7 +32,7 @@ jobs:
             if [ -f scripts/hpx-tunnel-engine.version ]; then
               engine="$(tr -d '[:space:]' < scripts/hpx-tunnel-engine.version)"
             else
-              engine="1.7.5"
+              engine="1.8.5"
             fi
             upstream="v${engine}"
           fi

@@ -210,6 +210,7 @@ class HpxPulseAgentHeartbeatRequest(BaseModel):
     tunnel_running: bool = Field(default=False, validation_alias=AliasChoices("tunnel_running", "backpack_running"))
     iface_up: bool = False
     forward_ok: bool | None = None
+    diag: dict | None = None
 
 
 class HpxPulseAgentAckRequest(BaseModel):
@@ -237,3 +238,6 @@ class HpxPulseDiagnoseResponse(BaseModel):
     primary_fix: str = ""
     checks: list[HpxPulseDiagCheck]
     engine_pin: str | None = None
+    diag_report: dict | None = None
+    probe_queued: bool = False
+    hint: str | None = None

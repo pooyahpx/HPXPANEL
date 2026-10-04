@@ -777,6 +777,11 @@ export default function HpxPulseList() {
           </DialogHeader>
           {diagResult && (
             <div className="space-y-3">
+              {diagResult.hint ? (
+                <p className="border-amber-500/30 bg-amber-500/5 rounded-lg border p-3 text-xs leading-relaxed text-amber-800 dark:text-amber-300">
+                  {diagResult.hint}
+                </p>
+              ) : null}
               <div className="flex flex-wrap gap-2 text-[11px]">
                 <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400">
                   ok {diagResult.ok}
@@ -787,6 +792,11 @@ export default function HpxPulseList() {
                 <Badge variant="outline" className="border-destructive/30 bg-destructive/10 text-destructive">
                   fail {diagResult.fail}
                 </Badge>
+                {diagResult.probe_queued ? (
+                  <Badge variant="outline" className="text-muted-foreground">
+                    probe queued
+                  </Badge>
+                ) : null}
               </div>
               {diagResult.primary_fix ? (
                 <p className="border-primary/30 bg-primary/5 rounded-lg border p-3 text-sm leading-relaxed">
@@ -797,6 +807,7 @@ export default function HpxPulseList() {
               <ul className="space-y-2">
                 {diagResult.checks.map((c, i) => (
                   <li key={`${c.name}-${i}`} className="rounded-lg border p-3 text-sm">
+                    <div className="text-muted-foreground mb-1 text-[10px] tracking-wide uppercase">{c.group}</div>
                     <div className="flex items-start justify-between gap-2">
                       <span className="font-medium">{c.name}</span>
                       <Badge

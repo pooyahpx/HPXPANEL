@@ -29,6 +29,7 @@ def _pulse(**kwargs):
         "latency_ms": None,
         "auto_heal_enabled": True,
         "last_heal_action": None,
+        "diag_report": None,
     }
     defaults.update(kwargs)
     return SimpleNamespace(**defaults)
@@ -55,3 +56,42 @@ def test_diagnose_stale_agent():
     stale = dt.now(UTC) - td(seconds=600)
     checks = diagnose_pulse_record(_pulse(iran_agent_last_seen=stale, latency_ms=50.0, status=HpxPulseStatus.running))
     assert any(c.name == "Iran agent" and c.level == "fail" for c in checks)
+
+
+def test_diagnose_agent_stall_after_connect():
+    import time
+
+    report = {
+        "ts": time.time(),
+        "sides": {
+            "abroad": {
+                "side": "abroad",
+                "host": "ab",
+                "engine_version": "1.8.5",
+                "ts": time.time(),
+                "mss": {"ok": True, "detail": "mss=1280"},
+                "tcp": {
+                    "control": {"ok": True, "state": "ok", "ms": 40.0, "detail": "connect ok"},
+                    "forward": {"ok": True, "state": "ok", "ms": 42.0, "detail": "connect ok"},
+                    "forward_exchange": {
+                        "ok": False,
+                        "state": "fail",
+                        "stall": True,
+                        "ms": 42.0,
+                        "detail": "stall_after_connect: TCP connected but no bytes",
+                        "fix": "Lower mss to 1200",
+                    },
+                },
+                "verdict": {
+                    "level": "fail",
+                    "summary": "stall_after_connect: TCP connected but no bytes",
+                    "fix": "Lower mss to 1200",
+                },
+            }
+        },
+    }
+    checks = diagnose_pulse_record(
+        _pulse(status=HpxPulseStatus.running, latency_ms=42.0, message="stall", diag_report=report)
+    )
+    assert any(c.name == "TCP data after connect (MSS test)" and c.level == "fail" for c in checks)
+    assert any("stall" in c.detail.lower() or "mss" in (c.fix or "").lower() for c in checks)

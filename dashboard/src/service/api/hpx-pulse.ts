@@ -231,6 +231,9 @@ export interface HpxPulseDiagnoseResponse {
   primary_fix: string
   checks: HpxPulseDiagCheck[]
   engine_pin?: string | null
+  diag_report?: Record<string, unknown> | null
+  probe_queued?: boolean
+  hint?: string | null
 }
 
 export function useDiagnoseHpxPulse() {

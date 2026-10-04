@@ -50,7 +50,7 @@ def test_render_iran_server_includes_all_forward_ports():
     assert 'bind_addr = "0.0.0.0:2053"' in toml
     assert '"443=127.0.0.1:443"' in toml
     assert '"2053=127.0.0.1:2053"' in toml
-    assert "mss = 1360" in toml
+    assert "mss = 1280" in toml
     assert "accept_udp = true" in toml
 
 

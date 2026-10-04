@@ -39,3 +39,23 @@ def test_low_cpu_forces_aggressive_to_balance():
 def test_profile_meta_fallback():
     meta = profile_meta("does-not-exist")
     assert meta["profile_id"] == "pulse-reverse-tcp-stealth"
+
+
+def test_mtu_safe_profiles_exposed_with_mss():
+    res = advise(PulseAdviseRequest(goal="mobile", cpu_cores=1, ram_mb=1024))
+    mtu = next(p for p in res.profiles if p.profile_id == "pulse-reverse-tcp-stealth-mtu")
+    hard = next(p for p in res.profiles if p.profile_id == "pulse-reverse-tcp-stealth-mtu-hard")
+    assert mtu.mss == 1200
+    assert hard.mss == 1100
+    assert mtu.preset == "balance"
+    assert mtu.tunnel_mode == "reverse_stealth"
+    # Should rank near the top for mobile / Iran paths
+    top_ids = [p.profile_id for p in res.profiles[:5]]
+    assert "pulse-reverse-tcp-stealth-mtu" in top_ids
+
+
+def test_mtu_profile_meta():
+    meta = profile_meta("pulse-reverse-tcp-stealth-mtu")
+    assert meta["mss"] == 1200
+    assert meta["preset"] == "balance"
+

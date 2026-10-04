@@ -388,6 +388,7 @@ function PulseCard({
               </Badge>
               <span className="text-muted-foreground text-[11px]">
                 {pulse.tunnel_mode.startsWith('reverse_') ? 'HPX Reverse' : 'HPX Direct'} · {pulse.preset}
+                {pulse.profile_id?.includes('mtu') ? ' · Safe/MTU' : ''}
               </span>
               {autoLabel && (
                 <Badge

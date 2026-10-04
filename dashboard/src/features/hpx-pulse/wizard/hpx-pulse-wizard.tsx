@@ -493,16 +493,16 @@ export default function HpxPulseWizard({ open, onOpenChange, onCreated, editingP
             {advice && (
               <div className="space-y-2 rounded-lg border p-3">
                 <p className="text-sm font-medium">
-                  {t('hpxPulse.topProfiles', { defaultValue: 'Ranked tunnel presets (TCP / WSS / KCP / UDP / QUIC)' })}
+                  {t('hpxPulse.topProfiles', { defaultValue: 'Ranked tunnel presets (TCP / WSS / KCP / UDP / QUIC / Safe-MTU)' })}
                 </p>
                 <p className="text-muted-foreground text-[11px]">
                   {t('hpxPulse.topProfilesHint', {
                     defaultValue:
-                      'UDP family (KCP / QUIC / Reverse UDP) still exists — with Hard/Mobile intents they rank below Stealth, so pick Fast and preview to surface them.',
+                      'Safe / MTU clamps TCP MSS to 1200 (Hard=1100) when Diagnose shows stall_after_connect. UDP family still ranks under Fast intent.',
                   })}
                 </p>
                 <div className="max-h-64 space-y-2 overflow-y-auto">
-                  {advice.profiles.slice(0, 8).map(p => (
+                  {advice.profiles.slice(0, 10).map(p => (
                     <button
                       key={p.profile_id}
                       type="button"
@@ -516,6 +516,11 @@ export default function HpxPulseWizard({ open, onOpenChange, onCreated, editingP
                         <span className="font-medium">{fa ? p.title_fa : p.title}</span>
                         <div className="flex items-center gap-1">
                           <Badge variant="outline" className="text-[10px] uppercase">{p.preset}</Badge>
+                          {p.mss ? (
+                            <Badge variant="outline" className="text-[10px] uppercase">
+                              mss {p.mss}
+                            </Badge>
+                          ) : null}
                           {p.carrier && (
                             <Badge variant="secondary" className="text-[10px] uppercase">{p.carrier}</Badge>
                           )}

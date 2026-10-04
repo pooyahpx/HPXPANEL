@@ -85,9 +85,11 @@ def _checks_from_one_agent_diag(report: dict, side: str) -> list[PulseDiagCheck]
         detail = str(item.get("detail") or state)
         fix = str(item.get("fix") or "")
         if item.get("stall"):
-            fix = fix or (
+            # Panel owns the operator-facing fix (profile name); agent text may lag.
+            fix = (
                 "TCP connects then stalls on first bytes — classic MTU/MSS. "
-                "Lower mss to 1200 on both TOMLs, Sync, restart tunnel services."
+                "Edit Pulse → Preview → pick «Safe / MTU» (mss=1200) or «MTU Hard» (1100) → Save → Sync "
+                "(no manual TOML edits)."
             )
         checks.append(PulseDiagCheck(g, title, level, detail, fix))
 
@@ -275,8 +277,10 @@ def diagnose_pulse_record(pulse: HpxPulse) -> list[PulseDiagCheck]:
                 g,
                 "TCP vs UDP",
                 "info",
-                "UDP-through-tunnel OK + TCP sites fail ⇒ almost always MSS/MTU (default mss=1280 now)",
-                "Diagnose twice (queue probe → wait 10s → Diagnose). If stall_after_connect: set mss=1200 both sides + Sync",
+                "UDP-through-tunnel OK + TCP sites fail ⇒ almost always MSS/MTU "
+                f"(default mss={1280}; Safe/MTU profile uses 1200, Hard uses 1100)",
+                "Diagnose twice (queue probe → wait 10s → Diagnose). "
+                "If stall_after_connect: Edit → Safe / MTU profile → Save → Sync",
             )
         )
 

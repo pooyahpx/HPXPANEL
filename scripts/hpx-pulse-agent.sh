@@ -412,15 +412,47 @@ panel_api_bases() {
 }
 
 API_LAST_HTTP_CODE="000"
+# Consecutive confirmed 401s before wiping local tunnel (avoids panel-upgrade false positives).
+REVOKE_STREAK_DIR="${ETC_DIR}/.revoke-streak"
+REVOKE_CONFIRM_HITS=2
 
 panel_registration_revoked() {
-  [ "$API_LAST_HTTP_CODE" = "401" ] || [ "$API_LAST_HTTP_CODE" = "404" ]
+  # Only a real "Invalid agent key" 401 means the pulse was deleted / tokens regenerated.
+  # Never treat 404/502/503/000 as revoke — those happen during panel restarts and would
+  # permanently destroy tunnels on every upgrade (seen on multi-server fleets).
+  [ "$API_LAST_HTTP_CODE" = "401" ]
+}
+
+_revoke_streak_path() {
+  local pid="${1:-${PULSE_ID:-0}}"
+  mkdir -p "$REVOKE_STREAK_DIR" 2>/dev/null || true
+  echo "${REVOKE_STREAK_DIR}/${pid}.hits"
+}
+
+_reset_revoke_streak() {
+  rm -f "$(_revoke_streak_path "${1:-${PULSE_ID:-}}")" 2>/dev/null || true
+}
+
+_bump_revoke_streak() {
+  local pid="${1:-${PULSE_ID:-}}" path hits
+  [ -n "$pid" ] || return 1
+  path="$(_revoke_streak_path "$pid")"
+  hits=0
+  [ -f "$path" ] && hits="$(cat "$path" 2>/dev/null || echo 0)"
+  hits=$((hits + 1))
+  printf '%s' "$hits" >"$path" 2>/dev/null || true
+  [ "$hits" -ge "$REVOKE_CONFIRM_HITS" ]
 }
 
 cleanup_revoked_pulse() {
   local pid="${1:-${PULSE_ID:-}}"
   [ -n "$pid" ] || return 0
-  log "pulse ${pid} no longer on panel — removing local tunnel (${PULSE_SIDE:-?})"
+  if ! _bump_revoke_streak "$pid"; then
+    warn "pulse ${pid} got HTTP 401 (invalid agent key) — will remove local tunnel after ${REVOKE_CONFIRM_HITS} confirms (not yet)"
+    return 0
+  fi
+  log "pulse ${pid} confirmed gone on panel (repeated 401) — removing local tunnel (${PULSE_SIDE:-?})"
+  _reset_revoke_streak "$pid"
   remove_pulse_local_state "$pid"
 }
 
@@ -474,15 +506,19 @@ verify_registrations_with_panel() {
     pid="$(basename "$env_file" .env)"
     PULSE_ID="$pid"
     if cfg=$(api_request GET "/api/hpx_pulse/agent/config"); then
+      _reset_revoke_streak "$pid"
       command=$(echo "$cfg" | jq -r '.agent_command // empty' 2>/dev/null || true)
       if [ "$command" = "leave" ] || [ "$command" = "uninstall" ]; then
         log "panel requested local removal for pulse ${pid}"
+        _reset_revoke_streak "$pid"
         remove_pulse_local_state "$pid"
       fi
       continue
     fi
     if panel_registration_revoked; then
       cleanup_revoked_pulse "$pid"
+    else
+      warn "pulse ${pid} config fetch failed (HTTP ${API_LAST_HTTP_CODE:-?}) — keeping local tunnel (panel may be restarting)"
     fi
   done
   PANEL_URL="$saved_panel"
@@ -814,13 +850,15 @@ sync_pulse_from_panel() {
       cleanup_revoked_pulse "${PULSE_ID:-}"
       return 0
     fi
-    warn "panel config fetch failed (HTTP ${API_LAST_HTTP_CODE:-?})"
+    warn "panel config fetch failed (HTTP ${API_LAST_HTTP_CODE:-?}) — keeping tunnel; retry after panel is up"
     return 1
   fi
+  _reset_revoke_streak "${PULSE_ID:-}"
   hash=$(echo "$cfg" | jq -r '.config_hash')
   command=$(echo "$cfg" | jq -r '.agent_command // empty')
   if [ "$command" = "leave" ] || [ "$command" = "uninstall" ]; then
     log "panel requested local removal for pulse ${PULSE_ID}"
+    _reset_revoke_streak "${PULSE_ID:-}"
     remove_pulse_local_state "$PULSE_ID"
     return 0
   fi
@@ -976,7 +1014,9 @@ send_heartbeat() {
       cleanup_revoked_pulse "${PULSE_ID:-}"
       return 0
     fi
-    warn "heartbeat to panel failed (HTTP ${API_LAST_HTTP_CODE:-?}) — try: hpx-pulse-agent set-panel-url https://domain (no :8000)"
+    warn "heartbeat to panel failed (HTTP ${API_LAST_HTTP_CODE:-?}) — keeping tunnel; try: hpx-pulse-agent set-panel-url https://domain (no :8000)"
+  else
+    _reset_revoke_streak "${PULSE_ID:-}"
   fi
   [ "$hb_ok" = 1 ]
 }

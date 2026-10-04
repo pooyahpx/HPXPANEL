@@ -101,57 +101,8 @@ async def list_hpx_pulses(
     return await pulse_operator.list_pulses(db, admin=admin, offset=offset, limit=limit, name=name)
 
 
-@router.get("/{pulse_id}", response_model=HpxPulseResponse, responses={404: responses._404})
-async def get_hpx_pulse(
-    pulse_id: int,
-    db: AsyncSession = Depends(get_db),
-    admin: AdminDetails = Depends(require_permission("hpx_pulse", "read")),
-):
-    return await pulse_operator.get_pulse(db, admin=admin, pulse_id=pulse_id)
-
-
-@router.delete("/{pulse_id}", response_model=HpxPulseActionResponse, responses={404: responses._404})
-async def delete_hpx_pulse(
-    pulse_id: int,
-    db: AsyncSession = Depends(get_db),
-    admin: AdminDetails = Depends(require_permission("hpx_pulse", "delete")),
-):
-    return await pulse_operator.delete_pulse(db, admin=admin, pulse_id=pulse_id)
-
-
-@router.post("/{pulse_id}/join-token", response_model=HpxPulseActionResponse, responses={404: responses._404})
-async def regenerate_hpx_pulse_tokens(
-    pulse_id: int,
-    request: Request,
-    db: AsyncSession = Depends(get_db),
-    admin: AdminDetails = Depends(require_permission("hpx_pulse", "update")),
-):
-    return await pulse_operator.regenerate_tokens(
-        db, admin=admin, pulse_id=pulse_id, panel_url=_request_base_url(request)
-    )
-
-
-@router.post("/{pulse_id}/sync", response_model=HpxPulseActionResponse, responses={404: responses._404})
-async def sync_hpx_pulse(
-    pulse_id: int,
-    db: AsyncSession = Depends(get_db),
-    admin: AdminDetails = Depends(require_permission("hpx_pulse", "update")),
-):
-    return await pulse_operator.sync_pulse(db, admin=admin, pulse_id=pulse_id)
-
-
-@router.patch(
-    "/{pulse_id}", response_model=HpxPulseActionResponse, responses={404: responses._404, 409: responses._409}
-)
-async def update_hpx_pulse(
-    pulse_id: int,
-    model: HpxPulseUpdate,
-    db: AsyncSession = Depends(get_db),
-    admin: AdminDetails = Depends(require_permission("hpx_pulse", "update")),
-):
-    return await pulse_operator.update_pulse(db, admin=admin, pulse_id=pulse_id, model=model)
-
-
+# Agent routes MUST be registered before /{pulse_id} so path segments like
+# "agent" are never mistaken for an id (and so upgrades never 404 these paths).
 @router.post("/agent/claim", response_model=HpxPulseAgentBootstrap)
 async def claim_hpx_pulse_agent(
     model: HpxPulseAgentClaimRequest,
@@ -237,3 +188,54 @@ async def hpx_pulse_agent_ack(
     side: str = Depends(_agent_side),
 ):
     await pulse_operator.agent_ack(db, agent_key=agent_key, side=side, model=model)
+
+
+@router.get("/{pulse_id}", response_model=HpxPulseResponse, responses={404: responses._404})
+async def get_hpx_pulse(
+    pulse_id: int,
+    db: AsyncSession = Depends(get_db),
+    admin: AdminDetails = Depends(require_permission("hpx_pulse", "read")),
+):
+    return await pulse_operator.get_pulse(db, admin=admin, pulse_id=pulse_id)
+
+
+@router.delete("/{pulse_id}", response_model=HpxPulseActionResponse, responses={404: responses._404})
+async def delete_hpx_pulse(
+    pulse_id: int,
+    db: AsyncSession = Depends(get_db),
+    admin: AdminDetails = Depends(require_permission("hpx_pulse", "delete")),
+):
+    return await pulse_operator.delete_pulse(db, admin=admin, pulse_id=pulse_id)
+
+
+@router.post("/{pulse_id}/join-token", response_model=HpxPulseActionResponse, responses={404: responses._404})
+async def regenerate_hpx_pulse_tokens(
+    pulse_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    admin: AdminDetails = Depends(require_permission("hpx_pulse", "update")),
+):
+    return await pulse_operator.regenerate_tokens(
+        db, admin=admin, pulse_id=pulse_id, panel_url=_request_base_url(request)
+    )
+
+
+@router.post("/{pulse_id}/sync", response_model=HpxPulseActionResponse, responses={404: responses._404})
+async def sync_hpx_pulse(
+    pulse_id: int,
+    db: AsyncSession = Depends(get_db),
+    admin: AdminDetails = Depends(require_permission("hpx_pulse", "update")),
+):
+    return await pulse_operator.sync_pulse(db, admin=admin, pulse_id=pulse_id)
+
+
+@router.patch(
+    "/{pulse_id}", response_model=HpxPulseActionResponse, responses={404: responses._404, 409: responses._409}
+)
+async def update_hpx_pulse(
+    pulse_id: int,
+    model: HpxPulseUpdate,
+    db: AsyncSession = Depends(get_db),
+    admin: AdminDetails = Depends(require_permission("hpx_pulse", "update")),
+):
+    return await pulse_operator.update_pulse(db, admin=admin, pulse_id=pulse_id, model=model)

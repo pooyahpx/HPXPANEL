@@ -306,7 +306,16 @@ remove_pulse_local_state() {
     while IFS= read -r port; do
       [ -n "$port" ] || continue
       free_orphan_listen_port "$port" || true
+      # Drop leftover ACCEPT rules this agent inserted (panel delete does not wipe iptables).
+      if has iptables; then
+        iptables -D INPUT -p tcp --dport "$port" -j ACCEPT 2>/dev/null || true
+        iptables -D INPUT -p udp --dport "$port" -j ACCEPT 2>/dev/null || true
+      fi
     done < <(collect_forward_listen_ports "${PORT_FORWARDS:-}")
+    if [ -n "${CONTROL_PORT:-}" ] && has iptables; then
+      iptables -D INPUT -p tcp --dport "$CONTROL_PORT" -j ACCEPT 2>/dev/null || true
+      iptables -D INPUT -p udp --dport "$CONTROL_PORT" -j ACCEPT 2>/dev/null || true
+    fi
   fi
   svc="$(tunnel_service_name)"
   systemctl stop "${svc}.service" 2>/dev/null || true
@@ -977,6 +986,14 @@ sync_pulse_from_panel() {
     return 0
   fi
 
+  case "$command" in
+    path-ping|path-ping:*)
+      write_env
+      handle_path_ping_command "$command" || true
+      return 0
+      ;;
+  esac
+
   if [ "$hash" != "${CONFIG_HASH:-}" ] || [ "$command" = "start" ] || [ "$command" = "restart" ]; then
     apply_tunnel_config "$toml"
     CONFIG_HASH="$hash"
@@ -988,6 +1005,56 @@ sync_pulse_from_panel() {
   fi
   write_env
   send_heartbeat
+}
+
+# TCP connect with class: ok | refused | timeout | error  (abroad→Iran path).
+probe_tcp_connect_json() {
+  local host="$1" port="$2" label="${3:-tcp}"
+  [ -n "$host" ] && [ -n "$port" ] || return 1
+  if ! has python3 && ! has python; then
+    local ms
+    ms="$(measure_tcp_ms "$host" "$port" || true)"
+    if [ -n "$ms" ]; then
+      jq -nc --argjson ms "$ms" --arg d "${label}: connect ok (${ms}ms)" \
+        '{ok:true, state:"ok", blocked:false, class:"ok", ms:$ms, detail:$d}'
+    else
+      jq -nc --arg d "${label}: connect failed (no python for class)" \
+        --arg f "Install python3; open Iran firewall TCP ${port}" \
+        '{ok:false, state:"fail", blocked:true, class:"error", detail:$d, fix:$f}'
+    fi
+    return 0
+  fi
+  local py=python3
+  has python3 || py=python
+  "$py" -c "
+import json, socket, time
+host, port, label = '$host', int('$port'), '''$label'''
+out = {'ok': False, 'state': 'fail', 'blocked': False, 'ms': None, 'class': 'error', 'detail': '', 'fix': ''}
+s = socket.socket(); s.settimeout(4.0)
+t = time.time()
+try:
+    s.connect((host, port))
+    ms = round((time.time() - t) * 1000, 1)
+    out.update(ok=True, state='ok', blocked=False, class='ok', ms=ms,
+               detail='%s: connect ok (%.1fms)' % (label, ms))
+except socket.timeout:
+    out.update(blocked=True, class='timeout',
+               detail='%s: TCP SYN timeout %s:%s — DC/provider drops TCP (not MSS stall)' % (label, host, port),
+               fix='Compare working Iran IP from abroad (nc -vz IP %s). On broken Iran: ufw allow %s/tcp + provider firewall' % (port, port))
+except ConnectionRefusedError:
+    out.update(class='refused',
+               detail='%s: TCP refused %s:%s — reachable but nothing listening' % (label, host, port),
+               fix='On Iran: systemctl restart hpx-pulse-tunnel-*; ss -tlnp | grep :%s' % port)
+except OSError as e:
+    err = str(e).lower()
+    blocked = ('timed out' in err) or ('unreachable' in err) or (getattr(e, 'errno', None) in (110, 101, 113))
+    out.update(blocked=blocked, class='error',
+               detail='%s: connect error: %s' % (label, e),
+               fix='Open Iran TCP %s; if timeout only on this Iran IP → provider TCP filter — use the working Iran VPS' % port)
+finally:
+    s.close()
+print(json.dumps(out))
+" 2>/dev/null || echo '{"ok":false,"state":"fail","blocked":true,"class":"error","detail":"connect probe crashed","fix":""}'
 }
 
 # TCP connect RTT in ms (reverse tunnels — ICMP is often blocked on VPS).
@@ -1078,13 +1145,14 @@ try:
         out.update(ok=True, state='ok', bytes=len(data),
                    detail='connect+exchange ok (%.1fms, got %dB)' % (out['ms'] or 0, len(data)))
     else:
-        out.update(stall=True,
-                   detail='connect ok (%.1fms) then EOF on first read' % (out['ms'] or 0),
-                   fix='Peer closed after connect — check abroad backend / Iran forward')
+        # Empty recv = peer closed — usually abroad inbound missing, NOT MSS.
+        out.update(stall=False, peer_closed=True,
+                   detail='connect ok (%.1fms) then EOF on first read — abroad backend closed (often nothing on forward target)' % (out['ms'] or 0),
+                   fix='Start Xray inbound on abroad matching port-forward target (e.g. 127.0.0.1:2082), or change Pulse forward to the port Xray actually listens')
 except socket.timeout:
     out.update(stall=True,
                detail='stall_after_connect: TCP connected (%.1fms) but no bytes in 4s — classic MTU/MSS' % (out['ms'] or 0),
-               fix='Edit Pulse → Safe / MTU (mss=1200) or MTU Hard (1100) → Save → Sync (both sides)')
+               fix='Edit Pulse → TCP Extreme (mss=1000) → Save → Sync both sides')
 except Exception as e:
     out['detail'] = 'recv error after connect: %s' % e
 finally:
@@ -1391,28 +1459,19 @@ finally:
         ;;
       *)
         if [ -n "${IRAN_PUBLIC_IP:-}" ] && [ -n "${CONTROL_PORT:-}" ]; then
-          local cms
-          cms="$(measure_tcp_ms "$IRAN_PUBLIC_IP" "$CONTROL_PORT" || true)"
-          if [ -n "$cms" ]; then
-            tcp_ctl=$(jq -nc --argjson ms "$cms" --arg d "connect ok (${cms}ms)" '{ok:true, state:"ok", ms:$ms, detail:$d}')
-          else
-            tcp_ctl=$(jq -nc --arg d "connect failed Iran:${CONTROL_PORT}" --arg f "Open Iran firewall for control port; verify iran_public_ip" '{ok:false, state:"fail", detail:$d, fix:$f}')
-          fi
+          tcp_ctl="$(probe_tcp_connect_json "$IRAN_PUBLIC_IP" "$CONTROL_PORT" "control")"
         fi
         ;;
     esac
 
     fwd_port="$(first_forward_listen_port || true)"
     if [ -n "${IRAN_PUBLIC_IP:-}" ] && [ -n "$fwd_port" ]; then
-      local fms
-      fms="$(measure_tcp_ms "$IRAN_PUBLIC_IP" "$fwd_port" || true)"
-      if [ -n "$fms" ]; then
-        tcp_fwd=$(jq -nc --argjson ms "$fms" --arg d "connect ok (${fms}ms) Iran:${fwd_port}" '{ok:true, state:"ok", ms:$ms, detail:$d}')
+      tcp_fwd="$(probe_tcp_connect_json "$IRAN_PUBLIC_IP" "$fwd_port" "forward")"
+      if echo "$tcp_fwd" | jq -e '.ok == true' >/dev/null 2>&1; then
         tcp_ex="$(probe_tcp_exchange_json "$IRAN_PUBLIC_IP" "$fwd_port")"
         tls_via="$(probe_tls_brief_json "$IRAN_PUBLIC_IP" "$fwd_port" "via-Iran:${fwd_port}")"
       else
-        tcp_fwd=$(jq -nc --arg d "connect failed Iran:${fwd_port}" --arg f "Open Iran firewall TCP ${fwd_port}; ensure abroad backend up" '{ok:false, state:"fail", detail:$d, fix:$f}')
-        tcp_ex=$(jq -nc --arg d "skipped — forward connect failed" '{ok:false, state:"fail", stall:false, detail:$d}')
+        tcp_ex=$(jq -nc --arg d "skipped — forward TCP blocked/refused" '{ok:false, state:"fail", stall:false, blocked:true, detail:$d}')
       fi
     fi
   fi
@@ -1420,11 +1479,27 @@ finally:
   udp_detail="Carrier=${transport_val}. User configs stay TCP on Iran forward; KCP/QUIC/UDP only change Iran↔abroad hop."
   udp_fix="Reality -1 + connect OK ⇒ check TLS via-Iran probe / client address must be Iran IP"
 
-  # Verdict
+  # Verdict — backend down before MSS stall (EOF after connect ≠ MTU).
   if echo "${orphans_json:-}" | jq -e '.ok == false' >/dev/null 2>&1; then
     verdict_level="fail"
     verdict_summary="$(echo "$orphans_json" | jq -r '.detail')"
     verdict_fix="$(echo "$orphans_json" | jq -r '.fix // empty')"
+  elif echo "${be_json:-}" | jq -e '.ok == false' >/dev/null 2>&1; then
+    verdict_level="fail"
+    verdict_summary="$(echo "$be_json" | jq -r '.detail')"
+    verdict_fix="$(echo "$be_json" | jq -r '.fix // empty')"
+  elif echo "${xray_json:-}" | jq -e '.tls_local.ok == false' >/dev/null 2>&1; then
+    verdict_level="fail"
+    verdict_summary="$(echo "$xray_json" | jq -r '.tls_local.detail // .detail')"
+    verdict_fix="$(echo "$xray_json" | jq -r '.tls_local.fix // .fix // empty')"
+  elif echo "${tcp_fwd:-}" | jq -e '.blocked == true' >/dev/null 2>&1; then
+    verdict_level="fail"
+    verdict_summary="$(echo "$tcp_fwd" | jq -r '.detail')"
+    verdict_fix="$(echo "$tcp_fwd" | jq -r '.fix // empty')"
+  elif echo "${tcp_ctl:-}" | jq -e '.blocked == true' >/dev/null 2>&1; then
+    verdict_level="fail"
+    verdict_summary="$(echo "$tcp_ctl" | jq -r '.detail')"
+    verdict_fix="$(echo "$tcp_ctl" | jq -r '.fix // empty')"
   elif echo "${tls_via:-}" | jq -e '.stall == true' >/dev/null 2>&1; then
     verdict_level="fail"
     verdict_summary="$(echo "$tls_via" | jq -r '.detail')"
@@ -1441,10 +1516,6 @@ finally:
     verdict_level="fail"
     verdict_summary="$(echo "$tcp_ctl" | jq -r '.detail')"
     verdict_fix="$(echo "$tcp_ctl" | jq -r '.fix // empty')"
-  elif echo "${be_json:-}" | jq -e '.ok == false' >/dev/null 2>&1; then
-    verdict_level="fail"
-    verdict_summary="$(echo "$be_json" | jq -r '.detail')"
-    verdict_fix="$(echo "$be_json" | jq -r '.fix // empty')"
   elif echo "${xray_json:-}" | jq -e '.ok == false' >/dev/null 2>&1; then
     verdict_level="fail"
     verdict_summary="$(echo "$xray_json" | jq -r '.detail')"
@@ -1558,27 +1629,163 @@ handle_diagnose_command() {
   fi
 }
 
+# Panel queues: path-ping:tcp:4:control | path-ping:udp:8:forward
+run_path_ping_samples() {
+  local proto="$1" count="$2" target_kind="$3"
+  local host="${IRAN_PUBLIC_IP:-}" port="" i ms status detail replies_json="[]" ok_n=0
+  [ -n "$host" ] || { echo '{"status":"error","detail":"iran_public_ip missing"}'; return 1; }
+
+  if [ "$target_kind" = "forward" ]; then
+    port="$(first_forward_listen_port || true)"
+    [ -n "$port" ] || port=443
+  else
+    port="${CONTROL_PORT:-}"
+  fi
+  [ -n "$port" ] || { echo '{"status":"error","detail":"no port"}'; return 1; }
+
+  if ! has python3 && ! has python; then
+    echo '{"status":"error","detail":"python missing"}'
+    return 1
+  fi
+  local py=python3
+  has python3 || py=python
+
+  for i in $(seq 1 "$count"); do
+    if [ "$proto" = "udp" ]; then
+      ms="$($py -c "
+import socket, time
+s=socket.socket(socket.AF_INET, socket.SOCK_DGRAM); s.settimeout(2.0)
+t=time.time()
+try:
+    s.sendto(b'hpx-path-ping', ('$host', int('$port')))
+    # UDP often no reply — RTT = send success latency (path open enough to emit)
+    print('%.1f' % ((time.time()-t)*1000))
+except Exception:
+    pass
+finally:
+    s.close()
+" 2>/dev/null || true)"
+      if [ -n "$ms" ]; then
+        status=ok; detail="udp send ok"; ok_n=$((ok_n + 1))
+      else
+        status=timeout; ms=""; detail="udp send failed"
+      fi
+    else
+      ms="$(measure_tcp_ms "$host" "$port" || true)"
+      if [ -n "$ms" ]; then
+        status=ok; detail="tcp connect ok"; ok_n=$((ok_n + 1))
+      else
+        status=timeout; ms=""; detail="tcp connect timeout/fail"
+      fi
+    fi
+    if [ -n "$ms" ]; then
+      replies_json="$(echo "$replies_json" | jq -c --argjson seq "$i" --arg st "$status" --argjson ms "$ms" --arg d "$detail" \
+        '. + [{seq:$seq, status:$st, time_ms:$ms, detail:$d}]')"
+    else
+      replies_json="$(echo "$replies_json" | jq -c --argjson seq "$i" --arg st "$status" --arg d "$detail" \
+        '. + [{seq:$seq, status:$st, time_ms:null, detail:$d}]')"
+    fi
+    sleep 0.25
+  done
+
+  local times min_ms max_ms avg_ms loss
+  times="$(echo "$replies_json" | jq '[.[] | select(.time_ms != null) | .time_ms]')"
+  min_ms="$(echo "$times" | jq 'if length>0 then min else null end')"
+  max_ms="$(echo "$times" | jq 'if length>0 then max else null end')"
+  avg_ms="$(echo "$times" | jq 'if length>0 then (add/length) else null end')"
+  loss="$(echo "$replies_json" | jq --argjson n "$count" --argjson ok "$ok_n" 'if $n>0 then (100*($n-$ok)/$n) else 100 end')"
+
+  jq -nc \
+    --arg proto "$proto" \
+    --argjson count "$count" \
+    --arg target "$target_kind" \
+    --argjson port "$port" \
+    --arg host "$host" \
+    --arg side "${PULSE_SIDE:-abroad}" \
+    --argjson replies "$replies_json" \
+    --argjson min "$min_ms" \
+    --argjson max "$max_ms" \
+    --argjson avg "$avg_ms" \
+    --argjson loss "$loss" \
+    --argjson ok "$ok_n" \
+    --argjson ts "$(date +%s)" \
+    '{
+      status:"done", proto:$proto, count:$count, target:$target, port:$port,
+      from:$side, to:$host, replies:$replies,
+      min_ms:$min, max_ms:$max, avg_ms:$avg, loss_pct:$loss,
+      packets_received:$ok, ts:$ts
+    }'
+}
+
+handle_path_ping_command() {
+  local raw="${1:-path-ping:tcp:4:control}"
+  local proto=tcp count=4 target=control
+  # path-ping:proto:count:target
+  IFS=':' read -r _ proto count target <<< "${raw}"
+  proto="${proto:-tcp}"
+  count="${count:-4}"
+  target="${target:-control}"
+  [[ "$count" =~ ^[0-9]+$ ]] || count=4
+  [ "$count" -ge 1 ] || count=1
+  [ "$count" -le 20 ] || count=20
+  case "$proto" in tcp|udp) ;; *) proto=tcp ;; esac
+  case "$target" in control|forward) ;; *) target=control ;; esac
+
+  log "path-ping ${proto} ×${count} → Iran ${target} (pulse ${PULSE_ID:-?})"
+  local result diag avg_raw lat_json="null" msg
+  result="$(run_path_ping_samples "$proto" "$count" "$target")" || result='{"status":"error","replies":[]}'
+  avg_raw="$(echo "$result" | jq -r '.avg_ms // empty')"
+  [ -n "$avg_raw" ] && [ "$avg_raw" != "null" ] && lat_json="$avg_raw"
+  msg="$(echo "$result" | jq -r '"path-ping "+(.proto//"?")+" avg="+((.avg_ms|tostring)//"?")+"ms loss="+((.loss_pct|tostring)//"?")+"%"')"
+  diag="$(jq -nc --argjson pp "$result" --arg side "${PULSE_SIDE:-abroad}" --argjson ts "$(date +%s)" \
+    '{path_ping:$pp, side:$side, ts:$ts}')"
+
+  api_request POST "/api/hpx_pulse/agent/heartbeat" \
+    "$(jq -nc \
+      --arg s "running" \
+      --arg h "$(hostname -f 2>/dev/null || hostname)" \
+      --arg m "$msg" \
+      --argjson d "$diag" \
+      --argjson lm "$lat_json" \
+      '{status:$s, host:$h, tunnel_running:true, iface_up:true, latency_ms:(if $lm==null then null else ($lm|tonumber) end), message:$m, diag:$d}')" \
+    >/dev/null || warn "path-ping heartbeat failed"
+
+  api POST "/api/hpx_pulse/agent/ack" \
+    "$(jq -nc --arg c "$raw" '{command:$c, status:"running", message:"path-ping posted"}')" >/dev/null || true
+}
+
 maybe_handle_diagnose_command() {
   local cfg command hash toml
   cfg=$(api_request GET "/api/hpx_pulse/agent/config") || return 0
   command=$(echo "$cfg" | jq -r '.agent_command // empty')
-  [ "$command" = "diagnose" ] || return 0
-  hash=$(echo "$cfg" | jq -r '.config_hash // empty')
-  toml=$(echo "$cfg" | jq -r '.tunnel_toml // .backpack_toml // empty')
-  TUNNEL_MODE=$(echo "$cfg" | jq -r '.tunnel_mode // "direct_l3"')
-  CONTROL_PORT=$(echo "$cfg" | jq -r '.control_port // empty')
-  IRAN_PUBLIC_IP=$(echo "$cfg" | jq -r '.iran_public_ip // empty')
-  ABROAD_PUBLIC_IP=$(echo "$cfg" | jq -r '.abroad_public_ip // empty')
-  PORT_FORWARDS=$(echo "$cfg" | jq -c '.port_forwards // []')
-  # Ping-path Diagnose must also Sync Extreme TOML before probing.
-  if [ -n "$toml" ] && [ "$toml" != "null" ]; then
-    if [ "$hash" != "${CONFIG_HASH:-}" ]; then
-      apply_tunnel_config "$toml"
-      CONFIG_HASH="$hash"
-      write_env
-    fi
-  fi
-  handle_diagnose_command
+  case "$command" in
+    diagnose)
+      hash=$(echo "$cfg" | jq -r '.config_hash // empty')
+      toml=$(echo "$cfg" | jq -r '.tunnel_toml // .backpack_toml // empty')
+      TUNNEL_MODE=$(echo "$cfg" | jq -r '.tunnel_mode // "direct_l3"')
+      CONTROL_PORT=$(echo "$cfg" | jq -r '.control_port // empty')
+      IRAN_PUBLIC_IP=$(echo "$cfg" | jq -r '.iran_public_ip // empty')
+      ABROAD_PUBLIC_IP=$(echo "$cfg" | jq -r '.abroad_public_ip // empty')
+      PORT_FORWARDS=$(echo "$cfg" | jq -c '.port_forwards // []')
+      if [ -n "$toml" ] && [ "$toml" != "null" ]; then
+        if [ "$hash" != "${CONFIG_HASH:-}" ]; then
+          apply_tunnel_config "$toml"
+          CONFIG_HASH="$hash"
+          write_env
+        fi
+      fi
+      handle_diagnose_command
+      ;;
+    path-ping|path-ping:*)
+      TUNNEL_MODE=$(echo "$cfg" | jq -r '.tunnel_mode // "direct_l3"')
+      CONTROL_PORT=$(echo "$cfg" | jq -r '.control_port // empty')
+      IRAN_PUBLIC_IP=$(echo "$cfg" | jq -r '.iran_public_ip // empty')
+      ABROAD_PUBLIC_IP=$(echo "$cfg" | jq -r '.abroad_public_ip // empty')
+      PORT_FORWARDS=$(echo "$cfg" | jq -c '.port_forwards // []')
+      handle_path_ping_command "$command"
+      ;;
+    *) return 0 ;;
+  esac
 }
 
 measure_icmp_ms() {
@@ -2000,6 +2207,7 @@ HPX Pulse Agent
   install-engine [--force]  install hpx-tunnel-engine (GitHub-first on Iran)
   uninstall-engine        remove engine binary (for reinstall tests)
   sync | ping | status
+  tcp-check IP [ports...] compare TCP reachability (run on abroad vs two Iran IPs)
 
 Engine manual install (if join hangs on panel mirror):
   curl --http1.1 -fsSL .../hpx-tunnel-engine-install.sh | sudo env HPX_PREFER_GITHUB=1 bash
@@ -2010,7 +2218,28 @@ Engine reinstall test:
   sudo hpx-pulse-agent install-engine --force
   # or one-liner:
   HPX_ENGINE_FORCE=1 curl .../hpx-tunnel-engine-install.sh | sudo env HPX_PREFER_GITHUB=1 bash
+
+Compare why TCP dies on one Iran VPS (from abroad):
+  sudo hpx-pulse-agent tcp-check 93.113.230.164 443 26912
+  sudo hpx-pulse-agent tcp-check OTHER_IRAN_IP 443 26912
 EOF
+}
+
+cmd_tcp_check() {
+  local ip="${1:-}"
+  shift || true
+  [ -n "$ip" ] || die "usage: tcp-check IP [port ...]"
+  local ports=("$@")
+  if [ "${#ports[@]}" -eq 0 ]; then
+    ports=(443 80 2053 8443)
+  fi
+  echo "TCP path check → ${ip} (from $(hostname -f 2>/dev/null || hostname))"
+  local p j
+  for p in "${ports[@]}"; do
+    j="$(probe_tcp_connect_json "$ip" "$p" "check")"
+    echo "$j" | jq -r --arg p "$p" '"  :\($p)  \(.class // "?")  \(.detail)"' 2>/dev/null \
+      || echo "  :${p}  $(echo "$j" | head -c 200)"
+  done
 }
 
 main() {
@@ -2022,6 +2251,7 @@ main() {
     set-panel-url) cmd_set_panel_url "$@" ;;
     install-engine) shift; cmd_install_engine "$@" ;;
     uninstall-engine) cmd_uninstall_engine ;;
+    tcp-check) cmd_tcp_check "$@" ;;
     sync) cmd_sync ;;
     ping) cmd_ping ;;
     status) cmd_status ;;

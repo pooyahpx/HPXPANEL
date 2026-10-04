@@ -82,6 +82,54 @@ export interface HpxPulseResponse {
   priority?: number
   last_failover_at?: string | null
   created_at: string
+  path_ping?: HpxPulsePathPingResult | null
+}
+
+export type PathPingProto = 'tcp' | 'udp'
+export type PathPingTarget = 'control' | 'forward'
+export type PathPingStatus = 'queued' | 'done' | 'error' | string
+
+export interface HpxPulsePathPingReply {
+  seq: number
+  status: 'ok' | 'timeout' | 'error' | string
+  time_ms?: number | null
+  detail?: string
+}
+
+export interface HpxPulsePathPingResult {
+  status?: PathPingStatus
+  proto?: PathPingProto | string
+  count?: number
+  target?: PathPingTarget | string
+  port?: number | null
+  from?: string
+  to?: string
+  replies?: HpxPulsePathPingReply[]
+  min_ms?: number | null
+  max_ms?: number | null
+  avg_ms?: number | null
+  loss_pct?: number | null
+  packets_received?: number
+  ts?: number
+  detail?: string
+}
+
+export interface HpxPulsePathPingRequest {
+  proto?: PathPingProto
+  count?: number
+  target?: PathPingTarget
+}
+
+export interface HpxPulsePathPingResponse {
+  pulse_id: number
+  name: string
+  queued: boolean
+  proto: PathPingProto
+  count: number
+  target: PathPingTarget
+  port?: number | null
+  hint?: string | null
+  path_ping?: HpxPulsePathPingResult | null
 }
 
 export interface HpxPulsesResponse {
@@ -172,8 +220,12 @@ export function useGetHpxPulses(
   return useQuery({
     queryKey: ['hpx-pulses', params],
     queryFn: () => fetcher<HpxPulsesResponse>(`/api/hpx_pulses${qs ? `?${qs}` : ''}`),
-    refetchInterval: 15_000,
-    staleTime: 10_000,
+    refetchInterval: query => {
+      const pulses = query.state.data?.pulses ?? []
+      const waiting = pulses.some(p => p.path_ping?.status === 'queued')
+      return waiting ? 3_000 : 15_000
+    },
+    staleTime: 5_000,
     enabled: options?.enabled ?? true,
   })
 }
@@ -242,6 +294,18 @@ export function useDiagnoseHpxPulse() {
   return useMutation({
     mutationFn: (id: number) =>
       fetcher<HpxPulseDiagnoseResponse>(`/api/hpx_pulse/${id}/diagnose`, { method: 'POST' }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['hpx-pulses'] }),
+  })
+}
+
+export function usePathPingHpxPulse() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, data }: { id: number; data?: HpxPulsePathPingRequest }) =>
+      fetcher<HpxPulsePathPingResponse>(`/api/hpx_pulse/${id}/path-ping`, {
+        method: 'POST',
+        body: data ?? { proto: 'tcp', count: 4, target: 'control' },
+      }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['hpx-pulses'] }),
   })
 }

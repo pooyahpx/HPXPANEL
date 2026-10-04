@@ -30,6 +30,8 @@ from app.models.hpx_pulse import (
     HpxPulseAgentHeartbeatRequest,
     HpxPulseCreate,
     HpxPulseDiagnoseResponse,
+    HpxPulsePathPingRequest,
+    HpxPulsePathPingResponse,
     HpxPulseResponse,
     HpxPulsesResponse,
     HpxPulseUpdate,
@@ -185,6 +187,9 @@ def _to_response(db_pulse: HpxPulse) -> HpxPulseResponse:
         "priority": db_pulse.priority,
         "last_failover_at": db_pulse.last_failover_at,
         "created_at": db_pulse.created_at,
+        "path_ping": (
+            (db_pulse.diag_report or {}).get("path_ping") if isinstance(db_pulse.diag_report, dict) else None
+        ),
     }
     return HpxPulseResponse.model_validate(data)
 
@@ -526,6 +531,77 @@ class HpxPulseOperation(BaseOperation):
             **summary,
         )
 
+    async def path_ping(
+        self,
+        db: AsyncSession,
+        *,
+        admin: AdminDetails,
+        pulse_id: int,
+        model: HpxPulsePathPingRequest,
+    ) -> HpxPulsePathPingResponse:
+        """Queue abroad→Iran TCP/UDP multi-sample path ping (agent runs, panel polls path_ping)."""
+        _ = admin
+        db_pulse = await get_hpx_pulse_by_id(db, pulse_id)
+        if db_pulse is None:
+            await self.raise_error(message="Pulse not found", code=404)
+
+        port: int | None = db_pulse.control_port
+        if model.target == "forward":
+            forwards = db_pulse.port_forwards or []
+            if forwards:
+                left = str(forwards[0]).split("=", 1)[0].strip()
+                port = int(left) if left.isdigit() else port
+            else:
+                port = 443
+
+        cmd = f"path-ping:{model.proto}:{model.count}:{model.target}"
+        existing = db_pulse.diag_report if isinstance(db_pulse.diag_report, dict) else {}
+        pending = {
+            "status": "queued",
+            "proto": model.proto,
+            "count": model.count,
+            "target": model.target,
+            "port": port,
+            "from": "abroad",
+            "to": db_pulse.iran_public_ip,
+            "ts": int(dt.now(UTC).timestamp()),
+            "replies": [],
+        }
+        update: dict = {
+            "last_health_check": dt.now(UTC),
+            "diag_report": {**existing, "path_ping": pending},
+            "message": f"Path ping queued ({model.proto.upper()} ×{model.count} → Iran {model.target})",
+        }
+        queued = False
+        if db_pulse.abroad_agent_key_hash:
+            update["abroad_agent_command"] = cmd
+            queued = True
+        elif db_pulse.iran_agent_key_hash:
+            # Fallback: Iran probes itself (less useful) — prefer abroad.
+            update["iran_agent_command"] = cmd
+            pending["from"] = "iran"
+            update["diag_report"] = {**existing, "path_ping": pending}
+            queued = True
+
+        db_pulse = await update_hpx_pulse(db, db_pulse, update)
+        await db.commit()
+        hint = None
+        if queued:
+            hint = "Abroad agent will sample Iran path in ~5–15s — keep this panel open"
+        else:
+            hint = "No agents joined — Tokens → join abroad (preferred) then Path Ping again"
+        return HpxPulsePathPingResponse(
+            pulse_id=db_pulse.id,
+            name=db_pulse.name,
+            queued=queued,
+            proto=model.proto,
+            count=model.count,
+            target=model.target,
+            port=port,
+            hint=hint,
+            path_ping=pending if queued else None,
+        )
+
     async def update_pulse(
         self, db: AsyncSession, *, admin: AdminDetails, pulse_id: int, model: HpxPulseUpdate
     ) -> HpxPulseActionResponse:
@@ -745,10 +821,17 @@ class HpxPulseOperation(BaseOperation):
             if "sides" not in existing and existing.get("side"):
                 sides[str(existing["side"])] = {k: v for k, v in existing.items() if k != "sides"}
             sides[side] = incoming
-            update_data["diag_report"] = {
+            merged = {
                 "ts": incoming.get("ts"),
                 "sides": sides,
             }
+            # Preserve / refresh top-level path_ping from agent samples.
+            path_ping = incoming.get("path_ping")
+            if isinstance(path_ping, dict):
+                merged["path_ping"] = path_ping
+            elif isinstance(existing.get("path_ping"), dict):
+                merged["path_ping"] = existing["path_ping"]
+            update_data["diag_report"] = merged
             verdict = incoming.get("verdict") if isinstance(incoming.get("verdict"), dict) else None
             if verdict and verdict.get("summary") and model.message is None:
                 update_data["message"] = str(verdict["summary"])[:240]

@@ -3861,7 +3861,19 @@
       "error": "Ошибка",
       "unhealthy": "Неисправен",
       "partial": "Частично"
-    }
+    },
+    "diagnose": "Диагностика + Fix",
+    "diagnoseTitle": "Диагностика Pulse",
+    "pathPing": "Пинг пути",
+    "pathPingAbroadToIran": "Abroad → Iran",
+    "pathPingControl": "Control",
+    "pathPingForward": "Forward",
+    "pathPingRun": "Запуск",
+    "pathPingIdle": "Пинг пути простаивает",
+    "pathPingQueued": "Сэмплирование…",
+    "pathPingQueuedToast": "Пинг пути в очереди — агент abroad→Iran",
+    "pathPingNoAgent": "Нет агентов — сначала Tokens → join abroad",
+    "pathPingTargetPort": "Цель {{ip}}:{{port}} ({{target}})"
   },
   "hpxTunnel": {
     "title": "HPX ICMP",

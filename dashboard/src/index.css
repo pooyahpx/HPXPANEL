@@ -872,6 +872,15 @@
     }
   }
 
+  @keyframes path-ping-slide {
+    0% {
+      transform: translateX(-120%);
+    }
+    100% {
+      transform: translateX(320%);
+    }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .dev-by-hpx__label {
       animation: none;

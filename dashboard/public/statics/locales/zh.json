@@ -3916,7 +3916,19 @@
       "error": "错误",
       "unhealthy": "不健康",
       "partial": "部分"
-    }
+    },
+    "diagnose": "诊断 + 修复",
+    "diagnoseTitle": "Pulse 诊断",
+    "pathPing": "路径探测",
+    "pathPingAbroadToIran": "境外 → 伊朗",
+    "pathPingControl": "控制口",
+    "pathPingForward": "转发口",
+    "pathPingRun": "运行",
+    "pathPingIdle": "路径探测空闲",
+    "pathPingQueued": "采样中…",
+    "pathPingQueuedToast": "路径探测已排队 — 境外代理采样到伊朗",
+    "pathPingNoAgent": "尚无代理 — 先 Tokens 再 join 境外",
+    "pathPingTargetPort": "目标 {{ip}}:{{port}} ({{target}})"
   },
   "hpxTunnel": {
     "title": "HPX ICMP",

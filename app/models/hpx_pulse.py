@@ -143,6 +143,7 @@ class HpxPulseResponse(BaseModel):
     priority: int = 0
     last_failover_at: dt | None = None
     created_at: dt
+    path_ping: dict | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -242,3 +243,30 @@ class HpxPulseDiagnoseResponse(BaseModel):
     diag_report: dict | None = None
     probe_queued: bool = False
     hint: str | None = None
+
+
+class HpxPulsePathPingRequest(BaseModel):
+    """Queue TCP/UDP path samples from abroad agent → Iran (XRayMesh-style live ping)."""
+
+    proto: Literal["tcp", "udp"] = "tcp"
+    count: int = Field(default=4, ge=1, le=20)
+    target: Literal["control", "forward"] = "control"
+
+
+class HpxPulsePathPingReply(BaseModel):
+    seq: int
+    status: Literal["ok", "timeout", "error"]
+    time_ms: float | None = None
+    detail: str = ""
+
+
+class HpxPulsePathPingResponse(BaseModel):
+    pulse_id: int
+    name: str
+    queued: bool
+    proto: Literal["tcp", "udp"]
+    count: int
+    target: Literal["control", "forward"]
+    port: int | None = None
+    hint: str | None = None
+    path_ping: dict | None = None

@@ -12,6 +12,8 @@ from app.models.hpx_pulse import (
     HpxPulseAgentHeartbeatRequest,
     HpxPulseCreate,
     HpxPulseDiagnoseResponse,
+    HpxPulsePathPingRequest,
+    HpxPulsePathPingResponse,
     HpxPulseResponse,
     HpxPulsesResponse,
     HpxPulseUpdate,
@@ -237,6 +239,21 @@ async def diagnose_hpx_pulse(
     admin: AdminDetails = Depends(require_permission("hpx_pulse", "read")),
 ):
     return await pulse_operator.diagnose_pulse(db, admin=admin, pulse_id=pulse_id)
+
+
+@router.post(
+    "/{pulse_id}/path-ping",
+    response_model=HpxPulsePathPingResponse,
+    responses={404: responses._404},
+)
+async def path_ping_hpx_pulse(
+    pulse_id: int,
+    model: HpxPulsePathPingRequest,
+    db: AsyncSession = Depends(get_db),
+    admin: AdminDetails = Depends(require_permission("hpx_pulse", "read")),
+):
+    """Queue live TCP/UDP path samples from abroad agent toward Iran."""
+    return await pulse_operator.path_ping(db, admin=admin, pulse_id=pulse_id, model=model)
 
 
 @router.patch(

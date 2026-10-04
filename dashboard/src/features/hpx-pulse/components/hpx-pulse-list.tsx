@@ -10,12 +10,16 @@ import {
   useDeleteHpxPulse,
   useDiagnoseHpxPulse,
   useGetHpxPulses,
+  usePathPingHpxPulse,
   useRegeneratePulseTokens,
   useSyncHpxPulse,
   useUpdateHpxPulse,
   type HpxPulseDiagnoseResponse,
   type HpxPulseResponse,
+  type PathPingProto,
+  type PathPingTarget,
 } from '@/service/api/hpx-pulse'
+import PathPingPanel from '@/features/hpx-pulse/components/path-ping-panel'
 import { useAdmin } from '@/hooks/use-admin'
 import { hasPermission } from '@/utils/rbac'
 import { cn } from '@/lib/utils'
@@ -314,24 +318,28 @@ function PulseCard({
   onRegenerate,
   onSync,
   onDiagnose,
+  onPathPing,
   onAutoSync,
   onEdit,
   canUpdate,
   canDelete,
   syncLoading,
   diagnoseLoading,
+  pathPingLoading,
 }: {
   pulse: HpxPulseResponse
   onDelete: () => void
   onRegenerate: () => void
   onSync: () => void
   onDiagnose: () => void
+  onPathPing: (opts: { proto: PathPingProto; count: number; target: PathPingTarget }) => Promise<void>
   onAutoSync: (minutes: number) => Promise<void>
   onEdit: () => void
   canUpdate: boolean
   canDelete: boolean
   syncLoading: boolean
   diagnoseLoading: boolean
+  pathPingLoading: boolean
 }) {
   const { t, i18n } = useTranslation()
   const fa = i18n.language?.startsWith('fa')
@@ -529,6 +537,17 @@ function PulseCard({
             {pulse.message && <p className="text-muted-foreground text-xs leading-relaxed">{pulse.message}</p>}
           </div>
         )}
+
+        {canUpdate ? (
+          <PathPingPanel
+            pulse={pulse}
+            disabled={!canUpdate}
+            loading={pathPingLoading}
+            onRun={onPathPing}
+          />
+        ) : pulse.path_ping ? (
+          <PathPingPanel pulse={pulse} canRun={false} loading={false} onRun={async () => {}} />
+        ) : null}
       </div>
     </Card>
   )
@@ -545,12 +564,14 @@ export default function HpxPulseList() {
   const regenMutation = useRegeneratePulseTokens()
   const syncMutation = useSyncHpxPulse()
   const diagnoseMutation = useDiagnoseHpxPulse()
+  const pathPingMutation = usePathPingHpxPulse()
   const updateMutation = useUpdateHpxPulse()
   const [wizardOpen, setWizardOpen] = useState(false)
   const [editingPulse, setEditingPulse] = useState<HpxPulseResponse | null>(null)
   const [joinCommands, setJoinCommands] = useState<JoinCommandSet | null>(null)
   const [syncingId, setSyncingId] = useState<number | null>(null)
   const [diagnosingId, setDiagnosingId] = useState<number | null>(null)
+  const [pathPingId, setPathPingId] = useState<number | null>(null)
   const [diagResult, setDiagResult] = useState<HpxPulseDiagnoseResponse | null>(null)
 
   useEffect(() => {
@@ -671,6 +692,7 @@ export default function HpxPulseList() {
               canDelete={canDelete}
               syncLoading={syncingId === pulse.id}
               diagnoseLoading={diagnosingId === pulse.id}
+              pathPingLoading={pathPingId === pulse.id || pulse.path_ping?.status === 'queued'}
               onEdit={() => {
                 setEditingPulse(pulse)
                 setWizardOpen(true)
@@ -691,6 +713,21 @@ export default function HpxPulseList() {
                   toast.error((e as Error)?.message ?? t('error', { defaultValue: 'Error' }))
                 } finally {
                   setDiagnosingId(null)
+                }
+              }}
+              onPathPing={async opts => {
+                setPathPingId(pulse.id)
+                try {
+                  const res = await pathPingMutation.mutateAsync({ id: pulse.id, data: opts })
+                  if (res.queued) {
+                    toast.message(res.hint ?? t('hpxPulse.pathPingQueuedToast', { defaultValue: 'Path ping queued' }))
+                  } else {
+                    toast.error(res.hint ?? t('hpxPulse.pathPingNoAgent', { defaultValue: 'No agent joined' }))
+                  }
+                } catch (e) {
+                  toast.error((e as Error)?.message ?? t('error', { defaultValue: 'Error' }))
+                } finally {
+                  setPathPingId(null)
                 }
               }}
               onSync={async () => {

@@ -60,7 +60,15 @@ def test_tcp_pass_profiles_exist():
     assert kcp.carrier == "kcp"
     assert quic.tunnel_mode == "reverse_quic"
     assert "TCP" in kcp.title or "KCP" in kcp.title
-    assert res.profiles[0].profile_id in {"pulse-tcp-pass-kcp", "pulse-tcp-pass-quic", "pulse-reverse-kcp"}
+    # Hard intent prefers TCP Extreme / Safe-MTU Stealth over UDP escape.
+    assert res.profiles[0].profile_id in {
+        "pulse-reverse-tcp-stealth-mtu-extreme",
+        "pulse-reverse-tcp-stealth-mtu-hard",
+        "pulse-reverse-tcp-stealth-mtu",
+        "pulse-tcp-pass-kcp",
+        "pulse-tcp-pass-quic",
+        "pulse-reverse-kcp",
+    }
 
 
 def test_hard_intent_surfaces_aggressive_when_cpu_allows():

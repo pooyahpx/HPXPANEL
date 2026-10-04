@@ -42,8 +42,8 @@ def scan_hosts_for_pulse(
         addrs = _addr_list(getattr(h, "address", None))
         if not addrs:
             continue
-        has_iran = bool(iran) and any(iran == a or iran in a for a in addrs)
-        has_abroad = bool(abroad) and any(abroad == a or abroad in a for a in addrs)
+        has_iran = bool(iran) and any(iran == a for a in addrs)
+        has_abroad = bool(abroad) and any(abroad == a for a in addrs)
         if not has_iran and not has_abroad:
             continue
         if has_abroad and not has_iran:
@@ -81,7 +81,7 @@ def rewrite_host_addresses_to_iran(addresses: Any, *, abroad_ip: str, iran_ip: s
     iran = (iran_ip or "").strip()
     out: set[str] = set()
     for a in _addr_list(addresses):
-        if abroad and (a == abroad or abroad in a):
+        if abroad and a == abroad:
             out.add(iran if iran else a)
         else:
             out.add(a)

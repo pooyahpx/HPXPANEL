@@ -5,8 +5,10 @@ from datetime import UTC, datetime as dt, timedelta as td
 
 from sqlalchemy.exc import IntegrityError
 
+from app.core.hosts import host_manager
 from app.db import AsyncSession
 from app.db.crud.general import get_jwt_secret_key
+from app.db.crud.host import get_hosts
 from app.db.crud.hpx_pulse import (
     create_hpx_pulse,
     delete_hpx_pulse,
@@ -35,8 +37,6 @@ from app.models.hpx_pulse import (
     PulseAdviseResponse,
 )
 from app.operation import BaseOperation
-from app.core.hosts import host_manager
-from app.db.crud.host import get_hosts
 from app.services.hpx_pulse.advisor import advise, profile_meta
 from app.services.hpx_pulse.config_linker import rewrite_host_addresses_to_iran, scan_hosts_for_pulse
 from app.services.hpx_pulse.diagnose import (
@@ -210,7 +210,9 @@ class HpxPulseOperation(BaseOperation):
         secret = await self._secret_key(db)
         return decrypt_secret(db_pulse.token_encrypted, secret)
 
-    async def advise_pulse(self, model: PulseAdviseRequest, *, domain: str | None = None, sni_hint: str | None = None) -> PulseAdviseResponse:
+    async def advise_pulse(
+        self, model: PulseAdviseRequest, *, domain: str | None = None, sni_hint: str | None = None
+    ) -> PulseAdviseResponse:
         return advise(model, domain=domain, sni_hint=sni_hint)
 
     async def _iran_join_commands(self, panel_url: str | None, iran_token: str) -> tuple[str, str]:
@@ -425,9 +427,7 @@ class HpxPulseOperation(BaseOperation):
             message="Sync queued for connected agents",
         )
 
-    async def diagnose_pulse(
-        self, db: AsyncSession, *, admin: AdminDetails, pulse_id: int
-    ) -> HpxPulseDiagnoseResponse:
+    async def diagnose_pulse(self, db: AsyncSession, *, admin: AdminDetails, pulse_id: int) -> HpxPulseDiagnoseResponse:
         """TCP-reverse super agent: scan Hosts, force Extreme MSS, Sync+probe both sides."""
         _ = admin
         db_pulse = await get_hpx_pulse_by_id(db, pulse_id)
@@ -451,20 +451,16 @@ class HpxPulseOperation(BaseOperation):
                 db_host = next((h for h in hosts if getattr(h, "id", None) == hit.host_id), None)
                 if db_host is None:
                     continue
-                new_addrs = rewrite_host_addresses_to_iran(
-                    db_host.address, abroad_ip=abroad_ip, iran_ip=iran_ip
-                )
-                if new_addrs and new_addrs != set(_addr for _addr in (db_host.address or set())):
+                new_addrs = rewrite_host_addresses_to_iran(db_host.address, abroad_ip=abroad_ip, iran_ip=iran_ip)
+                if new_addrs and new_addrs != set(db_host.address or set()):
                     db_host.address = new_addrs
                     rewritten.append(db_host)
-                    fix_notes.append(
-                        f"Host #{hit.host_id} «{hit.remark}» address → Iran {iran_ip}"
-                    )
+                    fix_notes.append(f"Host #{hit.host_id} «{hit.remark}» address → Iran {iran_ip}")
             if rewritten:
                 await db.flush()
                 try:
                     await host_manager.add_hosts(db, rewritten)
-                except Exception as exc:  # noqa: BLE001 — diagnose must not die on cache refresh
+                except Exception as exc:
                     logger.warning("host_manager refresh after Pulse diagnose autofix failed: %s", exc)
 
         # Re-scan after rewrite for diagnose rows.
@@ -568,7 +564,9 @@ class HpxPulseOperation(BaseOperation):
             )
             update_data["advice_json"] = advice.model_dump(mode="json")
             if model.profile_id is None:
-                chosen = next((p for p in advice.profiles if p.profile_id == advice.recommended_profile_id), advice.profiles[0])
+                chosen = next(
+                    (p for p in advice.profiles if p.profile_id == advice.recommended_profile_id), advice.profiles[0]
+                )
                 update_data["profile_id"] = chosen.profile_id
                 update_data["tunnel_mode"] = chosen.tunnel_mode
                 update_data["carrier"] = chosen.carrier
@@ -761,9 +759,7 @@ class HpxPulseOperation(BaseOperation):
                     "Tunnel control is up but forwarded port is not reachable — "
                     "open Iran firewall for 443 and ensure Xray listens on abroad 127.0.0.1:443"
                 )
-            elif model.status in {HpxPulseStatus.running.value, "running"} and (
-                model.tunnel_running or model.iface_up
-            ):
+            elif model.status in {HpxPulseStatus.running.value, "running"} and (model.tunnel_running or model.iface_up):
                 update_data["status"] = HpxPulseStatus.running
                 if model.message is None and "message" not in update_data:
                     update_data["message"] = "HPX tunnel active"
@@ -774,9 +770,7 @@ class HpxPulseOperation(BaseOperation):
         await db.commit()
         return self._agent_config(db_pulse, side, token)
 
-    async def agent_ack(
-        self, db: AsyncSession, *, agent_key: str, side: str, model: HpxPulseAgentAckRequest
-    ) -> None:
+    async def agent_ack(self, db: AsyncSession, *, agent_key: str, side: str, model: HpxPulseAgentAckRequest) -> None:
         db_pulse = await self._pulse_from_agent_key(db, agent_key, side)
         prefix = "iran" if side == "iran" else "abroad"
         await update_hpx_pulse(

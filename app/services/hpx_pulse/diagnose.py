@@ -176,7 +176,9 @@ def diagnose_pulse_record(pulse: HpxPulse) -> list[PulseDiagCheck]:
             "Status",
             "info" if pulse.status == HpxPulseStatus.running else "warn",
             f"{pulse.status}" + (f" — {pulse.message}" if pulse.message else ""),
-            "" if pulse.status == HpxPulseStatus.running else "Open Diagnose, wait 10s, open again — agents push live TCP probes",
+            ""
+            if pulse.status == HpxPulseStatus.running
+            else "Open Diagnose, wait 10s, open again — agents push live TCP probes",
         )
     )
     checks.append(
@@ -193,7 +195,9 @@ def diagnose_pulse_record(pulse: HpxPulse) -> list[PulseDiagCheck]:
             "Endpoints",
             "ok" if pulse.iran_public_ip and pulse.abroad_public_ip else "fail",
             f"Iran {pulse.iran_public_ip or 'MISSING'} ⇄ Abroad {pulse.abroad_public_ip or 'MISSING'} · control {pulse.control_port}",
-            "Set both public IPs and a free control port" if not (pulse.iran_public_ip and pulse.abroad_public_ip) else "",
+            "Set both public IPs and a free control port"
+            if not (pulse.iran_public_ip and pulse.abroad_public_ip)
+            else "",
         )
     )
 
@@ -421,7 +425,9 @@ def diagnose_summary(checks: list[PulseDiagCheck]) -> dict[str, Any]:
         "warn": warn,
         "fail": fail,
         "healthy": fail == 0,
-        "headline": top_fail.detail if top_fail else ("All critical checks passed" if warn == 0 else "Degraded — see warnings"),
+        "headline": top_fail.detail
+        if top_fail
+        else ("All critical checks passed" if warn == 0 else "Degraded — see warnings"),
         "primary_fix": top_fail.fix if top_fail else "",
         "checks": [asdict(c) for c in checks],
     }

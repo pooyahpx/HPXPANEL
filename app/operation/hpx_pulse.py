@@ -188,9 +188,7 @@ def _to_response(db_pulse: HpxPulse) -> HpxPulseResponse:
         "last_failover_at": db_pulse.last_failover_at,
         "created_at": db_pulse.created_at,
         "path_ping": (
-            (db_pulse.diag_report or {}).get("path_ping")
-            if isinstance(db_pulse.diag_report, dict)
-            else None
+            (db_pulse.diag_report or {}).get("path_ping") if isinstance(db_pulse.diag_report, dict) else None
         ),
     }
     return HpxPulseResponse.model_validate(data)

@@ -148,12 +148,20 @@ jobs:
 
             - name: Start NATS (JetStream)
               run: |
-                  docker run -d --name nats -p 4222:4222 nats:2.10-alpine -js
-                  for i in {1..20}; do
+                  # Exit 125 is common when a leftover /nats container or port clash exists.
+                  docker rm -f nats 2>/dev/null || true
+                  if ! docker run -d --name nats --restart=unless-stopped -p 127.0.0.1:4222:4222 nats:2.10-alpine -js; then
+                    echo "docker run nats failed — retry once" >&2
+                    docker rm -f nats 2>/dev/null || true
+                    docker pull nats:2.10-alpine
+                    docker run -d --name nats -p 127.0.0.1:4222:4222 nats:2.10-alpine -js
+                  fi
+                  for i in {1..30}; do
                     nc -z 127.0.0.1 4222 && exit 0
                     sleep 0.5
                   done
                   echo "NATS did not start in time" >&2
+                  docker logs nats 2>&1 || true
                   exit 1
 
             - name: Run Alembic Migrations
@@ -320,12 +328,20 @@ jobs:
 
             - name: Start NATS (JetStream)
               run: |
-                  docker run -d --name nats -p 4222:4222 nats:2.10-alpine -js
-                  for i in {1..20}; do
+                  # Exit 125 is common when a leftover /nats container or port clash exists.
+                  docker rm -f nats 2>/dev/null || true
+                  if ! docker run -d --name nats --restart=unless-stopped -p 127.0.0.1:4222:4222 nats:2.10-alpine -js; then
+                    echo "docker run nats failed — retry once" >&2
+                    docker rm -f nats 2>/dev/null || true
+                    docker pull nats:2.10-alpine
+                    docker run -d --name nats -p 127.0.0.1:4222:4222 nats:2.10-alpine -js
+                  fi
+                  for i in {1..30}; do
                     nc -z 127.0.0.1 4222 && exit 0
                     sleep 0.5
                   done
                   echo "NATS did not start in time" >&2
+                  docker logs nats 2>&1 || true
                   exit 1
 
             - name: Run Alembic Migrations

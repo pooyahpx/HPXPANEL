@@ -498,7 +498,7 @@ export default function HpxPulseWizard({ open, onOpenChange, onCreated, editingP
                 <p className="text-muted-foreground text-[11px]">
                   {t('hpxPulse.topProfilesHint', {
                     defaultValue:
-                      'Safe / MTU clamps TCP MSS to 1200 (Hard=1100) when Diagnose shows stall_after_connect. UDP family still ranks under Fast intent.',
+                      'If TCP/WS stall: pick Escape/KCP/QUIC (UDP) — same Backhaul-class engine, UDP carrier. Safe/MTU only helps if TCP still partially works (mss 1200/1100).',
                   })}
                 </p>
                 <div className="max-h-64 space-y-2 overflow-y-auto">

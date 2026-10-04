@@ -102,24 +102,24 @@ _PROFILES: dict[str, dict] = {
         "base_score": 70,
     },
     "pulse-reverse-kcp": {
-        "title": "Reverse KCP + FEC",
-        "title_fa": "Reverse KCP + FEC",
+        "title": "Escape / Reverse KCP (UDP)",
+        "title_fa": "فرار / Reverse KCP (UDP)",
         "tunnel_mode": "reverse_kcp",
         "carrier": "kcp",
         "preset": "turbo",
         "base_score": 75,
     },
     "pulse-reverse-udp": {
-        "title": "Reverse UDP",
-        "title_fa": "Reverse UDP",
+        "title": "Escape / Reverse UDP",
+        "title_fa": "فرار / Reverse UDP",
         "tunnel_mode": "reverse_udp",
         "carrier": "udp",
         "preset": "turbo",
         "base_score": 58,
     },
     "pulse-reverse-quic": {
-        "title": "Reverse QUIC",
-        "title_fa": "Reverse QUIC",
+        "title": "Escape / Reverse QUIC (UDP)",
+        "title_fa": "فرار / Reverse QUIC (UDP)",
         "tunnel_mode": "reverse_quic",
         "carrier": "quic",
         "preset": "turbo",
@@ -177,6 +177,9 @@ def _intent_preset_boost(intent: str, preset: str) -> int:
         return 8
     if intent == "hard" and preset == "aggressive":
         return 12
+    if intent == "hard" and preset == "turbo":
+        # UDP escape carriers use turbo — surface them on broken TCP paths.
+        return 14
     if intent == "fast" and preset in {"turbo", "aggressive"}:
         return 10
     if intent == "hard" and preset == "balance":
@@ -332,10 +335,13 @@ def advise(
 
         elif pid == "pulse-reverse-kcp":
             score = _score_reverse_base(goal, low_cpu, score, reasons, reasons_fa)
-            if loss >= 8 or req.udp_reachable is True or intent == "fast":
-                score += 15 if loss >= 8 or intent == "fast" else 5
-                reasons.append("High loss / speed intent: KCP+FEC turbo preset")
-                reasons_fa.append("لاس بالا / قصد سرعت: KCP+FEC با preset turbo")
+            reasons.append("UDP carrier — bypasses TCP/WS MSS stalls (Backhaul-class UDP)")
+            reasons_fa.append("حامل UDP — رد شدن از stall تی‌سی‌پی/WS (هم‌خانواده Backhaul UDP)")
+            if loss >= 8 or req.udp_reachable is True or intent in {"fast", "hard", "mobile"}:
+                bump = 40 if intent in {"hard", "mobile"} else (15 if loss >= 8 or intent == "fast" else 5)
+                score += bump
+                reasons.append("Prefer when Diagnose shows stall_after_connect / only UDP works")
+                reasons_fa.append("وقتی Diagnose می‌گوید stall_after_connect یا فقط UDP کار می‌کند")
             else:
                 score -= 10
             if low_cpu:
@@ -343,18 +349,20 @@ def advise(
 
         elif pid == "pulse-reverse-udp":
             score = _score_reverse_base(goal, low_cpu, score, reasons, reasons_fa)
+            reasons.append("Raw UDP reverse — lightest escape when TCP/WS path is broken")
+            reasons_fa.append("Reverse UDP خام — سبک‌ترین فرار وقتی مسیر TCP/WS خراب است")
             if req.udp_reachable is False:
                 score -= 35
                 opt_warnings.append("UDP path reported blocked — not recommended")
-            if goal == "speed" or intent == "fast":
-                score += 8
+            if goal == "speed" or intent in {"fast", "hard", "mobile"}:
+                score += 36 if intent in {"hard", "mobile"} else 8
 
         elif pid == "pulse-reverse-quic":
             score = _score_reverse_base(goal, low_cpu, score, reasons, reasons_fa)
             reasons.append("Encrypted UDP with self-tuning congestion control")
             reasons_fa.append("UDP رمزنگاری‌شده با کنترل ازدحام خودکار")
-            if intent == "fast":
-                score += 10
+            if intent in {"fast", "hard", "mobile"}:
+                score += 38 if intent in {"hard", "mobile"} else 10
 
         elif pid == "pulse-reverse-xdi":
             score = _score_reverse_base(goal, low_cpu, score, reasons, reasons_fa)
@@ -435,7 +443,14 @@ def advise(
             )
         )
 
-    options.sort(key=lambda o: o.score, reverse=True)
+    # Prefer UDP escape carriers on hard/mobile when scores tie at the 100 cap
+    # (TCP/WS often stall on Iran paths while UDP still works).
+    _udp_escape = {"pulse-reverse-kcp", "pulse-reverse-quic", "pulse-reverse-udp", "pulse-clean-udp"}
+    prefer_udp = intent in {"hard", "mobile", "fast"}
+    options.sort(
+        key=lambda o: (o.score, 1 if prefer_udp and o.profile_id in _udp_escape else 0),
+        reverse=True,
+    )
     recommended = profile_override if profile_override in _PROFILES else options[0].profile_id
 
     if low_cpu:
@@ -443,12 +458,14 @@ def advise(
     if loss > 15:
         warnings.append("High packet loss — consider pulse-reverse-kcp")
     if intent == "hard":
-        warnings.append("Hard intent prefers Aggressive stealth presets when CPU allows")
+        warnings.append(
+            "Hard intent: if TCP/WS stall, pick Escape/KCP or QUIC (UDP) — same engine family as Backhaul UDP"
+        )
     if intent == "mobile":
-        warnings.append("Mobile intent prefers Balance + Reverse Stealth / WSS")
+        warnings.append("Mobile intent prefers Balance + Reverse Stealth / WSS; use Escape/KCP if TCP stalls")
     if intent in {"mobile", "hard", "stealth", "balanced"}:
         warnings.append(
-            "If Diagnose shows stall_after_connect: pick Safe / MTU (mss=1200) or MTU Hard (mss=1100), Save, Sync"
+            "If Diagnose shows stall_after_connect: try Safe/MTU first; if still broken use Escape/KCP (UDP)"
         )
 
     return PulseAdviseResponse(

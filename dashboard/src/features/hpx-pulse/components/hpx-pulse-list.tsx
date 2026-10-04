@@ -421,7 +421,7 @@ function PulseCard({
           <div className="flex flex-wrap gap-1">
             <Button size="sm" variant="outline" className="h-8 gap-1.5" onClick={onDiagnose} disabled={diagnoseLoading}>
               <Stethoscope className={cn('size-3.5', diagnoseLoading && 'animate-pulse')} />
-              {t('hpxPulse.diagnose', { defaultValue: 'Diagnose' })}
+              {t('hpxPulse.diagnose', { defaultValue: 'Diagnose + Fix' })}
             </Button>
             {canUpdate && (pulse.iran_claimed || pulse.abroad_claimed) && (
               <Button size="sm" variant="outline" className="h-8 gap-1.5" onClick={onSync} disabled={syncLoading}>

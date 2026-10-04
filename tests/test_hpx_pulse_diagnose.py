@@ -95,6 +95,6 @@ def test_diagnose_agent_stall_after_connect():
     )
     stall = next(c for c in checks if c.name == "TCP data after connect (MSS test)")
     assert stall.level == "fail"
-    assert "Safe / MTU" in stall.fix
-    assert "manual" in stall.fix.lower() or "Sync" in stall.fix
+    assert "TCP Extreme" in stall.fix
+    assert "Diagnose" in stall.fix or "Sync" in stall.fix
 

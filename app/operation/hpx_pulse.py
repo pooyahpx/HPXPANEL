@@ -5,8 +5,10 @@ from datetime import UTC, datetime as dt, timedelta as td
 
 from sqlalchemy.exc import IntegrityError
 
+from app.core.hosts import host_manager
 from app.db import AsyncSession
 from app.db.crud.general import get_jwt_secret_key
+from app.db.crud.host import get_hosts
 from app.db.crud.hpx_pulse import (
     create_hpx_pulse,
     delete_hpx_pulse,
@@ -36,8 +38,18 @@ from app.models.hpx_pulse import (
 )
 from app.operation import BaseOperation
 from app.services.hpx_pulse.advisor import advise, profile_meta
-from app.services.hpx_pulse.diagnose import diagnose_pulse_record, diagnose_summary
+from app.services.hpx_pulse.config_linker import rewrite_host_addresses_to_iran, scan_hosts_for_pulse
+from app.services.hpx_pulse.diagnose import (
+    PulseDiagCheck,
+    checks_from_linked_hosts,
+    diagnose_pulse_record,
+    diagnose_summary,
+)
 from app.services.hpx_pulse.engine_mirror import agent_assets_base, engine_version
+from app.services.hpx_pulse.tcp_autofix import extreme_profile_update, should_autofix_tcp_extreme
+from app.utils.logger import get_logger
+
+logger = get_logger("hpx-pulse")
 from app.services.hpx_pulse.tunnel_render import mint_tunnel_token, render_for_side
 from app.utils.crypto import decrypt_secret, encrypt_secret, hash_api_key
 from app.utils.helpers import resolve_panel_base_url
@@ -198,7 +210,9 @@ class HpxPulseOperation(BaseOperation):
         secret = await self._secret_key(db)
         return decrypt_secret(db_pulse.token_encrypted, secret)
 
-    async def advise_pulse(self, model: PulseAdviseRequest, *, domain: str | None = None, sni_hint: str | None = None) -> PulseAdviseResponse:
+    async def advise_pulse(
+        self, model: PulseAdviseRequest, *, domain: str | None = None, sni_hint: str | None = None
+    ) -> PulseAdviseResponse:
         return advise(model, domain=domain, sni_hint=sni_hint)
 
     async def _iran_join_commands(self, panel_url: str | None, iran_token: str) -> tuple[str, str]:
@@ -413,16 +427,57 @@ class HpxPulseOperation(BaseOperation):
             message="Sync queued for connected agents",
         )
 
-    async def diagnose_pulse(
-        self, db: AsyncSession, *, admin: AdminDetails, pulse_id: int
-    ) -> HpxPulseDiagnoseResponse:
+    async def diagnose_pulse(self, db: AsyncSession, *, admin: AdminDetails, pulse_id: int) -> HpxPulseDiagnoseResponse:
+        """TCP-reverse super agent: scan Hosts, force Extreme MSS, Sync+probe both sides."""
         _ = admin
         db_pulse = await get_hpx_pulse_by_id(db, pulse_id)
         if db_pulse is None:
             await self.raise_error(message="Pulse not found", code=404)
-        summary = diagnose_summary(diagnose_pulse_record(db_pulse))
-        # Queue live TCP/UDP probes on next agent poll (~5s ping timer).
+
+        fix_notes: list[str] = []
+        hosts = await get_hosts(db)
+        hits = scan_hosts_for_pulse(
+            hosts,
+            iran_ip=db_pulse.iran_public_ip,
+            abroad_ip=db_pulse.abroad_public_ip,
+        )
+        rewritten: list = []
+        iran_ip = (db_pulse.iran_public_ip or "").strip()
+        abroad_ip = (db_pulse.abroad_public_ip or "").strip()
+        if iran_ip and abroad_ip:
+            for hit in hits:
+                if hit.issue not in {"abroad_ip", "mixed"}:
+                    continue
+                db_host = next((h for h in hosts if getattr(h, "id", None) == hit.host_id), None)
+                if db_host is None:
+                    continue
+                new_addrs = rewrite_host_addresses_to_iran(db_host.address, abroad_ip=abroad_ip, iran_ip=iran_ip)
+                if new_addrs and new_addrs != set(db_host.address or set()):
+                    db_host.address = new_addrs
+                    rewritten.append(db_host)
+                    fix_notes.append(f"Host #{hit.host_id} «{hit.remark}» address → Iran {iran_ip}")
+            if rewritten:
+                await db.flush()
+                try:
+                    await host_manager.add_hosts(db, rewritten)
+                except Exception as exc:
+                    logger.warning("host_manager refresh after Pulse diagnose autofix failed: %s", exc)
+
+        # Re-scan after rewrite for diagnose rows.
+        hosts = await get_hosts(db)
+        hits = scan_hosts_for_pulse(
+            hosts,
+            iran_ip=db_pulse.iran_public_ip,
+            abroad_ip=db_pulse.abroad_public_ip,
+        )
+
         update: dict = {"last_health_check": dt.now(UTC)}
+        extreme_id = should_autofix_tcp_extreme(db_pulse)
+        if extreme_id:
+            update.update(extreme_profile_update(extreme_id))
+            fix_notes.append(f"profile → {extreme_id} (TCP Extreme mss=1000)")
+
+        # Queue diagnose: agent applies latest TOML (hash change) then autofix+probes.
         probe_queued = False
         if db_pulse.iran_agent_key_hash:
             update["iran_agent_command"] = "diagnose"
@@ -430,14 +485,37 @@ class HpxPulseOperation(BaseOperation):
         if db_pulse.abroad_agent_key_hash:
             update["abroad_agent_command"] = "diagnose"
             probe_queued = True
-        await update_hpx_pulse(db, db_pulse, update)
+        if fix_notes:
+            update["message"] = "TCP autofix: " + "; ".join(fix_notes[:4])
+            update["last_status_change"] = dt.now(UTC)
+
+        db_pulse = await update_hpx_pulse(db, db_pulse, update)
         await db.commit()
+
+        checks = diagnose_pulse_record(db_pulse)
+        checks.extend(checks_from_linked_hosts(hits))
+        if fix_notes:
+            checks.insert(
+                0,
+                PulseDiagCheck(
+                    f"Pulse: {db_pulse.name}",
+                    "Autofix applied",
+                    "info",
+                    "; ".join(fix_notes),
+                    "Agents Sync new TOML + deep TCP probes on next poll (~5–15s)",
+                ),
+            )
+        summary = diagnose_summary(checks)
+
         hint = None
         if probe_queued:
             hint = (
-                "Deep probe + autofix queued (orphan tunnels, firewall, Xray listen, TLS via Iran). "
-                "Wait ~15s then Diagnose again for full report"
+                "TCP-reverse agent: Host rewrite + TCP Extreme (if needed) + Sync + "
+                "firewall/TCPMSS/orphan/Xray autofix + TLS-via-Iran probe queued. "
+                "Wait ~20s then Diagnose again for the fresh report"
             )
+        elif fix_notes:
+            hint = "Panel autofix applied (no agents joined yet — Tokens → join Iran & abroad)"
         return HpxPulseDiagnoseResponse(
             pulse_id=db_pulse.id,
             name=db_pulse.name,
@@ -486,7 +564,9 @@ class HpxPulseOperation(BaseOperation):
             )
             update_data["advice_json"] = advice.model_dump(mode="json")
             if model.profile_id is None:
-                chosen = next((p for p in advice.profiles if p.profile_id == advice.recommended_profile_id), advice.profiles[0])
+                chosen = next(
+                    (p for p in advice.profiles if p.profile_id == advice.recommended_profile_id), advice.profiles[0]
+                )
                 update_data["profile_id"] = chosen.profile_id
                 update_data["tunnel_mode"] = chosen.tunnel_mode
                 update_data["carrier"] = chosen.carrier
@@ -679,9 +759,7 @@ class HpxPulseOperation(BaseOperation):
                     "Tunnel control is up but forwarded port is not reachable — "
                     "open Iran firewall for 443 and ensure Xray listens on abroad 127.0.0.1:443"
                 )
-            elif model.status in {HpxPulseStatus.running.value, "running"} and (
-                model.tunnel_running or model.iface_up
-            ):
+            elif model.status in {HpxPulseStatus.running.value, "running"} and (model.tunnel_running or model.iface_up):
                 update_data["status"] = HpxPulseStatus.running
                 if model.message is None and "message" not in update_data:
                     update_data["message"] = "HPX tunnel active"
@@ -692,9 +770,7 @@ class HpxPulseOperation(BaseOperation):
         await db.commit()
         return self._agent_config(db_pulse, side, token)
 
-    async def agent_ack(
-        self, db: AsyncSession, *, agent_key: str, side: str, model: HpxPulseAgentAckRequest
-    ) -> None:
+    async def agent_ack(self, db: AsyncSession, *, agent_key: str, side: str, model: HpxPulseAgentAckRequest) -> None:
         db_pulse = await self._pulse_from_agent_key(db, agent_key, side)
         prefix = "iran" if side == "iran" else "abroad"
         await update_hpx_pulse(

@@ -963,6 +963,15 @@ sync_pulse_from_panel() {
   PORT_FORWARDS=$(echo "$cfg" | jq -c '.port_forwards // []')
 
   if [ "$command" = "diagnose" ]; then
+    # Apply latest panel TOML first (Diagnose may have upgraded to TCP Extreme).
+    if [ -n "$toml" ] && [ "$toml" != "null" ]; then
+      if [ "$hash" != "${CONFIG_HASH:-}" ]; then
+        apply_tunnel_config "$toml"
+        CONFIG_HASH="$hash"
+      else
+        open_iran_firewall || true
+      fi
+    fi
     write_env
     handle_diagnose_command || true
     return 0
@@ -1143,9 +1152,24 @@ list_orphan_tunnel_units() {
 }
 
 auto_fix_on_diagnose() {
-  local orphans o fixed=0
-  log "diagnose auto-fix — pulse ${PULSE_ID:-?} side=${PULSE_SIDE:-?}"
+  local orphans o fixed=0 transport mss_now
+  log "diagnose auto-fix — pulse ${PULSE_ID:-?} side=${PULSE_SIDE:-?} mode=${TUNNEL_MODE:-?}"
   open_iran_firewall || true
+
+  # TCP reverse: clamp MSS in live TOML + kernel path (even before panel Sync lands).
+  case "${TUNNEL_MODE:-}" in
+    reverse_stealth|reverse_tcp|reverse_tcpmux|reverse_ws|reverse_wss|reverse_wssmux)
+      if force_tcp_mss_toml 1000; then
+        fixed=1
+        log "forced mss=1000 in tunnel TOML (TCP Extreme local clamp)"
+      fi
+      if has sysctl; then
+        sysctl -w net.ipv4.tcp_mtu_probing=1 >/dev/null 2>&1 || true
+        sysctl -w net.ipv4.tcp_base_mss=1024 >/dev/null 2>&1 || true
+      fi
+      ;;
+  esac
+
   orphans="$(list_orphan_tunnel_units || true)"
   if [ -n "$orphans" ]; then
     while IFS= read -r o; do
@@ -1160,6 +1184,10 @@ auto_fix_on_diagnose() {
     systemctl restart "$(tunnel_service_name).service" 2>/dev/null || true
     sleep 2
     fixed=1
+  elif [ "$fixed" = 1 ]; then
+    # Restart after MSS/firewall changes so engine picks up TOML.
+    systemctl restart "$(tunnel_service_name).service" 2>/dev/null || true
+    sleep 2
   fi
   # Soft nudge common Xray unit names if backend port is dead (abroad only).
   if [ "${PULSE_SIDE:-}" = "abroad" ]; then
@@ -1178,6 +1206,28 @@ auto_fix_on_diagnose() {
     fi
   fi
   [ "$fixed" = 1 ]
+}
+
+force_tcp_mss_toml() {
+  # Ensure mss = N in reverse [server]/[client] TOML (TCP/Stealth path).
+  local want="$1" cfg cur
+  cfg="$(tunnel_cfg_path)"
+  [ -f "$cfg" ] || return 1
+  cur="$(toml_mss_value || true)"
+  if [ -n "$cur" ] && [ "$cur" -le "$want" ] 2>/dev/null; then
+    return 1
+  fi
+  if grep -qE '^[[:space:]]*mss[[:space:]]*=' "$cfg" 2>/dev/null; then
+    sed -i -E "s/^([[:space:]]*mss[[:space:]]*=[[:space:]]*)[0-9]+/\\1${want}/" "$cfg" || return 1
+  else
+    # Insert after first transport= line (both sides have it).
+    if grep -qE '^[[:space:]]*transport[[:space:]]*=' "$cfg" 2>/dev/null; then
+      sed -i -E "/^[[:space:]]*transport[[:space:]]*=/a mss = ${want}" "$cfg" || return 1
+    else
+      printf '\nmss = %s\n' "$want" >>"$cfg" || return 1
+    fi
+  fi
+  return 0
 }
 
 probe_tls_brief_json() {
@@ -1509,15 +1559,25 @@ handle_diagnose_command() {
 }
 
 maybe_handle_diagnose_command() {
-  local cfg command
+  local cfg command hash toml
   cfg=$(api_request GET "/api/hpx_pulse/agent/config") || return 0
   command=$(echo "$cfg" | jq -r '.agent_command // empty')
   [ "$command" = "diagnose" ] || return 0
+  hash=$(echo "$cfg" | jq -r '.config_hash // empty')
+  toml=$(echo "$cfg" | jq -r '.tunnel_toml // .backpack_toml // empty')
   TUNNEL_MODE=$(echo "$cfg" | jq -r '.tunnel_mode // "direct_l3"')
   CONTROL_PORT=$(echo "$cfg" | jq -r '.control_port // empty')
   IRAN_PUBLIC_IP=$(echo "$cfg" | jq -r '.iran_public_ip // empty')
   ABROAD_PUBLIC_IP=$(echo "$cfg" | jq -r '.abroad_public_ip // empty')
   PORT_FORWARDS=$(echo "$cfg" | jq -c '.port_forwards // []')
+  # Ping-path Diagnose must also Sync Extreme TOML before probing.
+  if [ -n "$toml" ] && [ "$toml" != "null" ]; then
+    if [ "$hash" != "${CONFIG_HASH:-}" ]; then
+      apply_tunnel_config "$toml"
+      CONFIG_HASH="$hash"
+      write_env
+    fi
+  fi
   handle_diagnose_command
 }
 

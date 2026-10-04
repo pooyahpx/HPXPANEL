@@ -106,11 +106,11 @@ def _checks_from_one_agent_diag(report: dict, side: str) -> list[PulseDiagCheck]
         detail = str(item.get("detail") or state)
         fix = str(item.get("fix") or "")
         if item.get("stall"):
-            # Panel owns the operator-facing fix (profile name); agent text may lag.
+            # Panel Diagnose autofixes to TCP Extreme; text for second-click confirmation.
             fix = (
                 "TCP connects then stalls on first bytes — classic MTU/MSS on TCP carrier. "
-                "Edit Pulse → «TCP Extreme — Reverse Stealth (MSS 1000)» → Save → Sync both sides "
-                "(keeps TCP/Stealth; do not switch to KCP unless Extreme still fails)."
+                "Diagnose auto-applies «TCP Extreme — Reverse Stealth (MSS 1000)» + Sync; "
+                "wait ~20s and Diagnose again. Keep TCP — do not switch to KCP unless Extreme still fails."
             )
         checks.append(PulseDiagCheck(g, title, level, detail, fix))
 
@@ -176,7 +176,9 @@ def diagnose_pulse_record(pulse: HpxPulse) -> list[PulseDiagCheck]:
             "Status",
             "info" if pulse.status == HpxPulseStatus.running else "warn",
             f"{pulse.status}" + (f" — {pulse.message}" if pulse.message else ""),
-            "" if pulse.status == HpxPulseStatus.running else "Open Diagnose, wait 10s, open again — agents push live TCP probes",
+            ""
+            if pulse.status == HpxPulseStatus.running
+            else "Open Diagnose, wait 10s, open again — agents push live TCP probes",
         )
     )
     checks.append(
@@ -193,7 +195,9 @@ def diagnose_pulse_record(pulse: HpxPulse) -> list[PulseDiagCheck]:
             "Endpoints",
             "ok" if pulse.iran_public_ip and pulse.abroad_public_ip else "fail",
             f"Iran {pulse.iran_public_ip or 'MISSING'} ⇄ Abroad {pulse.abroad_public_ip or 'MISSING'} · control {pulse.control_port}",
-            "Set both public IPs and a free control port" if not (pulse.iran_public_ip and pulse.abroad_public_ip) else "",
+            "Set both public IPs and a free control port"
+            if not (pulse.iran_public_ip and pulse.abroad_public_ip)
+            else "",
         )
     )
 
@@ -293,17 +297,36 @@ def diagnose_pulse_record(pulse: HpxPulse) -> list[PulseDiagCheck]:
     checks.extend(_checks_from_agent_diag(pulse))
 
     if is_reverse:
-        checks.append(
-            PulseDiagCheck(
-                g,
-                "TCP vs UDP",
-                "info",
-                "User TCP configs keep working on Iran:443 — carrier switches to UDP (KCP/QUIC). "
-                "Safe/MTU only helps if TCP carrier still partially works.",
-                "Edit → pick «TCP Pass — KCP backhaul» (or QUIC) → Save → Sync. "
-                "If still on Stealth/TCP/WS, you are still on the broken TCP path.",
+        tcp_modes = {
+            "reverse_stealth",
+            "reverse_tcp",
+            "reverse_tcpmux",
+            "reverse_ws",
+            "reverse_wss",
+            "reverse_wssmux",
+        }
+        if mode in tcp_modes:
+            checks.append(
+                PulseDiagCheck(
+                    g,
+                    "TCP reverse path",
+                    "info",
+                    "Tunnel carrier is TCP/Stealth/WSS — user Reality still lands on Iran:443. "
+                    "If ping is green but TLS hangs: MSS/MTU stall (Diagnose → TCP Extreme autofix).",
+                    "Click Diagnose — panel upgrades to TCP Extreme (mss=1000), rewrites Hosts "
+                    "that point at abroad IP → Iran IP, then agents Sync + probe.",
+                )
             )
-        )
+        else:
+            checks.append(
+                PulseDiagCheck(
+                    g,
+                    "UDP carrier note",
+                    "info",
+                    "Carrier is UDP-family (KCP/QUIC/UDP) — user TCP still uses Iran forwards.",
+                    "For TCP-only repair: Edit → TCP Extreme Stealth → Save → Sync.",
+                )
+            )
 
     if pulse.status == HpxPulseStatus.unhealthy:
         msg = (pulse.message or "").lower()
@@ -349,6 +372,49 @@ def diagnose_pulse_record(pulse: HpxPulse) -> list[PulseDiagCheck]:
     return checks
 
 
+def checks_from_linked_hosts(hits: list[Any]) -> list[PulseDiagCheck]:
+    """Panel Host rows that reference this Pulse's Iran/abroad public IPs."""
+    checks: list[PulseDiagCheck] = []
+    g = "Panel configs · Hosts"
+    if not hits:
+        checks.append(
+            PulseDiagCheck(
+                g,
+                "Related Hosts",
+                "warn",
+                "No Host address matches this Pulse Iran/abroad IP — subscription may still point elsewhere",
+                "Hosts → set address to Iran public IP so clients enter the reverse TCP forward",
+            )
+        )
+        return checks
+    for hit in hits:
+        issue = getattr(hit, "issue", "")
+        if issue == "abroad_ip":
+            level: DiagLevel = "fail"
+        elif issue == "mixed":
+            level = "fail"
+        elif issue == "ok_iran":
+            level = "ok"
+        else:
+            level = "info"
+        fix = ""
+        if issue in {"abroad_ip", "mixed"}:
+            fix = (
+                "Diagnose autofix rewrites abroad IP → Iran IP on this Host. "
+                "Re-fetch subscription on the client after fix."
+            )
+        checks.append(
+            PulseDiagCheck(
+                g,
+                f"Host #{getattr(hit, 'host_id', '?')} {getattr(hit, 'remark', '')}".strip(),
+                level,
+                getattr(hit, "detail", "") or str(getattr(hit, "addresses", [])),
+                fix,
+            )
+        )
+    return checks
+
+
 def diagnose_summary(checks: list[PulseDiagCheck]) -> dict[str, Any]:
     ok = sum(1 for c in checks if c.level == "ok")
     warn = sum(1 for c in checks if c.level == "warn")
@@ -359,7 +425,9 @@ def diagnose_summary(checks: list[PulseDiagCheck]) -> dict[str, Any]:
         "warn": warn,
         "fail": fail,
         "healthy": fail == 0,
-        "headline": top_fail.detail if top_fail else ("All critical checks passed" if warn == 0 else "Degraded — see warnings"),
+        "headline": top_fail.detail
+        if top_fail
+        else ("All critical checks passed" if warn == 0 else "Degraded — see warnings"),
         "primary_fix": top_fail.fix if top_fail else "",
         "checks": [asdict(c) for c in checks],
     }

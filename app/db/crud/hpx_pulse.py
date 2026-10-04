@@ -1,6 +1,6 @@
 from datetime import datetime as dt
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import HpxPulse, HpxPulseStatus
@@ -39,7 +39,9 @@ async def create_hpx_pulse(
         advice_json=advice_json,
         note=model.note,
         auto_restart_interval_minutes=(
-            model.auto_restart_interval_minutes if model.auto_restart_interval_minutes and model.auto_restart_interval_minutes > 0 else None
+            model.auto_restart_interval_minutes
+            if model.auto_restart_interval_minutes and model.auto_restart_interval_minutes > 0
+            else None
         ),
         auto_heal_enabled=model.auto_heal_enabled,
         backup_pulse_id=model.backup_pulse_id,
@@ -75,10 +77,14 @@ async def get_hpx_pulses(
     offset: int,
     limit: int,
     name: str | None = None,
+    include_pending_delete: bool = False,
 ) -> tuple[list[HpxPulse], int]:
     filters = []
     if name:
         filters.append(HpxPulse.name.ilike(f"%{name}%"))
+    if not include_pending_delete:
+        # Soft-deleted pulses stay until agents leave; hide from UI lists.
+        filters.append(or_(HpxPulse.message.is_(None), ~HpxPulse.message.ilike("__pending_delete__%")))
 
     count_stmt = select(func.count()).select_from(HpxPulse)
     if filters:
@@ -103,6 +109,11 @@ async def update_hpx_pulse(db: AsyncSession, db_pulse: HpxPulse, data: dict) -> 
 
 async def delete_hpx_pulse(db: AsyncSession, db_pulse: HpxPulse) -> None:
     await db.delete(db_pulse)
+
+
+async def list_pending_delete_hpx_pulses(db: AsyncSession) -> list[HpxPulse]:
+    stmt = select(HpxPulse).where(HpxPulse.message.ilike("__pending_delete__%"))
+    return list((await db.execute(stmt)).scalars().all())
 
 
 def set_join_token(db_pulse: HpxPulse, *, side: str, token: str, expires_at: dt) -> None:

@@ -16,6 +16,7 @@ from app.db.crud.hpx_pulse import (
     get_hpx_pulse_by_id,
     get_hpx_pulse_by_join_token_hash,
     get_hpx_pulses,
+    list_pending_delete_hpx_pulses,
     set_join_token,
     update_hpx_pulse,
 )
@@ -52,6 +53,43 @@ from app.services.hpx_pulse.tcp_autofix import extreme_profile_update, should_au
 from app.utils.logger import get_logger
 
 logger = get_logger("hpx-pulse")
+
+# Soft-delete: agents must fetch `leave` before the row is hard-deleted.
+PENDING_DELETE_MARKER = "__pending_delete__"
+PENDING_DELETE_GRACE = td(minutes=2)
+
+
+def _is_pending_delete(db_pulse: HpxPulse) -> bool:
+    return bool(db_pulse.message and str(db_pulse.message).startswith(PENDING_DELETE_MARKER))
+
+
+async def _reap_pending_deletes(db: AsyncSession) -> int:
+    """Hard-delete pulses whose agents have left (or grace elapsed)."""
+    rows = await list_pending_delete_hpx_pulses(db)
+    removed = 0
+    now = dt.now(UTC)
+    for pulse in rows:
+        iran_gone = not pulse.iran_agent_key_hash
+        abroad_gone = not pulse.abroad_agent_key_hash
+        changed = pulse.last_status_change
+        if changed is not None and changed.tzinfo is None:
+            changed = changed.replace(tzinfo=UTC)
+        aged_out = changed is None or (now - changed) >= PENDING_DELETE_GRACE
+        if (iran_gone and abroad_gone) or aged_out:
+            logger.info(
+                "reaping pending-delete pulse #%s (iran_gone=%s abroad_gone=%s aged=%s)",
+                pulse.id,
+                iran_gone,
+                abroad_gone,
+                aged_out,
+            )
+            await delete_hpx_pulse(db, pulse)
+            removed += 1
+    if removed:
+        await db.commit()
+    return removed
+
+
 from app.services.hpx_pulse.tunnel_render import mint_tunnel_token, render_for_side
 from app.utils.crypto import decrypt_secret, encrypt_secret, hash_api_key
 from app.utils.helpers import resolve_panel_base_url
@@ -350,6 +388,7 @@ class HpxPulseOperation(BaseOperation):
         name: str | None = None,
     ) -> HpxPulsesResponse:
         _ = admin
+        await _reap_pending_deletes(db)
         rows, total = await get_hpx_pulses(db, offset=offset, limit=limit, name=name)
         return HpxPulsesResponse(pulses=[_to_response(r) for r in rows], total=total)
 
@@ -366,23 +405,32 @@ class HpxPulseOperation(BaseOperation):
         if db_pulse is None:
             await self.raise_error(message="Pulse not found", code=404)
         resp = _to_response(db_pulse)
-        # Signal agents to uninstall before keys are removed (sync/ping runs every few seconds).
+        has_agents = bool(db_pulse.iran_agent_key_hash or db_pulse.abroad_agent_key_hash)
+        # Soft-delete first so agents can still auth and receive `leave` (hard-delete was wiping
+        # keys immediately → crash-loop units with missing toml on the host).
         await update_hpx_pulse(
             db,
             db_pulse,
             {
-                "iran_agent_command": "leave",
-                "abroad_agent_command": "leave",
+                "iran_agent_command": "leave" if db_pulse.iran_agent_key_hash else None,
+                "abroad_agent_command": "leave" if db_pulse.abroad_agent_key_hash else None,
                 "status": HpxPulseStatus.stopped,
-                "message": "Pulse deleted from panel — agents will uninstall",
+                "enabled": False,
+                "message": f"{PENDING_DELETE_MARKER} agents uninstalling",
+                "last_status_change": dt.now(UTC),
             },
         )
         await db.commit()
-        db_pulse = await get_hpx_pulse_by_id(db, pulse_id)
-        if db_pulse is not None:
-            await delete_hpx_pulse(db, db_pulse)
-            await db.commit()
-        return HpxPulseActionResponse(pulse=resp, message="Pulse deleted from panel")
+        if not has_agents:
+            db_pulse = await get_hpx_pulse_by_id(db, pulse_id)
+            if db_pulse is not None:
+                await delete_hpx_pulse(db, db_pulse)
+                await db.commit()
+            return HpxPulseActionResponse(pulse=resp, message="Pulse deleted from panel")
+        return HpxPulseActionResponse(
+            pulse=resp,
+            message="Delete queued — agents will uninstall within ~30s (orphan units auto-purged)",
+        )
 
     async def regenerate_tokens(
         self, db: AsyncSession, *, admin: AdminDetails, pulse_id: int, panel_url: str | None
@@ -860,12 +908,18 @@ class HpxPulseOperation(BaseOperation):
     async def agent_ack(self, db: AsyncSession, *, agent_key: str, side: str, model: HpxPulseAgentAckRequest) -> None:
         db_pulse = await self._pulse_from_agent_key(db, agent_key, side)
         prefix = "iran" if side == "iran" else "abroad"
-        await update_hpx_pulse(
-            db,
-            db_pulse,
-            {
-                f"{prefix}_agent_command": None,
-                "message": model.message or f"{side} ack: {model.status}",
-            },
-        )
+        cmd = (model.command or "").strip().lower()
+        update: dict = {
+            f"{prefix}_agent_command": None,
+            "message": model.message or f"{side} ack: {model.status}",
+        }
+        # After leave/uninstall, drop this side's agent key so soft-delete can reap.
+        if cmd in {"leave", "uninstall"} or cmd.startswith("leave"):
+            update[f"{prefix}_agent_key_hash"] = None
+            update[f"{prefix}_agent_host"] = None
+            update[f"{prefix}_agent_last_seen"] = None
+            if _is_pending_delete(db_pulse):
+                update["message"] = f"{PENDING_DELETE_MARKER} {side} left"
+        await update_hpx_pulse(db, db_pulse, update)
         await db.commit()
+        await _reap_pending_deletes(db)

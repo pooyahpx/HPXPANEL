@@ -192,6 +192,13 @@ async def _attempt_failback(db, primary: HpxPulse) -> bool:
 async def hpx_pulse_health_job():
     try:
         async with GetDB() as db:
+            try:
+                from app.operation.hpx_pulse import _reap_pending_deletes
+
+                await _reap_pending_deletes(db)
+            except Exception:
+                logger.debug("pending-delete reap skipped", exc_info=True)
+
             pulses, _ = await get_hpx_pulses(db, offset=0, limit=500)
             for pulse in pulses:
                 if not pulse.enabled:

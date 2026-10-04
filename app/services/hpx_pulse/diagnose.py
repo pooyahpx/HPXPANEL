@@ -114,11 +114,19 @@ def _checks_from_one_agent_diag(report: dict, side: str) -> list[PulseDiagCheck]
             )
         elif item.get("blocked"):
             level = "fail"
-            fix = (
-                "TCP SYN never completes to this Iran IP (provider/DC filter or host firewall) — "
-                "not an MSS issue. From abroad compare: nc -vz WORKING_IRAN 443 && nc -vz BROKEN_IRAN 443. "
-                "On broken Iran: ufw allow 443/tcp + control port; check provider firewall; or move Pulse to the working Iran VPS."
-            )
+            detail_l = detail.lower()
+            if "connect probe crashed" in detail_l or item.get("class") == "error":
+                fix = (
+                    "Agent TCP probe crashed (not necessarily a closed firewall). "
+                    "From abroad run: nc -vz IRAN_IP CONTROL_PORT and nc -vz IRAN_IP FORWARD_PORT. "
+                    "Diagnose also auto-purges crash-loop orphan tunnel units (missing toml)."
+                )
+            else:
+                fix = (
+                    "TCP SYN never completes to this Iran IP (provider/DC filter or host firewall) — "
+                    "not an MSS issue. From abroad compare: nc -vz WORKING_IRAN 443 && nc -vz BROKEN_IRAN 443. "
+                    "On broken Iran: ufw allow 443/tcp + control port; check provider firewall; or move Pulse to the working Iran VPS."
+                )
         elif item.get("peer_closed") or "EOF" in detail:
             level = "fail"
             fix = (

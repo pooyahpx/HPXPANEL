@@ -1305,7 +1305,30 @@ build_diag_report_json() {
     # For UDP carriers, control port is UDP — skip misleading TCP control connect.
     case "${TUNNEL_MODE:-}" in
       reverse_kcp|reverse_quic|reverse_udp)
-        tcp_ctl=$(jq -nc --arg d "skipped — control is UDP for ${TUNNEL_MODE}" '{ok:true, state:"ok", detail:$d}')
+        # Without UDP to Iran:control, KCP never links — Iran:443 still accepts then stalls.
+        if [ -n "${IRAN_PUBLIC_IP:-}" ] && [ -n "${CONTROL_PORT:-}" ] && { has python3 || has python; }; then
+          local py=python3 uok
+          has python3 || py=python
+          uok="$($py -c "
+import socket
+s=socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+s.settimeout(2.0)
+try:
+    s.sendto(b'hpx-diag', ('${IRAN_PUBLIC_IP}', int('${CONTROL_PORT}')))
+    print('sent')
+except Exception as e:
+    print('fail:'+str(e))
+finally:
+    s.close()
+" 2>/dev/null || echo fail)"
+          if [[ "$uok" == sent* ]]; then
+            tcp_ctl=$(jq -nc --arg d "UDP send to Iran:${CONTROL_PORT} ok (control for ${TUNNEL_MODE})" '{ok:true, state:"ok", detail:$d}')
+          else
+            tcp_ctl=$(jq -nc --arg d "UDP to Iran:${CONTROL_PORT} failed (${uok})" --arg f "Open Iran firewall UDP ${CONTROL_PORT} — without it KCP never links and Iran:443 stalls after connect" '{ok:false, state:"fail", detail:$d, fix:$f}')
+          fi
+        else
+          tcp_ctl=$(jq -nc --arg d "control is UDP for ${TUNNEL_MODE} — ensure Iran allows UDP :${CONTROL_PORT:-?}" '{ok:true, state:"ok", detail:$d}')
+        fi
         ;;
       *)
         if [ -n "${IRAN_PUBLIC_IP:-}" ] && [ -n "${CONTROL_PORT:-}" ]; then

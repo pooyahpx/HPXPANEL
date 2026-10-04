@@ -578,7 +578,7 @@ ensure_engine() {
     return 0
   fi
   log "Installing HPX tunnel engine..."
-  local installer panel_install_url prefer_github
+  local installer panel_install_url prefer_github pinned_ver=""
   installer="$(mktemp)"
   panel_install_url=""
   prefer_github="${HPX_PREFER_GITHUB:-}"
@@ -588,9 +588,16 @@ ensure_engine() {
   fi
   if [ -n "${PANEL_URL:-}" ]; then
     panel_install_url="${PANEL_URL%/}/api/hpx_pulse/agent/engine-install.sh"
+    pinned_ver="$(hp_panel_curl "${PANEL_URL%/}/api/hpx_pulse/engine" 2>/dev/null | jq -r '.engine_version // empty' 2>/dev/null || true)"
   elif [ -n "${HPX_AGENT_ASSETS_BASE:-}" ]; then
     panel_install_url="${HPX_AGENT_ASSETS_BASE%/}/engine-install.sh"
   fi
+  if [ -z "$pinned_ver" ]; then
+    pinned_ver="$(hp_curl "https://raw.githubusercontent.com/pooyahpx/HPXPANEL/main/scripts/hpx-tunnel-engine.version" 2>/dev/null | tr -d '[:space:]' || true)"
+  fi
+  [ -n "$pinned_ver" ] || pinned_ver="1.8.5"
+  pinned_ver="${pinned_ver#v}"
+  log "engine pin · v${pinned_ver}"
   if hp_curl "$ENGINE_INSTALL_URL" -o "$installer"; then
     log "Using GitHub-hosted engine installer"
   elif [ -n "$panel_install_url" ] && hp_panel_curl "$panel_install_url" -o "$installer"; then
@@ -605,7 +612,9 @@ ensure_engine() {
     HPX_PANEL_URL="${PANEL_URL:-}" HPX_AGENT_ASSETS_BASE="${HPX_AGENT_ASSETS_BASE:-}" \
       HPX_PREFER_GITHUB="${1:-0}" \
       HPX_ENGINE_FORCE="${HPX_ENGINE_FORCE:-0}" \
-      HPX_NO_GITHUB_FALLBACK="${HPX_NO_GITHUB_FALLBACK:-0}" bash "$installer"
+      HPX_NO_GITHUB_FALLBACK="${HPX_NO_GITHUB_FALLBACK:-0}" \
+      HPX_TUNNEL_ENGINE_VERSION="${HPX_TUNNEL_ENGINE_VERSION:-$pinned_ver}" \
+      bash "$installer"
   }
   if run_engine_install "${prefer_github:-0}"; then
     install_ok=1

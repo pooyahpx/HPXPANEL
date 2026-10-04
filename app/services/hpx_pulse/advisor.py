@@ -44,6 +44,24 @@ _PROFILES: dict[str, dict] = {
         "mss": 1100,
         "base_score": 88,
     },
+    "pulse-reverse-tcp-stealth-mtu-extreme": {
+        "title": "TCP Extreme — Reverse Stealth (MSS 1000)",
+        "title_fa": "TCP Extreme — Stealth با MSS 1000",
+        "tunnel_mode": "reverse_stealth",
+        "carrier": "stealth",
+        "preset": "balance",
+        "mss": 1000,
+        "base_score": 96,
+    },
+    "pulse-reverse-tcp-mtu-extreme": {
+        "title": "TCP Extreme — Reverse TCP (MSS 1000)",
+        "title_fa": "TCP Extreme — Reverse TCP با MSS 1000",
+        "tunnel_mode": "reverse_tcp",
+        "carrier": "tcp",
+        "preset": "balance",
+        "mss": 1000,
+        "base_score": 80,
+    },
     "pulse-reverse-tcp-stealth-hard": {
         "title": "Reverse TCP Stealth (Hard)",
         "title_fa": "Reverse TCP Stealth (سخت)",
@@ -288,25 +306,40 @@ def advise(
             if goal == "speed":
                 score -= 5
 
-        elif pid in {"pulse-reverse-tcp-stealth-mtu", "pulse-reverse-tcp-stealth-mtu-hard"}:
+        elif pid in {
+            "pulse-reverse-tcp-stealth-mtu",
+            "pulse-reverse-tcp-stealth-mtu-hard",
+            "pulse-reverse-tcp-stealth-mtu-extreme",
+        }:
             score = _score_reverse_base(goal, low_cpu, score, reasons, reasons_fa)
             mss_val = meta.get("mss") or 1200
             reasons.append(
-                f"Same Reverse Stealth + TCP MSS={mss_val} on Iran & abroad "
-                "(fixes stall_after_connect when UDP works)"
+                f"TCP Stealth carrier + MSS={mss_val} on Iran & abroad "
+                "(keeps TCP end-to-end; clamps segments for broken MTU paths)"
             )
             reasons_fa.append(
-                f"همان Reverse Stealth با MSS={mss_val} در ایران و خارج "
-                "(رفع stall وقتی UDP کار می‌کند)"
+                f"حامل TCP Stealth با MSS={mss_val} در ایران و خارج "
+                "(TCP می‌ماند؛ سگمنت‌ها برای مسیر MTU خراب کوچک می‌شوند)"
             )
-            if goal in {"stealth", "balanced"} or intent == "mobile":
+            if goal in {"stealth", "balanced"} or intent in {"mobile", "hard", "stealth"}:
                 score += 12
             if intent == "hard" and pid.endswith("mtu-hard"):
                 score += 10
+            if "extreme" in pid:
+                score += 22
+                reasons.append("TCP Extreme — strongest MSS clamp while staying on TCP/Stealth")
+                reasons_fa.append("TCP Extreme — قوی‌ترین clamp روی MSS، همچنان TCP/Stealth")
             if goal == "speed":
                 score -= 8
             if low_cpu:
                 score += 4
+
+        elif pid == "pulse-reverse-tcp-mtu-extreme":
+            score = _score_reverse_base(goal, low_cpu, score, reasons, reasons_fa)
+            reasons.append("Plain Reverse TCP with MSS=1000 for worst-path TCP MTU")
+            reasons_fa.append("Reverse TCP ساده با MSS=1000 برای بدترین مسیرهای TCP")
+            if intent in {"mobile", "hard", "stealth", "balanced"}:
+                score += 18
 
         elif pid == "pulse-reverse-tcp":
             score = _score_reverse_base(goal, low_cpu, score, reasons, reasons_fa)
@@ -484,9 +517,25 @@ def advise(
         "pulse-reverse-udp",
         "pulse-clean-udp",
     }
-    prefer_udp = intent in {"hard", "mobile", "fast"}
+    _tcp_safe = {
+        "pulse-reverse-tcp-stealth-mtu-extreme",
+        "pulse-reverse-tcp-stealth-mtu-hard",
+        "pulse-reverse-tcp-stealth-mtu",
+        "pulse-reverse-tcp-mtu-extreme",
+        "pulse-reverse-tcp-mtu",
+    }
+    # Default intent: prefer TCP Extreme/Safe over UDP escape when scores tie.
+    prefer_tcp_fix = intent in {"stealth", "mobile", "hard", "balanced"}
+    prefer_udp = intent == "fast"
     options.sort(
-        key=lambda o: (o.score, 1 if prefer_udp and o.profile_id in _udp_escape else 0),
+        key=lambda o: (
+            o.score,
+            (
+                2
+                if prefer_tcp_fix and o.profile_id in _tcp_safe
+                else (1 if prefer_udp and o.profile_id in _udp_escape else 0)
+            ),
+        ),
         reverse=True,
     )
     recommended = profile_override if profile_override in _PROFILES else options[0].profile_id
@@ -497,13 +546,13 @@ def advise(
         warnings.append("High packet loss — consider pulse-tcp-pass-kcp / pulse-reverse-kcp")
     if intent == "hard":
         warnings.append(
-            "Hard intent: pick «TCP Pass — KCP» when Stealth/TCP/WS stall — user configs stay TCP, wire is UDP"
+            "Hard intent: pick «TCP Extreme — Stealth (MSS 1000)» to keep TCP; use KCP only if Extreme still stalls"
         )
     if intent == "mobile":
-        warnings.append("Mobile: Stealth/WSS if TCP works; else «TCP Pass — KCP»")
+        warnings.append("Mobile: TCP Extreme/Safe-MTU Stealth first; Escape/KCP only if TCP still stalls")
     if intent in {"mobile", "hard", "stealth", "balanced"}:
         warnings.append(
-            "If Diagnose shows stall_after_connect: Safe/MTU first; if still broken use TCP Pass (KCP/QUIC)"
+            "If Diagnose shows stall_after_connect: TCP Extreme (mss=1000) → Save → Sync both sides"
         )
 
     return PulseAdviseResponse(

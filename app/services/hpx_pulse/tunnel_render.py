@@ -10,6 +10,7 @@ from typing import Any
 DEFAULT_MSS = 1280
 MTU_SAFE_MSS = 1200
 MTU_HARD_MSS = 1100
+MTU_EXTREME_MSS = 1000
 
 _REVERSE_MODE_TRANSPORT: dict[str, str] = {
     "reverse_stealth": "stealth",
@@ -32,6 +33,8 @@ _MSS_BY_PROFILE: dict[str, int] = {
     "pulse-reverse-tcp-stealth-mtu": MTU_SAFE_MSS,
     "pulse-reverse-tcp-mtu": MTU_SAFE_MSS,
     "pulse-reverse-tcp-stealth-mtu-hard": MTU_HARD_MSS,
+    "pulse-reverse-tcp-stealth-mtu-extreme": MTU_EXTREME_MSS,
+    "pulse-reverse-tcp-mtu-extreme": MTU_EXTREME_MSS,
 }
 
 

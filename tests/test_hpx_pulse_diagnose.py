@@ -93,5 +93,8 @@ def test_diagnose_agent_stall_after_connect():
     checks = diagnose_pulse_record(
         _pulse(status=HpxPulseStatus.running, latency_ms=42.0, message="stall", diag_report=report)
     )
-    assert any(c.name == "TCP data after connect (MSS test)" and c.level == "fail" for c in checks)
-    assert any("stall" in c.detail.lower() or "mss" in (c.fix or "").lower() for c in checks)
+    stall = next(c for c in checks if c.name == "TCP data after connect (MSS test)")
+    assert stall.level == "fail"
+    assert "Safe / MTU" in stall.fix
+    assert "manual" in stall.fix.lower() or "Sync" in stall.fix
+

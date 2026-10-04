@@ -26,6 +26,24 @@ _PROFILES: dict[str, dict] = {
         "preset": "balance",
         "base_score": 94,
     },
+    "pulse-reverse-tcp-stealth-mtu": {
+        "title": "Safe / MTU — Reverse Stealth",
+        "title_fa": "مسیر امن / MTU — Reverse Stealth",
+        "tunnel_mode": "reverse_stealth",
+        "carrier": "stealth",
+        "preset": "balance",
+        "mss": 1200,
+        "base_score": 93,
+    },
+    "pulse-reverse-tcp-stealth-mtu-hard": {
+        "title": "Safe / MTU Hard — Reverse Stealth",
+        "title_fa": "مسیر امن / MTU سخت — Reverse Stealth",
+        "tunnel_mode": "reverse_stealth",
+        "carrier": "stealth",
+        "preset": "balance",
+        "mss": 1100,
+        "base_score": 88,
+    },
     "pulse-reverse-tcp-stealth-hard": {
         "title": "Reverse TCP Stealth (Hard)",
         "title_fa": "Reverse TCP Stealth (سخت)",
@@ -41,6 +59,15 @@ _PROFILES: dict[str, dict] = {
         "carrier": "tcp",
         "preset": "balance",
         "base_score": 72,
+    },
+    "pulse-reverse-tcp-mtu": {
+        "title": "Safe / MTU — Reverse TCP",
+        "title_fa": "مسیر امن / MTU — Reverse TCP",
+        "tunnel_mode": "reverse_tcp",
+        "carrier": "tcp",
+        "preset": "balance",
+        "mss": 1200,
+        "base_score": 74,
     },
     "pulse-reverse-tcp-mux": {
         "title": "Reverse TCP Mux",
@@ -241,6 +268,26 @@ def advise(
             if goal == "speed":
                 score -= 5
 
+        elif pid in {"pulse-reverse-tcp-stealth-mtu", "pulse-reverse-tcp-stealth-mtu-hard"}:
+            score = _score_reverse_base(goal, low_cpu, score, reasons, reasons_fa)
+            mss_val = meta.get("mss") or 1200
+            reasons.append(
+                f"Same Reverse Stealth + TCP MSS={mss_val} on Iran & abroad "
+                "(fixes stall_after_connect when UDP works)"
+            )
+            reasons_fa.append(
+                f"همان Reverse Stealth با MSS={mss_val} در ایران و خارج "
+                "(رفع stall وقتی UDP کار می‌کند)"
+            )
+            if goal in {"stealth", "balanced"} or intent == "mobile":
+                score += 12
+            if intent == "hard" and pid.endswith("mtu-hard"):
+                score += 10
+            if goal == "speed":
+                score -= 8
+            if low_cpu:
+                score += 4
+
         elif pid == "pulse-reverse-tcp":
             score = _score_reverse_base(goal, low_cpu, score, reasons, reasons_fa)
             reasons.append("Plain reverse TCP — lowest CPU on port-forward setups")
@@ -250,6 +297,16 @@ def advise(
             if goal == "stealth":
                 score -= 15
                 opt_warnings.append("Plain TCP is easier to fingerprint than Stealth")
+
+        elif pid == "pulse-reverse-tcp-mtu":
+            score = _score_reverse_base(goal, low_cpu, score, reasons, reasons_fa)
+            reasons.append("Plain Reverse TCP with MSS=1200 for broken path MTU")
+            reasons_fa.append("Reverse TCP ساده با MSS=1200 برای مسیرهای MTU خراب")
+            if goal in {"stealth", "balanced"} or intent == "mobile":
+                score += 6
+            if goal == "stealth":
+                score -= 10
+                opt_warnings.append("Prefer Safe/MTU Stealth when DPI is present")
 
         elif pid == "pulse-reverse-tcp-mux":
             score = _score_reverse_base(goal, low_cpu, score, reasons, reasons_fa)
@@ -370,6 +427,7 @@ def advise(
                 tunnel_mode=tunnel_mode,
                 carrier=carrier,
                 preset=effective_preset,
+                mss=meta.get("mss"),
                 score=max(0, min(100, score)),
                 reasons=reasons,
                 reasons_fa=reasons_fa,
@@ -388,6 +446,10 @@ def advise(
         warnings.append("Hard intent prefers Aggressive stealth presets when CPU allows")
     if intent == "mobile":
         warnings.append("Mobile intent prefers Balance + Reverse Stealth / WSS")
+    if intent in {"mobile", "hard", "stealth", "balanced"}:
+        warnings.append(
+            "If Diagnose shows stall_after_connect: pick Safe / MTU (mss=1200) or MTU Hard (mss=1100), Save, Sync"
+        )
 
     return PulseAdviseResponse(
         recommended_profile_id=recommended,

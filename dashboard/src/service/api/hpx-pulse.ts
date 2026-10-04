@@ -20,6 +20,7 @@ export interface PulseProfileOption {
   tunnel_mode: string
   carrier: string | null
   preset: string
+  mss?: number | null
   score: number
   reasons: string[]
   reasons_fa: string[]

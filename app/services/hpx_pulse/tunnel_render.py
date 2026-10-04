@@ -5,6 +5,12 @@ from __future__ import annotations
 import secrets
 from typing import Any
 
+# Default MSS for reverse [server]/[client]. Iran↔abroad paths that drop large
+# TCP segments (UDP still OK) need a lower clamp — see Safe / MTU advisor profiles.
+DEFAULT_MSS = 1280
+MTU_SAFE_MSS = 1200
+MTU_HARD_MSS = 1100
+
 _REVERSE_MODE_TRANSPORT: dict[str, str] = {
     "reverse_stealth": "stealth",
     "reverse_tcp": "tcp",
@@ -20,9 +26,28 @@ _REVERSE_MODE_TRANSPORT: dict[str, str] = {
 
 _MUX_TRANSPORTS = frozenset({"tcpmux", "kcp", "wsmux", "wssmux", "xdi"})
 
+# Panel profile_id → TCP MSS / L3 mss_clamp. Engine preset stays balance/turbo/…
+# (do not invent engine preset names). Only emit keys the binary already understands.
+_MSS_BY_PROFILE: dict[str, int] = {
+    "pulse-reverse-tcp-stealth-mtu": MTU_SAFE_MSS,
+    "pulse-reverse-tcp-mtu": MTU_SAFE_MSS,
+    "pulse-reverse-tcp-stealth-mtu-hard": MTU_HARD_MSS,
+}
+
 
 def mint_tunnel_token() -> str:
     return secrets.token_urlsafe(32)
+
+
+def resolve_mss(pulse: Any) -> int:
+    """TCP MSS (reverse) / mss_clamp (L3) for this pulse — profile-driven."""
+    explicit = getattr(pulse, "mss", None)
+    if isinstance(explicit, int) and explicit > 0:
+        return explicit
+    profile_id = getattr(pulse, "profile_id", None) or ""
+    if profile_id in _MSS_BY_PROFILE:
+        return _MSS_BY_PROFILE[profile_id]
+    return DEFAULT_MSS
 
 
 def _ports_block(port_forwards: list[str]) -> str:
@@ -105,6 +130,7 @@ def render_iran_l3(
     peer_ip: str = "10.10.0.2",
     port_forwards: list[str] | None = None,
     mtu: int = 1380,
+    mss_clamp: int = DEFAULT_MSS,
 ) -> str:
     ports = _ports_block(port_forwards or [])
     return f"""[l3]
@@ -117,7 +143,7 @@ carrier = "{carrier}"
 preset = "{preset}"
 mtu = {mtu}
 auto_mtu = true
-mss_clamp = 1280
+mss_clamp = {mss_clamp}
 iface = "bp0"
 {ports}"""
 
@@ -132,6 +158,7 @@ def render_abroad_l3(
     peer_ip: str = "10.10.0.1",
     port_forwards: list[str] | None = None,
     mtu: int = 1380,
+    mss_clamp: int = DEFAULT_MSS,
 ) -> str:
     ports = _ports_block(port_forwards or [])
     return f"""[l3]
@@ -144,7 +171,7 @@ carrier = "{carrier}"
 preset = "{preset}"
 mtu = {mtu}
 auto_mtu = true
-mss_clamp = 1280
+mss_clamp = {mss_clamp}
 iface = "bp0"
 {ports}"""
 
@@ -157,7 +184,7 @@ def render_iran_server(
     preset: str,
     port_forwards: list[str] | None = None,
     domain: str | None = None,
-    mss: int = 1280,
+    mss: int = DEFAULT_MSS,
 ) -> str:
     ports = _reverse_ports_block(port_forwards or [])
     tls = _server_tls_block(transport, domain)
@@ -186,7 +213,7 @@ def render_abroad_client(
     token: str,
     transport: str,
     preset: str,
-    mss: int = 1280,
+    mss: int = DEFAULT_MSS,
 ) -> str:
     mux = _mux_block(transport)
     mss_line = f"mss = {mss}\n" if mss and mss > 0 else ""
@@ -214,6 +241,7 @@ def render_for_side(
     port_forwards = pulse.port_forwards or []
     mode = pulse.tunnel_mode or "direct_l3"
     domain = getattr(pulse, "domain", None) or None
+    mss = resolve_mss(pulse)
 
     if mode.startswith("reverse_"):
         transport = _reverse_transport(pulse)
@@ -225,6 +253,7 @@ def render_for_side(
                 preset=preset,
                 port_forwards=port_forwards,
                 domain=domain,
+                mss=mss,
             )
         return render_abroad_client(
             iran_ip=pulse.iran_public_ip,
@@ -232,6 +261,7 @@ def render_for_side(
             token=token,
             transport=transport,
             preset=preset,
+            mss=mss,
         )
 
     carrier = pulse.carrier or "udp"
@@ -241,6 +271,7 @@ def render_for_side(
         "carrier": carrier,
         "preset": preset,
         "port_forwards": port_forwards,
+        "mss_clamp": mss,
     }
     if side == "iran":
         return render_iran_l3(abroad_ip=pulse.abroad_public_ip, **common)

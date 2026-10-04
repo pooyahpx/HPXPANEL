@@ -33,6 +33,7 @@ class PulseProfileOption(BaseModel):
     tunnel_mode: str
     carrier: str | None = None
     preset: str
+    mss: int | None = None
     score: int = Field(ge=0, le=100)
     reasons: list[str]
     reasons_fa: list[str]

@@ -3,9 +3,12 @@
 from types import SimpleNamespace
 
 from app.services.hpx_pulse.tunnel_render import (
+    MTU_HARD_MSS,
+    MTU_SAFE_MSS,
     _normalize_reverse_ports,
     render_for_side,
     render_iran_server,
+    resolve_mss,
 )
 
 
@@ -14,6 +17,7 @@ def _pulse(**kwargs):
         "tunnel_mode": "reverse_stealth",
         "carrier": "stealth",
         "preset": "balance",
+        "profile_id": "pulse-reverse-tcp-stealth",
         "control_port": 47887,
         "iran_public_ip": "1.2.3.4",
         "abroad_public_ip": "5.6.7.8",
@@ -63,3 +67,27 @@ def test_render_for_side_iran_and_abroad_share_token_but_not_ports_block_on_abro
     assert "2053=127.0.0.1:2053" in iran_toml
     assert "ports" not in abroad_toml
     assert 'remote_addr = "1.2.3.4:47887"' in abroad_toml
+
+
+def test_mtu_safe_profile_emits_mss_1200_both_sides():
+    pulse = _pulse(profile_id="pulse-reverse-tcp-stealth-mtu")
+    assert resolve_mss(pulse) == MTU_SAFE_MSS
+    iran = render_for_side("iran", pulse, "tok")
+    abroad = render_for_side("abroad", pulse, "tok")
+    assert "mss = 1200" in iran
+    assert "mss = 1200" in abroad
+    assert 'preset = "balance"' in iran
+    assert 'transport = "stealth"' in iran
+
+
+def test_mtu_hard_profile_emits_mss_1100():
+    pulse = _pulse(profile_id="pulse-reverse-tcp-stealth-mtu-hard")
+    assert resolve_mss(pulse) == MTU_HARD_MSS
+    assert "mss = 1100" in render_for_side("iran", pulse, "tok")
+    assert "mss = 1100" in render_for_side("abroad", pulse, "tok")
+
+
+def test_default_profile_keeps_mss_1280():
+    pulse = _pulse(profile_id="pulse-reverse-tcp-stealth")
+    assert "mss = 1280" in render_for_side("iran", pulse, "tok")
+    assert "mss = 1280" in render_for_side("abroad", pulse, "tok")

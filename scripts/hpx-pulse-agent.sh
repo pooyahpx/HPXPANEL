@@ -1012,7 +1012,7 @@ try:
     s.sendall(payload)
 except Exception as e:
     out.update(stall=True, detail='connect ok (%.1fms) but send failed: %s' % (out['ms'] or 0, e),
-               fix='TCP connects then stalls on write — lower mss to 1200 both sides, Sync, restart tunnel')
+               fix='TCP write stall — Edit Pulse → Safe / MTU (mss=1200) → Save → Sync')
     print(json.dumps(out)); s.close(); raise SystemExit
 s.settimeout(4.0)
 try:
@@ -1027,7 +1027,7 @@ try:
 except socket.timeout:
     out.update(stall=True,
                detail='stall_after_connect: TCP connected (%.1fms) but no bytes in 4s — classic MTU/MSS' % (out['ms'] or 0),
-               fix='Lower mss to 1200 on Iran+abroad TOMLs, Sync, restart both tunnel services')
+               fix='Edit Pulse → Safe / MTU (mss=1200) or MTU Hard (1100) → Save → Sync (both sides)')
 except Exception as e:
     out['detail'] = 'recv error after connect: %s' % e
 finally:
@@ -1090,12 +1090,12 @@ build_diag_report_json() {
   if [ -z "$mss_val" ]; then
     mss_ok="false"
     mss_detail="mss not set in TOML (path may use full 1500 MTU segments)"
-    mss_fix="Sync from panel (default mss=1280) or set mss=1200 both sides"
-  else
+    mss_fix="Sync from panel — pick Safe / MTU profile (mss=1200) or set mss=1200 both sides"
+  else:
     mss_detail="mss=${mss_val}"
     if [ "$mss_val" -gt 1280 ] 2>/dev/null; then
       mss_ok="false"
-      mss_fix="High MSS — if TCP stalls, lower to 1200 and Sync"
+      mss_fix="High MSS — Edit Pulse → Safe / MTU → Save → Sync"
     fi
   fi
 
@@ -1151,7 +1151,7 @@ build_diag_report_json() {
   fi
 
   udp_detail="UDP often works when TCP stalls (smaller datagrams bypass MSS clamp). If users say UDP OK / TCP broken → check forward_exchange stall."
-  udp_fix="If stall_after_connect: set mss=1200 both sides + Sync + restart tunnel"
+  udp_fix="If stall_after_connect: Edit Pulse → Safe / MTU → Save → Sync"
 
   # Verdict
   if echo "${tcp_ex:-}" | jq -e '.stall == true' >/dev/null 2>&1; then

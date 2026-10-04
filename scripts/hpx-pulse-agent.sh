@@ -540,6 +540,10 @@ verify_registrations_with_panel() {
       if [ "$command" = "leave" ] || [ "$command" = "uninstall" ]; then
         log "panel requested local removal for pulse ${pid}"
         _reset_revoke_streak "$pid"
+        # Ack before wiping keys so panel soft-delete can reap this side.
+        api POST "/api/hpx_pulse/agent/ack" \
+          "$(jq -nc --arg c "$command" '{command:$c, status:"stopped", message:"local tunnel removed"}')" \
+          >/dev/null || true
         remove_pulse_local_state "$pid"
       fi
       continue
@@ -564,19 +568,85 @@ verify_registrations_with_panel() {
 }
 
 prune_orphan_configs() {
-  local cfg id svc
-  for cfg in "$ETC_DIR"/l3-pulse-*.toml; do
-    [ -f "$cfg" ] || continue
-    id="${cfg##*/l3-pulse-}"
+  # Full sweep: crash-loop units (missing toml), orphans, stray configs.
+  purge_stale_tunnel_units
+}
+
+_pulse_id_from_tunnel_unit() {
+  local u="$1"
+  u="${u%.service}"
+  u="${u#hpx-pulse-tunnel-}"
+  [[ "$u" =~ ^[0-9]+$ ]] && echo "$u"
+}
+
+remove_tunnel_unit_fully() {
+  local id="$1" svc
+  [ -n "$id" ] || return 0
+  svc="hpx-pulse-tunnel-${id}"
+  log "purging stale tunnel unit ${svc} (missing config / deleted pulse / crash-loop)"
+  systemctl stop "${svc}.service" 2>/dev/null || true
+  systemctl reset-failed "${svc}.service" 2>/dev/null || true
+  systemctl disable "${svc}.service" 2>/dev/null || true
+  rm -f "/etc/systemd/system/${svc}.service"
+  rm -f "${ETC_DIR}/l3-pulse-${id}.toml"
+  rm -f "${AGENTS_DIR}/${id}.env"
+  systemctl daemon-reload 2>/dev/null || true
+}
+
+# Stops crash-loops like: unit enabled but l3-pulse-N.toml missing (after panel delete/edit).
+purge_stale_tunnel_units() {
+  local mine_id="${PULSE_ID:-}" unit id toml envf
+  mkdir -p "$ETC_DIR" "$AGENTS_DIR" 2>/dev/null || true
+
+  while IFS= read -r unit; do
+    [ -n "$unit" ] || continue
+    id="$(_pulse_id_from_tunnel_unit "$unit")"
+    [ -n "$id" ] || continue
+    toml="${ETC_DIR}/l3-pulse-${id}.toml"
+    envf="${AGENTS_DIR}/${id}.env"
+
+    if [ -n "$mine_id" ] && [ "$id" = "$mine_id" ]; then
+      if [ ! -f "$toml" ]; then
+        warn "pulse ${id} unit crash-loop (toml missing) — stopping until Sync rewrites config"
+        systemctl stop "${unit}" 2>/dev/null || true
+        systemctl reset-failed "${unit}" 2>/dev/null || true
+      fi
+      continue
+    fi
+
+    if [ ! -f "$toml" ] || [ ! -f "$envf" ]; then
+      remove_tunnel_unit_fully "$id"
+      continue
+    fi
+    if ! pulse_registration_active "$id"; then
+      remove_tunnel_unit_fully "$id"
+      continue
+    fi
+  done < <(systemctl list-unit-files 'hpx-pulse-tunnel-*.service' --no-legend 2>/dev/null | awk '{print $1}')
+
+  for toml in "$ETC_DIR"/l3-pulse-*.toml; do
+    [ -f "$toml" ] || continue
+    id="${toml##*/l3-pulse-}"
     id="${id%.toml}"
     [ -f "${AGENTS_DIR}/${id}.env" ] && continue
-    log "removing orphan tunnel config ${cfg}"
-    svc="hpx-pulse-tunnel-${id}"
-    systemctl stop "${svc}.service" 2>/dev/null || true
-    systemctl disable "${svc}.service" 2>/dev/null || true
-    rm -f "/etc/systemd/system/${svc}.service"
-    rm -f "$cfg"
+    [ -n "$mine_id" ] && [ "$id" = "$mine_id" ] && continue
+    remove_tunnel_unit_fully "$id"
   done
+
+  while IFS= read -r unit; do
+    [ -n "$unit" ] || continue
+    id="$(_pulse_id_from_tunnel_unit "$unit")"
+    [ -n "$id" ] || continue
+    [ -n "$mine_id" ] && [ "$id" = "$mine_id" ] && continue
+    toml="${ETC_DIR}/l3-pulse-${id}.toml"
+    if [ ! -f "$toml" ] || [ ! -f "${AGENTS_DIR}/${id}.env" ]; then
+      remove_tunnel_unit_fully "$id"
+    fi
+  done < <(
+    systemctl list-units 'hpx-pulse-tunnel-*.service' --no-legend --all --state=running,failed,activating,inactive 2>/dev/null \
+      | awk '{print $1}'
+  )
+
   systemctl daemon-reload 2>/dev/null || true
 }
 
@@ -961,6 +1031,9 @@ sync_pulse_from_panel() {
   if [ "$command" = "leave" ] || [ "$command" = "uninstall" ]; then
     log "panel requested local removal for pulse ${PULSE_ID}"
     _reset_revoke_streak "${PULSE_ID:-}"
+    api POST "/api/hpx_pulse/agent/ack" \
+      "$(jq -nc --arg c "$command" '{command:$c, status:"stopped", message:"local tunnel removed"}')" \
+      >/dev/null || true
     remove_pulse_local_state "$PULSE_ID"
     return 0
   fi
@@ -1208,20 +1281,33 @@ toml_transport_value() {
 }
 
 list_orphan_tunnel_units() {
-  # Other pulse tunnel units still running on this host (common abroad conflict).
-  local u mine
+  # Other pulse tunnel units still present (running OR crash-looping / missing toml).
+  local u mine id toml
   mine="hpx-pulse-tunnel-${PULSE_ID:-0}.service"
-  systemctl list-units 'hpx-pulse-tunnel*.service' --no-legend --state=running 2>/dev/null \
-    | awk '{print $1}' | while read -r u; do
+  {
+    systemctl list-units 'hpx-pulse-tunnel*.service' --no-legend --all --state=running,failed,activating 2>/dev/null \
+      | awk '{print $1}'
+    systemctl list-unit-files 'hpx-pulse-tunnel-*.service' --no-legend 2>/dev/null | awk '{print $1}'
+  } | while read -r u; do
       [ -n "$u" ] || continue
       [ "$u" = "$mine" ] && continue
-      echo "$u"
-    done
+      id="$(_pulse_id_from_tunnel_unit "$u")"
+      [ -n "$id" ] || continue
+      toml="${ETC_DIR}/l3-pulse-${id}.toml"
+      if [ ! -f "$toml" ] || [ ! -f "${AGENTS_DIR}/${id}.env" ]; then
+        echo "$u"
+        continue
+      fi
+      # Running foreign pulse also counts as orphan relative to current diagnose target.
+      systemctl is-active --quiet "$u" 2>/dev/null && echo "$u"
+    done | sort -u
 }
 
 auto_fix_on_diagnose() {
   local orphans o fixed=0 transport mss_now
   log "diagnose auto-fix — pulse ${PULSE_ID:-?} side=${PULSE_SIDE:-?} mode=${TUNNEL_MODE:-?}"
+  # Always purge crash-loop / deleted-pulse units first (e.g. missing toml).
+  purge_stale_tunnel_units
   open_iran_firewall || true
 
   # TCP reverse: clamp MSS in live TOML + kernel path (even before panel Sync lands).
@@ -1241,17 +1327,27 @@ auto_fix_on_diagnose() {
   orphans="$(list_orphan_tunnel_units || true)"
   if [ -n "$orphans" ]; then
     while IFS= read -r o; do
+      local oid=""
       [ -n "$o" ] || continue
-      log "stopping orphan tunnel $o"
-      systemctl stop "$o" 2>/dev/null || true
-      systemctl disable "$o" 2>/dev/null || true
+      oid="$(_pulse_id_from_tunnel_unit "$o")"
+      if [ -n "$oid" ]; then
+        log "removing orphan/crash-loop tunnel $o"
+        remove_tunnel_unit_fully "$oid"
+      else
+        log "stopping orphan tunnel $o"
+        systemctl stop "$o" 2>/dev/null || true
+        systemctl disable "$o" 2>/dev/null || true
+      fi
       fixed=1
     done <<< "$orphans"
   fi
   if ! tunnel_service_active; then
-    systemctl restart "$(tunnel_service_name).service" 2>/dev/null || true
-    sleep 2
-    fixed=1
+    # Ensure unit + toml exist after purge/sync path.
+    if [ -f "$(tunnel_cfg_path)" ]; then
+      systemctl restart "$(tunnel_service_name).service" 2>/dev/null || true
+      sleep 2
+      fixed=1
+    fi
   elif [ "$fixed" = 1 ]; then
     # Restart after MSS/firewall changes so engine picks up TOML.
     systemctl restart "$(tunnel_service_name).service" 2>/dev/null || true

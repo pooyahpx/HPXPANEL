@@ -587,7 +587,7 @@ wheels = [
 
 [[package]]
 name = "hpxpanel"
-version = "4.8.17"
+version = "4.9.0"
 source = { virtual = "." }
 dependencies = [
     { name = "aiocache" },

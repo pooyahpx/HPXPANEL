@@ -554,7 +554,11 @@ class HpxPulseOperation(BaseOperation):
             else:
                 port = 443
 
-        cmd = f"path-ping:{model.proto}:{model.count}:{model.target}"
+        # Compact command stays ≤16 chars for panels that have not widened agent_command yet.
+        # Agent accepts both `pp:*` and legacy `path-ping:*`.
+        proto_s = "t" if model.proto == "tcp" else "u"
+        target_s = "c" if model.target == "control" else "f"
+        cmd = f"pp:{proto_s}:{model.count}:{target_s}"
         existing = db_pulse.diag_report if isinstance(db_pulse.diag_report, dict) else {}
         pending = {
             "status": "queued",

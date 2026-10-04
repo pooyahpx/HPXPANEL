@@ -351,10 +351,9 @@ function PulseCard({
   return (
     <Card
       className={cn(
-        'group relative overflow-hidden border transition-all duration-300',
-        isRunning && 'border-emerald-500/40 shadow-[0_0_0_1px_rgba(16,185,129,0.08)]',
-        bothAgents && !isRunning && 'border-amber-500/35',
-        !isRunning && !bothAgents && 'border-border/80',
+        'group relative overflow-hidden border-white/10 bg-card/55 backdrop-blur-xl transition-all duration-300 hover:-translate-y-0.5 hover:border-primary/25 hover:shadow-[0_16px_48px_-20px_rgba(16,185,129,0.35)]',
+        isRunning && 'border-emerald-500/30',
+        bothAgents && !isRunning && 'border-amber-500/30',
       )}
     >
       <div
@@ -362,13 +361,13 @@ function PulseCard({
           'pointer-events-none absolute inset-x-0 top-0 h-1',
           isRunning && 'bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-500',
           pulse.status === 'partial' && 'bg-gradient-to-r from-amber-400 to-orange-400',
-          pulse.status === 'pending_claim' && 'bg-gradient-to-r from-violet-400 to-fuchsia-400',
+          pulse.status === 'pending_claim' && 'bg-gradient-to-r from-teal-400 to-sky-400',
           (pulse.status === 'error' || pulse.status === 'unhealthy') && 'bg-gradient-to-r from-red-500 to-orange-500',
           pulse.status === 'stopped' && 'bg-muted-foreground/30',
         )}
       />
 
-      <div className="space-y-4 p-4 pt-5 sm:p-5 sm:pt-6">
+      <div className="space-y-4 p-5 pt-6 sm:p-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0 space-y-2">
             <div className="flex flex-wrap items-center gap-2">

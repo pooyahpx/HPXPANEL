@@ -277,10 +277,10 @@ def diagnose_pulse_record(pulse: HpxPulse) -> list[PulseDiagCheck]:
                 g,
                 "TCP vs UDP",
                 "info",
-                "UDP-through-tunnel OK + TCP/WS fail ⇒ broken TCP path (MSS) or filtered TCP. "
-                "Safe/MTU (1200/1100) may help TCP; if not, switch carrier to Escape/KCP or QUIC (UDP).",
-                "Edit → Intent Hard → Preview → pick Escape/KCP or QUIC → Save → Sync. "
-                "WS/TCP share the broken path; UDP often still works.",
+                "User TCP configs keep working on Iran:443 — carrier switches to UDP (KCP/QUIC). "
+                "Safe/MTU only helps if TCP carrier still partially works.",
+                "Edit → pick «TCP Pass — KCP backhaul» (or QUIC) → Save → Sync. "
+                "If still on Stealth/TCP/WS, you are still on the broken TCP path.",
             )
         )
 

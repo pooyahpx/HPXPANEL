@@ -22,7 +22,24 @@ def test_mobile_intent_prefers_balance_stealth():
 def test_hard_intent_surfaces_udp_escape():
     res = advise(PulseAdviseRequest(goal="hard", cpu_cores=4, ram_mb=2048))
     top_ids = {p.profile_id for p in res.profiles[:4]}
-    assert top_ids & {"pulse-reverse-kcp", "pulse-reverse-quic", "pulse-reverse-udp"}
+    assert top_ids & {
+        "pulse-tcp-pass-kcp",
+        "pulse-tcp-pass-quic",
+        "pulse-reverse-kcp",
+        "pulse-reverse-quic",
+        "pulse-reverse-udp",
+    }
+
+
+def test_tcp_pass_profiles_exist():
+    res = advise(PulseAdviseRequest(goal="hard", cpu_cores=2, ram_mb=2048))
+    kcp = next(p for p in res.profiles if p.profile_id == "pulse-tcp-pass-kcp")
+    quic = next(p for p in res.profiles if p.profile_id == "pulse-tcp-pass-quic")
+    assert kcp.tunnel_mode == "reverse_kcp"
+    assert kcp.carrier == "kcp"
+    assert quic.tunnel_mode == "reverse_quic"
+    assert "TCP" in kcp.title or "KCP" in kcp.title
+    assert res.profiles[0].profile_id in {"pulse-tcp-pass-kcp", "pulse-tcp-pass-quic", "pulse-reverse-kcp"}
 
 
 def test_hard_intent_surfaces_aggressive_when_cpu_allows():

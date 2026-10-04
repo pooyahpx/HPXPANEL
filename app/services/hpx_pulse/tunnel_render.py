@@ -111,6 +111,15 @@ def _server_tls_block(transport: str, domain: str | None) -> str:
 def _mux_block(transport: str) -> str:
     if transport not in _MUX_TRANSPORTS:
         return ""
+    # Large frames (32KiB) stall on Iran paths even over KCP/QUIC when path MTU is low.
+    # Keep bigger frames for TCP-family mux; clamp UDP carriers.
+    if transport in {"kcp", "quic", "xdi"}:
+        return """mux_con = 8
+mux_version = 2
+mux_framesize = 4096
+mux_recievebuffer = 4194304
+mux_streambuffer = 32768
+"""
     return """mux_con = 8
 mux_version = 2
 mux_framesize = 32768

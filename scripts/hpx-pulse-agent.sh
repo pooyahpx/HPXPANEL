@@ -423,15 +423,21 @@ panel_api_bases() {
 }
 
 API_LAST_HTTP_CODE="000"
+API_LAST_BODY=""
 # Consecutive confirmed 401s before wiping local tunnel (avoids panel-upgrade false positives).
 REVOKE_STREAK_DIR="${ETC_DIR}/.revoke-streak"
-REVOKE_CONFIRM_HITS=2
+REVOKE_CONFIRM_HITS=3
 
 panel_registration_revoked() {
   # Only a real "Invalid agent key" 401 means the pulse was deleted / tokens regenerated.
   # Never treat 404/502/503/000 as revoke — those happen during panel restarts and would
   # permanently destroy tunnels on every upgrade (seen on multi-server fleets).
-  [ "$API_LAST_HTTP_CODE" = "401" ]
+  # Also ignore generic CDN/WAF 401s that are not from the panel agent auth check.
+  [ "$API_LAST_HTTP_CODE" = "401" ] || return 1
+  case "${API_LAST_BODY:-}" in
+    *[Ii]nvalid*[Aa]gent*[Kk]ey*|*"Invalid agent key"*|*"invalid agent key"*) return 0 ;;
+  esac
+  return 1
 }
 
 _revoke_streak_path() {
@@ -471,6 +477,7 @@ api_request() {
   local method="$1" path="$2" body="${3:-}"
   local base url attempt tmp http_code resp
   API_LAST_HTTP_CODE="000"
+  API_LAST_BODY=""
   while IFS= read -r base; do
     [ -n "$base" ] || continue
     url="${base%/}${path}"
@@ -482,6 +489,7 @@ api_request() {
       [ -n "$body" ] && args+=(-H "Content-Type: application/json" -d "$body")
       http_code=$(curl "${args[@]}" "$url" 2>/dev/null) || http_code="000"
       API_LAST_HTTP_CODE="$http_code"
+      API_LAST_BODY="$(tr -d '\r' <"$tmp" 2>/dev/null | head -c 400 || true)"
       if [ "$http_code" = "200" ]; then
         resp=$(cat "$tmp")
         rm -f "$tmp"
@@ -507,6 +515,7 @@ api() {
 verify_registrations_with_panel() {
   [ -d "$AGENTS_DIR" ] || return 0
   local env_file pid saved_panel saved_key saved_side saved_id cfg command
+  local skip_revoke="${SKIP_REVOKE_FOR_PULSE:-}"
   saved_panel="${PANEL_URL:-}"
   saved_key="${AGENT_KEY:-}"
   saved_side="${PULSE_SIDE:-}"
@@ -527,7 +536,11 @@ verify_registrations_with_panel() {
       continue
     fi
     if panel_registration_revoked; then
-      cleanup_revoked_pulse "$pid"
+      if [ -n "$skip_revoke" ] && [ "$pid" = "$skip_revoke" ]; then
+        warn "pulse ${pid} got 401 right after join claim — not wiping (will retry on next sync)"
+      else
+        cleanup_revoked_pulse "$pid"
+      fi
     elif [ "${API_LAST_HTTP_CODE:-000}" = "000" ]; then
       # Brief blip while joining another pulse on the same host — keep quiet.
       :
@@ -1352,7 +1365,8 @@ send_heartbeat() {
   if [ "$hb_ok" != 1 ]; then
     if panel_registration_revoked; then
       cleanup_revoked_pulse "${PULSE_ID:-}"
-      return 0
+      # Never pretend success after 401 — join used to print "connected" while tunnel was wiped.
+      return 1
     fi
     warn "heartbeat to panel failed (HTTP ${API_LAST_HTTP_CODE:-?}) — keeping tunnel; try: hpx-pulse-agent set-panel-url https://domain (no :8000)"
   else
@@ -1447,29 +1461,38 @@ cmd_join() {
   PORT_FORWARDS=$(echo "$claim" | jq -c '.port_forwards // []')
   HPX_AGENT_ASSETS_BASE=$(echo "$claim" | jq -r '.agent_assets_base // empty')
   [ -n "$AGENT_KEY" ] && [ "$AGENT_KEY" != "null" ] || die "missing agent_key from panel"
+  # Fresh claim must not inherit a leftover revoke streak from a previous attempt on this pulse id.
+  _reset_revoke_streak "$PULSE_ID"
 
   install_self
   write_env
   prune_orphan_configs
-  verify_registrations_with_panel
+  # Only wipe *other* pulses on revoke — never the one we just claimed mid-join.
+  SKIP_REVOKE_FOR_PULSE="$PULSE_ID" verify_registrations_with_panel
   check_local_forward_conflicts
   ensure_engine
   apply_tunnel_config "$(echo "$claim" | jq -r '.tunnel_toml // .backpack_toml // empty')"
   write_env
   install_agent_systemd
+  _reset_revoke_streak "$PULSE_ID"
 
   api POST "/api/hpx_pulse/agent/ack" \
     "$(jq -nc '{command:"start", status:"running", message:"HPX Pulse joined"}')" >/dev/null || true
   if send_heartbeat; then
     write_env
-    log "ready on ${side} — pulse_id=${PULSE_ID} (panel shows agent connected)"
+    log "ready on ${side} — pulse_id=${PULSE_ID} · forwards=${PORT_FORWARDS:-[]} (panel shows agent connected)"
   else
     write_env
-    warn "tunnel is running locally but panel heartbeat failed at ${PANEL_URL}"
-    warn "from Iran, port :8000 is often blocked — try:"
-    warn "  sudo hpx-pulse-agent set-panel-url https://YOUR_DOMAIN"
-    warn "  (no :8000 if nginx serves panel on 443) then: sudo hpx-pulse-agent sync"
-    log "ready on ${side} — pulse_id=${PULSE_ID} (fix PANEL_URL so panel shows connected)"
+    if [ -f "${AGENTS_DIR}/${PULSE_ID}.env" ]; then
+      warn "tunnel is running locally but panel heartbeat failed at ${PANEL_URL}"
+      warn "from Iran, port :8000 is often blocked — try:"
+      warn "  sudo hpx-pulse-agent set-panel-url https://YOUR_DOMAIN"
+      warn "  (no :8000 if nginx serves panel on 443) then: sudo hpx-pulse-agent sync"
+      log "ready on ${side} — pulse_id=${PULSE_ID} · forwards=${PORT_FORWARDS:-[]} (fix PANEL_URL so panel shows connected)"
+    else
+      warn "join claimed pulse ${PULSE_ID} but local tunnel was removed after auth errors — regenerate Tokens and re-join"
+      return 1
+    fi
   fi
 }
 

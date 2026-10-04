@@ -26,13 +26,13 @@ def test_scan_flags_abroad_host():
 
 def test_rewrite_abroad_to_iran():
     out = rewrite_host_addresses_to_iran(
-        {"193.42.11.147", "cdn.example.com"},
+        {"193.42.11.147", "keep-other"},
         abroad_ip="193.42.11.147",
         iran_ip="93.113.230.164",
     )
     assert "93.113.230.164" in out
     assert "193.42.11.147" not in out
-    assert "cdn.example.com" in out
+    assert "keep-other" in out
 
 
 def test_should_upgrade_plain_stealth():

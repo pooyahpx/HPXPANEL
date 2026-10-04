@@ -816,7 +816,7 @@ open_iran_firewall() {
     fi
   done
 
-  # TCPMSS clamp on forward ports — helps end-user TCP even when carrier is UDP.
+  # TCPMSS clamp on forward ports — critical for TCP/Stealth carriers on broken MTU paths.
   if has iptables; then
     for p in "${ports[@]}"; do
       [ -n "${CONTROL_PORT:-}" ] && [ "$p" = "$CONTROL_PORT" ] && continue
@@ -824,6 +824,15 @@ open_iran_firewall() {
         || iptables -t mangle -A POSTROUTING -p tcp --tcp-flags SYN,RST SYN --dport "$p" -j TCPMSS --clamp-mss-to-pmtu 2>/dev/null || true
       iptables -t mangle -C POSTROUTING -p tcp --tcp-flags SYN,RST SYN --sport "$p" -j TCPMSS --clamp-mss-to-pmtu 2>/dev/null \
         || iptables -t mangle -A POSTROUTING -p tcp --tcp-flags SYN,RST SYN --sport "$p" -j TCPMSS --clamp-mss-to-pmtu 2>/dev/null || true
+      # Hard clamp for Iran↔client TCP when path MTU discovery fails.
+      case "${TUNNEL_MODE:-}" in
+        reverse_stealth|reverse_tcp|reverse_tcpmux|reverse_ws|reverse_wss|reverse_wssmux)
+          iptables -t mangle -C POSTROUTING -p tcp --tcp-flags SYN,RST SYN --dport "$p" -j TCPMSS --set-mss 1000 2>/dev/null \
+            || iptables -t mangle -A POSTROUTING -p tcp --tcp-flags SYN,RST SYN --dport "$p" -j TCPMSS --set-mss 1000 2>/dev/null || true
+          iptables -t mangle -C POSTROUTING -p tcp --tcp-flags SYN,RST SYN --sport "$p" -j TCPMSS --set-mss 1000 2>/dev/null \
+            || iptables -t mangle -A POSTROUTING -p tcp --tcp-flags SYN,RST SYN --sport "$p" -j TCPMSS --set-mss 1000 2>/dev/null || true
+          ;;
+      esac
     done
   fi
 }

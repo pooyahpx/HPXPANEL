@@ -108,9 +108,9 @@ def _checks_from_one_agent_diag(report: dict, side: str) -> list[PulseDiagCheck]
         if item.get("stall"):
             # Panel owns the operator-facing fix (profile name); agent text may lag.
             fix = (
-                "TCP connects then stalls on first bytes — classic MTU/MSS. "
-                "Edit Pulse → Preview → pick «Safe / MTU» (mss=1200) or «MTU Hard» (1100) → Save → Sync "
-                "(no manual TOML edits)."
+                "TCP connects then stalls on first bytes — classic MTU/MSS on TCP carrier. "
+                "Edit Pulse → «TCP Extreme — Reverse Stealth (MSS 1000)» → Save → Sync both sides "
+                "(keeps TCP/Stealth; do not switch to KCP unless Extreme still fails)."
             )
         checks.append(PulseDiagCheck(g, title, level, detail, fix))
 

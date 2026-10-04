@@ -498,7 +498,7 @@ export default function HpxPulseWizard({ open, onOpenChange, onCreated, editingP
                 <p className="text-muted-foreground text-[11px]">
                   {t('hpxPulse.topProfilesHint', {
                     defaultValue:
-                      'TCP Pass (KCP/QUIC): user configs stay TCP on Iran; Iran↔abroad rides UDP. Use when Stealth/TCP/WS all stall. Safe/MTU only for partial TCP path (mss 1200/1100).',
+                      'TCP Extreme (Stealth MSS 1000): keeps TCP carrier — use when Reality needs TCP and path stalls after connect. KCP only as last resort.',
                   })}
                 </p>
                 <div className="max-h-64 space-y-2 overflow-y-auto">

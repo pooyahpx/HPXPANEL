@@ -9,17 +9,27 @@ def test_mobile_intent_prefers_balance_stealth():
     top = res.profiles[0]
     assert top.profile_id in {
         "pulse-reverse-tcp-stealth",
+        "pulse-reverse-tcp-stealth-mtu",
+        "pulse-reverse-tcp-stealth-mtu-hard",
         "pulse-reverse-wss",
         "pulse-reverse-wss-mux",
+        "pulse-reverse-kcp",
+        "pulse-reverse-quic",
     }
-    assert top.preset == "balance"
+    assert top.preset in {"balance", "turbo"}
+
+
+def test_hard_intent_surfaces_udp_escape():
+    res = advise(PulseAdviseRequest(goal="hard", cpu_cores=4, ram_mb=2048))
+    top_ids = {p.profile_id for p in res.profiles[:4]}
+    assert top_ids & {"pulse-reverse-kcp", "pulse-reverse-quic", "pulse-reverse-udp"}
 
 
 def test_hard_intent_surfaces_aggressive_when_cpu_allows():
     res = advise(PulseAdviseRequest(goal="hard", cpu_cores=4, ram_mb=2048))
     aggressive = [p for p in res.profiles if p.preset == "aggressive"]
     assert aggressive
-    assert any(p.profile_id.endswith("hard") or "aggressive" in p.profile_id for p in res.profiles[:5])
+    assert any(p.profile_id.endswith("hard") or "aggressive" in p.profile_id for p in res.profiles[:8])
 
 
 def test_fast_intent_boosts_turbo_carriers():

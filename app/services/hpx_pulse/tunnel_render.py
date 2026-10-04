@@ -117,7 +117,7 @@ carrier = "{carrier}"
 preset = "{preset}"
 mtu = {mtu}
 auto_mtu = true
-mss_clamp = 0
+mss_clamp = 1360
 iface = "bp0"
 {ports}"""
 
@@ -144,7 +144,7 @@ carrier = "{carrier}"
 preset = "{preset}"
 mtu = {mtu}
 auto_mtu = true
-mss_clamp = 0
+mss_clamp = 1360
 iface = "bp0"
 {ports}"""
 
@@ -157,10 +157,14 @@ def render_iran_server(
     preset: str,
     port_forwards: list[str] | None = None,
     domain: str | None = None,
+    mss: int = 1360,
 ) -> str:
     ports = _reverse_ports_block(port_forwards or [])
     tls = _server_tls_block(transport, domain)
     mux = _mux_block(transport)
+    # Iran↔abroad paths often drop large TCP segments (UDP still works). Clamp MSS
+    # like BackPack Health Check recommends when path MTU < 1500.
+    mss_line = f"mss = {mss}\n" if mss and mss > 0 else ""
     return f"""[server]
 bind_addr = "0.0.0.0:{control_port}"
 transport = "{transport}"
@@ -172,7 +176,7 @@ heartbeat = 20
 log_level = "error"
 sniffer = false
 accept_udp = true
-{tls}{mux}{ports}"""
+{mss_line}{tls}{mux}{ports}"""
 
 
 def render_abroad_client(
@@ -182,21 +186,23 @@ def render_abroad_client(
     token: str,
     transport: str,
     preset: str,
+    mss: int = 1360,
 ) -> str:
     mux = _mux_block(transport)
+    mss_line = f"mss = {mss}\n" if mss and mss > 0 else ""
     return f"""[client]
 remote_addr = "{iran_ip}:{control_port}"
 transport = "{transport}"
 preset = "{preset}"
 token = "{token}"
-connection_pool = 4
+connection_pool = 8
 keepalive_period = 75
 nodelay = true
 retry_interval = 3
 dial_timeout = 10
 log_level = "error"
 sniffer = false
-{mux}"""
+{mss_line}{mux}"""
 
 
 def render_for_side(

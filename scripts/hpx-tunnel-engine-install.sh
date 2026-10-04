@@ -111,7 +111,12 @@ engine_version="${HPX_TUNNEL_ENGINE_VERSION:-}"
 if [ -z "$engine_version" ] && [ -f "$VERSION_FILE" ]; then
   engine_version="$(tr -d '[:space:]' <"$VERSION_FILE")"
 fi
-[ -n "$engine_version" ] || engine_version="1.7.5"
+# Piped / curl|bash installs have no VERSION_FILE beside the script — fetch pin from GitHub.
+if [ -z "$engine_version" ]; then
+  engine_version="$("${CURL[@]}" "https://raw.githubusercontent.com/${ENGINE_REPO}/main/scripts/hpx-tunnel-engine.version" 2>/dev/null | tr -d '[:space:]' || true)"
+fi
+# Last resort — keep in sync with scripts/hpx-tunnel-engine.version
+[ -n "$engine_version" ] || engine_version="1.8.5"
 engine_version="${engine_version#v}"
 release_tag="hpx-tunnel-engine-v${engine_version}"
 

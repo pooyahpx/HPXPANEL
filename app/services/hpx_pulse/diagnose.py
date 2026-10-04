@@ -129,7 +129,7 @@ def diagnose_pulse_record(pulse: HpxPulse) -> list[PulseDiagCheck]:
                     "Live ping",
                     "fail",
                     "no RTT — abroad cannot TCP-reach Iran control or forward port",
-                    "1) Iran: open control port + forward ports in firewall  2) Abroad: Xray must listen 127.0.0.1:<forward>  3) Token/mode must match both sides",
+                    "1) Iran firewall: control + forward TCP ports  2) Abroad Xray on 127.0.0.1:<forward>  3) If UDP apps work but TCP stalls → Sync (mss=1360) or lower mss to 1280",
                 )
             )
         else:
@@ -138,21 +138,36 @@ def diagnose_pulse_record(pulse: HpxPulse) -> list[PulseDiagCheck]:
                     g,
                     "Live ping",
                     "warn",
-                    "no ICMP RTT on L3 peer (ICMP often blocked) — check bp0 + tunnel service",
-                    "On both sides: ip link show bp0; systemctl status hpx-pulse-tunnel-<id>",
+                    "no ICMP RTT on L3 peer (ICMP often blocked) — not the same as tunnel health",
+                    "Check bp0 + tunnel service. If ICMP ping works but TCP pages stall → mss_clamp / Sync",
                 )
             )
     else:
         level: DiagLevel = "ok"
         fix = ""
+        msg_l = (pulse.message or "").lower()
         if pulse.latency_ms > 300:
             level = "warn"
             fix = "High RTT — try preset speed or a closer abroad VPS"
-        detail = f"{pulse.latency_ms:.1f} ms"
+        if "control ok" in msg_l and ("closed" in msg_l or "forward" in msg_l):
+            level = "fail"
+            fix = "Tunnel control is up but user TCP port is dead — open Iran forward ports; ensure abroad backend listens"
+        detail = f"{pulse.latency_ms:.1f} ms (TCP path RTT — not ICMP)"
         if pulse.message:
             detail += f" — {pulse.message}"
         checks.append(PulseDiagCheck(g, "Live ping", level, detail, fix))
 
+    # Classic: UDP works, TCP stalls after connect → MSS/MTU.
+    if is_reverse and pulse.status in {HpxPulseStatus.running, HpxPulseStatus.unhealthy, HpxPulseStatus.partial}:
+        checks.append(
+            PulseDiagCheck(
+                g,
+                "TCP vs UDP",
+                "info",
+                "If UDP (e.g. QUIC/WireGuard apps) works but TCP sites stall: path MTU — Pulse now sets mss=1360; Sync both agents",
+                "Still broken? Edit TOML mss=1280 on both sides or Sync after panel update, then restart tunnel",
+            )
+        )
     if pulse.status == HpxPulseStatus.unhealthy:
         msg = (pulse.message or "").lower()
         if "silent" in msg:

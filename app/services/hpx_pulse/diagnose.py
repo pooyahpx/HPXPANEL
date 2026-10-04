@@ -112,6 +112,19 @@ def _checks_from_one_agent_diag(report: dict, side: str) -> list[PulseDiagCheck]
                 "Diagnose auto-applies «TCP Extreme — Reverse Stealth (MSS 1000)» + Sync; "
                 "wait ~20s and Diagnose again. Keep TCP — do not switch to KCP unless Extreme still fails."
             )
+        elif item.get("blocked"):
+            level = "fail"
+            fix = (
+                "TCP SYN never completes to this Iran IP (provider/DC filter or host firewall) — "
+                "not an MSS issue. From abroad compare: nc -vz WORKING_IRAN 443 && nc -vz BROKEN_IRAN 443. "
+                "On broken Iran: ufw allow 443/tcp + control port; check provider firewall; or move Pulse to the working Iran VPS."
+            )
+        elif item.get("peer_closed") or "EOF" in detail:
+            level = "fail"
+            fix = (
+                "Peer closed after connect — usually abroad Xray not listening on the port-forward target. "
+                "On abroad: ss -tlnp | grep 2082 (or your forward port). Align Pulse forward with real inbound, or open that port in Xray."
+            )
         checks.append(PulseDiagCheck(g, title, level, detail, fix))
 
     udp = report.get("udp") if isinstance(report.get("udp"), dict) else {}

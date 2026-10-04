@@ -680,11 +680,23 @@ retire_legacy_tunnel_service() {
 tunnel_port_listening() {
   local port="${CONTROL_PORT:-}"
   [ -n "$port" ] || return 1
+  local proto_tcp=1 proto_udp=0
+  case "${TUNNEL_MODE:-}" in
+    reverse_kcp|reverse_quic|reverse_udp) proto_tcp=0; proto_udp=1 ;;
+  esac
   if has ss; then
+    if [ "$proto_udp" = 1 ]; then
+      ss -ulnH "sport = :${port}" 2>/dev/null | grep -q .
+      return $?
+    fi
     ss -tlnH "sport = :${port}" 2>/dev/null | grep -q .
     return $?
   fi
   if has netstat; then
+    if [ "$proto_udp" = 1 ]; then
+      netstat -uln 2>/dev/null | grep -q ":${port} "
+      return $?
+    fi
     netstat -tln 2>/dev/null | grep -q ":${port} "
     return $?
   fi
@@ -1102,13 +1114,126 @@ toml_mss_value() {
   grep -E '^[[:space:]]*mss[[:space:]]*=' "$cfg" 2>/dev/null | head -1 | sed -E 's/.*=[[:space:]]*//' | tr -d '[:space:]'
 }
 
+toml_transport_value() {
+  local cfg
+  cfg="$(tunnel_cfg_path)"
+  [ -f "$cfg" ] || return 1
+  grep -E '^[[:space:]]*transport[[:space:]]*=' "$cfg" 2>/dev/null | head -1 | sed -E 's/.*=[[:space:]]*"?([^"]*)"?/\1/' | tr -d '[:space:]'
+}
+
+list_orphan_tunnel_units() {
+  # Other pulse tunnel units still running on this host (common abroad conflict).
+  local u mine
+  mine="hpx-pulse-tunnel-${PULSE_ID:-0}.service"
+  systemctl list-units 'hpx-pulse-tunnel*.service' --no-legend --state=running 2>/dev/null \
+    | awk '{print $1}' | while read -r u; do
+      [ -n "$u" ] || continue
+      [ "$u" = "$mine" ] && continue
+      echo "$u"
+    done
+}
+
+auto_fix_on_diagnose() {
+  local orphans o fixed=0
+  log "diagnose auto-fix — pulse ${PULSE_ID:-?} side=${PULSE_SIDE:-?}"
+  open_iran_firewall || true
+  orphans="$(list_orphan_tunnel_units || true)"
+  if [ -n "$orphans" ]; then
+    while IFS= read -r o; do
+      [ -n "$o" ] || continue
+      log "stopping orphan tunnel $o"
+      systemctl stop "$o" 2>/dev/null || true
+      systemctl disable "$o" 2>/dev/null || true
+      fixed=1
+    done <<< "$orphans"
+  fi
+  if ! tunnel_service_active; then
+    systemctl restart "$(tunnel_service_name).service" 2>/dev/null || true
+    sleep 2
+    fixed=1
+  fi
+  # Soft nudge common Xray unit names if backend port is dead (abroad only).
+  if [ "${PULSE_SIDE:-}" = "abroad" ]; then
+    local be_port
+    be_port="$(first_forward_listen_port || true)"
+    if [ -n "$be_port" ] && ! port_is_listening "$be_port"; then
+      for svc in xray xray.service x-ui x-ui.service sing-box; do
+        if systemctl list-unit-files "$svc" >/dev/null 2>&1 || systemctl status "$svc" >/dev/null 2>&1; then
+          log "backend :${be_port} down — restarting $svc"
+          systemctl restart "$svc" 2>/dev/null || true
+          sleep 2
+          fixed=1
+          break
+        fi
+      done
+    fi
+  fi
+  [ "$fixed" = 1 ]
+}
+
+probe_tls_brief_json() {
+  local host="$1" port="$2" label="$3"
+  [ -n "$host" ] && [ -n "$port" ] || return 1
+  if ! has openssl; then
+    echo '{"ok":false,"state":"warn","detail":"openssl missing","fix":"install openssl for TLS probe"}'
+    return 0
+  fi
+  local out rc=0
+  out="$(timeout 6 openssl s_client -connect "${host}:${port}" -servername "${host}" -brief </dev/null 2>&1)" || rc=$?
+  if echo "$out" | grep -qiE 'Protocol version|CONNECTION ESTABLISHED|Verify return code'; then
+    jq -nc --arg d "${label}: TLS handshake got response" --arg snip "$(echo "$out" | head -3 | tr '\n' ' ' | cut -c1-160)" \
+      '{ok:true, state:"ok", detail:($d+" · "+$snip)}'
+  elif [ "$rc" = 124 ]; then
+    jq -nc --arg d "${label}: TLS hang/timeout 6s after connect — stall or Reality/filter" \
+      --arg f "If local OK but via-Iran hangs: tunnel payload path broken. Try TCP Pass/KCP or Safe/MTU. Check client uses Iran IP." \
+      '{ok:false, state:"fail", stall:true, detail:$d, fix:$f}'
+  else
+    # Connection refused / reset still useful — means something answered at TCP layer.
+    if echo "$out" | grep -qiE 'Connection refused|Connection reset|alert handshake'; then
+      jq -nc --arg d "${label}: TCP up, TLS alert/refuse (often OK for Reality — core answered)" \
+        --arg snip "$(echo "$out" | head -2 | tr '\n' ' ' | cut -c1-120)" \
+        '{ok:true, state:"ok", detail:($d+" · "+$snip)}'
+    else
+      jq -nc --arg d "${label}: TLS probe failed rc=${rc}" --arg snip "$(echo "$out" | head -2 | tr '\n' ' ' | cut -c1-120)" \
+        '{ok:false, state:"fail", detail:($d+" · "+$snip), fix:"Check Xray inbound + port forward target"}'
+    fi
+  fi
+}
+
+probe_xray_json() {
+  local be_port="${1:-443}"
+  local proc="false" detail listens tls_local="null"
+  if pgrep -x xray >/dev/null 2>&1 || pgrep -af '[x]ray' >/dev/null 2>&1; then
+    proc="true"
+    detail="xray process running"
+  elif pgrep -af '[s]ing-box' >/dev/null 2>&1; then
+    proc="true"
+    detail="sing-box process running"
+  else
+    detail="no xray/sing-box process found"
+  fi
+  listens="$(ss -tlnp 2>/dev/null | grep -E ':(443|8443|2053)\s' | head -8 | tr '\n' ';' | cut -c1-300)"
+  if port_is_listening "$be_port"; then
+    tls_local="$(probe_tls_brief_json 127.0.0.1 "$be_port" "local:${be_port}")"
+  else
+    tls_local=$(jq -nc --arg d "nothing listening on :${be_port}" --arg f "Start Xray inbound on 127.0.0.1:${be_port}" '{ok:false, state:"fail", detail:$d, fix:$f}')
+  fi
+  jq -nc \
+    --argjson proc "$proc" \
+    --arg d "$detail" \
+    --arg L "${listens:-none}" \
+    --argjson tls "$tls_local" \
+    '{ok:$proc, detail:$d, listens:$L, tls_local:$tls, fix:(if $proc then "" else "Install/start Xray on abroad; inbound must match port forward" end)}'
+}
+
 build_diag_report_json() {
   local host eng mss_val mss_ok="true" mss_detail mss_fix=""
   local svc_ok="false" svc_detail ctl_json="null" be_json="null"
-  local tcp_ctl="null" tcp_fwd="null" tcp_ex="null"
+  local tcp_ctl="null" tcp_fwd="null" tcp_ex="null" tls_via="null" xray_json="null"
+  local orphans_json transport_json mode_json
   local fwd_port be_target be_host be_port
   local verdict_level="info" verdict_summary="probe collected" verdict_fix=""
-  local ts udp_detail udp_fix=""
+  local ts udp_detail udp_fix="" transport_val orphans orphan_ok="true" orphan_detail
 
   host="$(hostname -f 2>/dev/null || hostname)"
   eng="$("$ENGINE_BIN" --version 2>/dev/null | head -1 | tr -d '\r' || echo unknown)"
@@ -1118,7 +1243,7 @@ build_diag_report_json() {
     mss_ok="false"
     mss_detail="mss not set in TOML (path may use full 1500 MTU segments)"
     mss_fix="Sync from panel — pick Safe / MTU profile (mss=1200) or set mss=1200 both sides"
-  else:
+  else
     mss_detail="mss=${mss_val}"
     if [ "$mss_val" -gt 1280 ] 2>/dev/null; then
       mss_ok="false"
@@ -1133,11 +1258,32 @@ build_diag_report_json() {
     svc_detail="inactive ($(tunnel_service_name))"
   fi
 
+  transport_val="$(toml_transport_value || echo unknown)"
+  mode_json=$(jq -nc --arg m "${TUNNEL_MODE:-}" --arg t "$transport_val" --arg c "${PULSE_SIDE:-}" \
+    '{ok:true, detail:("mode="+$m+" transport="+$t+" side="+$c)}')
+  orphans="$(list_orphan_tunnel_units | tr '\n' ' ' | sed 's/[[:space:]]*$//')"
+  if [ -n "$orphans" ]; then
+    orphan_ok="false"
+    orphan_detail="orphan tunnels still running: ${orphans}"
+  else
+    orphan_detail="no orphan tunnel units"
+  fi
+  orphans_json=$(jq -nc --argjson ok "$orphan_ok" --arg d "$orphan_detail" --arg f "Diagnose auto-fix stops orphans; or: systemctl stop <unit>" '{ok:$ok, detail:$d, fix:$f}')
+  transport_json=$(jq -nc --arg t "$transport_val" --arg m "${TUNNEL_MODE:-}" \
+    '{ok:true, detail:("toml transport="+$t+" · pulse mode="+$m), fix:(if ($t=="stealth" or $t=="tcp" or $t=="wss") then "If Reality -1 with TCP stall: switch profile to TCP Pass/KCP" else "" end)}')
+
   if [ "${PULSE_SIDE:-}" = "iran" ] && [[ "${TUNNEL_MODE:-}" == reverse_* ]]; then
     if tunnel_port_listening; then
-      ctl_json=$(jq -nc --arg d "listening :${CONTROL_PORT}" '{ok:true, detail:$d}')
+      case "${TUNNEL_MODE:-}" in
+        reverse_kcp|reverse_quic|reverse_udp)
+          ctl_json=$(jq -nc --arg d "UDP listening :${CONTROL_PORT} (OK for ${TUNNEL_MODE})" '{ok:true, detail:$d}')
+          ;;
+        *)
+          ctl_json=$(jq -nc --arg d "TCP listening :${CONTROL_PORT}" '{ok:true, detail:$d}')
+          ;;
+      esac
     else
-      ctl_json=$(jq -nc --arg d "NOT listening :${CONTROL_PORT}" --arg f "systemctl status $(tunnel_service_name); check bind_addr" '{ok:false, detail:$d, fix:$f}')
+      ctl_json=$(jq -nc --arg d "control NOT listening :${CONTROL_PORT} mode=${TUNNEL_MODE}" --arg f "systemctl restart $(tunnel_service_name); open firewall (UDP for KCP/QUIC)" '{ok:false, detail:$d, fix:$f}')
     fi
   fi
 
@@ -1151,17 +1297,28 @@ build_diag_report_json() {
       else
         be_json=$(jq -nc --arg d "NOT listening ${be_host}:${be_port}" --arg f "Start Xray/inbound on abroad ${be_host}:${be_port}" '{ok:false, detail:$d, fix:$f}')
       fi
+      xray_json="$(probe_xray_json "$be_port")"
+    else
+      xray_json="$(probe_xray_json 443)"
     fi
 
-    if [ -n "${IRAN_PUBLIC_IP:-}" ] && [ -n "${CONTROL_PORT:-}" ]; then
-      local cms
-      cms="$(measure_tcp_ms "$IRAN_PUBLIC_IP" "$CONTROL_PORT" || true)"
-      if [ -n "$cms" ]; then
-        tcp_ctl=$(jq -nc --argjson ms "$cms" --arg d "connect ok (${cms}ms)" '{ok:true, state:"ok", ms:$ms, detail:$d}')
-      else
-        tcp_ctl=$(jq -nc --arg d "connect failed Iran:${CONTROL_PORT}" --arg f "Open Iran firewall for control port; verify iran_public_ip" '{ok:false, state:"fail", detail:$d, fix:$f}')
-      fi
-    fi
+    # For UDP carriers, control port is UDP — skip misleading TCP control connect.
+    case "${TUNNEL_MODE:-}" in
+      reverse_kcp|reverse_quic|reverse_udp)
+        tcp_ctl=$(jq -nc --arg d "skipped — control is UDP for ${TUNNEL_MODE}" '{ok:true, state:"ok", detail:$d}')
+        ;;
+      *)
+        if [ -n "${IRAN_PUBLIC_IP:-}" ] && [ -n "${CONTROL_PORT:-}" ]; then
+          local cms
+          cms="$(measure_tcp_ms "$IRAN_PUBLIC_IP" "$CONTROL_PORT" || true)"
+          if [ -n "$cms" ]; then
+            tcp_ctl=$(jq -nc --argjson ms "$cms" --arg d "connect ok (${cms}ms)" '{ok:true, state:"ok", ms:$ms, detail:$d}')
+          else
+            tcp_ctl=$(jq -nc --arg d "connect failed Iran:${CONTROL_PORT}" --arg f "Open Iran firewall for control port; verify iran_public_ip" '{ok:false, state:"fail", detail:$d, fix:$f}')
+          fi
+        fi
+        ;;
+    esac
 
     fwd_port="$(first_forward_listen_port || true)"
     if [ -n "${IRAN_PUBLIC_IP:-}" ] && [ -n "$fwd_port" ]; then
@@ -1170,6 +1327,7 @@ build_diag_report_json() {
       if [ -n "$fms" ]; then
         tcp_fwd=$(jq -nc --argjson ms "$fms" --arg d "connect ok (${fms}ms) Iran:${fwd_port}" '{ok:true, state:"ok", ms:$ms, detail:$d}')
         tcp_ex="$(probe_tcp_exchange_json "$IRAN_PUBLIC_IP" "$fwd_port")"
+        tls_via="$(probe_tls_brief_json "$IRAN_PUBLIC_IP" "$fwd_port" "via-Iran:${fwd_port}")"
       else
         tcp_fwd=$(jq -nc --arg d "connect failed Iran:${fwd_port}" --arg f "Open Iran firewall TCP ${fwd_port}; ensure abroad backend up" '{ok:false, state:"fail", detail:$d, fix:$f}')
         tcp_ex=$(jq -nc --arg d "skipped — forward connect failed" '{ok:false, state:"fail", stall:false, detail:$d}')
@@ -1177,11 +1335,19 @@ build_diag_report_json() {
     fi
   fi
 
-  udp_detail="UDP often works when TCP stalls (smaller datagrams bypass MSS clamp). If users say UDP OK / TCP broken → check forward_exchange stall."
-  udp_fix="If stall_after_connect: Edit Pulse → Safe / MTU → Save → Sync"
+  udp_detail="Carrier=${transport_val}. User configs stay TCP on Iran forward; KCP/QUIC/UDP only change Iran↔abroad hop."
+  udp_fix="Reality -1 + connect OK ⇒ check TLS via-Iran probe / client address must be Iran IP"
 
   # Verdict
-  if echo "${tcp_ex:-}" | jq -e '.stall == true' >/dev/null 2>&1; then
+  if echo "${orphans_json:-}" | jq -e '.ok == false' >/dev/null 2>&1; then
+    verdict_level="fail"
+    verdict_summary="$(echo "$orphans_json" | jq -r '.detail')"
+    verdict_fix="$(echo "$orphans_json" | jq -r '.fix // empty')"
+  elif echo "${tls_via:-}" | jq -e '.stall == true' >/dev/null 2>&1; then
+    verdict_level="fail"
+    verdict_summary="$(echo "$tls_via" | jq -r '.detail')"
+    verdict_fix="$(echo "$tls_via" | jq -r '.fix // empty')"
+  elif echo "${tcp_ex:-}" | jq -e '.stall == true' >/dev/null 2>&1; then
     verdict_level="fail"
     verdict_summary="$(echo "$tcp_ex" | jq -r '.detail')"
     verdict_fix="$(echo "$tcp_ex" | jq -r '.fix // empty')"
@@ -1197,13 +1363,18 @@ build_diag_report_json() {
     verdict_level="fail"
     verdict_summary="$(echo "$be_json" | jq -r '.detail')"
     verdict_fix="$(echo "$be_json" | jq -r '.fix // empty')"
+  elif echo "${xray_json:-}" | jq -e '.ok == false' >/dev/null 2>&1; then
+    verdict_level="fail"
+    verdict_summary="$(echo "$xray_json" | jq -r '.detail')"
+    verdict_fix="$(echo "$xray_json" | jq -r '.fix // empty')"
   elif echo "${tcp_ex:-}" | jq -e '.ok == true' >/dev/null 2>&1; then
     verdict_level="ok"
-    verdict_summary="TCP path healthy (connect + first-byte exchange OK)"
+    verdict_summary="Path OK (connect + exchange). If Reality still -1: client must use Iran IP/domain, not abroad."
+    verdict_fix="Confirm subscription host = Iran public IP; SNI/Reality dest unchanged"
   elif [ "${PULSE_SIDE:-}" = "iran" ]; then
     if echo "${ctl_json:-}" | jq -e '.ok == true' >/dev/null 2>&1; then
       verdict_level="ok"
-      verdict_summary="Iran control listening — wait for abroad path probe"
+      verdict_summary="Iran control listening — wait for abroad path/Xray probe"
     else
       verdict_level="fail"
       verdict_summary="$(echo "${ctl_json:-null}" | jq -r '.detail // "Iran local checks failed"')"
@@ -1223,6 +1394,11 @@ build_diag_report_json() {
     --argjson tctl "$tcp_ctl" \
     --argjson tfwd "$tcp_fwd" \
     --argjson tex "$tcp_ex" \
+    --argjson tls "$tls_via" \
+    --argjson xr "$xray_json" \
+    --argjson orp "$orphans_json" \
+    --argjson trn "$transport_json" \
+    --argjson md "$mode_json" \
     --arg ud "$udp_detail" \
     --arg uf "$udp_fix" \
     --arg vl "$verdict_level" \
@@ -1231,13 +1407,18 @@ build_diag_report_json() {
     '{
       side:$side, host:$host, engine_version:$eng, ts:$ts,
       tunnel_service:$svc,
+      mode:$md,
+      transport:$trn,
+      orphan_tunnels:$orp,
       control_listen:(if $ctl == null then null else $ctl end),
       backend_listen:(if $be == null then null else $be end),
+      xray:(if $xr == null then null else $xr end),
       mss:$mss,
       tcp:{
         control:(if $tctl == null then null else $tctl end),
         forward:(if $tfwd == null then null else $tfwd end),
-        forward_exchange:(if $tex == null then null else $tex end)
+        forward_exchange:(if $tex == null then null else $tex end),
+        tls_via_iran:(if $tls == null then null else $tls end)
       },
       udp:{detail:$ud, fix:$uf},
       verdict:{level:$vl, summary:$vs, fix:$vf}
@@ -1249,9 +1430,9 @@ post_deep_diag_heartbeat() {
   tunnel_service_active && running="true"
   tunnel_link_up && link="true"
   diag="$(build_diag_report_json)" || diag="{}"
-  if echo "$diag" | jq -e '.tcp.forward_exchange.stall == true' >/dev/null 2>&1; then
+  if echo "$diag" | jq -e '.tcp.forward_exchange.stall == true or .tcp.tls_via_iran.stall == true' >/dev/null 2>&1; then
     fwd_json="false"
-    msg="$(echo "$diag" | jq -r '.verdict.summary // "TCP stall after connect (MSS)"')"
+    msg="$(echo "$diag" | jq -r '.verdict.summary // "TLS/TCP stall after connect"')"
   elif echo "$diag" | jq -e '.tcp.forward.ok == true' >/dev/null 2>&1; then
     fwd_json="true"
     lat_json="$(echo "$diag" | jq -r '.tcp.forward.ms // empty')"
@@ -1283,10 +1464,11 @@ post_deep_diag_heartbeat() {
 }
 
 handle_diagnose_command() {
-  log "panel diagnose — running TCP/UDP path probes (pulse ${PULSE_ID:-?})"
+  log "panel diagnose — auto-fix + deep probes (pulse ${PULSE_ID:-?})"
+  auto_fix_on_diagnose || true
   if post_deep_diag_heartbeat; then
     api POST "/api/hpx_pulse/agent/ack" \
-      "$(jq -nc '{command:"diagnose", status:"running", message:"HPX deep diagnose posted"}')" >/dev/null || true
+      "$(jq -nc '{command:"diagnose", status:"running", message:"HPX deep diagnose + autofix posted"}')" >/dev/null || true
     log "diagnose report posted to panel"
   else
     warn "diagnose heartbeat failed (HTTP ${API_LAST_HTTP_CODE:-?})"

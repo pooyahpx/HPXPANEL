@@ -48,8 +48,12 @@ def _checks_from_one_agent_diag(report: dict, side: str) -> list[PulseDiagCheck]
 
     for key, title in (
         ("tunnel_service", "Tunnel systemd"),
+        ("mode", "Mode / side"),
+        ("transport", "TOML transport"),
+        ("orphan_tunnels", "Orphan tunnel units"),
         ("control_listen", "Control port listen (Iran)"),
-        ("backend_listen", "Backend listen (abroad localhost)"),
+        ("backend_listen", "Backend listen (abroad)"),
+        ("xray", "Xray / core process"),
         ("mss", "MSS in TOML"),
     ):
         item = report.get(key)
@@ -57,6 +61,8 @@ def _checks_from_one_agent_diag(report: dict, side: str) -> list[PulseDiagCheck]
             continue
         ok = bool(item.get("ok"))
         level: DiagLevel = "ok" if ok else "fail"
+        if key in {"mss", "transport", "mode"} and not ok:
+            level = "warn"
         if key == "mss" and not ok:
             level = "warn"
         checks.append(
@@ -68,12 +74,27 @@ def _checks_from_one_agent_diag(report: dict, side: str) -> list[PulseDiagCheck]
                 str(item.get("fix") or ""),
             )
         )
+        # Nested Xray TLS local
+        if key == "xray":
+            tls_l = item.get("tls_local") if isinstance(item.get("tls_local"), dict) else None
+            if tls_l:
+                lok = bool(tls_l.get("ok"))
+                checks.append(
+                    PulseDiagCheck(
+                        g,
+                        "Xray TLS local",
+                        "ok" if lok else "fail",
+                        str(tls_l.get("detail") or ""),
+                        str(tls_l.get("fix") or ""),
+                    )
+                )
 
     tcp = report.get("tcp") if isinstance(report.get("tcp"), dict) else {}
     for key, title in (
         ("control", "TCP → Iran control"),
         ("forward", "TCP → Iran forward"),
         ("forward_exchange", "TCP data after connect (MSS test)"),
+        ("tls_via_iran", "TLS via Iran forward (Reality path)"),
     ):
         item = tcp.get(key) if isinstance(tcp, dict) else None
         if not isinstance(item, dict):

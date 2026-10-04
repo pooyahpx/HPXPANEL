@@ -435,8 +435,8 @@ class HpxPulseOperation(BaseOperation):
         hint = None
         if probe_queued:
             hint = (
-                "Live probe queued on agents — wait ~10s then Diagnose again "
-                "to see TCP exchange / stall_after_connect (MSS) results"
+                "Deep probe + autofix queued (orphan tunnels, firewall, Xray listen, TLS via Iran). "
+                "Wait ~15s then Diagnose again for full report"
             )
         return HpxPulseDiagnoseResponse(
             pulse_id=db_pulse.id,

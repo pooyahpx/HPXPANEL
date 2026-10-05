@@ -25,6 +25,19 @@ def _addr_list(raw: Any) -> list[str]:
     return [s] if s else []
 
 
+def forward_listen_ports(port_forwards: list[str] | None) -> set[int]:
+    """External listen ports from pulse forwards (left side of 8443=127.0.0.1:8443)."""
+    out: set[int] = set()
+    for raw in port_forwards or []:
+        left = str(raw).split("=", 1)[0].strip()
+        left = left.split(":", 1)[0].strip()
+        if left.isdigit():
+            port = int(left)
+            if 1 <= port <= 65535:
+                out.add(port)
+    return out
+
+
 def scan_hosts_for_pulse(
     hosts: list[Any],
     *,
@@ -75,12 +88,59 @@ def scan_hosts_for_pulse(
     return hits
 
 
-def rewrite_host_addresses_to_iran(addresses: Any, *, abroad_ip: str, iran_ip: str) -> set[str]:
-    """Replace abroad public IP with Iran IP in a Host.address set."""
+def host_belongs_to_other_pulse(
+    *,
+    addresses: list[str],
+    host_port: int | None,
+    my_iran_ip: str,
+    my_forward_ports: set[int],
+    peer_iran_ips: set[str],
+    peer_forward_ports: dict[str, set[int]],
+) -> bool:
+    """True when this Host is already wired to a different Pulse (don't steal it)."""
+    my_iran = (my_iran_ip or "").strip()
+    for addr in addresses:
+        a = addr.strip()
+        if not a or a == my_iran:
+            continue
+        if a in peer_iran_ips:
+            peer_ports = peer_forward_ports.get(a) or set()
+            # Same Iran IP on two pulses: use port to decide ownership.
+            if host_port and peer_ports and host_port in peer_ports:
+                return True
+            if host_port and my_forward_ports and host_port in my_forward_ports:
+                return False
+            # Different Iran IP entirely → owned by the other pulse.
+            if a != my_iran:
+                return True
+    if host_port and my_forward_ports and host_port not in my_forward_ports:
+        # Port matches another pulse's forwards only.
+        for ports in peer_forward_ports.values():
+            if host_port in ports:
+                return True
+    return False
+
+
+def rewrite_host_addresses_to_iran(
+    addresses: Any,
+    *,
+    abroad_ip: str,
+    iran_ip: str,
+    protected_iran_ips: set[str] | None = None,
+) -> set[str]:
+    """Replace abroad public IP with Iran IP in a Host.address set.
+
+    Never rewrite addresses that already point at another Pulse's Iran IP
+    (shared abroad VPS + Diagnose must not steal sibling tunnels' Hosts).
+    """
     abroad = (abroad_ip or "").strip()
     iran = (iran_ip or "").strip()
+    protected = {p.strip() for p in (protected_iran_ips or set()) if p and p.strip() and p.strip() != iran}
     out: set[str] = set()
     for a in _addr_list(addresses):
+        if a in protected:
+            out.add(a)
+            continue
         if abroad and a == abroad:
             out.add(iran if iran else a)
         else:

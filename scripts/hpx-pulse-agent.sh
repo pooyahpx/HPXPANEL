@@ -330,15 +330,20 @@ remove_pulse_local_state() {
 
 prune_stale_agent_registrations() {
   [ -d "$AGENTS_DIR" ] || return 0
-  local env_file existing_id
+  local env_file existing_id toml
   for env_file in "$AGENTS_DIR"/*.env; do
     [ -f "$env_file" ] || continue
     existing_id="$(basename "$env_file" .env)"
     [ "$existing_id" = "${PULSE_ID:-}" ] && continue
+    toml="${ETC_DIR}/l3-pulse-${existing_id}.toml"
+    # Intact multi-tunnel peer (env+toml) — never wipe during a brief restart/join race.
+    if [ -f "$toml" ]; then
+      continue
+    fi
     if pulse_registration_active "$existing_id"; then
       continue
     fi
-    log "removing stale local registration for pulse ${existing_id} (stopped / deleted from panel)"
+    log "removing stale local registration for pulse ${existing_id} (no toml / inactive)"
     remove_pulse_local_state "$existing_id"
   done
 }
@@ -359,11 +364,16 @@ free_orphan_listen_port() {
       fi
     done < <(collect_forward_listen_ports "${PORT_FORWARDS:-}")
   done
-  warn "port ${port} held by orphan process — releasing for new join"
+  warn "port ${port} held by orphan process — releasing for new join (this port only)"
   if has fuser; then
     fuser -k "${port}/tcp" 2>/dev/null || true
-  else
-    pkill -f hpx-tunnel-engi 2>/dev/null || true
+  elif has ss; then
+    # Kill only the listener on this port — NEVER pkill all hpx-tunnel-engine (wipes sibling pulses).
+    local pid
+    pid="$(ss -tlnp "sport = :${port}" 2>/dev/null | sed -n 's/.*pid=\([0-9]\+\).*/\1/p' | head -1)"
+    if [ -n "$pid" ]; then
+      kill "$pid" 2>/dev/null || true
+    fi
   fi
   sleep 1
   return 0

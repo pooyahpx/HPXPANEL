@@ -41,7 +41,12 @@ from app.models.hpx_pulse import (
 )
 from app.operation import BaseOperation
 from app.services.hpx_pulse.advisor import advise, profile_meta
-from app.services.hpx_pulse.config_linker import rewrite_host_addresses_to_iran, scan_hosts_for_pulse
+from app.services.hpx_pulse.config_linker import (
+    forward_listen_ports,
+    host_belongs_to_other_pulse,
+    rewrite_host_addresses_to_iran,
+    scan_hosts_for_pulse,
+)
 from app.services.hpx_pulse.diagnose import (
     PulseDiagCheck,
     checks_from_linked_hosts,
@@ -497,14 +502,54 @@ class HpxPulseOperation(BaseOperation):
         rewritten: list = []
         iran_ip = (db_pulse.iran_public_ip or "").strip()
         abroad_ip = (db_pulse.abroad_public_ip or "").strip()
+        my_ports = forward_listen_ports(db_pulse.port_forwards)
+        peer_iran_ips: set[str] = set()
+        peer_forward_ports: dict[str, set[int]] = {}
+        try:
+            peers, _ = await get_hpx_pulses(db, offset=0, limit=100)
+            for peer in peers:
+                if peer.id == db_pulse.id:
+                    continue
+                pip = (peer.iran_public_ip or "").strip()
+                if not pip:
+                    continue
+                peer_iran_ips.add(pip)
+                peer_forward_ports[pip] = forward_listen_ports(peer.port_forwards)
+        except Exception as exc:
+            logger.debug("diagnose peer pulse scan skipped: %s", exc)
+
         if iran_ip and abroad_ip:
             for hit in hits:
                 if hit.issue not in {"abroad_ip", "mixed"}:
                     continue
+                if host_belongs_to_other_pulse(
+                    addresses=hit.addresses,
+                    host_port=hit.port,
+                    my_iran_ip=iran_ip,
+                    my_forward_ports=my_ports,
+                    peer_iran_ips=peer_iran_ips,
+                    peer_forward_ports=peer_forward_ports,
+                ):
+                    fix_notes.append(
+                        f"Host #{hit.host_id} «{hit.remark}» skipped — belongs to another Pulse "
+                        f"(port/Iran IP); not rewritten to {iran_ip}"
+                    )
+                    continue
+                if my_ports and hit.port and hit.port not in my_ports:
+                    fix_notes.append(
+                        f"Host #{hit.host_id} «{hit.remark}» skipped — port {hit.port} "
+                        f"not in this Pulse forwards {sorted(my_ports)}"
+                    )
+                    continue
                 db_host = next((h for h in hosts if getattr(h, "id", None) == hit.host_id), None)
                 if db_host is None:
                     continue
-                new_addrs = rewrite_host_addresses_to_iran(db_host.address, abroad_ip=abroad_ip, iran_ip=iran_ip)
+                new_addrs = rewrite_host_addresses_to_iran(
+                    db_host.address,
+                    abroad_ip=abroad_ip,
+                    iran_ip=iran_ip,
+                    protected_iran_ips=peer_iran_ips,
+                )
                 if new_addrs and new_addrs != set(db_host.address or set()):
                     db_host.address = new_addrs
                     rewritten.append(db_host)

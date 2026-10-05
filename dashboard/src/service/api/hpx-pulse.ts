@@ -298,6 +298,15 @@ export function useDiagnoseHpxPulse() {
   })
 }
 
+export function useFixHpxPulse() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) =>
+      fetcher<HpxPulseDiagnoseResponse>(`/api/hpx_pulse/${id}/fix`, { method: 'POST' }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['hpx-pulses'] }),
+  })
+}
+
 export function usePathPingHpxPulse() {
   const qc = useQueryClient()
   return useMutation({

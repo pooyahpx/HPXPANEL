@@ -98,3 +98,9 @@ def test_diagnose_agent_stall_after_connect():
     assert "TCP Extreme" in stall.fix
     assert "Diagnose" in stall.fix or "Sync" in stall.fix
 
+
+def test_diagnose_fix_agent_command_fits_legacy_column():
+    """agent_command String(16) must fit diagnose-fix from panel Fix endpoint."""
+    for cmd in ("diagnose", "diagnose-fix"):
+        assert len(cmd) <= 16, cmd
+

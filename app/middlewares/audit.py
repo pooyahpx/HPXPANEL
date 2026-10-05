@@ -64,6 +64,7 @@ _ACTION_SEGMENTS = {
     "disable",
     "enable",
     "expire",
+    "fix",
     "geofiles",
     "groups",
     "import",

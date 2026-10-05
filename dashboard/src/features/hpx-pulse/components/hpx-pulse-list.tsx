@@ -1,3 +1,13 @@
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -9,6 +19,7 @@ import HpxPulseWizard from '@/features/hpx-pulse/wizard/hpx-pulse-wizard'
 import {
   useDeleteHpxPulse,
   useDiagnoseHpxPulse,
+  useFixHpxPulse,
   useGetHpxPulses,
   usePathPingHpxPulse,
   useRegeneratePulseTokens,
@@ -34,6 +45,7 @@ import {
   Stethoscope,
   Timer,
   Trash2,
+  Wrench,
   Zap,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
@@ -318,6 +330,7 @@ function PulseCard({
   onRegenerate,
   onSync,
   onDiagnose,
+  onFix,
   onPathPing,
   onAutoSync,
   onEdit,
@@ -325,6 +338,7 @@ function PulseCard({
   canDelete,
   syncLoading,
   diagnoseLoading,
+  fixLoading,
   pathPingLoading,
 }: {
   pulse: HpxPulseResponse
@@ -332,6 +346,7 @@ function PulseCard({
   onRegenerate: () => void
   onSync: () => void
   onDiagnose: () => void
+  onFix: () => void
   onPathPing: (opts: { proto: PathPingProto; count: number; target: PathPingTarget }) => Promise<void>
   onAutoSync: (minutes: number) => Promise<void>
   onEdit: () => void
@@ -339,6 +354,7 @@ function PulseCard({
   canDelete: boolean
   syncLoading: boolean
   diagnoseLoading: boolean
+  fixLoading: boolean
   pathPingLoading: boolean
 }) {
   const { t, i18n } = useTranslation()
@@ -426,10 +442,22 @@ function PulseCard({
           </div>
 
           <div className="flex flex-wrap gap-1">
-            <Button size="sm" variant="outline" className="h-8 gap-1.5" onClick={onDiagnose} disabled={diagnoseLoading}>
+            <Button size="sm" variant="outline" className="h-8 gap-1.5" onClick={onDiagnose} disabled={diagnoseLoading || fixLoading}>
               <Stethoscope className={cn('size-3.5', diagnoseLoading && 'animate-pulse')} />
-              {t('hpxPulse.diagnose', { defaultValue: 'Diagnose + Fix' })}
+              {t('hpxPulse.runDiagnose', { defaultValue: 'Run Diagnose' })}
             </Button>
+            {canUpdate && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 gap-1.5 border-emerald-500/30 bg-emerald-500/5 hover:bg-emerald-500/10"
+                onClick={onFix}
+                disabled={fixLoading || diagnoseLoading}
+              >
+                <Wrench className={cn('size-3.5', fixLoading && 'animate-spin')} />
+                {t('hpxPulse.applyFix', { defaultValue: 'Fix' })}
+              </Button>
+            )}
             {canUpdate && (pulse.iran_claimed || pulse.abroad_claimed) && (
               <Button size="sm" variant="outline" className="h-8 gap-1.5" onClick={onSync} disabled={syncLoading}>
                 <RefreshCw className={cn('size-3.5', syncLoading && 'animate-spin')} />
@@ -563,6 +591,7 @@ export default function HpxPulseList() {
   const regenMutation = useRegeneratePulseTokens()
   const syncMutation = useSyncHpxPulse()
   const diagnoseMutation = useDiagnoseHpxPulse()
+  const fixMutation = useFixHpxPulse()
   const pathPingMutation = usePathPingHpxPulse()
   const updateMutation = useUpdateHpxPulse()
   const [wizardOpen, setWizardOpen] = useState(false)
@@ -570,8 +599,11 @@ export default function HpxPulseList() {
   const [joinCommands, setJoinCommands] = useState<JoinCommandSet | null>(null)
   const [syncingId, setSyncingId] = useState<number | null>(null)
   const [diagnosingId, setDiagnosingId] = useState<number | null>(null)
+  const [fixingId, setFixingId] = useState<number | null>(null)
+  const [fixConfirmPulse, setFixConfirmPulse] = useState<HpxPulseResponse | null>(null)
   const [pathPingId, setPathPingId] = useState<number | null>(null)
   const [diagResult, setDiagResult] = useState<HpxPulseDiagnoseResponse | null>(null)
+  const [diagResultMode, setDiagResultMode] = useState<'diagnose' | 'fix'>('diagnose')
 
   useEffect(() => {
     const handler = () => {
@@ -691,6 +723,7 @@ export default function HpxPulseList() {
               canDelete={canDelete}
               syncLoading={syncingId === pulse.id}
               diagnoseLoading={diagnosingId === pulse.id}
+              fixLoading={fixingId === pulse.id}
               pathPingLoading={pathPingId === pulse.id || pulse.path_ping?.status === 'queued'}
               onEdit={() => {
                 setEditingPulse(pulse)
@@ -700,8 +733,16 @@ export default function HpxPulseList() {
                 setDiagnosingId(pulse.id)
                 try {
                   const res = await diagnoseMutation.mutateAsync(pulse.id)
+                  setDiagResultMode('diagnose')
                   setDiagResult(res)
-                  if (res.fail > 0) {
+                  if (res.probe_queued) {
+                    toast.message(
+                      res.hint ??
+                        t('hpxPulse.diagnoseQueued', {
+                          defaultValue: 'Deep probes queued — wait ~20s and run diagnose again',
+                        }),
+                    )
+                  } else if (res.fail > 0) {
                     toast.error(res.headline)
                   } else if (res.warn > 0) {
                     toast.message(res.headline)
@@ -714,6 +755,7 @@ export default function HpxPulseList() {
                   setDiagnosingId(null)
                 }
               }}
+              onFix={() => setFixConfirmPulse(pulse)}
               onPathPing={async opts => {
                 setPathPingId(pulse.id)
                 try {
@@ -799,12 +841,58 @@ export default function HpxPulseList() {
         }}
       />
 
+      <AlertDialog open={!!fixConfirmPulse} onOpenChange={open => !open && setFixConfirmPulse(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('hpxPulse.fixConfirmTitle', { defaultValue: 'Apply Pulse fix?' })}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('hpxPulse.fixConfirmBody', {
+                defaultValue:
+                  'This may rewrite Host addresses to Iran IP, upgrade to TCP Extreme, and run agent autofix (firewall, MSS, orphans, Xray). Run Diagnose first if you only want a read-only report.',
+                name: fixConfirmPulse?.name ?? '',
+              })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t('cancel', { defaultValue: 'Cancel' })}</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-emerald-600 hover:bg-emerald-700"
+              onClick={async () => {
+                const pulse = fixConfirmPulse
+                setFixConfirmPulse(null)
+                if (!pulse) return
+                setFixingId(pulse.id)
+                try {
+                  const res = await fixMutation.mutateAsync(pulse.id)
+                  setDiagResultMode('fix')
+                  setDiagResult(res)
+                  toast.success(
+                    res.hint ??
+                      t('hpxPulse.fixQueued', {
+                        defaultValue: 'Autofix queued — wait ~20s then run diagnose for updated report',
+                      }),
+                  )
+                } catch (e) {
+                  toast.error((e as Error)?.message ?? t('error', { defaultValue: 'Error' }))
+                } finally {
+                  setFixingId(null)
+                }
+              }}
+            >
+              {t('hpxPulse.applyFix', { defaultValue: 'Fix' })}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <Dialog open={!!diagResult} onOpenChange={open => !open && setDiagResult(null)}>
         <DialogContent className="max-h-[85dvh] max-w-lg overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Stethoscope className="size-4" />
-              {t('hpxPulse.diagnoseTitle', { defaultValue: 'Pulse diagnose' })}
+              {diagResultMode === 'fix' ? <Wrench className="size-4" /> : <Stethoscope className="size-4" />}
+              {diagResultMode === 'fix'
+                ? t('hpxPulse.fixResultTitle', { defaultValue: 'Pulse fix' })
+                : t('hpxPulse.diagnoseTitle', { defaultValue: 'Pulse diagnose' })}
               {diagResult ? ` · ${diagResult.name}` : ''}
             </DialogTitle>
             <DialogDescription>

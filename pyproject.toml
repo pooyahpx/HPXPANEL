@@ -1,6 +1,6 @@
 [project]
 name = "hpxpanel"
-version = "4.9.3"
+version = "4.9.5"
 description = "Unified GUI Censorship Resistant Solution"
 readme = "README.md"
 requires-python = ">=3.14"

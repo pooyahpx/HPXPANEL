@@ -238,7 +238,18 @@ async def diagnose_hpx_pulse(
     db: AsyncSession = Depends(get_db),
     admin: AdminDetails = Depends(require_permission("hpx_pulse", "read")),
 ):
-    return await pulse_operator.diagnose_pulse(db, admin=admin, pulse_id=pulse_id)
+    """Read-only checklist + queue agent deep probes (no panel/agent autofix)."""
+    return await pulse_operator.diagnose_pulse(db, admin=admin, pulse_id=pulse_id, apply_fix=False)
+
+
+@router.post("/{pulse_id}/fix", response_model=HpxPulseDiagnoseResponse, responses={404: responses._404})
+async def fix_hpx_pulse(
+    pulse_id: int,
+    db: AsyncSession = Depends(get_db),
+    admin: AdminDetails = Depends(require_permission("hpx_pulse", "update")),
+):
+    """Apply panel autofix + queue agent diagnose-fix (Host rewrite, TCP Extreme, etc.)."""
+    return await pulse_operator.fix_pulse(db, admin=admin, pulse_id=pulse_id)
 
 
 @router.post(

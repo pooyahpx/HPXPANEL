@@ -41,7 +41,12 @@ from app.models.hpx_pulse import (
 )
 from app.operation import BaseOperation
 from app.services.hpx_pulse.advisor import advise, profile_meta
-from app.services.hpx_pulse.config_linker import rewrite_host_addresses_to_iran, scan_hosts_for_pulse
+from app.services.hpx_pulse.config_linker import (
+    forward_listen_ports,
+    host_belongs_to_other_pulse,
+    rewrite_host_addresses_to_iran,
+    scan_hosts_for_pulse,
+)
 from app.services.hpx_pulse.diagnose import (
     PulseDiagCheck,
     checks_from_linked_hosts,
@@ -480,8 +485,15 @@ class HpxPulseOperation(BaseOperation):
             message="Sync queued for connected agents",
         )
 
-    async def diagnose_pulse(self, db: AsyncSession, *, admin: AdminDetails, pulse_id: int) -> HpxPulseDiagnoseResponse:
-        """TCP-reverse super agent: scan Hosts, force Extreme MSS, Sync+probe both sides."""
+    async def diagnose_pulse(
+        self,
+        db: AsyncSession,
+        *,
+        admin: AdminDetails,
+        pulse_id: int,
+        apply_fix: bool = False,
+    ) -> HpxPulseDiagnoseResponse:
+        """Read-only diagnose (default) or panel+agent autofix when apply_fix=True."""
         _ = admin
         db_pulse = await get_hpx_pulse_by_id(db, pulse_id)
         if db_pulse is None:
@@ -494,51 +506,93 @@ class HpxPulseOperation(BaseOperation):
             iran_ip=db_pulse.iran_public_ip,
             abroad_ip=db_pulse.abroad_public_ip,
         )
-        rewritten: list = []
-        iran_ip = (db_pulse.iran_public_ip or "").strip()
-        abroad_ip = (db_pulse.abroad_public_ip or "").strip()
-        if iran_ip and abroad_ip:
-            for hit in hits:
-                if hit.issue not in {"abroad_ip", "mixed"}:
-                    continue
-                db_host = next((h for h in hosts if getattr(h, "id", None) == hit.host_id), None)
-                if db_host is None:
-                    continue
-                new_addrs = rewrite_host_addresses_to_iran(db_host.address, abroad_ip=abroad_ip, iran_ip=iran_ip)
-                if new_addrs and new_addrs != set(db_host.address or set()):
-                    db_host.address = new_addrs
-                    rewritten.append(db_host)
-                    fix_notes.append(f"Host #{hit.host_id} «{hit.remark}» address → Iran {iran_ip}")
-            if rewritten:
-                await db.flush()
-                try:
-                    await host_manager.add_hosts(db, rewritten)
-                except Exception as exc:
-                    logger.warning("host_manager refresh after Pulse diagnose autofix failed: %s", exc)
 
-        # Re-scan after rewrite for diagnose rows.
-        hosts = await get_hosts(db)
-        hits = scan_hosts_for_pulse(
-            hosts,
-            iran_ip=db_pulse.iran_public_ip,
-            abroad_ip=db_pulse.abroad_public_ip,
-        )
+        if apply_fix:
+            rewritten: list = []
+            iran_ip = (db_pulse.iran_public_ip or "").strip()
+            abroad_ip = (db_pulse.abroad_public_ip or "").strip()
+            my_ports = forward_listen_ports(db_pulse.port_forwards)
+            peer_iran_ips: set[str] = set()
+            peer_forward_ports: dict[str, set[int]] = {}
+            try:
+                peers, _ = await get_hpx_pulses(db, offset=0, limit=100)
+                for peer in peers:
+                    if peer.id == db_pulse.id:
+                        continue
+                    pip = (peer.iran_public_ip or "").strip()
+                    if not pip:
+                        continue
+                    peer_iran_ips.add(pip)
+                    peer_forward_ports[pip] = forward_listen_ports(peer.port_forwards)
+            except Exception as exc:
+                logger.debug("diagnose peer pulse scan skipped: %s", exc)
+
+            if iran_ip and abroad_ip:
+                for hit in hits:
+                    if hit.issue not in {"abroad_ip", "mixed"}:
+                        continue
+                    if host_belongs_to_other_pulse(
+                        addresses=hit.addresses,
+                        host_port=hit.port,
+                        my_iran_ip=iran_ip,
+                        my_forward_ports=my_ports,
+                        peer_iran_ips=peer_iran_ips,
+                        peer_forward_ports=peer_forward_ports,
+                    ):
+                        fix_notes.append(
+                            f"Host #{hit.host_id} «{hit.remark}» skipped — belongs to another Pulse "
+                            f"(port/Iran IP); not rewritten to {iran_ip}"
+                        )
+                        continue
+                    if my_ports and hit.port and hit.port not in my_ports:
+                        fix_notes.append(
+                            f"Host #{hit.host_id} «{hit.remark}» skipped — port {hit.port} "
+                            f"not in this Pulse forwards {sorted(my_ports)}"
+                        )
+                        continue
+                    db_host = next((h for h in hosts if getattr(h, "id", None) == hit.host_id), None)
+                    if db_host is None:
+                        continue
+                    new_addrs = rewrite_host_addresses_to_iran(
+                        db_host.address,
+                        abroad_ip=abroad_ip,
+                        iran_ip=iran_ip,
+                        protected_iran_ips=peer_iran_ips,
+                    )
+                    if new_addrs and new_addrs != set(db_host.address or set()):
+                        db_host.address = new_addrs
+                        rewritten.append(db_host)
+                        fix_notes.append(f"Host #{hit.host_id} «{hit.remark}» address → Iran {iran_ip}")
+                if rewritten:
+                    await db.flush()
+                    try:
+                        await host_manager.add_hosts(db, rewritten)
+                    except Exception as exc:
+                        logger.warning("host_manager refresh after Pulse diagnose autofix failed: %s", exc)
+
+            hosts = await get_hosts(db)
+            hits = scan_hosts_for_pulse(
+                hosts,
+                iran_ip=db_pulse.iran_public_ip,
+                abroad_ip=db_pulse.abroad_public_ip,
+            )
 
         update: dict = {"last_health_check": dt.now(UTC)}
-        extreme_id = should_autofix_tcp_extreme(db_pulse)
-        if extreme_id:
-            update.update(extreme_profile_update(extreme_id))
-            fix_notes.append(f"profile → {extreme_id} (TCP Extreme mss=1000)")
+        agent_cmd = "diagnose-fix" if apply_fix else "diagnose"
+        if apply_fix:
+            extreme_id = should_autofix_tcp_extreme(db_pulse)
+            if extreme_id:
+                update.update(extreme_profile_update(extreme_id))
+                fix_notes.append(f"profile → {extreme_id} (TCP Extreme mss=1000)")
 
-        # Queue diagnose: agent applies latest TOML (hash change) then autofix+probes.
         probe_queued = False
         if db_pulse.iran_agent_key_hash:
-            update["iran_agent_command"] = "diagnose"
+            update["iran_agent_command"] = agent_cmd
             probe_queued = True
         if db_pulse.abroad_agent_key_hash:
-            update["abroad_agent_command"] = "diagnose"
+            update["abroad_agent_command"] = agent_cmd
             probe_queued = True
-        if fix_notes:
+        if apply_fix and fix_notes:
             update["message"] = "TCP autofix: " + "; ".join(fix_notes[:4])
             update["last_status_change"] = dt.now(UTC)
 
@@ -547,7 +601,7 @@ class HpxPulseOperation(BaseOperation):
 
         checks = diagnose_pulse_record(db_pulse)
         checks.extend(checks_from_linked_hosts(hits))
-        if fix_notes:
+        if apply_fix and fix_notes:
             checks.insert(
                 0,
                 PulseDiagCheck(
@@ -562,12 +616,18 @@ class HpxPulseOperation(BaseOperation):
 
         hint = None
         if probe_queued:
-            hint = (
-                "TCP-reverse agent: Host rewrite + TCP Extreme (if needed) + Sync + "
-                "firewall/TCPMSS/orphan/Xray autofix + TLS-via-Iran probe queued. "
-                "Wait ~20s then Diagnose again for the fresh report"
-            )
-        elif fix_notes:
+            if apply_fix:
+                hint = (
+                    "TCP-reverse agent: Host rewrite + TCP Extreme (if needed) + Sync + "
+                    "firewall/TCPMSS/orphan/Xray autofix + TLS-via-Iran probe queued. "
+                    "Wait ~20s then Run Diagnose again for the fresh report"
+                )
+            else:
+                hint = (
+                    "Deep TCP/TLS probes queued on connected agents (read-only — no panel or agent autofix). "
+                    "Wait ~15–20s then Run Diagnose again for updated agent report"
+                )
+        elif apply_fix and fix_notes:
             hint = "Panel autofix applied (no agents joined yet — Tokens → join Iran & abroad)"
         return HpxPulseDiagnoseResponse(
             pulse_id=db_pulse.id,
@@ -578,6 +638,10 @@ class HpxPulseOperation(BaseOperation):
             hint=hint,
             **summary,
         )
+
+    async def fix_pulse(self, db: AsyncSession, *, admin: AdminDetails, pulse_id: int) -> HpxPulseDiagnoseResponse:
+        """Panel Host rewrite + TCP Extreme + agent diagnose-fix (autofix path)."""
+        return await self.diagnose_pulse(db, admin=admin, pulse_id=pulse_id, apply_fix=True)
 
     async def path_ping(
         self,

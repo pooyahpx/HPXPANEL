@@ -1053,18 +1053,28 @@ sync_pulse_from_panel() {
   ABROAD_PUBLIC_IP=$(echo "$cfg" | jq -r '.abroad_public_ip // empty')
   PORT_FORWARDS=$(echo "$cfg" | jq -c '.port_forwards // []')
 
-  if [ "$command" = "diagnose" ]; then
-    # Apply latest panel TOML first (Diagnose may have upgraded to TCP Extreme).
-    if [ -n "$toml" ] && [ "$toml" != "null" ]; then
-      if [ "$hash" != "${CONFIG_HASH:-}" ]; then
-        apply_tunnel_config "$toml"
-        CONFIG_HASH="$hash"
-      else
-        open_iran_firewall || true
+  if [ "$command" = "diagnose" ] || [ "$command" = "diagnose-fix" ] || [ "$command" = "fix" ]; then
+    local diag_fix=0
+    case "$command" in
+      diagnose-fix|fix) diag_fix=1 ;;
+    esac
+    if [ "$diag_fix" = 1 ]; then
+      # Fix path: apply latest panel TOML (may include TCP Extreme upgrade).
+      if [ -n "$toml" ] && [ "$toml" != "null" ]; then
+        if [ "$hash" != "${CONFIG_HASH:-}" ]; then
+          apply_tunnel_config "$toml"
+          CONFIG_HASH="$hash"
+        else
+          open_iran_firewall || true
+        fi
       fi
+    elif [ -n "$toml" ] && [ "$toml" != "null" ] && [ "$hash" != "${CONFIG_HASH:-}" ]; then
+      # Read-only diagnose: only apply pending Sync TOML, never open firewall / MSS locally.
+      apply_tunnel_config "$toml"
+      CONFIG_HASH="$hash"
     fi
     write_env
-    handle_diagnose_command || true
+    handle_diagnose_command "$diag_fix" || true
     return 0
   fi
 
@@ -1716,11 +1726,22 @@ post_deep_diag_heartbeat() {
 }
 
 handle_diagnose_command() {
-  log "panel diagnose — auto-fix + deep probes (pulse ${PULSE_ID:-?})"
-  auto_fix_on_diagnose || true
+  local with_fix="${1:-0}"
+  if [ "$with_fix" = 1 ]; then
+    log "panel diagnose-fix — auto-fix + deep probes (pulse ${PULSE_ID:-?})"
+    auto_fix_on_diagnose || true
+  else
+    log "panel diagnose — read-only deep probes (pulse ${PULSE_ID:-?})"
+  fi
   if post_deep_diag_heartbeat; then
+    local ack_cmd="diagnose"
+    local ack_msg="HPX deep diagnose posted (read-only)"
+    if [ "$with_fix" = 1 ]; then
+      ack_cmd="diagnose-fix"
+      ack_msg="HPX deep diagnose + autofix posted"
+    fi
     api POST "/api/hpx_pulse/agent/ack" \
-      "$(jq -nc '{command:"diagnose", status:"running", message:"HPX deep diagnose + autofix posted"}')" >/dev/null || true
+      "$(jq -nc --arg c "$ack_cmd" --arg m "$ack_msg" '{command:$c, status:"running", message:$m}')" >/dev/null || true
     log "diagnose report posted to panel"
   else
     warn "diagnose heartbeat failed (HTTP ${API_LAST_HTTP_CODE:-?})"
@@ -1879,7 +1900,7 @@ maybe_handle_diagnose_command() {
   cfg=$(api_request GET "/api/hpx_pulse/agent/config") || return 0
   command=$(echo "$cfg" | jq -r '.agent_command // empty')
   case "$command" in
-    diagnose)
+    diagnose|diagnose-fix|fix)
       hash=$(echo "$cfg" | jq -r '.config_hash // empty')
       toml=$(echo "$cfg" | jq -r '.tunnel_toml // .backpack_toml // empty')
       TUNNEL_MODE=$(echo "$cfg" | jq -r '.tunnel_mode // "direct_l3"')
@@ -1887,14 +1908,26 @@ maybe_handle_diagnose_command() {
       IRAN_PUBLIC_IP=$(echo "$cfg" | jq -r '.iran_public_ip // empty')
       ABROAD_PUBLIC_IP=$(echo "$cfg" | jq -r '.abroad_public_ip // empty')
       PORT_FORWARDS=$(echo "$cfg" | jq -c '.port_forwards // []')
-      if [ -n "$toml" ] && [ "$toml" != "null" ]; then
-        if [ "$hash" != "${CONFIG_HASH:-}" ]; then
-          apply_tunnel_config "$toml"
-          CONFIG_HASH="$hash"
-          write_env
+      local diag_fix=0
+      case "$command" in
+        diagnose-fix|fix) diag_fix=1 ;;
+      esac
+      if [ "$diag_fix" = 1 ]; then
+        if [ -n "$toml" ] && [ "$toml" != "null" ]; then
+          if [ "$hash" != "${CONFIG_HASH:-}" ]; then
+            apply_tunnel_config "$toml"
+            CONFIG_HASH="$hash"
+            write_env
+          else
+            open_iran_firewall || true
+          fi
         fi
+      elif [ -n "$toml" ] && [ "$toml" != "null" ] && [ "$hash" != "${CONFIG_HASH:-}" ]; then
+        apply_tunnel_config "$toml"
+        CONFIG_HASH="$hash"
+        write_env
       fi
-      handle_diagnose_command
+      handle_diagnose_command "$diag_fix"
       ;;
     path-ping|path-ping:*|pp|pp:*)
       TUNNEL_MODE=$(echo "$cfg" | jq -r '.tunnel_mode // "direct_l3"')

@@ -583,7 +583,7 @@ remove_tunnel_unit_fully() {
   local id="$1" svc
   [ -n "$id" ] || return 0
   svc="hpx-pulse-tunnel-${id}"
-  log "purging stale tunnel unit ${svc} (missing config / deleted pulse / crash-loop)"
+  log "purging leftover tunnel unit ${svc} (missing toml and/or env)"
   systemctl stop "${svc}.service" 2>/dev/null || true
   systemctl reset-failed "${svc}.service" 2>/dev/null || true
   systemctl disable "${svc}.service" 2>/dev/null || true
@@ -593,7 +593,8 @@ remove_tunnel_unit_fully() {
   systemctl daemon-reload 2>/dev/null || true
 }
 
-# Stops crash-loops like: unit enabled but l3-pulse-N.toml missing (after panel delete/edit).
+# Only remove crash-loop leftovers: unit/file without BOTH env+toml.
+# Intact peers (env+toml present) are NEVER purged — soft-delete leave handles teardown.
 purge_stale_tunnel_units() {
   local mine_id="${PULSE_ID:-}" unit id toml envf
   mkdir -p "$ETC_DIR" "$AGENTS_DIR" 2>/dev/null || true
@@ -614,16 +615,13 @@ purge_stale_tunnel_units() {
       continue
     fi
 
+    # Keep healthy peers. Only wipe when toml OR env is missing (crash-loop debris).
     if [ ! -f "$toml" ] || [ ! -f "$envf" ]; then
       remove_tunnel_unit_fully "$id"
-      continue
-    fi
-    if ! pulse_registration_active "$id"; then
-      remove_tunnel_unit_fully "$id"
-      continue
     fi
   done < <(systemctl list-unit-files 'hpx-pulse-tunnel-*.service' --no-legend 2>/dev/null | awk '{print $1}')
 
+  # Orphan toml without matching env (and not this agent).
   for toml in "$ETC_DIR"/l3-pulse-*.toml; do
     [ -f "$toml" ] || continue
     id="${toml##*/l3-pulse-}"
@@ -633,6 +631,7 @@ purge_stale_tunnel_units() {
     remove_tunnel_unit_fully "$id"
   done
 
+  # Running/failed units without both files.
   while IFS= read -r unit; do
     [ -n "$unit" ] || continue
     id="$(_pulse_id_from_tunnel_unit "$unit")"
@@ -1281,7 +1280,7 @@ toml_transport_value() {
 }
 
 list_orphan_tunnel_units() {
-  # Other pulse tunnel units still present (running OR crash-looping / missing toml).
+  # Only units missing toml and/or env (crash-loop leftovers). Intact peers are not orphans.
   local u mine id toml
   mine="hpx-pulse-tunnel-${PULSE_ID:-0}.service"
   {
@@ -1296,10 +1295,7 @@ list_orphan_tunnel_units() {
       toml="${ETC_DIR}/l3-pulse-${id}.toml"
       if [ ! -f "$toml" ] || [ ! -f "${AGENTS_DIR}/${id}.env" ]; then
         echo "$u"
-        continue
       fi
-      # Running foreign pulse also counts as orphan relative to current diagnose target.
-      systemctl is-active --quiet "$u" 2>/dev/null && echo "$u"
     done | sort -u
 }
 
@@ -1330,15 +1326,12 @@ auto_fix_on_diagnose() {
       local oid=""
       [ -n "$o" ] || continue
       oid="$(_pulse_id_from_tunnel_unit "$o")"
-      if [ -n "$oid" ]; then
-        log "removing orphan/crash-loop tunnel $o"
+      # Only fully remove broken leftovers (missing toml/env). Never touch intact peers.
+      if [ -n "$oid" ] && { [ ! -f "${ETC_DIR}/l3-pulse-${oid}.toml" ] || [ ! -f "${AGENTS_DIR}/${oid}.env" ]; }; then
+        log "removing crash-loop / leftover tunnel $o"
         remove_tunnel_unit_fully "$oid"
-      else
-        log "stopping orphan tunnel $o"
-        systemctl stop "$o" 2>/dev/null || true
-        systemctl disable "$o" 2>/dev/null || true
+        fixed=1
       fi
-      fixed=1
     done <<< "$orphans"
   fi
   if ! tunnel_service_active; then

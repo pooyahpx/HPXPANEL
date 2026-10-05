@@ -1,6 +1,6 @@
-import { FormEvent, useEffect, useRef, useState } from 'react'
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ChevronDown, CircleCheck, CircleHelp, CircleX, Loader2, ScanSearch, X } from 'lucide-react'
+import { Check, ChevronDown, CircleCheck, CircleHelp, CircleX, Loader2, Radar, ScanSearch, Sparkles, X } from 'lucide-react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -8,7 +8,14 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { CoreEditorFormDialog } from '@/features/core-editor/components/shared/core-editor-form-dialog'
-import { RealityScanResult, scanRealityTarget } from '@/service/reality-scan'
+import {
+  REALITY_PRESET_TARGETS,
+  RealityIranPath,
+  RealityScanResult,
+  RealityScanUsePayload,
+  buildRealityUsePayload,
+  scanRealityTarget,
+} from '@/service/reality-scan'
 import dayjs from '@/lib/dayjs'
 import { dateUtils } from '@/utils/dateFormatter'
 import { cn } from '@/lib/utils'
@@ -17,6 +24,7 @@ interface RealityScanDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   initialTarget?: string
+  onUse?: (payload: RealityScanUsePayload) => void
 }
 
 const MAX_TARGETS = 25
@@ -69,7 +77,7 @@ type TriState = boolean | null | undefined
 function CheckRow({ status, label, detail }: { status: TriState; label: string; detail?: string }) {
   const icon =
     status === true ? (
-      <CircleCheck className="h-4 w-4 shrink-0 text-green-500" />
+      <CircleCheck className="h-4 w-4 shrink-0 text-emerald-500" />
     ) : status === false ? (
       <CircleX className="text-destructive h-4 w-4 shrink-0" />
     ) : (
@@ -92,9 +100,91 @@ function CheckRow({ status, label, detail }: { status: TriState; label: string; 
 
 function MiniBadge({ ok, label }: { ok: boolean; label: string }) {
   return (
-    <span className={cn('rounded px-1.5 py-0.5 font-mono text-[10px] font-medium', ok ? 'bg-green-500/10 text-green-500' : 'bg-destructive/10 text-destructive')} dir="ltr">
+    <span className={cn('rounded px-1.5 py-0.5 font-mono text-[10px] font-medium', ok ? 'bg-emerald-500/10 text-emerald-500' : 'bg-destructive/10 text-destructive')} dir="ltr">
       {label}
     </span>
+  )
+}
+
+function gradeTone(grade: string) {
+  switch (grade) {
+    case 'excellent':
+      return 'border-emerald-500/35 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+    case 'good':
+      return 'border-sky-500/35 bg-sky-500/10 text-sky-600 dark:text-sky-400'
+    case 'fair':
+      return 'border-amber-500/35 bg-amber-500/10 text-amber-700 dark:text-amber-400'
+    case 'poor':
+      return 'border-destructive/35 bg-destructive/10 text-destructive'
+    default:
+      return 'border-border bg-muted/40 text-muted-foreground'
+  }
+}
+
+function IranPathPanel({ path, onUse, canUse }: { path: RealityIranPath; onUse?: () => void; canUse?: boolean }) {
+  const { t } = useTranslation()
+  return (
+    <div className={cn('space-y-3 rounded-xl border p-3', gradeTone(path.grade))}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Radar className="h-4 w-4 shrink-0" />
+          <span className="text-sm font-semibold">
+            {t('coreEditor.realityScan.iranPathTitle', { defaultValue: 'Iran / Pulse fit' })}
+          </span>
+          <Badge variant="outline" className="font-mono text-[10px]" dir="ltr">
+            {path.score}/100 · {path.grade}
+          </Badge>
+        </div>
+        {canUse && onUse ? (
+          <Button type="button" size="sm" className="h-8 gap-1.5" onClick={onUse}>
+            <Check className="h-3.5 w-3.5" />
+            {t('coreEditor.realityScan.useTarget', { defaultValue: 'Use' })}
+          </Button>
+        ) : null}
+      </div>
+
+      {path.iran_affinity ? (
+        <p className="text-xs leading-relaxed opacity-90">{path.affinity_reason || t('coreEditor.realityScan.iranAffinityYes', { defaultValue: 'Strong Iran brand / .ir blend' })}</p>
+      ) : (
+        <p className="text-xs leading-relaxed opacity-90">
+          {t('coreEditor.realityScan.iranAffinityNo', { defaultValue: 'Global decoy — works, but Iran ISP blend is weaker than Digikala-class targets.' })}
+        </p>
+      )}
+
+      {path.pulse_checks.length ? (
+        <div className="space-y-1.5">
+          <div className="text-[11px] font-medium tracking-wide uppercase opacity-80">
+            {t('coreEditor.realityScan.pulseChecks', { defaultValue: 'Pulse Iran entry' })}
+          </div>
+          <div className="space-y-1">
+            {path.pulse_checks.map(check => (
+              <div key={`${check.pulse_id}-${check.port}`} className="bg-background/50 flex items-center justify-between gap-2 rounded-lg border px-2.5 py-1.5 text-xs" dir="ltr">
+                <div className="flex min-w-0 items-center gap-2">
+                  {check.reachable ? <CircleCheck className="h-3.5 w-3.5 shrink-0 text-emerald-500" /> : <CircleX className="text-destructive h-3.5 w-3.5 shrink-0" />}
+                  <span className="truncate font-mono">
+                    #{check.pulse_id} {check.iran_ip}:{check.port}
+                  </span>
+                </div>
+                <span className="text-muted-foreground shrink-0 font-mono">
+                  {check.reachable ? `${check.latency_ms ?? '?'} ms` : check.detail || 'down'}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {path.notes.length ? (
+        <ul className="space-y-1 text-[11px] leading-relaxed opacity-90">
+          {path.notes.map(note => (
+            <li key={note} className="flex gap-1.5">
+              <span className="opacity-50">•</span>
+              <span>{note}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
   )
 }
 
@@ -102,10 +192,10 @@ function RowStatusIcon({ row }: { row: ScanRow }) {
   if (row.status === 'scanning') return <Loader2 className="text-muted-foreground h-4 w-4 shrink-0 animate-spin" />
   if (row.status === 'pending') return <CircleHelp className="text-muted-foreground/40 h-4 w-4 shrink-0" />
   if (row.status === 'error') return <CircleX className="text-destructive h-4 w-4 shrink-0" />
-  return row.result?.feasible ? <CircleCheck className="h-4 w-4 shrink-0 text-green-500" /> : <CircleX className="text-destructive h-4 w-4 shrink-0" />
+  return row.result?.feasible ? <CircleCheck className="h-4 w-4 shrink-0 text-emerald-500" /> : <CircleX className="text-destructive h-4 w-4 shrink-0" />
 }
 
-function ScanResultDetail({ result }: { result: RealityScanResult }) {
+function ScanResultDetail({ result, onUse }: { result: RealityScanResult; onUse?: (payload: RealityScanUsePayload) => void }) {
   const { t } = useTranslation()
   const keyExchangeDetail =
     result.curve ??
@@ -118,34 +208,46 @@ function ScanResultDetail({ result }: { result: RealityScanResult }) {
     return `${d.fromNow()} (${dateUtils.formatDate(d.unix())})`
   }
 
+  const handleUse = () => onUse?.(buildRealityUsePayload(result))
+
   return (
     <div className="space-y-4">
       <div
         className={cn(
-          'flex flex-col gap-2 rounded-md border p-3 sm:flex-row sm:items-center sm:justify-between',
-          result.feasible ? 'border-green-500/30 bg-green-500/10' : 'border-destructive/30 bg-destructive/10',
+          'flex flex-col gap-3 rounded-xl border p-3 sm:flex-row sm:items-center sm:justify-between',
+          result.feasible ? 'border-emerald-500/30 bg-emerald-500/10' : 'border-destructive/30 bg-destructive/10',
         )}
       >
         <div className="flex min-w-0 items-center gap-2">
-          {result.feasible ? <CircleCheck className="h-5 w-5 shrink-0 text-green-500" /> : <CircleX className="text-destructive h-5 w-5 shrink-0" />}
-          <span className="text-sm font-semibold">
-            {result.feasible
-              ? t('coreEditor.realityScan.feasible', { defaultValue: 'Suitable Reality target' })
-              : t('coreEditor.realityScan.notFeasible', { defaultValue: 'Not a suitable Reality target' })}
-          </span>
+          {result.feasible ? <CircleCheck className="h-5 w-5 shrink-0 text-emerald-500" /> : <CircleX className="text-destructive h-5 w-5 shrink-0" />}
+          <div className="min-w-0">
+            <div className="text-sm font-semibold">
+              {result.feasible
+                ? t('coreEditor.realityScan.feasible', { defaultValue: 'Suitable Reality target' })
+                : t('coreEditor.realityScan.notFeasible', { defaultValue: 'Not a suitable Reality target' })}
+            </div>
+            <div className="text-muted-foreground truncate font-mono text-xs" dir="ltr">
+              {result.host}
+              {result.ip ? ` (${result.ip})` : ''}:{result.port}
+            </div>
+          </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <span className="text-muted-foreground truncate font-mono text-xs" dir="ltr">
-            {result.host}
-            {result.ip ? ` (${result.ip})` : ''}:{result.port}
-          </span>
           {result.latency_ms !== null ? (
-            <Badge dir="ltr" variant="outline" className="shrink-0 font-mono text-xs">
+            <Badge dir="ltr" variant="outline" className="font-mono text-xs">
               {result.latency_ms} ms
             </Badge>
           ) : null}
+          {onUse && result.feasible ? (
+            <Button type="button" size="sm" className="h-8 gap-1.5" onClick={handleUse}>
+              <Check className="h-3.5 w-3.5" />
+              {t('coreEditor.realityScan.useTarget', { defaultValue: 'Use' })}
+            </Button>
+          ) : null}
         </div>
       </div>
+
+      {result.iran_path ? <IranPathPanel path={result.iran_path} onUse={handleUse} canUse={Boolean(onUse && result.feasible)} /> : null}
 
       {result.sni ? (
         <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -169,7 +271,7 @@ function ScanResultDetail({ result }: { result: RealityScanResult }) {
         </Alert>
       ) : null}
 
-      <div className="divide-border rounded-md border px-3">
+      <div className="divide-border overflow-hidden rounded-xl border px-3">
         <CheckRow status={result.tls13} label={t('coreEditor.realityScan.tls13', { defaultValue: 'TLS 1.3' })} detail={result.tls_version ? `TLS ${result.tls_version}` : undefined} />
         <Separator />
         <CheckRow status={result.h2} label={t('coreEditor.realityScan.h2', { defaultValue: 'HTTP/2 (ALPN)' })} detail={result.alpn ?? undefined} />
@@ -232,36 +334,67 @@ function ScanResultDetail({ result }: { result: RealityScanResult }) {
   )
 }
 
-function ScanRowItem({ row, expanded, onToggle }: { row: ScanRow; expanded: boolean; onToggle: () => void }) {
+function ScanRowItem({
+  row,
+  expanded,
+  onToggle,
+  onUse,
+}: {
+  row: ScanRow
+  expanded: boolean
+  onToggle: () => void
+  onUse?: (payload: RealityScanUsePayload) => void
+}) {
   const { t } = useTranslation()
   const canExpand = row.status === 'done' || row.status === 'error'
   return (
-    <div className="overflow-hidden rounded-md border">
-      <button type="button" onClick={canExpand ? onToggle : undefined} className={cn('flex w-full items-center gap-2 px-3 py-2 text-left', canExpand ? 'hover:bg-muted/50' : 'cursor-default')}>
-        <RowStatusIcon row={row} />
-        <span className="min-w-0 flex-1 truncate font-mono text-sm" dir="ltr">
-          {row.target}
-        </span>
-        {row.status === 'done' && row.result ? (
-          <span className="hidden shrink-0 items-center gap-1.5 sm:flex">
-            <MiniBadge ok={row.result.tls13} label="TLS 1.3" />
-            <MiniBadge ok={row.result.h2} label="H2" />
-            {row.result.latency_ms !== null ? (
-              <Badge dir="ltr" variant="outline" className="font-mono text-[10px]">
-                {row.result.latency_ms} ms
-              </Badge>
-            ) : null}
+    <div className="overflow-hidden rounded-xl border">
+      <div className="flex items-stretch">
+        <button type="button" onClick={canExpand ? onToggle : undefined} className={cn('flex min-w-0 flex-1 items-center gap-2 px-3 py-2.5 text-left', canExpand ? 'hover:bg-muted/50' : 'cursor-default')}>
+          <RowStatusIcon row={row} />
+          <span className="min-w-0 flex-1 truncate font-mono text-sm" dir="ltr">
+            {row.target}
           </span>
-        ) : row.status === 'scanning' ? (
-          <span className="text-muted-foreground shrink-0 text-xs">{t('coreEditor.realityScan.scanningShort', { defaultValue: 'Scanning' })}</span>
-        ) : row.status === 'error' ? (
-          <span className="text-destructive shrink-0 text-xs">{t('coreEditor.realityScan.scanFailed', { defaultValue: 'Failed' })}</span>
+          {row.status === 'done' && row.result ? (
+            <span className="hidden shrink-0 items-center gap-1.5 sm:flex">
+              <MiniBadge ok={row.result.tls13} label="TLS 1.3" />
+              <MiniBadge ok={row.result.h2} label="H2" />
+              {row.result.iran_path ? (
+                <Badge dir="ltr" variant="outline" className={cn('font-mono text-[10px]', gradeTone(row.result.iran_path.grade))}>
+                  IR {row.result.iran_path.score}
+                </Badge>
+              ) : null}
+              {row.result.latency_ms !== null ? (
+                <Badge dir="ltr" variant="outline" className="font-mono text-[10px]">
+                  {row.result.latency_ms} ms
+                </Badge>
+              ) : null}
+            </span>
+          ) : row.status === 'scanning' ? (
+            <span className="text-muted-foreground shrink-0 text-xs">{t('coreEditor.realityScan.scanningShort', { defaultValue: 'Scanning' })}</span>
+          ) : row.status === 'error' ? (
+            <span className="text-destructive shrink-0 text-xs">{t('coreEditor.realityScan.scanFailed', { defaultValue: 'Failed' })}</span>
+          ) : null}
+          {canExpand ? <ChevronDown className={cn('text-muted-foreground h-4 w-4 shrink-0 transition-transform', expanded && 'rotate-180')} /> : <span className="w-4 shrink-0" />}
+        </button>
+        {row.status === 'done' && row.result?.feasible && onUse ? (
+          <div className="border-l p-1.5">
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              className="h-full min-h-8 gap-1 px-2.5 text-xs"
+              onClick={() => onUse(buildRealityUsePayload(row.result!))}
+            >
+              <Check className="h-3.5 w-3.5" />
+              {t('coreEditor.realityScan.useTarget', { defaultValue: 'Use' })}
+            </Button>
+          </div>
         ) : null}
-        {canExpand ? <ChevronDown className={cn('text-muted-foreground h-4 w-4 shrink-0 transition-transform', expanded && 'rotate-180')} /> : <span className="w-4 shrink-0" />}
-      </button>
+      </div>
       {expanded && row.status === 'done' && row.result ? (
         <div className="border-t p-3">
-          <ScanResultDetail result={row.result} />
+          <ScanResultDetail result={row.result} onUse={onUse} />
         </div>
       ) : expanded && row.status === 'error' ? (
         <div className="border-t p-3">
@@ -299,7 +432,7 @@ function TargetsInput({ value, onChange, disabled, max }: { value: string[]; onC
   return (
     <div
       className={cn(
-        'border-input focus-within:ring-ring flex min-h-10 w-full flex-wrap items-center gap-1.5 rounded-md border bg-transparent px-2 py-1.5 text-sm focus-within:ring-1',
+        'border-input focus-within:ring-ring/40 flex min-h-11 w-full flex-wrap items-center gap-1.5 rounded-xl border bg-transparent px-2.5 py-1.5 text-sm shadow-xs focus-within:ring-2',
         disabled && 'pointer-events-none opacity-50',
       )}
       dir="ltr"
@@ -308,7 +441,7 @@ function TargetsInput({ value, onChange, disabled, max }: { value: string[]; onC
       }}
     >
       {value.map(tag => (
-        <Badge key={tag} variant="secondary" className="max-w-full gap-1 py-0.5 pr-1 pl-2 font-mono text-[11px] font-normal">
+        <Badge key={tag} variant="secondary" className="max-w-full gap-1 rounded-lg py-0.5 pr-1 pl-2 font-mono text-[11px] font-normal">
           <span className="truncate">{tag}</span>
           <button
             type="button"
@@ -329,7 +462,7 @@ function TargetsInput({ value, onChange, disabled, max }: { value: string[]; onC
         dir="ltr"
         autoComplete="off"
         spellCheck={false}
-        placeholder={value.length ? '' : 'www.microsoft.com:443, apple.com, cloudflare.com'}
+        placeholder={value.length ? '' : 'digikala.com:443, www.apple.com'}
         onChange={event => {
           const raw = event.target.value
           if (/[\s,]/.test(raw)) {
@@ -360,7 +493,7 @@ function TargetsInput({ value, onChange, disabled, max }: { value: string[]; onC
   )
 }
 
-export function RealityScanDialog({ open, onOpenChange, initialTarget }: RealityScanDialogProps) {
+export function RealityScanDialog({ open, onOpenChange, initialTarget, onUse }: RealityScanDialogProps) {
   const { t } = useTranslation()
   const [targets, setTargets] = useState<string[]>([])
   const [timeoutInput, setTimeoutInput] = useState('10')
@@ -389,6 +522,18 @@ export function RealityScanDialog({ open, onOpenChange, initialTarget }: Reality
   useEffect(() => () => abortRef.current?.abort(), [])
 
   const canScan = targets.length > 0 && !isScanning
+  const iranPresets = useMemo(() => REALITY_PRESET_TARGETS.filter(p => p.region === 'iran'), [])
+  const globalPresets = useMemo(() => REALITY_PRESET_TARGETS.filter(p => p.region === 'global'), [])
+
+  const togglePreset = (host: string) => {
+    if (isScanning) return
+    setTargets(prev => (prev.includes(host) ? prev.filter(item => item !== host) : prev.length >= MAX_TARGETS ? prev : [...prev, host]))
+  }
+
+  const handleUse = (payload: RealityScanUsePayload) => {
+    onUse?.(payload)
+    onOpenChange(false)
+  }
 
   const runScan = async () => {
     const list = targets
@@ -413,7 +558,7 @@ export function RealityScanDialog({ open, onOpenChange, initialTarget }: Reality
         if (controller.signal.aborted) return
         patch(target, { status: 'scanning' })
         try {
-          const res = await scanRealityTarget({ target, timeout }, controller.signal)
+          const res = await scanRealityTarget({ target, timeout, check_iran_path: true }, controller.signal)
           if (controller.signal.aborted) return
           patch(target, { status: 'done', result: res })
         } catch (error) {
@@ -471,10 +616,68 @@ export function RealityScanDialog({ open, onOpenChange, initialTarget }: Reality
         )
       }
     >
-      <div className="space-y-4">
-        <p className="text-muted-foreground text-sm">{t('coreEditor.realityScan.description', { defaultValue: 'Probe one or more targets to check they work as REALITY decoys. REALITY needs HTTP/2 and TLS 1.3.' })}</p>
+      <div className="space-y-5">
+        <p className="text-muted-foreground text-sm leading-relaxed">
+          {t('coreEditor.realityScan.description', {
+            defaultValue: 'Probe decoys for REALITY (TLS 1.3 + HTTP/2 + X25519), score Iran blend, and check Pulse Iran entry IPs.',
+          })}
+        </p>
 
-        <form id="reality-scan-form" onSubmit={handleSubmit} className="grid items-start gap-4 sm:grid-cols-[minmax(0,1fr)_140px]">
+        <div className="space-y-2.5">
+          <div className="flex items-center gap-2">
+            <Sparkles className="text-muted-foreground h-3.5 w-3.5" />
+            <span className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+              {t('coreEditor.realityScan.presets', { defaultValue: 'Suggested targets' })}
+            </span>
+          </div>
+          <div className="space-y-2">
+            <div className="flex flex-wrap gap-1.5">
+              {iranPresets.map(preset => {
+                const active = targets.includes(preset.host)
+                return (
+                  <button
+                    key={preset.host}
+                    type="button"
+                    disabled={isScanning}
+                    onClick={() => togglePreset(preset.host)}
+                    className={cn(
+                      'rounded-full border px-2.5 py-1 text-xs transition-colors',
+                      active ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300' : 'border-border bg-muted/30 hover:bg-muted/60 text-foreground',
+                    )}
+                    dir="ltr"
+                    title={preset.host}
+                  >
+                    {preset.label}
+                    <span className="text-muted-foreground ml-1 text-[10px]">IR</span>
+                  </button>
+                )
+              })}
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {globalPresets.map(preset => {
+                const active = targets.includes(preset.host)
+                return (
+                  <button
+                    key={preset.host}
+                    type="button"
+                    disabled={isScanning}
+                    onClick={() => togglePreset(preset.host)}
+                    className={cn(
+                      'rounded-full border px-2.5 py-1 text-xs transition-colors',
+                      active ? 'border-sky-500/40 bg-sky-500/15 text-sky-700 dark:text-sky-300' : 'border-border bg-muted/30 hover:bg-muted/60 text-foreground',
+                    )}
+                    dir="ltr"
+                    title={preset.host}
+                  >
+                    {preset.label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+
+        <form id="reality-scan-form" onSubmit={handleSubmit} className="grid items-start gap-4 sm:grid-cols-[minmax(0,1fr)_120px]">
           <div className="flex min-w-0 flex-col gap-2">
             <Label>{t('coreEditor.realityScan.targets', { defaultValue: 'Targets' })}</Label>
             <TargetsInput value={targets} onChange={setTargets} disabled={isScanning} max={MAX_TARGETS} />
@@ -484,18 +687,20 @@ export function RealityScanDialog({ open, onOpenChange, initialTarget }: Reality
           </div>
           <div className="flex min-w-0 flex-col gap-2">
             <Label>{t('coreEditor.realityScan.timeout', { defaultValue: 'Timeout (s)' })}</Label>
-            <Input className="h-10" value={timeoutInput} onChange={event => setTimeoutInput(event.target.value)} inputMode="numeric" type="number" min={1} max={20} disabled={isScanning} dir="ltr" />
+            <Input className="h-11 rounded-xl" value={timeoutInput} onChange={event => setTimeoutInput(event.target.value)} inputMode="numeric" type="number" min={1} max={20} disabled={isScanning} dir="ltr" />
           </div>
         </form>
 
         <div>
           {!rows.length ? (
-            <div className="text-muted-foreground flex min-h-48 items-center justify-center rounded-md border border-dashed px-4 text-center text-sm">
-              {t('coreEditor.realityScan.empty', { defaultValue: 'Enter one or more targets and run the scan.' })}
+            <div className="from-muted/20 to-muted/5 text-muted-foreground flex min-h-44 flex-col items-center justify-center gap-2 rounded-xl border border-dashed bg-gradient-to-b px-4 text-center text-sm">
+              <ScanSearch className="h-6 w-6 opacity-40" />
+              <p>{t('coreEditor.realityScan.empty', { defaultValue: 'Pick a suggested target or type one, then Scan.' })}</p>
+              <p className="text-xs opacity-70">{t('coreEditor.realityScan.emptyHint', { defaultValue: 'After a green result, press Use to fill dest + serverNames.' })}</p>
             </div>
           ) : single ? (
             single.status === 'done' && single.result ? (
-              <ScanResultDetail result={single.result} />
+              <ScanResultDetail result={single.result} onUse={onUse ? handleUse : undefined} />
             ) : single.status === 'error' ? (
               <Alert variant="destructive">
                 <AlertDescription dir="ltr" className="font-mono text-xs">
@@ -503,7 +708,7 @@ export function RealityScanDialog({ open, onOpenChange, initialTarget }: Reality
                 </AlertDescription>
               </Alert>
             ) : (
-              <div className="flex min-h-48 items-center justify-center rounded-md border border-dashed">
+              <div className="flex min-h-44 items-center justify-center rounded-xl border border-dashed">
                 <div className="text-muted-foreground flex items-center gap-2 text-sm">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   {t('coreEditor.realityScan.loading', { defaultValue: 'Scanning target...' })}
@@ -523,7 +728,13 @@ export function RealityScanDialog({ open, onOpenChange, initialTarget }: Reality
               </div>
               <div className="space-y-1.5">
                 {displayedRows.map(row => (
-                  <ScanRowItem key={row.target} row={row} expanded={expanded === row.target} onToggle={() => setExpanded(prev => (prev === row.target ? null : row.target))} />
+                  <ScanRowItem
+                    key={row.target}
+                    row={row}
+                    expanded={expanded === row.target}
+                    onToggle={() => setExpanded(prev => (prev === row.target ? null : row.target))}
+                    onUse={onUse ? handleUse : undefined}
+                  />
                 ))}
               </div>
             </div>

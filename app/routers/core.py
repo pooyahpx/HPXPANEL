@@ -40,8 +40,9 @@ async def create_core_config(
 async def scan_reality_target(
     request: RealityScanRequest,
     _: AdminDetails = Depends(require_permission("cores", "read")),
+    db: AsyncSession = Depends(get_db),
 ):
-    return await core_operator.scan_reality_target(request)
+    return await core_operator.scan_reality_target(db, request)
 
 
 @router.post("/openvpn/generate-pki", response_model=OpenVPNPkiResponse)

@@ -693,7 +693,198 @@ def _scan_sync(host: str, ip: str, port: int, sni: str | None, timeout: float) -
     return result
 
 
-async def scan_reality_target(target: str, timeout: float | None = None) -> dict:
+# Domains / brands that blend well with Iranian ISP traffic (REALITY camouflage).
+_IRAN_AFFINITY_HINTS: tuple[str, ...] = (
+    "digikala",
+    "aparat",
+    "snapp",
+    "divar",
+    "sheypoor",
+    "torob",
+    "cafebazaar",
+    "myket",
+    "bankmellat",
+    "bmi.ir",
+    "melli",
+    "shaparak",
+    "irancell",
+    "mci.ir",
+    "rightel",
+    "tapsi",
+    "alibaba.ir",
+    "flightio",
+    "okala",
+    "basalam",
+)
+
+
+def iran_affinity_for(host: str | None, server_names: list[str] | None = None) -> tuple[bool, str | None]:
+    """Return whether the decoy looks Iran-native for local ISP camouflage."""
+    candidates = [host or ""]
+    if server_names:
+        candidates.extend(server_names)
+    for raw in candidates:
+        name = (raw or "").strip().lower().rstrip(".")
+        if not name:
+            continue
+        if name.endswith(".ir") or ".ir." in name:
+            return True, f"{name} is an .ir name (strong Iran blend)"
+        for hint in _IRAN_AFFINITY_HINTS:
+            if hint in name:
+                return True, f"{name} matches Iran-popular brand «{hint}»"
+    return False, None
+
+
+def _grade_for_score(score: int) -> str:
+    if score >= 85:
+        return "excellent"
+    if score >= 70:
+        return "good"
+    if score >= 50:
+        return "fair"
+    if score > 0:
+        return "poor"
+    return "n/a"
+
+
+def _first_pulse_forward_port(port_forwards: list | None) -> int | None:
+    if not port_forwards:
+        return None
+    for entry in port_forwards:
+        raw = str(entry).strip()
+        if not raw:
+            continue
+        left = raw.split("=", 1)[0].strip()
+        left = left.split(":", 1)[0].strip()
+        try:
+            port = int(left)
+        except ValueError:
+            continue
+        if 1 <= port <= 65535:
+            return port
+    return None
+
+
+async def _tcp_probe_ms(host: str, port: int, timeout: float) -> tuple[bool, int | None, str | None]:
+    started = time.monotonic()
+    try:
+        reader, writer = await asyncio.wait_for(asyncio.open_connection(host, port), timeout=timeout)
+        writer.close()
+        try:
+            await writer.wait_closed()
+        except Exception:
+            pass
+        del reader
+        ms = max(1, int((time.monotonic() - started) * 1000))
+        return True, ms, None
+    except TimeoutError:
+        return False, None, "timeout"
+    except OSError as exc:
+        return False, None, str(exc)[:120]
+
+
+def score_iran_path(
+    *,
+    feasible: bool,
+    host: str | None,
+    server_names: list[str] | None,
+    latency_ms: int | None,
+    pulse_checks: list[dict],
+) -> dict:
+    notes: list[str] = []
+    score = 0
+    affinity, affinity_reason = iran_affinity_for(host, server_names)
+
+    if feasible:
+        score += 40
+        notes.append("REALITY basics OK (TLS 1.3 + H2 + X25519)")
+    else:
+        notes.append("Not feasible as REALITY dest yet — fix TLS/H2/X25519 first")
+
+    if affinity:
+        score += 30
+        if affinity_reason:
+            notes.append(affinity_reason)
+    else:
+        notes.append("Global CDN decoy — fine technically, weaker Iran ISP blend than .ir / Digikala-class brands")
+
+    if latency_ms is not None:
+        if latency_ms <= 80:
+            score += 15
+            notes.append(f"Low dest latency from panel ({latency_ms} ms)")
+        elif latency_ms <= 160:
+            score += 10
+            notes.append(f"Moderate dest latency from panel ({latency_ms} ms)")
+        elif latency_ms <= 300:
+            score += 5
+            notes.append(f"High dest latency from panel ({latency_ms} ms)")
+        else:
+            notes.append(f"Very high dest latency from panel ({latency_ms} ms)")
+
+    reachable = [c for c in pulse_checks if c.get("reachable")]
+    if pulse_checks:
+        if reachable:
+            score += 15
+            best = min((c.get("latency_ms") or 99999) for c in reachable)
+            notes.append(f"{len(reachable)}/{len(pulse_checks)} Pulse Iran entry IP(s) reachable (best {best} ms)")
+        else:
+            notes.append("No Pulse Iran entry IP reachable from panel — tunnel ingress may be down")
+    else:
+        notes.append("No Pulse tunnels configured — skipped Iran IP reachability check")
+
+    score = max(0, min(100, score))
+    return {
+        "score": score,
+        "grade": _grade_for_score(score),
+        "iran_affinity": affinity,
+        "affinity_reason": affinity_reason,
+        "pulse_checks": pulse_checks,
+        "notes": notes,
+    }
+
+
+async def assess_iran_path(
+    *,
+    result: dict,
+    pulses: list[dict] | None,
+    timeout: float,
+) -> dict:
+    """Score Iran camouflage + TCP reachability of Pulse Iran public IPs."""
+    pulse_checks: list[dict] = []
+    for pulse in (pulses or [])[:8]:
+        iran_ip = str(pulse.get("iran_public_ip") or "").strip()
+        if not iran_ip:
+            continue
+        port = _first_pulse_forward_port(pulse.get("port_forwards")) or 443
+        ok, ms, detail = await _tcp_probe_ms(iran_ip, port, min(timeout, 5.0))
+        pulse_checks.append(
+            {
+                "pulse_id": int(pulse.get("id") or 0),
+                "name": str(pulse.get("name") or f"pulse-{pulse.get('id')}"),
+                "iran_ip": iran_ip,
+                "port": port,
+                "reachable": ok,
+                "latency_ms": ms,
+                "detail": detail,
+            }
+        )
+
+    return score_iran_path(
+        feasible=bool(result.get("feasible")),
+        host=result.get("sni") or result.get("host"),
+        server_names=list(result.get("server_names") or []),
+        latency_ms=result.get("latency_ms"),
+        pulse_checks=pulse_checks,
+    )
+
+
+async def scan_reality_target(
+    target: str,
+    timeout: float | None = None,
+    *,
+    check_iran_path: bool = True,
+    pulses: list[dict] | None = None,
+) -> dict:
     host, port, sni = parse_target(target)
     clamped = _clamp_timeout(timeout)
     async with _get_scan_semaphore():
@@ -701,9 +892,15 @@ async def scan_reality_target(target: str, timeout: float | None = None) -> dict
         loop = asyncio.get_running_loop()
         executor = _get_scan_executor()
         try:
-            return await asyncio.wait_for(
+            result = await asyncio.wait_for(
                 loop.run_in_executor(executor, _scan_sync, host, ip, port, sni, clamped),
                 timeout=clamped * 6 + 15,
             )
         except TimeoutError:
             raise RealityScanError("Scan timed out.")
+
+    if check_iran_path:
+        result["iran_path"] = await assess_iran_path(result=result, pulses=pulses, timeout=clamped)
+    else:
+        result["iran_path"] = None
+    return result

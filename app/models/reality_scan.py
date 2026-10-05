@@ -6,6 +6,29 @@ class RealityScanRequest(BaseModel):
     timeout: float | None = Field(
         default=None, ge=1, le=20, description="Per-probe timeout in seconds (1-20, default 10)"
     )
+    check_iran_path: bool = Field(
+        default=True,
+        description="Also score Iran/Pulse fitness (affinity + reachability of Pulse Iran IPs)",
+    )
+
+
+class RealityPulsePathCheck(BaseModel):
+    pulse_id: int
+    name: str
+    iran_ip: str
+    port: int
+    reachable: bool
+    latency_ms: int | None = None
+    detail: str | None = None
+
+
+class RealityIranPath(BaseModel):
+    score: int = Field(ge=0, le=100)
+    grade: str  # excellent | good | fair | poor | n/a
+    iran_affinity: bool = False
+    affinity_reason: str | None = None
+    pulse_checks: list[RealityPulsePathCheck] = Field(default_factory=list)
+    notes: list[str] = Field(default_factory=list)
 
 
 class RealityScanResult(BaseModel):
@@ -38,3 +61,5 @@ class RealityScanResult(BaseModel):
 
     latency_ms: int | None = None
     reason: str | None = None
+
+    iran_path: RealityIranPath | None = None

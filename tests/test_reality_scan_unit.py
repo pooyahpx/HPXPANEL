@@ -610,3 +610,31 @@ def test_tls_probe_outer_unicodeerror_on_target_sni(monkeypatch):
     out = rs._tls_probe("1.2.3.4", 443, "a" * 70 + ".com", 2)
     assert out["tls_version"] is None
     assert out["reason"].startswith("Server name could not be encoded for TLS")
+def test_iran_affinity_digikala():
+    ok, reason = rs.iran_affinity_for('digikala.com', ['*.digikala.com'])
+    assert ok is True
+    assert reason and 'digikala' in reason.lower()
+
+
+def test_iran_affinity_global_cdn():
+    ok, reason = rs.iran_affinity_for('www.microsoft.com', ['www.microsoft.com'])
+    assert ok is False
+    assert reason is None
+
+
+def test_score_iran_path_feasible_iran_brand():
+    out = rs.score_iran_path(
+        feasible=True,
+        host='digikala.com',
+        server_names=['digikala.com'],
+        latency_ms=70,
+        pulse_checks=[{'reachable': True, 'latency_ms': 40}],
+    )
+    assert out['iran_affinity'] is True
+    assert out['score'] >= 85
+    assert out['grade'] == 'excellent'
+
+
+def test_first_pulse_forward_port():
+    assert rs._first_pulse_forward_port(['8443=127.0.0.1:8443']) == 8443
+    assert rs._first_pulse_forward_port([]) is None

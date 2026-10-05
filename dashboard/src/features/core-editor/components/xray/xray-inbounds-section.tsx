@@ -31,6 +31,7 @@ import { isPlaceholderTunnelRewriteAddress, normalizeTunnelNetworkForKit } from 
 import { inferParityFieldMode, outboundSettingToString, parseOutboundSettingValue, stringifyJsonFormRecord } from '@/features/core-editor/kit/xray-parity-value'
 import { useCoreEditorStore } from '@/features/core-editor/state/core-editor-store'
 import { RealityScanDialog } from '@/features/core-editor/components/xray/reality-scan-dialog'
+import { INBOUND_FORM_FIELD_SEC_SERVER_NAMES, INBOUND_FORM_FIELD_SEC_TARGET } from '@/features/core-editor/kit/inbound-dialog-schema'
 import useDirDetection from '@/hooks/use-dir-detection'
 import { cn } from '@/lib/utils'
 import {
@@ -5628,7 +5629,21 @@ export function XrayInboundsSection({ headerAddPulse, headerAddEpoch }: XrayInbo
 
 
 
-      <RealityScanDialog open={isRealityScanOpen} onOpenChange={setIsRealityScanOpen} initialTarget={realityScanTarget} />
+      <RealityScanDialog
+        open={isRealityScanOpen}
+        onOpenChange={setIsRealityScanOpen}
+        initialTarget={realityScanTarget}
+        onUse={payload => {
+          form.setValue(INBOUND_FORM_FIELD_SEC_TARGET, payload.target, { shouldDirty: true, shouldValidate: true })
+          form.setValue(INBOUND_FORM_FIELD_SEC_SERVER_NAMES, payload.serverNames.join('\n'), { shouldDirty: true, shouldValidate: true })
+          toast.success(
+            t('coreEditor.realityScan.applied', {
+              defaultValue: 'Applied {{target}} to REALITY dest + serverNames',
+              target: payload.target,
+            }),
+          )
+        }}
+      />
 
       <AlertDialog open={blockAddWhileDraftOpen} onOpenChange={setBlockAddWhileDraftOpen}>
         <AlertDialogContent dir={dir}>

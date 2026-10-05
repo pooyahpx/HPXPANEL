@@ -13,6 +13,7 @@ from app.db.crud.core import (
     remove_cores,
 )
 from app.db.crud.host import get_hosts
+from app.db.crud.hpx_pulse import get_hpx_pulses
 from app.db.crud.user import get_users_by_ids
 from app.db.crud.wireguard import (
     core_config_dict,
@@ -92,9 +93,32 @@ class CoreOperation(BaseOperation):
             users = await get_users_by_ids(db, changed_ids, load_admin_role=True)
             await sync_users(users)
 
-    async def scan_reality_target(self, request: RealityScanRequest) -> RealityScanResult:
+    async def scan_reality_target(self, db: AsyncSession, request: RealityScanRequest) -> RealityScanResult:
+        pulses_payload: list[dict] = []
+        if request.check_iran_path:
+            try:
+                rows, _ = await get_hpx_pulses(db, offset=0, limit=8)
+                for row in rows:
+                    if not getattr(row, "enabled", True):
+                        continue
+                    pulses_payload.append(
+                        {
+                            "id": row.id,
+                            "name": row.name,
+                            "iran_public_ip": row.iran_public_ip,
+                            "port_forwards": list(row.port_forwards or []),
+                        }
+                    )
+            except Exception as exc:
+                logger.debug("reality-scan: pulse list skipped: %s", exc)
+
         try:
-            result = await scan_reality_target(target=request.target, timeout=request.timeout)
+            result = await scan_reality_target(
+                target=request.target,
+                timeout=request.timeout,
+                check_iran_path=request.check_iran_path,
+                pulses=pulses_payload,
+            )
         except RealityScanError as e:
             await self.raise_error(message=str(e), code=400)
         except Exception as e:

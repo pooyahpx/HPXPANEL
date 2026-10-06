@@ -210,14 +210,15 @@ apply_instance() {
 }
 
 port_in_use_by_other_instance() {
-  local port="$1" dir f other
+  # $1 = port, $2 = compose key (SERVICE_PORT | PANEL_API_PORT)
+  local port="$1" key="${2:-SERVICE_PORT}" dir f other
   for dir in /opt/hpx-node /opt/hpx-node-*; do
     [ -d "$dir" ] || continue
     f="$dir/docker-compose.yml"
     [ -f "$f" ] || continue
     other="$(basename "$dir")"
     [ "$other" = "$SERVICE" ] && continue
-    if grep -E "SERVICE_PORT:[[:space:]]*${port}([[:space:]]|$)" "$f" >/dev/null 2>&1; then
+    if grep -E "${key}:[[:space:]]*${port}([[:space:]]|$)" "$f" >/dev/null 2>&1; then
       echo "$other"
       return 0
     fi
@@ -227,14 +228,77 @@ port_in_use_by_other_instance() {
 
 assert_port_free() {
   local conflict
-  conflict="$(port_in_use_by_other_instance "$SERVICE_PORT" || true)"
+  resolve_api_port
+  conflict="$(port_in_use_by_other_instance "$SERVICE_PORT" SERVICE_PORT || true)"
   if [ -n "$conflict" ]; then
-    die "Node port ${SERVICE_PORT} is already used by instance '${conflict}'. Pick another --service-port."
+    die "Node port ${SERVICE_PORT} is already used by instance '${conflict}'. Pick another --service-port (and use --name)."
+  fi
+  conflict="$(port_in_use_by_other_instance "$API_PORT" PANEL_API_PORT || true)"
+  if [ -n "$conflict" ]; then
+    die "API port ${API_PORT} is already used by instance '${conflict}'. Pick another --api-port (and use --name)."
+  fi
+  # Also block if someone put our API port as their gRPC port (or vice versa).
+  conflict="$(port_in_use_by_other_instance "$API_PORT" SERVICE_PORT || true)"
+  if [ -n "$conflict" ]; then
+    die "API port ${API_PORT} collides with Node port of instance '${conflict}'."
+  fi
+  conflict="$(port_in_use_by_other_instance "$SERVICE_PORT" PANEL_API_PORT || true)"
+  if [ -n "$conflict" ]; then
+    die "Node port ${SERVICE_PORT} collides with API port of instance '${conflict}'."
   fi
   if has ss; then
     if ss -lntu 2>/dev/null | awk '{print $5}' | grep -E "[:.]${SERVICE_PORT}\$" >/dev/null 2>&1; then
       warn "Port ${SERVICE_PORT} looks busy on this host — install may still work if it is the same container being replaced."
     fi
+    if ss -lntu 2>/dev/null | awk '{print $5}' | grep -E "[:.]${API_PORT}\$" >/dev/null 2>&1; then
+      warn "API port ${API_PORT} looks busy on this host — pick a free --api-port if this is a second instance."
+    fi
+  fi
+}
+
+# Second panel on one VPS MUST use --name. Reinstalling the default instance
+# without --name regenerates API key/CA and kills the first panel link.
+assert_multi_instance_safe() {
+  local existing_port=""
+  if [ -n "$NODE_NAME" ]; then
+    return 0
+  fi
+  # Default instance path already exists: only allow reinstall of THE SAME ports
+  # (or explicit same SERVICE). Different ports without --name = operator mistake.
+  if [ -f /opt/hpx-node/docker-compose.yml ]; then
+    existing_port="$(grep -E 'SERVICE_PORT:' /opt/hpx-node/docker-compose.yml 2>/dev/null | head -1 | awk '{print $2}' | tr -d '\r')"
+    if [ -n "$existing_port" ] && [ "$existing_port" != "$SERVICE_PORT" ]; then
+      die "A default node already exists on port ${existing_port} at /opt/hpx-node.
+Refusing to overwrite it with port ${SERVICE_PORT} (that kills the first panel connection).
+
+For a SECOND panel on this server, use a unique --name + free ports, e.g.:
+  sudo bash -c \"\$(curl -fsSL ${REPO}/raw/main/scripts/install.sh)\" @ install -y \\
+    --name panel2 --service-port ${SERVICE_PORT} --api-port ${API_PORT:-$((SERVICE_PORT + 1))}
+
+Then register the NEW Address / ports / API key / CA in the second panel only.
+Keep the first node untouched:  sudo hpx-node status"
+    fi
+  fi
+  # Any named sibling already present + installing default without --name is OK
+  # (reinstall default), but warn so operators know.
+  if compgen -G '/opt/hpx-node-*/docker-compose.yml' >/dev/null 2>&1; then
+    warn "Other named node instance(s) exist on this host. Reinstalling default '${SERVICE}' only — use --name for additional panels."
+  fi
+}
+
+preserve_existing_api_key() {
+  # Reinstall of the SAME instance must keep API key so the panel stays linked.
+  local existing=""
+  [ -z "$API_KEY" ] || return 0
+  if [ -f "$COMPOSE_FILE" ]; then
+    existing="$(grep -E '^\s*API_KEY:' "$COMPOSE_FILE" 2>/dev/null | head -1 | sed -E 's/.*API_KEY:[[:space:]]*"?([^"]*)"?/\1/' | tr -d '\r')"
+  fi
+  if [ -z "$existing" ] && [ -f "$INSTALL_DIR/.env" ]; then
+    existing="$(grep -E '^API_KEY=' "$INSTALL_DIR/.env" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '\r')"
+  fi
+  if [ -n "$existing" ]; then
+    API_KEY="$existing"
+    log "Keeping existing API key for ${SERVICE} (panel registration stays valid)"
   fi
 }
 
@@ -408,10 +472,12 @@ Install options:
 Note: open both Node Port and API Port in the firewall (panel Update Node uses API Port).
 
 Multi-node examples (same server, different gRPC ports — sell as separate panel nodes):
-  sudo bash install.sh install -y --name shop1 --service-port 62051
-  sudo bash install.sh install -y --name shop2 --service-port 62052
+  # First panel (default instance)
+  sudo bash install.sh install -y --service-port 62050 --api-port 62051
+  # Second panel — MUST use --name (otherwise overwrites the first node)
+  sudo bash install.sh install -y --name panel2 --service-port 62052 --api-port 62053
   sudo bash install.sh list
-  sudo bash install.sh --name shop1 status
+  sudo bash install.sh --name panel2 status
 
 Note: host networking is shared. Give each panel node different inbound/VPN ports
 in HPXPANEL so WireGuard / OpenVPN / IKEv2 do not collide on this host.
@@ -817,14 +883,21 @@ run_install() {
   require_root
   apply_instance
   resolve_api_port
+  assert_multi_instance_safe
   assert_port_free
   : > "$STEP_LOG"
+  preserve_existing_api_key
   [ -z "$API_KEY" ] && API_KEY="$(gen_uuid)"
   local quiet_note=""; [ "${QUIET:-0}" = "1" ] && quiet_note=" — quiet mode"
 
   banner
   features_panel
-  echo -e "${c_bld}Deploying HPX node${c_off} ${c_dim}${SERVICE}${c_off} ${c_dim}(log: ${STEP_LOG}${quiet_note})${c_off}"
+  if [ -z "$NODE_NAME" ]; then
+    echo -e "${c_bld}Deploying HPX node${c_off} ${c_dim}${SERVICE}${c_off} ${c_dim}(default instance — for a 2nd panel use --name)${c_off}"
+  else
+    echo -e "${c_bld}Deploying HPX node${c_off} ${c_dim}${SERVICE}${c_off} ${c_dim}(--name ${NODE_NAME})${c_off}"
+  fi
+  echo -e "${c_dim}(log: ${STEP_LOG}${quiet_note})${c_off}"
   echo
 
   run_step_live "Installing Docker"          install_docker

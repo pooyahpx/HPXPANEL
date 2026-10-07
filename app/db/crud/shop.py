@@ -8,6 +8,7 @@ from app.db.models import (
     Admin,
     AdminRole,
     ShopConfig,
+    ShopDiscountCode,
     ShopOrder,
     ShopOrderStatus,
     ShopPlan,
@@ -451,6 +452,9 @@ async def create_shop_order(
     payment_ref: str | None = None,
     payment_url: str | None = None,
     payment_paid: bool = False,
+    discount_code: str | None = None,
+    discount_amount_toman: int | None = None,
+    original_price_toman: int | None = None,
 ) -> ShopOrder:
     kind = (order_kind or "purchase").strip().lower()
     if kind not in ("purchase", "renewal"):
@@ -462,6 +466,7 @@ async def create_shop_order(
         initial_status = ShopOrderStatus.awaiting_payment
     else:
         initial_status = ShopOrderStatus.pending
+    code = (discount_code or "").strip().upper() or None
     order = ShopOrder(
         plan_id=plan_id,
         admin_id=admin_id,
@@ -481,12 +486,134 @@ async def create_shop_order(
         payment_ref=payment_ref,
         payment_url=payment_url,
         payment_paid=bool(payment_paid),
+        discount_code=code,
+        discount_amount_toman=discount_amount_toman,
+        original_price_toman=original_price_toman,
     )
     await _assign_sqlite_pk(db, ShopOrder, order)
     db.add(order)
+    if code:
+        row = await get_shop_discount_by_code(db, admin_id, code)
+        if row is not None:
+            row.used_count = int(row.used_count or 0) + 1
     await db.commit()
     await db.refresh(order)
     return order
+
+
+def _normalize_discount_code(code: str) -> str:
+    return (code or "").strip().upper()
+
+
+async def list_shop_discount_codes(db: AsyncSession, admin_id: int) -> list[ShopDiscountCode]:
+    result = await db.execute(
+        select(ShopDiscountCode)
+        .where(ShopDiscountCode.admin_id == admin_id)
+        .order_by(ShopDiscountCode.id.desc())
+    )
+    return list(result.scalars().all())
+
+
+async def get_shop_discount_code(db: AsyncSession, code_id: int) -> ShopDiscountCode | None:
+    return await db.get(ShopDiscountCode, code_id)
+
+
+async def get_shop_discount_by_code(db: AsyncSession, admin_id: int, code: str) -> ShopDiscountCode | None:
+    normalized = _normalize_discount_code(code)
+    if not normalized:
+        return None
+    result = await db.execute(
+        select(ShopDiscountCode).where(
+            ShopDiscountCode.admin_id == admin_id,
+            ShopDiscountCode.code == normalized,
+        )
+    )
+    return result.scalar_one_or_none()
+
+
+async def create_shop_discount_code(
+    db: AsyncSession,
+    *,
+    admin_id: int,
+    code: str,
+    percent_off: int | None = None,
+    amount_off_toman: int | None = None,
+    max_uses: int | None = None,
+    expires_at: datetime | None = None,
+) -> ShopDiscountCode:
+    normalized = _normalize_discount_code(code)
+    if not normalized or len(normalized) > 64:
+        raise ValueError("invalid discount code")
+    if percent_off is None and amount_off_toman is None:
+        raise ValueError("percent_off or amount_off_toman required")
+    if percent_off is not None:
+        percent_off = int(percent_off)
+        if percent_off < 1 or percent_off > 100:
+            raise ValueError("percent_off must be 1-100")
+        amount_off_toman = None
+    elif amount_off_toman is not None:
+        amount_off_toman = int(amount_off_toman)
+        if amount_off_toman < 1:
+            raise ValueError("amount_off_toman must be >= 1")
+    row = ShopDiscountCode(
+        admin_id=admin_id,
+        code=normalized,
+        percent_off=percent_off,
+        amount_off_toman=amount_off_toman,
+        max_uses=int(max_uses) if max_uses is not None else None,
+        used_count=0,
+        is_active=True,
+        expires_at=expires_at,
+    )
+    await _assign_sqlite_pk(db, ShopDiscountCode, row)
+    db.add(row)
+    await db.commit()
+    await db.refresh(row)
+    return row
+
+
+async def toggle_shop_discount_code(db: AsyncSession, row: ShopDiscountCode) -> ShopDiscountCode:
+    row.is_active = not bool(row.is_active)
+    await db.commit()
+    await db.refresh(row)
+    return row
+
+
+async def delete_shop_discount_code(db: AsyncSession, row: ShopDiscountCode) -> None:
+    await db.delete(row)
+    await db.commit()
+
+
+async def redeem_shop_discount_code(
+    db: AsyncSession,
+    *,
+    admin_id: int,
+    code: str,
+    original_toman: int,
+) -> tuple[ShopDiscountCode, int, int]:
+    """Validate and quote a discount. Returns (row, final_price, discount_amount)."""
+    from app.utils.shop_quote import apply_discount_amount
+
+    row = await get_shop_discount_by_code(db, admin_id, code)
+    if row is None or not row.is_active:
+        raise ValueError("invalid")
+    if row.expires_at is not None:
+        exp = row.expires_at
+        if exp.tzinfo is None:
+            exp = exp.replace(tzinfo=UTC)
+        if exp < datetime.now(UTC):
+            raise ValueError("expired")
+    if row.max_uses is not None and int(row.used_count or 0) >= int(row.max_uses):
+        raise ValueError("exhausted")
+    quote = apply_discount_amount(
+        original_toman=original_toman,
+        percent_off=row.percent_off,
+        amount_off_toman=row.amount_off_toman,
+        code=row.code,
+    )
+    if quote.discount <= 0:
+        raise ValueError("invalid")
+    return row, quote.final, quote.discount
 
 
 async def update_shop_order_payment(

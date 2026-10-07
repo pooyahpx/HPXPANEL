@@ -20,7 +20,10 @@ async def _notify_pulse(title: str, detail: str | None = None) -> None:
     try:
         from app.db.crud.shop import get_owner_admin
         from app.telegram import get_bot
+        from app.utils.telegram_alert_prefs import tunnel_alerts_enabled
 
+        if not await tunnel_alerts_enabled():
+            return
         bot = get_bot()
         if bot is None:
             return

@@ -612,13 +612,14 @@ async def notify_owner_create_budget_charged(
 
 
 async def start_checkout(event, db, state, lang: str, *, summary_text: str) -> None:
-    """Show payment method picker or continue with the only enabled gateway."""
+    """Show payment method picker (with discount code action) then continue to the chosen gateway."""
     from aiogram import types
 
     from app.db.crud.shop import get_enabled_shop_config
-    from app.shop.payments import GATEWAY_CARD, GATEWAY_WALLET, enabled_gateways
+    from app.shop.payments import GATEWAY_CARD, enabled_gateways
     from app.telegram.keyboards.shop import ShopPayMethodKeyboard
     from app.telegram.utils import forms
+    from app.telegram.utils.i18n import format_price, rich
     from app.telegram.utils.shop_helpers import get_buyer_shop_config
 
     config = await get_buyer_shop_config(db, state)
@@ -631,19 +632,27 @@ async def start_checkout(event, db, state, lang: str, *, summary_text: str) -> N
     gateways = enabled_gateways(config)
     if not gateways:
         gateways = [GATEWAY_CARD]
+    data = await state.get_data()
+    original = data.get("original_price_toman")
+    quoted = data.get("quoted_price_toman")
+    if original is None and quoted is not None:
+        await state.update_data(original_price_toman=int(quoted))
+        original = int(quoted)
+    discount_code = data.get("discount_code")
+    discount_amount = int(data.get("discount_amount_toman") or 0)
+    text = summary_text
+    if discount_code and discount_amount > 0:
+        text += "\n\n" + rich(
+            lang,
+            "discount_applied",
+            code=discount_code,
+            amount=format_price(discount_amount),
+            price=format_price(int(quoted or 0)),
+        )
     await state.update_data(pay_gateways=gateways, lang=lang, checkout_summary=summary_text)
-    if len(gateways) == 1 and gateways[0] == GATEWAY_CARD:
-        await continue_card_checkout(event, state, lang, config, summary_text)
-        return
-    if len(gateways) == 1 and gateways[0] == GATEWAY_WALLET:
-        await continue_wallet_checkout(event, db, state, lang, config, summary_text)
-        return
-    if len(gateways) == 1:
-        await continue_online_checkout(event, db, state, lang, config, gateways[0], summary_text)
-        return
     await state.set_state(forms.ShopBuy.choose_pay_method)
-    text = summary_text + "\n\n" + t(lang, "choose_pay_method")
-    markup = ShopPayMethodKeyboard(lang, gateways).as_markup()
+    text = text + "\n\n" + t(lang, "choose_pay_method")
+    markup = ShopPayMethodKeyboard(lang, gateways, has_discount=bool(discount_code)).as_markup()
     if isinstance(event, types.CallbackQuery):
         try:
             await event.message.edit_text(text, reply_markup=markup)
@@ -720,6 +729,9 @@ async def continue_online_checkout(event, db, state, lang: str, config, gateway:
             is_custom=bool(data.get("is_custom")),
             payment_method=gateway,
             payment_paid=False,
+            discount_code=data.get("discount_code"),
+            discount_amount_toman=data.get("discount_amount_toman"),
+            original_price_toman=data.get("original_price_toman"),
         )
         result = await create_payment(
             config,
@@ -808,6 +820,9 @@ async def continue_wallet_checkout(event, db, state, lang: str, config, summary_
         is_custom=bool(data.get("is_custom")),
         payment_method="wallet",
         payment_paid=False,
+        discount_code=data.get("discount_code"),
+        discount_amount_toman=data.get("discount_amount_toman"),
+        original_price_toman=data.get("original_price_toman"),
     )
     try:
         await debit_wallet(

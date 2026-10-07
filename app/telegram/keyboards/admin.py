@@ -35,6 +35,9 @@ class AdminPanelAction(str, Enum):
     budget_ledger = "budget_ledger"
     sold_subs = "sold_subs"
     sold_sub_detail = "sold_sub_detail"
+    alert_settings = "alert_settings"
+    toggle_tunnel_alerts = "tog_tun_alrt"
+    toggle_cpu_alerts = "tog_cpu_alrt"
 
 
 def _has_permission(admin: AdminDetails | None, resource: str, action: str) -> bool:

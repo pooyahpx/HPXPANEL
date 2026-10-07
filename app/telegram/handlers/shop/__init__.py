@@ -999,6 +999,65 @@ async def choose_pay_method(
     await continue_online_checkout(event, db, state, lang, config, gateway, summary)
 
 
+@router.callback_query(ShopKeyboardCallback.filter(ShopAction.apply_discount == F.action))
+async def ask_discount_code(event: types.CallbackQuery, db: AsyncSession, state: FSMContext):
+    data = await state.get_data()
+    lang = data.get("lang") or await _lang(db, event.from_user.id)
+    await state.set_state(forms.ShopBuy.waiting_discount_code)
+    try:
+        await event.message.edit_text(t(lang, "ask_discount_code"))
+    except TelegramBadRequest:
+        await event.message.answer(t(lang, "ask_discount_code"))
+    await event.answer()
+
+
+@router.callback_query(ShopKeyboardCallback.filter(ShopAction.clear_discount == F.action))
+async def clear_discount_code(event: types.CallbackQuery, db: AsyncSession, state: FSMContext):
+    data = await state.get_data()
+    lang = data.get("lang") or await _lang(db, event.from_user.id)
+    original = int(data.get("original_price_toman") or data.get("quoted_price_toman") or 0)
+    await state.update_data(
+        quoted_price_toman=original,
+        discount_code=None,
+        discount_amount_toman=None,
+    )
+    summary = data.get("checkout_summary") or ""
+    await start_checkout(event, db, state, lang, summary_text=summary)
+
+
+@router.message(forms.ShopBuy.waiting_discount_code)
+async def apply_discount_code_message(event: types.Message, db: AsyncSession, state: FSMContext):
+    from app.db.crud.shop import redeem_shop_discount_code
+
+    data = await state.get_data()
+    lang = data.get("lang") or await _lang(db, event.from_user.id)
+    code = (event.text or "").strip()
+    admin_id = data.get("admin_id")
+    original = int(data.get("original_price_toman") or data.get("quoted_price_toman") or 0)
+    if not admin_id or original <= 0:
+        await event.answer(t(lang, "shop_disabled"))
+        return
+    try:
+        row, final, discount = await redeem_shop_discount_code(
+            db, admin_id=int(admin_id), code=code, original_toman=original
+        )
+    except ValueError as exc:
+        key = {
+            "expired": "discount_expired",
+            "exhausted": "discount_exhausted",
+        }.get(str(exc), "discount_invalid")
+        await event.answer(t(lang, key))
+        return
+    await state.update_data(
+        quoted_price_toman=final,
+        original_price_toman=original,
+        discount_code=row.code,
+        discount_amount_toman=discount,
+    )
+    summary = data.get("checkout_summary") or ""
+    await start_checkout(event, db, state, lang, summary_text=summary)
+
+
 @router.message(forms.ShopBuy.waiting_receipt, F.photo)
 async def receive_receipt(event: types.Message, db: AsyncSession, state: FSMContext):
     data = await state.get_data()
@@ -1035,6 +1094,9 @@ async def receive_receipt(event: types.Message, db: AsyncSession, state: FSMCont
         is_custom=is_custom,
         payment_method=data.get("payment_method") or "card",
         payment_paid=False,
+        discount_code=data.get("discount_code"),
+        discount_amount_toman=data.get("discount_amount_toman"),
+        original_price_toman=data.get("original_price_toman"),
     )
     await state.clear()
     created_key = "renew_order_created" if order_kind == "renewal" else "order_created"

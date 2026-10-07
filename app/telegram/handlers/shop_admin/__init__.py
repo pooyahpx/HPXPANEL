@@ -4,16 +4,21 @@ from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.crud.shop import (
+    create_shop_discount_code,
     create_shop_plan,
+    delete_shop_discount_code,
     delete_shop_plan,
     get_shop_bot_stats,
     get_shop_config_by_admin,
+    get_shop_discount_code,
     get_shop_order,
     get_shop_plan,
     get_telegram_lang,
     list_pending_orders,
     list_plans_for_admin,
+    list_shop_discount_codes,
     set_plan_active,
+    toggle_shop_discount_code,
     update_order_status,
     update_shop_plan,
     upsert_shop_config,
@@ -33,6 +38,7 @@ from app.telegram.keyboards.shop import (
     PAY_GW_ZARINPAL,
     ShopAdminAction,
     ShopAdminCardsKeyboard,
+    ShopAdminDiscountsKeyboard,
     ShopAdminKeyboard,
     ShopAdminPaymentsKeyboard,
     ShopAdminPlanEditKeyboard,
@@ -1261,6 +1267,152 @@ async def finish_card_photos(event: types.Message, db: AsyncSession, state: FSMC
     await state.clear()
     await event.answer(t(lang, "admin_card_photos_saved", count=len(photos)))
     await _render_admin_shop(event, db, admin)
+
+
+@router.callback_query(ShopAdminKeyboard.Callback.filter(ShopAdminAction.discounts == F.action))
+async def list_discounts(event: types.CallbackQuery, db: AsyncSession, admin: AdminDetails):
+    lang = await _lang(db, event.from_user.id)
+    codes = await list_shop_discount_codes(db, admin.id)
+    text = rich(lang, "admin_discounts_title")
+    if not codes:
+        text += "\n\n—"
+    await event.message.edit_text(text, reply_markup=ShopAdminDiscountsKeyboard(lang, codes).as_markup())
+    await event.answer()
+
+
+@router.callback_query(ShopAdminKeyboard.Callback.filter(ShopAdminAction.add_discount == F.action))
+async def ask_discount_code(event: types.CallbackQuery, db: AsyncSession, state: FSMContext):
+    lang = await _lang(db, event.from_user.id)
+    await state.set_state(forms.ShopAdminDiscount.waiting_code)
+    await state.update_data(lang=lang)
+    msg = await event.message.answer(t(lang, "admin_ask_discount_code"))
+    await add_to_messages_to_delete(state, msg)
+    await event.answer()
+
+
+@router.message(forms.ShopAdminDiscount.waiting_code)
+async def discount_code_value(event: types.Message, state: FSMContext):
+    data = await state.get_data()
+    lang = data.get("lang", "fa")
+    code = (event.text or "").strip().upper()
+    if not code or len(code) > 64 or " " in code:
+        await event.answer(t(lang, "admin_ask_discount_code"))
+        return
+    await state.update_data(discount_code=code)
+    await state.set_state(forms.ShopAdminDiscount.waiting_type)
+    from aiogram.utils.keyboard import InlineKeyboardBuilder
+
+    kb = InlineKeyboardBuilder()
+    kb.button(text=t(lang, "btn_discount_percent"), callback_data="disc_type:percent")
+    kb.button(text=t(lang, "btn_discount_amount"), callback_data="disc_type:amount")
+    kb.adjust(2)
+    await event.answer(t(lang, "admin_ask_discount_type"), reply_markup=kb.as_markup())
+
+
+@router.callback_query(forms.ShopAdminDiscount.waiting_type, F.data.startswith("disc_type:"))
+async def discount_type_pick(event: types.CallbackQuery, state: FSMContext, db: AsyncSession):
+    data = await state.get_data()
+    lang = data.get("lang") or await _lang(db, event.from_user.id)
+    kind = (event.data or "").split(":", 1)[-1]
+    if kind not in ("percent", "amount"):
+        await event.answer("!", show_alert=True)
+        return
+    await state.update_data(discount_kind=kind)
+    await state.set_state(forms.ShopAdminDiscount.waiting_value)
+    prompt = t(lang, "admin_ask_discount_percent") if kind == "percent" else t(lang, "admin_ask_discount_amount")
+    try:
+        await event.message.edit_text(prompt)
+    except TelegramBadRequest:
+        await event.message.answer(prompt)
+    await event.answer()
+
+
+@router.message(forms.ShopAdminDiscount.waiting_value)
+async def discount_value(event: types.Message, state: FSMContext):
+    data = await state.get_data()
+    lang = data.get("lang", "fa")
+    kind = data.get("discount_kind") or "percent"
+    raw = (event.text or "").strip().replace(",", "").replace("٬", "")
+    try:
+        value = int(raw)
+    except ValueError:
+        await event.answer(t(lang, "admin_ask_discount_percent" if kind == "percent" else "admin_ask_discount_amount"))
+        return
+    if kind == "percent" and (value < 1 or value > 100):
+        await event.answer(t(lang, "admin_ask_discount_percent"))
+        return
+    if kind == "amount" and value < 1:
+        await event.answer(t(lang, "admin_ask_discount_amount"))
+        return
+    await state.update_data(discount_value=value)
+    await state.set_state(forms.ShopAdminDiscount.waiting_max_uses)
+    await event.answer(t(lang, "admin_ask_discount_max_uses"))
+
+
+@router.message(forms.ShopAdminDiscount.waiting_max_uses)
+async def discount_max_uses(event: types.Message, db: AsyncSession, state: FSMContext, admin: AdminDetails):
+    data = await state.get_data()
+    lang = data.get("lang", "fa")
+    raw = (event.text or "").strip()
+    max_uses = None
+    if raw not in ("0", "-", "∞", "unlimited", "نامحدود"):
+        try:
+            max_uses = int(raw)
+            if max_uses < 1:
+                raise ValueError
+        except ValueError:
+            await event.answer(t(lang, "admin_ask_discount_max_uses"))
+            return
+    kind = data.get("discount_kind") or "percent"
+    value = int(data.get("discount_value") or 0)
+    code = data.get("discount_code") or ""
+    try:
+        await create_shop_discount_code(
+            db,
+            admin_id=admin.id,
+            code=code,
+            percent_off=value if kind == "percent" else None,
+            amount_off_toman=value if kind == "amount" else None,
+            max_uses=max_uses,
+        )
+    except Exception as exc:
+        await event.answer(t(lang, "admin_discount_create_fail", error=str(exc)[:120]))
+        return
+    await state.clear()
+    codes = await list_shop_discount_codes(db, admin.id)
+    await event.answer(
+        t(lang, "admin_discount_created", code=code) + "\n\n" + rich(lang, "admin_discounts_title"),
+        reply_markup=ShopAdminDiscountsKeyboard(lang, codes).as_markup(),
+    )
+
+
+@router.callback_query(ShopAdminKeyboard.Callback.filter(ShopAdminAction.toggle_discount == F.action))
+async def toggle_discount(event: types.CallbackQuery, callback_data: ShopAdminKeyboard.Callback, db: AsyncSession, admin: AdminDetails):
+    lang = await _lang(db, event.from_user.id)
+    row = await get_shop_discount_code(db, callback_data.id)
+    if not row or row.admin_id != admin.id:
+        await event.answer("!", show_alert=True)
+        return
+    await toggle_shop_discount_code(db, row)
+    codes = await list_shop_discount_codes(db, admin.id)
+    await event.message.edit_reply_markup(reply_markup=ShopAdminDiscountsKeyboard(lang, codes).as_markup())
+    await event.answer(t(lang, "admin_discount_toggled"))
+
+
+@router.callback_query(ShopAdminKeyboard.Callback.filter(ShopAdminAction.delete_discount == F.action))
+async def delete_discount(event: types.CallbackQuery, callback_data: ShopAdminKeyboard.Callback, db: AsyncSession, admin: AdminDetails):
+    lang = await _lang(db, event.from_user.id)
+    row = await get_shop_discount_code(db, callback_data.id)
+    if not row or row.admin_id != admin.id:
+        await event.answer("!", show_alert=True)
+        return
+    await delete_shop_discount_code(db, row)
+    codes = await list_shop_discount_codes(db, admin.id)
+    await event.message.edit_text(
+        rich(lang, "admin_discounts_title"),
+        reply_markup=ShopAdminDiscountsKeyboard(lang, codes).as_markup(),
+    )
+    await event.answer(t(lang, "admin_discount_deleted"))
 
 
 @router.callback_query(ShopAdminKeyboard.Callback.filter(ShopAdminAction.add_plan == F.action))

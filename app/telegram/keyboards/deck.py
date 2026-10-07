@@ -124,6 +124,11 @@ class DeckPanel(InlineKeyboardBuilder):
                 callback_data=panel_cb(action=AdminPanelAction.sold_subs),
             )
             rows.append(2)
+            self.button(
+                text=t(lang, "btn_alert_settings"),
+                callback_data=panel_cb(action=AdminPanelAction.alert_settings),
+            )
+            rows.append(1)
 
         if rows:
             self.adjust(*rows)

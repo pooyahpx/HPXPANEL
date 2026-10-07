@@ -37,6 +37,7 @@ import { BulkActionItem, BulkActionsBar } from '@/features/users/components/bulk
 import { BulkActionAlertDialog } from '@/features/users/components/bulk-action-alert-dialog'
 import { NodeActionsMenuModalHost } from '@/features/nodes/components/node-actions-menu'
 import { useAdmin } from '@/hooks/use-admin'
+import { useResolvedInfraLocations } from '@/hooks/use-resolved-infra-locations'
 import { hasPermission } from '@/utils/rbac'
 import { cn } from '@/lib/utils'
 
@@ -120,8 +121,8 @@ export default function NodesList() {
     refetch,
   } = useGetNodes(filters, {
     query: {
-      refetchInterval: 15_000,
-      staleTime: 8_000,
+      refetchInterval: 5_000,
+      staleTime: 2_000,
       gcTime: 60_000,
       retry: 1,
       refetchOnMount: true,
@@ -306,6 +307,7 @@ export default function NodesList() {
   }, [shouldUseLocalSearch, localSearchTerm, filteredNodes, currentPage])
 
   const nodesData = paginatedNodes
+  const locationsById = useResolvedInfraLocations(nodesData)
   const totalNodes = shouldUseLocalSearch && localSearchTerm ? filteredNodes.length : nodesResponse?.total || 0
   const showLoadingSpinner = isLoading && isFirstLoadRef.current
   const isBackgroundRefetch = isFetching && !isChangingPage && !isFirstLoadRef.current && !!nodesResponse
@@ -341,6 +343,7 @@ export default function NodesList() {
     canReconnect: canReconnectNodes,
     canUpdateCore: canUpdateNodeCore,
     canReadStats: canReadNodeStats,
+    locationsById,
   })
 
   const handleAdvanceSearchSubmit = (values: NodeAdvanceSearchFormValue) => {
@@ -743,6 +746,7 @@ export default function NodesList() {
                     canReconnect={canReconnectNodes}
                     canUpdateCore={canUpdateNodeCore}
                     canReadStats={canReadNodeStats}
+                    location={locationsById.get(String(node.id))}
                   />
                 )}
                 renderSkeleton={i => (

@@ -3,6 +3,8 @@ import { getSystemIpGeo } from '@/service/api/ip-geo'
 import {
   countryFromCode,
   isPublicIp,
+  mergeInfraLocations,
+  resolveInfraLocation,
   type InfraLocation,
 } from '@/utils/infra-location'
 
@@ -20,14 +22,13 @@ const emptyLocation = (): InfraLocation => ({
   datacenter: null,
 })
 
-/** Resolve node location/datacenter from IP via check-host.net (panel backend). */
+/** Resolve node location/datacenter from name hints + IP geo (panel backend). */
 export const useResolvedInfraLocations = <T extends Locatable>(items: T[]) => {
   const [byId, setById] = useState<Record<string, InfraLocation>>({})
 
   const lookupKey = useMemo(() => {
     return items
-      .filter(item => isPublicIp(item.address))
-      .map(item => `${item.id}:${item.address!.trim()}`)
+      .map(item => `${item.id}:${(item.address || '').trim()}:${(item.name || '').trim()}`)
       .sort()
       .join('|')
   }, [items])
@@ -40,13 +41,17 @@ export const useResolvedInfraLocations = <T extends Locatable>(items: T[]) => {
     }
 
     const targets = lookupKey.split('|').map(entry => {
-      const [id, ...ipParts] = entry.split(':')
-      return { id, ip: ipParts.join(':') }
+      const [id, ip = '', ...nameParts] = entry.split(':')
+      return { id, ip, name: nameParts.join(':') }
     })
 
     const run = async () => {
       const entries = await Promise.all(
         targets.map(async target => {
+          const fromName = resolveInfraLocation(target.name, target.ip)
+          if (!isPublicIp(target.ip)) {
+            return [target.id, fromName] as const
+          }
           try {
             const geo = await getSystemIpGeo(target.ip)
             const base = countryFromCode(geo.country_code)
@@ -58,9 +63,9 @@ export const useResolvedInfraLocations = <T extends Locatable>(items: T[]) => {
             }
             base.city = geo.city || null
             base.datacenter = (geo.isp || '').trim() || null
-            return [target.id, base] as const
+            return [target.id, mergeInfraLocations(base, fromName)] as const
           } catch {
-            return [target.id, emptyLocation()] as const
+            return [target.id, fromName.countryCode ? fromName : emptyLocation()] as const
           }
         }),
       )
@@ -82,7 +87,13 @@ export const useResolvedInfraLocations = <T extends Locatable>(items: T[]) => {
     const map = new Map<string, InfraLocation>()
     for (const item of items) {
       const id = String(item.id)
-      map.set(id, byId[id] || emptyLocation())
+      const cached = byId[id]
+      if (cached) {
+        map.set(id, cached)
+      } else {
+        // Instant name-based hint while IP geo resolves
+        map.set(id, resolveInfraLocation(item.name, item.address))
+      }
     }
     return map
   }, [items, byId])

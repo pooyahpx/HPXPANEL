@@ -11,6 +11,7 @@ import { useNodeReleases } from '@/hooks/use-node-releases'
 import { Separator } from '@/components/ui/separator'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Badge } from '@/components/ui/badge'
+import { displayCountryName, type InfraLocation } from '@/utils/infra-location'
 
 interface UseNodeListColumnsProps {
   onEdit: (node: NodeResponse) => void
@@ -21,6 +22,7 @@ interface UseNodeListColumnsProps {
   canReconnect?: boolean
   canUpdateCore?: boolean
   canReadStats?: boolean
+  locationsById?: Map<string, InfraLocation>
 }
 
 const getNodeStatusDotColor = (status: NodeStatus) => {
@@ -47,8 +49,9 @@ export const useNodeListColumns = ({
   canReconnect = true,
   canUpdateCore = true,
   canReadStats = true,
+  locationsById,
 }: UseNodeListColumnsProps) => {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const { latestVersion: latestXrayVersion, hasUpdate: hasXrayUpdate } = useXrayReleases()
   const { latestVersion: latestNodeVersion, hasUpdate: hasNodeUpdate } = useNodeReleases()
 
@@ -58,12 +61,24 @@ export const useNodeListColumns = ({
         id: 'name',
         header: t('name'),
         width: '3fr',
-        cell: node => (
-          <div className="flex min-w-0 items-center gap-2">
-            <span className={cn('h-2 w-2 shrink-0 rounded-full', getNodeStatusDotColor(node.status))} />
-            <span className="truncate font-medium">{node.name}</span>
-          </div>
-        ),
+        cell: node => {
+          const location = locationsById?.get(String(node.id))
+          const country = location ? displayCountryName(location, i18n.language) : null
+          return (
+            <div className="flex min-w-0 items-center gap-2">
+              <span className={cn('h-2 w-2 shrink-0 rounded-full', getNodeStatusDotColor(node.status))} />
+              {location?.flag ? (
+                <span className="shrink-0 text-base leading-none" aria-hidden title={country || undefined}>
+                  {location.flag}
+                </span>
+              ) : null}
+              <div className="min-w-0">
+                <span className="truncate font-medium">{node.name}</span>
+                {country ? <div className="text-muted-foreground truncate text-[10px]">{country}</div> : null}
+              </div>
+            </div>
+          )
+        },
       },
       {
         id: 'address',
@@ -231,6 +246,6 @@ export const useNodeListColumns = ({
           ]
         : []),
     ],
-    [t, onEdit, onToggleStatus, coresData, canUpdate, canDelete, canReconnect, canUpdateCore, canReadStats, latestXrayVersion, hasXrayUpdate, latestNodeVersion, hasNodeUpdate],
+    [t, i18n.language, onEdit, onToggleStatus, coresData, canUpdate, canDelete, canReconnect, canUpdateCore, canReadStats, locationsById, latestXrayVersion, hasXrayUpdate, latestNodeVersion, hasNodeUpdate],
   )
 }

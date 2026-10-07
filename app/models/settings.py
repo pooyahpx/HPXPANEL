@@ -364,6 +364,9 @@ class HWIDSettings(BaseModel):
 class General(BaseModel):
     default_method: ShadowsocksMethods = Field(default=ShadowsocksMethods.CHACHA20_POLY1305)
     custom_variables: list[CustomVariable] | None = Field(default=None)
+    # Owner Telegram toggles (runtime; default ON so existing installs keep alerts)
+    telegram_tunnel_alerts: bool = Field(default=True)
+    telegram_cpu_alerts: bool = Field(default=True)
 
     @field_validator("custom_variables")
     @classmethod

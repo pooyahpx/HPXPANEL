@@ -70,3 +70,38 @@ def validate_custom_bounds(
         raise ValueError(f"Days must be between {min_days} and {max_days}")
     if ip_limit < base_ip:
         raise ValueError(f"IP limit must be at least {base_ip}")
+
+
+@dataclass(frozen=True)
+class ShopDiscountQuote:
+    original: int
+    final: int
+    discount: int
+    code: str
+    percent_off: int | None
+    amount_off_toman: int | None
+
+
+def apply_discount_amount(
+    *,
+    original_toman: int,
+    percent_off: int | None = None,
+    amount_off_toman: int | None = None,
+    code: str = "",
+) -> ShopDiscountQuote:
+    original = max(0, int(original_toman or 0))
+    discount = 0
+    if percent_off is not None and int(percent_off) > 0:
+        pct = min(100, max(0, int(percent_off)))
+        discount = (original * pct) // 100
+    elif amount_off_toman is not None and int(amount_off_toman) > 0:
+        discount = min(original, int(amount_off_toman))
+    final = max(0, original - discount)
+    return ShopDiscountQuote(
+        original=original,
+        final=final,
+        discount=discount,
+        code=(code or "").strip().upper(),
+        percent_off=int(percent_off) if percent_off is not None else None,
+        amount_off_toman=int(amount_off_toman) if amount_off_toman is not None else None,
+    )

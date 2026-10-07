@@ -1547,6 +1547,20 @@ class ShopPlan(Base, CreatedAtUTCMixin):
     is_active: Mapped[bool] = mapped_column(server_default="1", default=True)
 
 
+class ShopDiscountCode(Base, CreatedAtUTCMixin):
+    __tablename__ = "shop_discount_codes"
+    __table_args__ = (UniqueConstraint("admin_id", "code", name="uq_shop_discount_admin_code"),)
+
+    admin_id: Mapped[int] = fk_id_column("admins.id", ondelete="CASCADE", index=True)
+    code: Mapped[str] = mapped_column(String(64))
+    percent_off: Mapped[int | None] = mapped_column(Integer, default=None)
+    amount_off_toman: Mapped[int | None] = mapped_column(BigInteger, default=None)
+    max_uses: Mapped[int | None] = mapped_column(Integer, default=None)
+    used_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    is_active: Mapped[bool] = mapped_column(server_default="1", default=True)
+    expires_at: Mapped[dt | None] = mapped_column(DateTime(timezone=True), default=None)
+
+
 class ShopOrder(Base, CreatedAtUTCMixin):
     __tablename__ = "shop_orders"
 
@@ -1574,3 +1588,6 @@ class ShopOrder(Base, CreatedAtUTCMixin):
     payment_ref: Mapped[str | None] = mapped_column(String(128), default=None)
     payment_url: Mapped[str | None] = mapped_column(String(1024), default=None)
     payment_paid: Mapped[bool] = mapped_column(server_default="0", default=False)
+    discount_code: Mapped[str | None] = mapped_column(String(64), default=None)
+    discount_amount_toman: Mapped[int | None] = mapped_column(BigInteger, default=None)
+    original_price_toman: Mapped[int | None] = mapped_column(BigInteger, default=None)

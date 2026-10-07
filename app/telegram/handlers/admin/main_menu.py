@@ -296,3 +296,67 @@ async def reconnect_all_nodes(event: CallbackQuery, db: AsyncSession, admin: Adm
     except TelegramBadRequest:
         pass
     await event.answer(Texts.nodes_reconnected)
+
+
+async def _render_alert_settings(event: CallbackQuery, db: AsyncSession, lang: str):
+    from app.settings import general_settings
+    from app.telegram.keyboards.admin import AdminPanel
+
+    general = await general_settings()
+    tunnel_on = bool(getattr(general, "telegram_tunnel_alerts", True))
+    cpu_on = bool(getattr(general, "telegram_cpu_alerts", True))
+    text = rich(
+        lang,
+        "alert_settings_title",
+        tunnel="ON ✅" if tunnel_on else "OFF ⏸",
+        cpu="ON ✅" if cpu_on else "OFF ⏸",
+    )
+    kb = InlineKeyboardBuilder()
+    cb = AdminPanel.Callback
+    kb.button(
+        text=t(lang, "btn_toggle_tunnel_alerts", state="ON" if tunnel_on else "OFF"),
+        callback_data=cb(action=AdminPanelAction.toggle_tunnel_alerts),
+    )
+    kb.button(
+        text=t(lang, "btn_toggle_cpu_alerts", state="ON" if cpu_on else "OFF"),
+        callback_data=cb(action=AdminPanelAction.toggle_cpu_alerts),
+    )
+    kb.button(text=t(lang, "btn_back"), callback_data=cb(action=AdminPanelAction.refresh))
+    kb.adjust(1, 1, 1)
+    try:
+        await event.message.edit_text(text, reply_markup=kb.as_markup())
+    except TelegramBadRequest:
+        await event.message.answer(text, reply_markup=kb.as_markup())
+
+
+@router.callback_query(IsOwnerFilter(), AdminPanel.Callback.filter(AdminPanelAction.alert_settings == F.action))
+async def alert_settings(event: CallbackQuery, db: AsyncSession):
+    lang = await _lang(db, event.from_user.id)
+    await _render_alert_settings(event, db, lang)
+    await event.answer()
+
+
+@router.callback_query(IsOwnerFilter(), AdminPanel.Callback.filter(AdminPanelAction.toggle_tunnel_alerts == F.action))
+async def toggle_tunnel_alerts(event: CallbackQuery, db: AsyncSession):
+    from app.settings import general_settings
+    from app.utils.telegram_alert_prefs import set_alert_prefs
+
+    lang = await _lang(db, event.from_user.id)
+    general = await general_settings()
+    current = bool(getattr(general, "telegram_tunnel_alerts", True))
+    await set_alert_prefs(db, telegram_tunnel_alerts=not current)
+    await _render_alert_settings(event, db, lang)
+    await event.answer(t(lang, "alert_toggled"))
+
+
+@router.callback_query(IsOwnerFilter(), AdminPanel.Callback.filter(AdminPanelAction.toggle_cpu_alerts == F.action))
+async def toggle_cpu_alerts(event: CallbackQuery, db: AsyncSession):
+    from app.settings import general_settings
+    from app.utils.telegram_alert_prefs import set_alert_prefs
+
+    lang = await _lang(db, event.from_user.id)
+    general = await general_settings()
+    current = bool(getattr(general, "telegram_cpu_alerts", True))
+    await set_alert_prefs(db, telegram_cpu_alerts=not current)
+    await _render_alert_settings(event, db, lang)
+    await event.answer(t(lang, "alert_toggled"))

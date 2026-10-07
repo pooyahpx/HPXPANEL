@@ -41,10 +41,14 @@ async def _sample_node_cpu(node_id: int) -> float | None:
     return stats.cpu_usage
 
 
-async def _notify_owner(message: str) -> None:
+async def _notify_owner(message: str, *, metric: str | None = None) -> None:
     try:
         from app.telegram import get_bot
+        from app.utils.telegram_alert_prefs import cpu_alerts_enabled
 
+        # High CPU Telegram pushes follow owner bot toggle (DB events still recorded).
+        if metric == "cpu" and not await cpu_alerts_enabled():
+            return
         bot = get_bot()
         if bot is None:
             return
@@ -84,7 +88,7 @@ async def _maybe_alert(
         message=message,
         node_id=node_id,
     )
-    await _notify_owner(f"⚠️ <b>Observability alert</b>\n{message}")
+    await _notify_owner(f"⚠️ <b>Observability alert</b>\n{message}", metric=metric)
 
 
 async def observability_alerts_job():

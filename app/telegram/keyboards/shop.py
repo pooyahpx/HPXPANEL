@@ -37,6 +37,8 @@ class ShopAction(str, Enum):
     renew_pick = "rnp"
     renew_buy = "rnb"
     pay_method = "pay"
+    apply_discount = "disc"
+    clear_discount = "cdsc"
     my_orders = "orders"
     lang = "lang"
     support = "support"
@@ -176,7 +178,14 @@ class ShopIpKeyboard(InlineKeyboardBuilder):
 class ShopPayMethodKeyboard(InlineKeyboardBuilder):
     """Buyer chooses an enabled payment gateway. plan_id carries gateway index."""
 
-    def __init__(self, lang: str, gateways: list[str], *args, **kwargs):
+    def __init__(
+        self,
+        lang: str,
+        gateways: list[str],
+        *args,
+        has_discount: bool = False,
+        **kwargs,
+    ):
         super().__init__(*args, **kwargs)
         cb = ShopKeyboardCallback
         labels = {
@@ -198,12 +207,22 @@ class ShopPayMethodKeyboard(InlineKeyboardBuilder):
                 callback_data=cb(action=ShopAction.pay_method, plan_id=index),
                 style=styles.get(gw),
             )
+        if has_discount:
+            self.button(
+                text=t(lang, "btn_clear_discount"),
+                callback_data=cb(action=ShopAction.clear_discount),
+            )
+        else:
+            self.button(
+                text=t(lang, "btn_apply_discount"),
+                callback_data=cb(action=ShopAction.apply_discount),
+            )
         self.button(text=t(lang, "btn_back"), callback_data=cb(action=ShopAction.home))
         n = len(gateways)
         if n:
-            self.adjust(*([1] * n), 1)
+            self.adjust(*([1] * n), 1, 1)
         else:
-            self.adjust(1)
+            self.adjust(1, 1)
 
 
 class ShopRenewAccountsKeyboard(InlineKeyboardBuilder):
@@ -298,6 +317,10 @@ class ShopAdminAction(str, Enum):
     broadcast = "bcast"
     stats = "stats"
     accounting = "acct"
+    discounts = "discs"
+    add_discount = "adisc"
+    toggle_discount = "tdisc"
+    delete_discount = "ddisc"
 
 
 class ShopAdminKeyboard(InlineKeyboardBuilder):
@@ -343,9 +366,10 @@ class ShopAdminKeyboard(InlineKeyboardBuilder):
         self.button(text=t(lang, "btn_broadcast"), callback_data=self.Callback(action=ShopAdminAction.broadcast))
         self.button(text=t(lang, "btn_add_plan"), callback_data=self.Callback(action=ShopAdminAction.add_plan))
         self.button(text=t(lang, "btn_list_plans"), callback_data=self.Callback(action=ShopAdminAction.list_plans))
+        self.button(text=t(lang, "btn_discounts"), callback_data=self.Callback(action=ShopAdminAction.discounts))
         self.button(text=t(lang, "btn_pending"), callback_data=self.Callback(action=ShopAdminAction.pending))
         self.button(text=t(lang, "btn_back"), callback_data=self.Callback(action=ShopAdminAction.home, id=-1))
-        self.adjust(2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 2, 1)
+        self.adjust(2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 2, 2, 1)
 
 
 # id encoding for payment admin callbacks
@@ -545,3 +569,28 @@ class SupportReplyKeyboard(InlineKeyboardBuilder):
             text=t(lang, "btn_support_reply"),
             callback_data=ShopAdminKeyboard.Callback(action=ShopAdminAction.support_reply, id=buyer_telegram_id),
         )
+
+
+class ShopAdminDiscountsKeyboard(InlineKeyboardBuilder):
+    def __init__(self, lang: str, codes: list, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        cb = ShopAdminKeyboard.Callback
+        for row in codes:
+            status = "✅" if row.is_active else "⏸"
+            if row.percent_off:
+                deal = f"{row.percent_off}%"
+            else:
+                deal = format_price(int(row.amount_off_toman or 0))
+            uses = f"{int(row.used_count or 0)}"
+            if row.max_uses is not None:
+                uses += f"/{int(row.max_uses)}"
+            label = f"{status} {row.code} · {deal} · {uses}"
+            self.button(text=label, callback_data=cb(action=ShopAdminAction.toggle_discount, id=row.id))
+            self.button(text=t(lang, "btn_delete"), callback_data=cb(action=ShopAdminAction.delete_discount, id=row.id))
+        self.button(text=t(lang, "btn_add_discount"), callback_data=cb(action=ShopAdminAction.add_discount))
+        self.button(text=t(lang, "btn_back"), callback_data=cb(action=ShopAdminAction.home))
+        n = len(codes)
+        if n:
+            self.adjust(*([2] * n), 1, 1)
+        else:
+            self.adjust(1, 1)

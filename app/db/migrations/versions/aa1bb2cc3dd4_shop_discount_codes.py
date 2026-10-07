@@ -1,6 +1,6 @@
 """shop discount codes + order discount fields
 
-Revision ID: a1b2c3d4e5f6
+Revision ID: aa1bb2cc3dd4
 Revises: z5a6b7c8d9e0
 Create Date: 2026-10-07 18:10:00.000000
 """
@@ -8,7 +8,7 @@ Create Date: 2026-10-07 18:10:00.000000
 import sqlalchemy as sa
 from alembic import op
 
-revision = "a1b2c3d4e5f6"
+revision = "aa1bb2cc3dd4"
 down_revision = "z5a6b7c8d9e0"
 branch_labels = None
 depends_on = None

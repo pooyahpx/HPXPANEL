@@ -4,11 +4,11 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input'
 import { LoaderButton } from '@/components/ui/loader-button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Badge } from '@/components/ui/badge'
 import useDirDetection from '@/hooks/use-dir-detection'
 import useDynamicErrorHandler from '@/hooks/use-dynamic-errors'
 import { cn } from '@/lib/utils'
 import { toTunnelPortString, fromTunnelPortString } from '@/features/hpx-pulse/utils/port-forwards'
+import { RankedTunnelPresets } from '@/features/hpx-pulse/wizard/ranked-tunnel-presets'
 import {
   useAdvisePulse,
   useCreateHpxPulse,
@@ -485,53 +485,25 @@ export default function HpxPulseWizard({ open, onOpenChange, onCreated, editingP
               )} />
             </div>
 
-            <Button type="button" variant="secondary" onClick={previewAdvise} disabled={adviseMutation.isPending}>
-              <Sparkles className="size-4" />
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={previewAdvise}
+              disabled={adviseMutation.isPending}
+              className="border-primary/20 bg-primary/10 hover:bg-primary/15 text-foreground"
+            >
+              <Sparkles className="size-4 text-primary" />
               {t('hpxPulse.advise', { defaultValue: 'Preview ranked tunnels' })}
             </Button>
 
             {advice && (
-              <div className="space-y-2 rounded-lg border p-3">
-                <p className="text-sm font-medium">
-                  {t('hpxPulse.topProfiles', { defaultValue: 'Ranked tunnel presets (TCP / WSS / KCP / UDP / QUIC / Safe-MTU)' })}
-                </p>
-                <p className="text-muted-foreground text-[11px]">
-                  {t('hpxPulse.topProfilesHint', {
-                    defaultValue:
-                      'TCP Extreme (Stealth MSS 1000): keeps TCP carrier — use when Reality needs TCP and path stalls after connect. KCP only as last resort.',
-                  })}
-                </p>
-                <div className="max-h-64 space-y-2 overflow-y-auto">
-                  {advice.profiles.slice(0, 10).map(p => (
-                    <button
-                      key={p.profile_id}
-                      type="button"
-                      onClick={() => setSelectedProfile(p.profile_id)}
-                      className={cn(
-                        'w-full rounded-md border p-2 text-start text-xs transition-colors',
-                        (selectedProfile ?? advice.recommended_profile_id) === p.profile_id && 'border-primary bg-primary/5',
-                      )}
-                    >
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <span className="font-medium">{fa ? p.title_fa : p.title}</span>
-                        <div className="flex items-center gap-1">
-                          <Badge variant="outline" className="text-[10px] uppercase">{p.preset}</Badge>
-                          {p.mss ? (
-                            <Badge variant="outline" className="text-[10px] uppercase">
-                              mss {p.mss}
-                            </Badge>
-                          ) : null}
-                          {p.carrier && (
-                            <Badge variant="secondary" className="text-[10px] uppercase">{p.carrier}</Badge>
-                          )}
-                          <Badge variant="secondary">{p.score}</Badge>
-                        </div>
-                      </div>
-                      <p className="text-muted-foreground mt-1">{fa ? p.reasons_fa[0] : p.reasons[0]}</p>
-                    </button>
-                  ))}
-                </div>
-              </div>
+              <RankedTunnelPresets
+                profiles={advice.profiles}
+                recommendedId={advice.recommended_profile_id}
+                selectedId={selectedProfile}
+                onSelect={setSelectedProfile}
+                fa={fa}
+              />
             )}
 
             <div className="flex justify-end gap-2">

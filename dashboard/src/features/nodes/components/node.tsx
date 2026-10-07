@@ -1,5 +1,5 @@
 import { Card } from '@/components/ui/card'
-import { AlertCircle, Link2, Network, Package, Server, ShieldCheck } from 'lucide-react'
+import { AlertCircle, Link2, MapPin, Network, Package, Server, ShieldCheck } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import useDirDetection from '@/hooks/use-dir-detection'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -14,6 +14,7 @@ import UpdateCoreDialog from '@/features/nodes/dialogs/update-core-modal'
 import { useState } from 'react'
 import type { MouseEvent, ReactNode } from 'react'
 import { Badge } from '@/components/ui/badge'
+import { displayCountryName, type InfraLocation } from '@/utils/infra-location'
 
 interface NodeProps {
   node: NodeResponse
@@ -27,6 +28,7 @@ interface NodeProps {
   canReadStats?: boolean
   selectionControl?: ReactNode
   selected?: boolean
+  location?: InfraLocation | null
 }
 
 export default function Node({
@@ -41,9 +43,11 @@ export default function Node({
   canReadStats = true,
   selectionControl,
   selected = false,
+  location = null,
 }: NodeProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const dir = useDirDetection()
+  const countryLabel = location ? displayCountryName(location, i18n.language) : null
   const [showUpdateCoreDialog, setShowUpdateCoreDialog] = useState(false)
   const { latestVersion: latestXrayVersion, hasUpdate: hasXrayUpdate } = useXrayReleases()
   const { latestVersion: latestNodeVersion, hasUpdate: hasNodeUpdate } = useNodeReleases()
@@ -164,7 +168,23 @@ export default function Node({
                 </div>
 
                 <div className="space-y-1">
-                  <h3 className="truncate text-base leading-tight font-semibold tracking-tight sm:text-lg">{node.name}</h3>
+                  <div className="flex min-w-0 items-center gap-2">
+                    {location?.flag ? (
+                      <span className="shrink-0 text-lg leading-none" aria-hidden title={countryLabel || undefined}>
+                        {location.flag}
+                      </span>
+                    ) : null}
+                    <h3 className="truncate text-base leading-tight font-semibold tracking-tight sm:text-lg">{node.name}</h3>
+                  </div>
+                  {(countryLabel || location?.city || location?.datacenter) && (
+                    <p className="text-muted-foreground flex min-w-0 items-center gap-1.5 truncate text-xs">
+                      <MapPin className="h-3 w-3 shrink-0 opacity-70" />
+                      <span className="truncate">
+                        {[location?.city, countryLabel].filter(Boolean).join(', ')}
+                        {location?.datacenter ? ` · ${location.datacenter}` : ''}
+                      </span>
+                    </p>
+                  )}
                   {resolvedCore?.name ? <p className="text-muted-foreground truncate text-xs">{resolvedCore.name}</p> : null}
                 </div>
               </div>

@@ -40,7 +40,7 @@ async def verify_node_backend_health(node: PasarGuardNode, node_name: str) -> tu
     Verify node health by checking backend stats.
     Returns (health, error_code, error_message) - error_code and error_message are None if no error occurred.
     """
-    current_health = await asyncio.wait_for(node.get_health(), timeout=10)
+    current_health = await asyncio.wait_for(node.get_health(), timeout=5)
 
     # Skip nodes that are not connected or invalid
     if current_health in (Health.NOT_CONNECTED, Health.INVALID):

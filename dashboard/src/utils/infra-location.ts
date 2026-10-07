@@ -21,7 +21,7 @@ const COUNTRIES: CountryMeta[] = [
   { code: 'FR', en: 'France', fa: 'فرانسه', flag: '🇫🇷', aliases: ['france', 'paris', 'par'] },
   { code: 'GB', en: 'United Kingdom', fa: 'انگلستان', flag: '🇬🇧', aliases: ['uk', 'britain', 'england', 'london', 'lon'] },
   { code: 'US', en: 'United States', fa: 'آمریکا', flag: '🇺🇸', aliases: ['usa', 'america', 'newyork', 'nyc', 'losangeles', 'lax', 'seattle', 'miami', 'dallas', 'chicago', 'ashburn'] },
-  { code: 'TR', en: 'Turkey', fa: 'ترکیه', flag: '🇹🇷', aliases: ['turkey', 'turkiye', 'istanbul', 'ankara', 'izmir'] },
+  { code: 'TR', en: 'Turkey', fa: 'ترکیه', flag: '🇹🇷', aliases: ['turkey', 'turkiye', 'tork', 'istanbul', 'ankara', 'izmir'] },
   { code: 'FI', en: 'Finland', fa: 'فنلاند', flag: '🇫🇮', aliases: ['finland', 'helsinki', 'hel'] },
   { code: 'SE', en: 'Sweden', fa: 'سوئد', flag: '🇸🇪', aliases: ['sweden', 'stockholm'] },
   { code: 'NO', en: 'Norway', fa: 'نروژ', flag: '🇳🇴', aliases: ['norway', 'oslo'] },

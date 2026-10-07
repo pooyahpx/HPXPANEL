@@ -156,10 +156,13 @@ export const setupColumns = ({
   {
     accessorKey: 'status',
     header: () => (
-      <div className="flex items-center">
+      <div className="flex items-center gap-1.5">
         <Select dir={dir as 'ltr' | 'rtl'} onValueChange={handleStatusFilter} value={(filters.status as string) || '0'}>
-          <SelectTrigger icon={false} className="ring-none w-fit max-w-28 border-none p-0 sm:px-1">
-            <span className="px-0 text-xs capitalize">{t('usersTable.status')}</span>
+          <SelectTrigger
+            icon={false}
+            className="hover:bg-muted/50 h-7 w-fit max-w-[7.5rem] border-none bg-transparent px-1.5 shadow-none focus:ring-0"
+          >
+            <span className="text-xs font-medium capitalize">{t('usersTable.status')}</span>
           </SelectTrigger>
           <SelectContent dir="ltr">
             <SelectItem className="py-4" value="0">
@@ -172,19 +175,20 @@ export const setupColumns = ({
             <SelectItem value="expired">{t('hostsDialog.status.expired')}</SelectItem>
           </SelectContent>
         </Select>
-        {/* Desktop expire sorting */}
-        <div className="hidden items-center sm:flex">
-          <span>/</span>
-          <button className="flex w-full items-center gap-1 px-2 py-3" onClick={() => handleSort('expire')}>
-            <div className="text-xs capitalize">
-              <span className="md:hidden">{t('expire')}</span>
-              <span className="hidden md:block">{t('expire')}</span>
-            </div>
-            {filters.sort && (filters.sort === 'expire' || filters.sort === '-expire') && (
-              <ChevronDown size={16} className={`transition-transform duration-300 ${filters.sort === 'expire' ? 'rotate-180' : ''} ${filters.sort === '-expire' ? 'rotate-0' : ''} `} />
-            )}
-          </button>
-        </div>
+        <div className="text-muted-foreground/50 hidden select-none text-xs sm:inline">/</div>
+        <button
+          type="button"
+          className="hover:bg-muted/50 hidden h-7 items-center gap-1 rounded-md px-1.5 sm:flex"
+          onClick={() => handleSort('expire')}
+        >
+          <span className="text-xs font-medium capitalize">{t('expire')}</span>
+          {filters.sort && (filters.sort === 'expire' || filters.sort === '-expire') && (
+            <ChevronDown
+              size={14}
+              className={`text-muted-foreground transition-transform duration-300 ${filters.sort === 'expire' ? 'rotate-180' : 'rotate-0'}`}
+            />
+          )}
+        </button>
       </div>
     ),
     cell: ({ row }: { row: Row<UserResponse> }) => {

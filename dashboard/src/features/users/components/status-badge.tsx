@@ -61,9 +61,9 @@ export const StatusBadge = memo(({ expiryDate = null, status: userStatus, showEx
     <div className={cn('flex flex-wrap justify-start gap-x-2')}>
       <Badge
         className={cn(
-          'pointer-events-none flex w-fit max-w-[150px] items-center justify-center gap-x-2 rounded-none px-0.5 py-0.5 sm:px-2',
+          'pointer-events-none flex w-fit max-w-[150px] items-center justify-center gap-x-2 rounded-md px-1.5 py-0.5 sm:px-2',
           statusColors[userStatus]?.statusColor || 'bg-gray-400 text-white',
-          'h-6 px-1.5 py-2.5 sm:h-auto sm:px-0.5 sm:py-0.5',
+          'h-6 sm:h-auto',
           isActive && 'status-live',
         )}
       >

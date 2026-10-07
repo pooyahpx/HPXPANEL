@@ -83,3 +83,15 @@ def test_scan_hosts_shared_abroad():
     issues = {h.host_id: h.issue for h in hits}
     assert issues[1] == "abroad_ip"
     assert issues[2] == "ok_iran"
+
+
+def test_agent_script_has_multi_tunnel_isolation_guards():
+    """Regression: ping purge / global MSS / shared Xray restart broke sibling tunnels."""
+    from pathlib import Path
+
+    script = Path("scripts/hpx-pulse-agent.sh").read_text(encoding="utf-8")
+    assert "maybe_prune_orphan_configs" in script
+    assert "NOT restarting Xray" in script
+    assert "tcp_base_mss" not in script or "Do not set global tcp_base_mss" in script
+    assert "siblings untouched" in script
+    assert "multi-tunnel Sync race" in script

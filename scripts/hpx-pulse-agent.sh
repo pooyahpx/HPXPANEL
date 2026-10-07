@@ -202,11 +202,22 @@ EOF
 }
 
 write_env() {
-  write_env_file "$ENV_FILE"
+  # Per-pulse file is authoritative for multi-tunnel hosts. Never clobber the
+  # global agent.env with another pulse's AGENT_KEY while siblings exist —
+  # that caused CLI/heartbeat confusion and delete/leave races.
   if [ -n "${PULSE_ID:-}" ] && [ "${PULSE_ID}" != "0" ]; then
     mkdir -p "$AGENTS_DIR"
     write_env_file "${AGENTS_DIR}/${PULSE_ID}.env"
+    local n=0
+    n="$(find "$AGENTS_DIR" -maxdepth 1 -type f -name '*.env' 2>/dev/null | wc -l | tr -d ' ')"
+    if [ "${n:-0}" -le 1 ]; then
+      write_env_file "$ENV_FILE"
+    elif [ ! -f "$ENV_FILE" ]; then
+      write_env_file "$ENV_FILE"
+    fi
+    return 0
   fi
+  write_env_file "$ENV_FILE"
 }
 
 load_env_file() {
@@ -323,7 +334,8 @@ remove_pulse_local_state() {
   rm -f "/etc/systemd/system/${svc}.service"
   rm -f "${AGENTS_DIR}/${pid}.env"
   rm -f "${ETC_DIR}/l3-pulse-${pid}.toml"
-  systemctl daemon-reload 2>/dev/null || true
+  # Defer daemon-reload so deleting one pulse does not stall sibling tunnels.
+  PURGE_NEED_RELOAD=1
   PULSE_ID="$saved_pulse_id"
   PULSE_SIDE="$saved_side"
 }
@@ -548,7 +560,7 @@ verify_registrations_with_panel() {
       _reset_revoke_streak "$pid"
       command=$(echo "$cfg" | jq -r '.agent_command // empty' 2>/dev/null || true)
       if [ "$command" = "leave" ] || [ "$command" = "uninstall" ]; then
-        log "panel requested local removal for pulse ${pid}"
+        log "panel requested local removal for pulse ${pid} only (siblings untouched)"
         _reset_revoke_streak "$pid"
         # Ack before wiping keys so panel soft-delete can reap this side.
         api POST "/api/hpx_pulse/agent/ack" \
@@ -571,6 +583,10 @@ verify_registrations_with_panel() {
       warn "pulse ${pid} config fetch failed (HTTP ${API_LAST_HTTP_CODE:-?}) — keeping local tunnel (panel may be restarting)"
     fi
   done
+  if [ "${PURGE_NEED_RELOAD:-0}" = 1 ]; then
+    systemctl daemon-reload 2>/dev/null || true
+    PURGE_NEED_RELOAD=0
+  fi
   PANEL_URL="$saved_panel"
   AGENT_KEY="$saved_key"
   PULSE_SIDE="$saved_side"
@@ -593,21 +609,45 @@ remove_tunnel_unit_fully() {
   local id="$1" svc
   [ -n "$id" ] || return 0
   svc="hpx-pulse-tunnel-${id}"
-  log "purging leftover tunnel unit ${svc} (missing toml and/or env)"
+  log "purging leftover tunnel unit ${svc} (missing config)"
   systemctl stop "${svc}.service" 2>/dev/null || true
   systemctl reset-failed "${svc}.service" 2>/dev/null || true
   systemctl disable "${svc}.service" 2>/dev/null || true
   rm -f "/etc/systemd/system/${svc}.service"
   rm -f "${ETC_DIR}/l3-pulse-${id}.toml"
   rm -f "${AGENTS_DIR}/${id}.env"
-  systemctl daemon-reload 2>/dev/null || true
+  # Caller batches daemon-reload — avoid reload storms that disrupt sibling tunnels.
+  PURGE_NEED_RELOAD=1
 }
 
-# Only remove crash-loop leftovers: unit/file without BOTH env+toml.
-# Intact peers (env+toml present) are NEVER purged — soft-delete leave handles teardown.
+# Safe multi-tunnel purge:
+# - Intact peers (env+toml) are NEVER touched (leave/soft-delete only).
+# - toml missing → crash-loop → remove.
+# - env missing but toml present + unit active → Sync/join race → leave alone.
+# - env missing + unit idle → stale leftover → remove.
 purge_stale_tunnel_units() {
   local mine_id="${PULSE_ID:-}" unit id toml envf
+  local purged=0
+  PURGE_NEED_RELOAD=0
   mkdir -p "$ETC_DIR" "$AGENTS_DIR" 2>/dev/null || true
+
+  _peer_should_purge() {
+    local pid="$1" t e
+    t="${ETC_DIR}/l3-pulse-${pid}.toml"
+    e="${AGENTS_DIR}/${pid}.env"
+    if [ ! -f "$t" ]; then
+      return 0
+    fi
+    if [ -f "$e" ]; then
+      return 1
+    fi
+    # toml without env: only purge if the unit is not running (avoid Sync race).
+    if systemctl is-active --quiet "hpx-pulse-tunnel-${pid}.service" 2>/dev/null; then
+      warn "pulse ${pid} toml present, env pending — not purging (multi-tunnel Sync race)"
+      return 1
+    fi
+    return 0
+  }
 
   while IFS= read -r unit; do
     [ -n "$unit" ] || continue
@@ -625,38 +665,58 @@ purge_stale_tunnel_units() {
       continue
     fi
 
-    # Keep healthy peers. Only wipe when toml OR env is missing (crash-loop debris).
-    if [ ! -f "$toml" ] || [ ! -f "$envf" ]; then
+    if _peer_should_purge "$id"; then
       remove_tunnel_unit_fully "$id"
+      purged=1
     fi
   done < <(systemctl list-unit-files 'hpx-pulse-tunnel-*.service' --no-legend 2>/dev/null | awk '{print $1}')
 
-  # Orphan toml without matching env (and not this agent).
   for toml in "$ETC_DIR"/l3-pulse-*.toml; do
     [ -f "$toml" ] || continue
     id="${toml##*/l3-pulse-}"
     id="${id%.toml}"
     [ -f "${AGENTS_DIR}/${id}.env" ] && continue
     [ -n "$mine_id" ] && [ "$id" = "$mine_id" ] && continue
-    remove_tunnel_unit_fully "$id"
+    if _peer_should_purge "$id"; then
+      remove_tunnel_unit_fully "$id"
+      purged=1
+    fi
   done
 
-  # Running/failed units without both files.
   while IFS= read -r unit; do
     [ -n "$unit" ] || continue
     id="$(_pulse_id_from_tunnel_unit "$unit")"
     [ -n "$id" ] || continue
     [ -n "$mine_id" ] && [ "$id" = "$mine_id" ] && continue
-    toml="${ETC_DIR}/l3-pulse-${id}.toml"
-    if [ ! -f "$toml" ] || [ ! -f "${AGENTS_DIR}/${id}.env" ]; then
+    if _peer_should_purge "$id"; then
       remove_tunnel_unit_fully "$id"
+      purged=1
     fi
   done < <(
     systemctl list-units 'hpx-pulse-tunnel-*.service' --no-legend --all --state=running,failed,activating,inactive 2>/dev/null \
       | awk '{print $1}'
   )
 
-  systemctl daemon-reload 2>/dev/null || true
+  if [ "${PURGE_NEED_RELOAD:-0}" = 1 ] || [ "$purged" = 1 ]; then
+    systemctl daemon-reload 2>/dev/null || true
+  fi
+  PURGE_NEED_RELOAD=0
+}
+
+# Throttle heavy purge: ping runs every 5s — never sweep that often (disrupts siblings).
+maybe_prune_orphan_configs() {
+  local stamp="${ETC_DIR}/.last_orphan_purge" now min_gap=120
+  now="$(date +%s 2>/dev/null || echo 0)"
+  if [ -f "$stamp" ]; then
+    local last
+    last="$(cat "$stamp" 2>/dev/null || echo 0)"
+    if [ "$now" -gt 0 ] && [ "$last" -gt 0 ] && [ $((now - last)) -lt "$min_gap" ]; then
+      return 0
+    fi
+  fi
+  prune_orphan_configs
+  mkdir -p "$ETC_DIR" 2>/dev/null || true
+  echo "$now" >"$stamp" 2>/dev/null || true
 }
 
 ensure_engine() {
@@ -810,11 +870,13 @@ tunnel_link_up() {
 }
 
 install_tunnel_systemd() {
-  local cfg="$1" engine_bin svc
+  local cfg="$1" engine_bin svc unit_path tmp
   engine_bin="$(engine_bin)"
   svc="$(tunnel_service_name)"
   retire_legacy_tunnel_service "$svc"
-  cat >"/etc/systemd/system/${svc}.service" <<EOF
+  unit_path="/etc/systemd/system/${svc}.service"
+  tmp="$(mktemp)"
+  cat >"$tmp" <<EOF
 [Unit]
 Description=HPX Pulse tunnel (pulse ${PULSE_ID:-?})
 After=network-online.target
@@ -824,14 +886,21 @@ Wants=network-online.target
 Type=simple
 ExecStart=${engine_bin} -c ${cfg}
 Restart=always
-RestartSec=5
+RestartSec=3
 Nice=-5
+LimitNOFILE=1048576
 
 [Install]
 WantedBy=multi-user.target
 EOF
-  systemctl daemon-reload
-  systemctl enable "${svc}.service" >/dev/null
+  if [ ! -f "$unit_path" ] || ! cmp -s "$tmp" "$unit_path"; then
+    mv "$tmp" "$unit_path"
+    systemctl daemon-reload
+    systemctl enable "${svc}.service" >/dev/null
+  else
+    rm -f "$tmp"
+  fi
+  # Restart only THIS pulse unit (toml already rewritten) — never wildcard siblings.
   systemctl restart "${svc}.service"
 }
 
@@ -1019,7 +1088,8 @@ EOF
 cmd_ping() {
   need_root
   ensure_deps
-  prune_orphan_configs
+  # Do NOT full-purge every 5s — races with Sync writing env and kills sibling tunnels.
+  maybe_prune_orphan_configs
   verify_registrations_with_panel
   for_each_pulse_env send_heartbeat
 }
@@ -1087,15 +1157,18 @@ sync_pulse_from_panel() {
   esac
 
   if [ "$hash" != "${CONFIG_HASH:-}" ] || [ "$command" = "start" ] || [ "$command" = "restart" ]; then
-    apply_tunnel_config "$toml"
+    # Keep env on disk before unit restart so a concurrent ping purge cannot
+    # treat this pulse as an orphan while Sync is mid-apply.
     CONFIG_HASH="$hash"
+    write_env
+    apply_tunnel_config "$toml"
     api POST "/api/hpx_pulse/agent/ack" \
       "$(jq -nc --arg c "${command:-start}" '{command:$c, status:"running", message:"HPX config applied"}')" >/dev/null || true
   else
     open_iran_firewall
     check_abroad_backends
+    write_env
   fi
-  write_env
   send_heartbeat
 }
 
@@ -1300,7 +1373,7 @@ toml_transport_value() {
 }
 
 list_orphan_tunnel_units() {
-  # Only units missing toml and/or env (crash-loop leftovers). Intact peers are not orphans.
+  # Crash-loop leftovers only (missing toml). Intact peers / Sync races are not orphans.
   local u mine id toml
   mine="hpx-pulse-tunnel-${PULSE_ID:-0}.service"
   {
@@ -1313,20 +1386,25 @@ list_orphan_tunnel_units() {
       id="$(_pulse_id_from_tunnel_unit "$u")"
       [ -n "$id" ] || continue
       toml="${ETC_DIR}/l3-pulse-${id}.toml"
-      if [ ! -f "$toml" ] || [ ! -f "${AGENTS_DIR}/${id}.env" ]; then
+      if [ ! -f "$toml" ]; then
         echo "$u"
       fi
     done | sort -u
 }
 
+count_local_pulse_envs() {
+  find "$AGENTS_DIR" -maxdepth 1 -type f -name '*.env' 2>/dev/null | wc -l | tr -d ' '
+}
+
 auto_fix_on_diagnose() {
-  local orphans o fixed=0 transport mss_now
+  local orphans o fixed=0 transport mss_now sibling_count
   log "diagnose auto-fix — pulse ${PULSE_ID:-?} side=${PULSE_SIDE:-?} mode=${TUNNEL_MODE:-?}"
-  # Always purge crash-loop / deleted-pulse units first (e.g. missing toml).
+  # Only wipe crash-loop leftovers of OTHER ids — never touch intact siblings.
   purge_stale_tunnel_units
   open_iran_firewall || true
 
-  # TCP reverse: clamp MSS in live TOML + kernel path (even before panel Sync lands).
+  # TCP reverse: MSS only in THIS pulse's TOML. Do not set global tcp_base_mss —
+  # that slows / breaks every other tunnel on the host.
   case "${TUNNEL_MODE:-}" in
     reverse_stealth|reverse_tcp|reverse_tcpmux|reverse_ws|reverse_wss|reverse_wssmux)
       if force_tcp_mss_toml 1000; then
@@ -1335,7 +1413,6 @@ auto_fix_on_diagnose() {
       fi
       if has sysctl; then
         sysctl -w net.ipv4.tcp_mtu_probing=1 >/dev/null 2>&1 || true
-        sysctl -w net.ipv4.tcp_base_mss=1024 >/dev/null 2>&1 || true
       fi
       ;;
   esac
@@ -1346,40 +1423,50 @@ auto_fix_on_diagnose() {
       local oid=""
       [ -n "$o" ] || continue
       oid="$(_pulse_id_from_tunnel_unit "$o")"
-      # Only fully remove broken leftovers (missing toml/env). Never touch intact peers.
-      if [ -n "$oid" ] && { [ ! -f "${ETC_DIR}/l3-pulse-${oid}.toml" ] || [ ! -f "${AGENTS_DIR}/${oid}.env" ]; }; then
-        log "removing crash-loop / leftover tunnel $o"
+      [ -n "$oid" ] || continue
+      [ "$oid" = "${PULSE_ID:-}" ] && continue
+      if [ ! -f "${ETC_DIR}/l3-pulse-${oid}.toml" ]; then
+        log "removing crash-loop leftover tunnel $o"
         remove_tunnel_unit_fully "$oid"
         fixed=1
       fi
     done <<< "$orphans"
   fi
+  if [ "${PURGE_NEED_RELOAD:-0}" = 1 ]; then
+    systemctl daemon-reload 2>/dev/null || true
+    PURGE_NEED_RELOAD=0
+  fi
   if ! tunnel_service_active; then
-    # Ensure unit + toml exist after purge/sync path.
     if [ -f "$(tunnel_cfg_path)" ]; then
       systemctl restart "$(tunnel_service_name).service" 2>/dev/null || true
-      sleep 2
+      sleep 1
       fixed=1
     fi
   elif [ "$fixed" = 1 ]; then
-    # Restart after MSS/firewall changes so engine picks up TOML.
+    # Restart ONLY this pulse's unit after its own TOML/firewall change.
     systemctl restart "$(tunnel_service_name).service" 2>/dev/null || true
-    sleep 2
+    sleep 1
   fi
-  # Soft nudge common Xray unit names if backend port is dead (abroad only).
+  # Abroad backend nudge: NEVER restart shared Xray when multiple pulses share this host
+  # (that drops every other tunnel's users).
   if [ "${PULSE_SIDE:-}" = "abroad" ]; then
+    sibling_count="$(count_local_pulse_envs)"
     local be_port
     be_port="$(first_forward_listen_port || true)"
     if [ -n "$be_port" ] && ! port_is_listening "$be_port"; then
-      for svc in xray xray.service x-ui x-ui.service sing-box; do
-        if systemctl list-unit-files "$svc" >/dev/null 2>&1 || systemctl status "$svc" >/dev/null 2>&1; then
-          log "backend :${be_port} down — restarting $svc"
-          systemctl restart "$svc" 2>/dev/null || true
-          sleep 2
-          fixed=1
-          break
-        fi
-      done
+      if [ "${sibling_count:-0}" -gt 1 ]; then
+        warn "backend :${be_port} down — NOT restarting Xray ( ${sibling_count} pulses on host; would disrupt siblings )"
+      else
+        for svc in xray xray.service x-ui x-ui.service sing-box; do
+          if systemctl list-unit-files "$svc" >/dev/null 2>&1 || systemctl status "$svc" >/dev/null 2>&1; then
+            log "backend :${be_port} down — restarting $svc (single-pulse host)"
+            systemctl restart "$svc" 2>/dev/null || true
+            sleep 1
+            fixed=1
+            break
+          fi
+        done
+      fi
     fi
   fi
   [ "$fixed" = 1 ]
@@ -2188,6 +2275,11 @@ cmd_sync() {
   prune_orphan_configs
   verify_registrations_with_panel
   for_each_pulse_env sync_pulse_from_panel
+  # Batch one reload after leave/purge during sync — never mid-loop (sibling stalls).
+  if [ "${PURGE_NEED_RELOAD:-0}" = 1 ]; then
+    systemctl daemon-reload 2>/dev/null || true
+    PURGE_NEED_RELOAD=0
+  fi
 }
 
 cmd_set_panel_url() {
@@ -2324,9 +2416,13 @@ cmd_leave() {
     fi
   }
   if [ -n "$pid" ]; then
-    log "removing local pulse ${pid}..."
+    log "removing local pulse ${pid} only (other pulses on this host stay up)..."
     remove_pulse_local_state "$pid"
     clear_legacy_agent_env
+    if [ "${PURGE_NEED_RELOAD:-0}" = 1 ]; then
+      systemctl daemon-reload 2>/dev/null || true
+      PURGE_NEED_RELOAD=0
+    fi
     log "pulse ${pid} removed from this server"
     return
   fi
@@ -2336,6 +2432,10 @@ cmd_leave() {
       [ -n "$pid" ] && [ "$pid" != "0" ] && remove_pulse_local_state "$pid"
       rm -f "$ENV_FILE"
       log "cleared legacy ${ENV_FILE}"
+      if [ "${PURGE_NEED_RELOAD:-0}" = 1 ]; then
+        systemctl daemon-reload 2>/dev/null || true
+        PURGE_NEED_RELOAD=0
+      fi
       return
     fi
     log "no local pulse registrations under ${AGENTS_DIR}"
@@ -2348,6 +2448,10 @@ cmd_leave() {
     remove_pulse_local_state "$pid"
   done
   clear_legacy_agent_env
+  if [ "${PURGE_NEED_RELOAD:-0}" = 1 ]; then
+    systemctl daemon-reload 2>/dev/null || true
+    PURGE_NEED_RELOAD=0
+  fi
   log "all local pulse registrations removed"
 }
 

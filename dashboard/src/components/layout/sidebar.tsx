@@ -37,6 +37,7 @@ import {
   Layers,
   LayoutDashboardIcon,
   LayoutTemplate,
+  Paintbrush,
   Activity,
   LifeBuoy,
   ListTodo,
@@ -82,6 +83,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const canReadNodeLogs = hasPermission(admin, 'nodes', 'logs')
   const canBulkCreateFromTemplate = hasPermission(admin, 'users', 'create') && canReadTemplates
   const canBulkUpdateUsers = hasScopeAll(admin, 'users', 'update')
+  const canEditSubTheme = hasPermission(admin, 'settings', 'read') && hasPermission(admin, 'settings', 'update')
   const nodeNavItems = [
     ...(canReadNodes
       ? [
@@ -327,6 +329,15 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               url: templateNavItems[0].url,
               icon: LayoutTemplate,
               items: templateNavItems,
+            },
+          ]
+        : []),
+      ...(canEditSubTheme
+        ? [
+            {
+              title: 'subTheme.title',
+              url: '/sub-theme',
+              icon: Paintbrush,
             },
           ]
         : []),

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router'
 import type { LucideIcon } from 'lucide-react'
-import { Activity, Group, HardDriveDownload, LayoutDashboardIcon, LayoutTemplate, ListTodo, Palette, PieChart, Settings2, Share2Icon, UserCog, UsersIcon, Key, Layers, Bell, Database, Cpu, Search, Zap } from 'lucide-react'
+import { Activity, Group, HardDriveDownload, LayoutDashboardIcon, LayoutTemplate, ListTodo, Palette, PieChart, Settings2, Share2Icon, UserCog, UsersIcon, Key, Layers, Bell, Database, Cpu, Search, Zap, Paintbrush } from 'lucide-react'
 import { useAdmin } from '@/hooks/use-admin'
 import { cn } from '@/lib/utils'
 import { canReadResourcePage, hasPermission, isOwner } from '@/utils/rbac'
@@ -60,6 +60,9 @@ function useQuestItems(): QuestItem[] {
     }
     if (canReadResourcePage(admin, 'templates')) {
       items.push({ id: 'templates', title: 'templates.title', url: '/templates/user', icon: LayoutTemplate })
+    }
+    if (hasPermission(admin, 'settings', 'read') && hasPermission(admin, 'settings', 'update')) {
+      items.push({ id: 'sub-theme', title: 'subTheme.title', url: '/sub-theme', icon: Paintbrush, keywords: 'subscription page skin appearance theme' })
     }
     if (hasPermission(admin, 'users', 'create') && canReadResourcePage(admin, 'templates')) {
       items.push({ id: 'bulk', title: 'bulk.title', url: '/bulk', icon: Layers })

@@ -1,15 +1,18 @@
+{%- set skin = sub_theme if sub_theme in ['terminal', 'aurora', 'nova', 'atlas', 'pulse'] else 'terminal' -%}
+{%- set sub_mode = 'light' if sub_theme_mode == 'light' else 'dark' -%}
+{%- set allow_toggle = sub_allow_mode_toggle is defined and sub_allow_mode_toggle -%}
+{%- set show_guide = sub_show_install_guide is not defined or sub_show_install_guide -%}
+{%- set show_apps = sub_show_apps is not defined or sub_show_apps -%}
+{%- set show_usage = sub_show_usage_chart is not defined or sub_show_usage_chart -%}
 <!DOCTYPE html>
-<html lang="en" data-skin="terminal">
+<html lang="en" data-skin="{{ skin }}">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>{{ user.username }} — HPXPANEL Subscription</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,500;1,600&family=DM+Sans:wght@400;500;600;700&family=Syne:wght@600;700;800&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-<script>
-(function(){try{var s=localStorage.getItem('subSkin');if(s!=='aurora'&&s!=='nova')s='terminal';document.documentElement.setAttribute('data-skin',s);}catch(e){document.documentElement.setAttribute('data-skin','terminal');}})();
-</script>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,500;1,600&family=DM+Sans:wght@400;500;600;700&family=Syne:wght@600;700;800&family=Manrope:wght@400;500;600;700;800&family=Outfit:wght@400;500;600;700&family=Source+Sans+3:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=Vazirmatn:wght@400;500;700&display=swap" rel="stylesheet" />
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 /* ===== Skin: terminal (default) ===== */
@@ -50,14 +53,6 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid hsl(v
 .brand-mark{display:grid;place-items:center;width:28px;height:28px;border:2px solid hsl(var(--pixel));background:hsl(var(--primary));color:hsl(var(--primary-fg));box-shadow:3px 3px 0 hsl(var(--pixel));font-weight:800}
 .topbar{flex-wrap:wrap}
 .topbar-end{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:10px 14px}
-.skin-ctl{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap}
-.skin-lbl{font-family:var(--font-label);font-size:.62rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:hsl(var(--muted-fg))}
-.skin-seg{display:inline-flex;border:2px solid hsl(var(--pixel));background:hsl(var(--card));box-shadow:3px 3px 0 hsl(var(--pixel))}
-.skin-opt,.mode-btn{min-height:36px;padding:0 12px;border:0;background:transparent;color:hsl(var(--muted-fg));font-family:var(--font-label);font-size:.68rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;cursor:pointer}
-.skin-opt+.skin-opt{border-left:2px solid hsl(var(--pixel))}
-.skin-opt[aria-pressed="true"]{background:hsl(var(--primary));color:hsl(var(--primary-fg))}
-.skin-opt:hover:not([aria-pressed="true"]){color:hsl(var(--fg))}
-.mode-btn{border:2px solid hsl(var(--pixel));background:hsl(var(--card));color:hsl(var(--fg));box-shadow:3px 3px 0 hsl(var(--pixel))}
 .mode-btn:active{transform:translate(2px,2px);box-shadow:none}
 .status-orb{display:none}
 .app-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
@@ -164,7 +159,7 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid hsl(v
 .status-disabled{--status:var(--muted-fg)}
 .status-on_hold{--status:var(--hold)}
 .link-row{flex-wrap:wrap}
-.link-quota{width:100%;display:flex;flex-wrap:wrap;gap:6px;padding:0 4px 4px 52px}
+.link-quota{width:100%;display:flex;flex-wrap:wrap;gap:6px;padding:0 4px 4px;padding-inline-start:52px}
 .quota-chip{display:inline-flex;align-items:center;gap:6px;padding:3px 8px;border:1px solid hsl(var(--border));background:hsl(var(--muted)/.55);font-family:var(--font-label);font-size:.65rem;font-weight:700;color:hsl(var(--fg))}
 .quota-chip.limited{border-color:hsl(var(--danger));color:hsl(var(--danger))}
 .quota-chip .remain{color:hsl(var(--success))}
@@ -186,6 +181,50 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid hsl(v
   *,*::before,*::after{animation:none!important;transition:none!important}
   .footer a{color:hsl(var(--primary));background:none;-webkit-background-clip:unset;background-clip:unset}
 }
+
+/* =====================================================================
+   v4.10.2 shared components (adapt to every skin through variables)
+   --r card radius · --r-btn control radius · --bw border width
+   --edge border colour · --lift control shadow
+   ===================================================================== */
+body{--r:0px;--r-btn:0px;--bw:2px;--edge:hsl(var(--pixel));--lift:3px 3px 0 hsl(var(--pixel))}
+html[lang="fa"]{--font-display:Vazirmatn,"Segoe UI",system-ui,sans-serif;--font-body:Vazirmatn,"Segoe UI",system-ui,sans-serif;--font-label:Vazirmatn,"Segoe UI",system-ui,sans-serif}
+html[lang="fa"] *{letter-spacing:0 !important;text-transform:none !important}
+.link-input,.urlbar input{direction:ltr;text-align:left}
+.mode-btn,.lang-btn{min-height:36px;padding:0 14px;border:var(--bw) solid var(--edge);border-radius:var(--r-btn);background:hsl(var(--card));color:hsl(var(--fg));box-shadow:var(--lift);font-family:var(--font-label);font-size:.68rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;cursor:pointer}
+.mode-btn:active,.lang-btn:active{transform:translate(2px,2px);box-shadow:none}
+.kicker{margin-bottom:6px;font-family:var(--font-label);font-size:.7rem;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:hsl(var(--primary))}
+.urlbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;max-width:760px;margin-top:18px;padding:8px;border:var(--bw) solid var(--edge);border-radius:var(--r);background:hsl(var(--card));box-shadow:var(--lift)}
+.urlbar-lbl{padding:0 8px;font-family:var(--font-label);font-size:.62rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:hsl(var(--muted-fg))}
+.urlbar input{flex:1 1 220px;min-width:0;border:0;background:transparent;color:hsl(var(--fg));font-family:var(--font-mono);font-size:.78rem;outline:none;text-overflow:ellipsis}
+.cta{position:relative;display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:0 20px;border:var(--bw) solid var(--edge);border-radius:var(--r-btn);background:hsl(var(--primary));color:hsl(var(--primary-fg));box-shadow:var(--lift);font-family:var(--font-label);font-size:.78rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;text-decoration:none;cursor:pointer;overflow:hidden}
+.cta.ghost{background:transparent;color:hsl(var(--fg));box-shadow:none}
+.cta:active{transform:translate(1px,1px)}
+.alerts{display:grid;gap:10px;margin-bottom:18px}
+.alert{display:flex;align-items:flex-start;gap:12px;padding:14px 16px;border:var(--bw) solid hsl(var(--warning));border-radius:var(--r);background:hsl(var(--warning)/.12)}
+.alert.danger{border-color:hsl(var(--danger));background:hsl(var(--danger)/.12)}
+.alert-ic{flex-shrink:0;display:grid;place-items:center;width:26px;height:26px;border-radius:var(--r-btn);background:hsl(var(--warning));color:#111;font-family:var(--font-label);font-weight:800}
+.alert.danger .alert-ic{background:hsl(var(--danger));color:#fff}
+.alert strong{display:block;font-family:var(--font-display);font-size:1rem}
+.alert p{margin-top:2px;font-size:.88rem;color:hsl(var(--muted-fg))}
+.meter{position:relative;margin-top:18px}
+.meter-top{display:flex;justify-content:space-between;gap:10px;margin-bottom:6px;font-family:var(--font-label);font-size:.66rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:hsl(var(--muted-fg))}
+.meter-track{height:12px;border:1px solid hsl(var(--border));border-radius:var(--r-btn);background:hsl(var(--muted-fg)/.15);overflow:hidden}
+.meter-fill{display:block;height:100%;border-radius:inherit;background:hsl(var(--status));transition:width .8s ease}
+.meter.hot .meter-fill{background:hsl(var(--danger))}
+.guide-body{padding:14px}
+.steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.step{padding:16px;border:var(--bw) solid var(--edge);border-radius:var(--r);background:hsl(var(--muted)/.4)}
+.step-n{display:inline-grid;place-items:center;width:30px;height:30px;margin-bottom:10px;border:var(--bw) solid var(--edge);border-radius:var(--r-btn);background:hsl(var(--primary));color:hsl(var(--primary-fg));font-family:var(--font-label);font-weight:800}
+.step h3{margin-bottom:4px;font-family:var(--font-display);font-size:1.02rem;font-weight:700}
+.step p{margin-bottom:12px;font-size:.86rem;color:hsl(var(--muted-fg))}
+.step .cta{width:100%;min-height:38px;padding:0 14px;font-size:.7rem;box-shadow:none}
+.guide-note{margin-top:12px;font-size:.8rem;color:hsl(var(--muted-fg))}
+.app-card{position:relative}
+.app-card.is-match{outline:2px solid hsl(var(--primary));outline-offset:2px}
+.match-tag{position:absolute;top:-11px;inset-inline-end:12px;padding:2px 10px;border-radius:var(--r-btn);background:hsl(var(--primary));color:hsl(var(--primary-fg));font-family:var(--font-label);font-size:.6rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+.topbar-end .mode-btn[hidden]{display:none}
+@media (max-width:900px){.steps{grid-template-columns:1fr}}
 
 /* =====================================================================
    Skin: AURORA — editorial luxury (ink / teal / gold, serif headlines)
@@ -281,12 +320,6 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid hsl(v
 [data-skin="aurora"] .qr-popup{border:1px solid hsl(var(--gold)/.5);border-radius:22px;box-shadow:0 30px 70px -20px hsl(0 0% 0%/.7),0 0 0 100vmax hsl(200 40% 3%/.74)}
 [data-skin="aurora"] .qr-close button{border:0;border-radius:50%}
 [data-skin="aurora"] #qrCodeContainer{border-radius:14px}
-[data-skin="aurora"] .skin-seg{border:1px solid hsl(var(--gold)/.45);border-radius:999px;box-shadow:none;overflow:hidden}
-[data-skin="aurora"] .skin-opt{padding:0 16px;font-size:.78rem;letter-spacing:.04em;text-transform:none;font-weight:600}
-[data-skin="aurora"] .skin-opt+.skin-opt{border-left:1px solid hsl(var(--gold)/.3)}
-[data-skin="aurora"] .skin-opt[aria-pressed="true"]{background:hsl(var(--gold)/.18);color:hsl(var(--gold))}
-[data-skin="aurora"] .mode-btn{border:1px solid hsl(var(--gold)/.45);border-radius:999px;box-shadow:none;padding:0 16px;font-size:.78rem;letter-spacing:.04em;text-transform:none;font-weight:600}
-[data-skin="aurora"] .skin-lbl{letter-spacing:.2em;font-weight:600;color:hsl(var(--gold))}
 
 /* =====================================================================
    Skin: NOVA — soft glass (teal / cyan mesh, Syne + Manrope, pills)
@@ -392,12 +425,6 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid hsl(v
 [data-skin="nova"] .qr-popup{border:1px solid hsl(var(--glass-bd));border-radius:28px;background:hsl(var(--card)/.92);backdrop-filter:blur(26px);-webkit-backdrop-filter:blur(26px);box-shadow:0 30px 80px -20px hsl(0 0% 0%/.6),0 0 0 100vmax hsl(206 60% 3%/.7)}
 [data-skin="nova"] .qr-close button{border:0;border-radius:50%}
 [data-skin="nova"] #qrCodeContainer{border-radius:18px}
-[data-skin="nova"] .skin-seg{border:1px solid hsl(var(--glass-bd));border-radius:999px;background:hsl(var(--glass));box-shadow:none;overflow:hidden;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}
-[data-skin="nova"] .skin-opt{padding:0 16px;font-size:.78rem;letter-spacing:.02em;text-transform:none;font-weight:700}
-[data-skin="nova"] .skin-opt+.skin-opt{border-left:0}
-[data-skin="nova"] .skin-opt[aria-pressed="true"]{background:linear-gradient(120deg,hsl(var(--primary)),hsl(var(--accent)));color:hsl(var(--primary-fg))}
-[data-skin="nova"] .mode-btn{border:1px solid hsl(var(--glass-bd));border-radius:999px;background:hsl(var(--glass));box-shadow:none;padding:0 16px;font-size:.78rem;letter-spacing:.02em;text-transform:none;font-weight:700}
-[data-skin="nova"] .skin-lbl{font-weight:700;letter-spacing:.08em}
 /* floating status orb (nova only) */
 [data-skin="nova"] .status-orb{
   display:grid;place-items:center;position:fixed;right:22px;bottom:22px;z-index:40;
@@ -411,6 +438,232 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid hsl(v
 }
 @keyframes orbFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-9px)}}
 
+/* ---- aurora: new components ---- */
+[data-skin="aurora"] body{--r:20px;--r-btn:999px;--bw:1px;--edge:hsl(var(--gold)/.32);--lift:none}
+[data-skin="aurora"] .kicker{font-family:var(--font-display);font-style:italic;font-size:.9rem;font-weight:500;letter-spacing:.24em;color:hsl(var(--gold))}
+[data-skin="aurora"] .urlbar{background:hsl(var(--card)/.85);padding:10px 10px 10px 18px;margin-top:26px}
+[data-skin="aurora"] .cta{border-color:hsl(var(--gold)/.6);box-shadow:0 14px 28px -16px hsl(var(--primary)/.8);text-transform:none;font-size:.86rem;letter-spacing:.04em}
+[data-skin="aurora"] .cta.ghost{border-color:hsl(var(--gold)/.5);box-shadow:none}
+[data-skin="aurora"] .alert{padding:18px 22px}
+[data-skin="aurora"] .alert strong{font-style:italic;font-weight:600;font-size:1.15rem}
+[data-skin="aurora"] .guide-body{padding:26px 28px}
+[data-skin="aurora"] .steps{gap:22px}
+[data-skin="aurora"] .step{padding:24px;background:linear-gradient(160deg,hsl(var(--primary)/.07),transparent 70%),hsl(var(--card))}
+[data-skin="aurora"] .step-n{background:transparent;border-color:hsl(var(--gold));color:hsl(var(--gold));font-family:var(--font-display);font-style:italic;font-weight:600}
+[data-skin="aurora"] .step h3{font-size:1.25rem;font-weight:600}
+[data-skin="aurora"] .meter-track{height:6px;border-color:hsl(var(--gold)/.3)}
+[data-skin="aurora"] .match-tag{background:hsl(var(--gold));color:hsl(var(--primary-fg));letter-spacing:.14em}
+
+/* ---- nova: new components ---- */
+[data-skin="nova"] body{--r:24px;--r-btn:999px;--bw:1px;--edge:hsl(var(--glass-bd));--lift:none}
+[data-skin="nova"] .kicker{letter-spacing:.1em;font-weight:800}
+[data-skin="nova"] .urlbar,[data-skin="nova"] .step,[data-skin="nova"] .alert{backdrop-filter:blur(18px) saturate(150%);-webkit-backdrop-filter:blur(18px) saturate(150%)}
+[data-skin="nova"] .urlbar,[data-skin="nova"] .step{background:hsl(var(--glass));box-shadow:var(--shadow)}
+[data-skin="nova"] .cta{border:0;background:linear-gradient(120deg,hsl(var(--primary)),hsl(var(--accent)));box-shadow:0 12px 30px -12px hsl(var(--primary)/.8);text-transform:none;font-weight:800;font-size:.86rem;letter-spacing:.02em}
+[data-skin="nova"] .cta.ghost{border:1px solid hsl(var(--glass-bd));background:hsl(var(--glass));color:hsl(var(--fg));box-shadow:none}
+[data-skin="nova"] .step-n{border:0;background:linear-gradient(120deg,hsl(var(--primary)),hsl(var(--accent)))}
+[data-skin="nova"] .meter-track{border-color:hsl(var(--glass-bd));height:10px}
+[data-skin="nova"] .meter-fill{box-shadow:0 0 14px hsl(var(--status)/.7)}
+
+/* =====================================================================
+   Skin: ATLAS — clean ops dashboard (slate / emerald, crisp cards, grid)
+   ===================================================================== */
+[data-skin="atlas"]{
+  --bg:215 28% 8%;--fg:210 25% 95%;--muted:215 22% 15%;--muted-fg:215 14% 67%;
+  --card:215 26% 11%;--border:215 18% 23%;--primary:160 84% 40%;--primary-fg:160 80% 5%;
+  --success:152 65% 48%;--warning:38 92% 56%;--danger:0 74% 62%;--hold:217 82% 68%;
+  --pixel:215 18% 28%;--shadow:0 1px 0 hsl(210 25% 95%/.04),0 14px 30px -20px hsl(215 50% 2%/.7);
+  --font-display:Outfit,system-ui,sans-serif;
+  --font-body:"Source Sans 3",Vazirmatn,system-ui,sans-serif;
+  --font-label:Outfit,Vazirmatn,system-ui,sans-serif;
+}
+[data-skin="atlas"] body.light{
+  --bg:210 40% 97%;--fg:215 28% 12%;--muted:214 32% 93%;--muted-fg:215 16% 38%;
+  --card:0 0% 100%;--border:214 24% 84%;--primary:161 94% 26%;--primary-fg:0 0% 100%;
+  --success:158 70% 26%;--warning:32 92% 36%;--danger:0 70% 46%;--hold:217 70% 42%;
+  --pixel:214 24% 78%;--shadow:0 1px 2px hsl(215 30% 20%/.06),0 14px 28px -20px hsl(215 40% 20%/.25);
+}
+[data-skin="atlas"] body{
+  --r:12px;--r-btn:8px;--bw:1px;--edge:hsl(var(--border));--lift:0 1px 2px hsl(215 40% 2%/.25);
+  font-size:15.5px;line-height:1.5;padding:26px 18px 64px;
+  background-image:
+    linear-gradient(hsl(var(--fg)/.035) 1px,transparent 1px),
+    linear-gradient(90deg,hsl(var(--fg)/.035) 1px,transparent 1px),
+    radial-gradient(46rem 22rem at 50% -8rem,hsl(var(--primary)/.14),transparent 70%);
+  background-size:28px 28px,28px 28px,auto;background-attachment:fixed;
+}
+[data-skin="atlas"] .shell{max-width:1160px}
+[data-skin="atlas"] .topbar{margin-bottom:22px;padding-bottom:14px;border-bottom:1px solid hsl(var(--border))}
+[data-skin="atlas"] .brand{font-family:var(--font-display);font-size:.9rem;font-weight:700;letter-spacing:.14em;color:hsl(var(--fg))}
+[data-skin="atlas"] .brand-mark{width:28px;height:28px;border:0;border-radius:8px;background:hsl(var(--primary));box-shadow:none}
+[data-skin="atlas"] .panel-index{padding:3px 9px;border:1px solid hsl(var(--border));border-radius:6px;background:hsl(var(--muted)/.5);color:hsl(var(--muted-fg));font-weight:600;letter-spacing:.08em}
+[data-skin="atlas"] .hero{margin-bottom:18px}
+[data-skin="atlas"] .hero h1{font-weight:600;font-size:clamp(1.7rem,3.4vw,2.4rem);letter-spacing:-.02em}
+[data-skin="atlas"] .uname{font-family:var(--font-mono);font-size:.85rem;font-weight:700}
+[data-skin="atlas"] .online{padding:3px 10px;border:1px solid hsl(var(--border));border-radius:999px;background:hsl(var(--muted)/.5);letter-spacing:.06em}
+[data-skin="atlas"] .urlbar{margin-top:16px;padding:6px 6px 6px 12px;background:hsl(var(--card))}
+[data-skin="atlas"] .announce{border:1px solid hsl(var(--primary)/.45);border-radius:12px;background:hsl(var(--primary)/.08);box-shadow:none}
+[data-skin="atlas"] .announce a{border:0;border-radius:8px;background:hsl(var(--primary));color:hsl(var(--primary-fg))}
+[data-skin="atlas"] .grid-top,[data-skin="atlas"] .grid-mid{gap:14px;margin-bottom:14px}
+[data-skin="atlas"] .panel-wide{margin-bottom:14px}
+[data-skin="atlas"] .panel{border:1px solid hsl(var(--border));border-radius:12px;background:hsl(var(--card));box-shadow:var(--shadow);overflow:hidden}
+[data-skin="atlas"] .panel-hd{padding:12px 16px;border-bottom:1px solid hsl(var(--border));background:hsl(var(--muted)/.35)}
+[data-skin="atlas"] .panel-hd h2{font-size:1rem;font-weight:600;letter-spacing:0}
+[data-skin="atlas"] .links-body,[data-skin="atlas"] .chart-body,[data-skin="atlas"] .apps-body,[data-skin="atlas"] .guide-body{padding:16px}
+[data-skin="atlas"] .status-hero{padding:20px}
+[data-skin="atlas"] .status-hero::before{background:linear-gradient(120deg,hsl(var(--status)/.1),transparent 55%)}
+[data-skin="atlas"] .status-title{font-weight:600;font-size:clamp(1.5rem,2.6vw,2rem);letter-spacing:0;text-transform:capitalize}
+[data-skin="atlas"] .status-title .dot{width:10px;height:10px;border-radius:50%;box-shadow:0 0 0 4px hsl(var(--status)/.2)}
+[data-skin="atlas"] .expire-chip{padding:8px 14px;border:1px solid hsl(var(--border));border-radius:10px;background:hsl(var(--muted)/.5)}
+[data-skin="atlas"] .expire-chip .val{font-weight:600}
+[data-skin="atlas"] .gauge{width:144px;height:144px}
+[data-skin="atlas"] .gauge circle{stroke-width:9}
+[data-skin="atlas"] .gauge circle:last-child{stroke-linecap:round}
+[data-skin="atlas"] .gauge-center strong{font-weight:600}
+[data-skin="atlas"] .metrics{gap:8px}
+[data-skin="atlas"] .metric{padding:9px 12px;border:1px solid hsl(var(--border));border-radius:8px;background:hsl(var(--muted)/.4)}
+[data-skin="atlas"] .metric .k,[data-skin="atlas"] .rail-card .k,[data-skin="atlas"] .expire-chip .lbl,[data-skin="atlas"] .gauge-center span{font-weight:600;letter-spacing:.06em}
+[data-skin="atlas"] .metric .v{font-weight:600}
+[data-skin="atlas"] .rail{gap:10px}
+[data-skin="atlas"] .rail-card{padding:14px 16px;border:1px solid hsl(var(--border));border-left:3px solid hsl(var(--primary));border-radius:10px;background:hsl(var(--card));box-shadow:none}
+[data-skin="atlas"] .rail-card .v{font-weight:600;font-size:1.25rem}
+[data-skin="atlas"] .meter-track{height:10px;background:hsl(var(--muted-fg)/.18)}
+[data-skin="atlas"] .step{background:hsl(var(--muted)/.35)}
+[data-skin="atlas"] .step-n{border:0;background:hsl(var(--primary)/.16);color:hsl(var(--primary))}
+[data-skin="atlas"] .cta{border:0;box-shadow:none;text-transform:none;font-size:.85rem;font-weight:600;letter-spacing:.01em}
+[data-skin="atlas"] .cta.ghost{border:1px solid hsl(var(--border));background:hsl(var(--muted)/.4)}
+[data-skin="atlas"] .link-row{padding:7px;border:1px solid hsl(var(--border));border-radius:10px;background:hsl(var(--muted)/.3)}
+[data-skin="atlas"] .proto{border:1px solid hsl(var(--primary)/.4);border-radius:6px;background:hsl(var(--primary)/.12);font-weight:700}
+[data-skin="atlas"] .icon-btn{border:1px solid hsl(var(--primary)/.5);border-radius:8px;background:hsl(var(--primary)/.12);color:hsl(var(--primary));box-shadow:none;transition:background .15s,color .15s}
+[data-skin="atlas"] .icon-btn:hover{background:hsl(var(--primary));color:hsl(var(--primary-fg))}
+[data-skin="atlas"] .icon-btn:active,[data-skin="atlas"] .copy-all:active,[data-skin="atlas"] .support-cta:active{transform:translateY(1px);box-shadow:none}
+[data-skin="atlas"] .copy-all,[data-skin="atlas"] .support-cta,[data-skin="atlas"] .app-actions .import-btn,[data-skin="atlas"] .app-card button{border:0;border-radius:8px;background:hsl(var(--primary));color:hsl(var(--primary-fg));box-shadow:none;font-weight:600}
+[data-skin="atlas"] .support-cta{text-transform:none;font-size:.82rem}
+[data-skin="atlas"] .empty{border:1px dashed hsl(var(--border));border-radius:10px}
+[data-skin="atlas"] .range-btn{border:1px solid hsl(var(--border));border-radius:6px;font-weight:600}
+[data-skin="atlas"] .range-btn.active{border-color:hsl(var(--primary));background:hsl(var(--primary));color:hsl(var(--primary-fg))}
+[data-skin="atlas"] .chart-canvas-wrap{border:1px solid hsl(var(--border));border-radius:10px;overflow:hidden}
+[data-skin="atlas"] .app-card{padding:16px;border:1px solid hsl(var(--border));border-radius:12px;background:hsl(var(--card));box-shadow:none}
+[data-skin="atlas"] .app-icon{border:0;border-radius:10px}
+[data-skin="atlas"] .platform{border:0;border-radius:6px;background:hsl(var(--primary)/.14);font-weight:600}
+[data-skin="atlas"] .app-actions .dl-btn{border:1px solid hsl(var(--border));border-radius:8px;background:hsl(var(--muted)/.4)}
+[data-skin="atlas"] .device-row{border:1px solid hsl(var(--border));border-radius:10px}
+[data-skin="atlas"] .quota-chip,[data-skin="atlas"] .group-quota-item,[data-skin="atlas"] .per-group-note{border-radius:8px}
+[data-skin="atlas"] .footer a{font-family:var(--font-display);font-weight:600;letter-spacing:.1em;background:none;-webkit-background-clip:unset;background-clip:unset;color:hsl(var(--muted-fg));animation:none}
+[data-skin="atlas"] .qr-popup{border:1px solid hsl(var(--border));border-radius:16px;box-shadow:0 24px 60px -20px hsl(0 0% 0%/.6),0 0 0 100vmax hsl(215 40% 3%/.7)}
+[data-skin="atlas"] .qr-close button{border:0;border-radius:8px}
+[data-skin="atlas"] #qrCodeContainer{border-radius:10px}
+[data-skin="atlas"] .match-tag{letter-spacing:.06em}
+
+/* =====================================================================
+   Skin: PULSE — kinetic dark (electric cyan / lime, strong motion)
+   ===================================================================== */
+[data-skin="pulse"]{
+  --bg:200 32% 5%;--fg:190 22% 96%;--muted:200 22% 11%;--muted-fg:195 12% 65%;
+  --card:200 26% 8%;--border:195 20% 20%;--primary:187 100% 50%;--primary-fg:200 70% 5%;
+  --accent:84 85% 56%;
+  --success:84 78% 54%;--warning:38 100% 58%;--danger:0 90% 64%;--hold:210 100% 72%;
+  --pixel:187 40% 30%;--shadow:none;
+  --font-display:"Space Grotesk",system-ui,sans-serif;
+  --font-body:"IBM Plex Sans",Vazirmatn,system-ui,sans-serif;
+  --font-label:"Space Grotesk",Vazirmatn,system-ui,sans-serif;
+}
+[data-skin="pulse"] body.light{
+  --bg:190 30% 96%;--fg:200 45% 8%;--muted:190 24% 91%;--muted-fg:195 16% 34%;
+  --card:0 0% 100%;--border:190 20% 78%;--primary:190 100% 27%;--primary-fg:0 0% 100%;
+  --accent:84 85% 26%;
+  --success:100 70% 28%;--warning:32 95% 36%;--danger:0 78% 46%;--hold:212 85% 40%;
+  --pixel:190 30% 60%;
+}
+[data-skin="pulse"] body{
+  --r:6px;--r-btn:4px;--bw:1px;--edge:hsl(var(--primary)/.38);--lift:none;
+  padding:26px 18px 64px;
+  background-image:
+    radial-gradient(44rem 26rem at 100% -8%,hsl(var(--primary)/.15),transparent 70%),
+    radial-gradient(36rem 24rem at -6% 106%,hsl(var(--accent)/.09),transparent 70%),
+    repeating-linear-gradient(135deg,hsl(var(--primary)/.035) 0 1px,transparent 1px 14px);
+  background-size:auto;background-attachment:fixed;
+}
+[data-skin="pulse"] .shell>*{animation:rise .6s cubic-bezier(.2,.7,.2,1) both}
+[data-skin="pulse"] .shell>*:nth-child(2){animation-delay:.05s}
+[data-skin="pulse"] .shell>*:nth-child(3){animation-delay:.1s}
+[data-skin="pulse"] .shell>*:nth-child(4){animation-delay:.15s}
+[data-skin="pulse"] .shell>*:nth-child(5){animation-delay:.2s}
+[data-skin="pulse"] .shell>*:nth-child(6){animation-delay:.25s}
+[data-skin="pulse"] .shell>*:nth-child(7){animation-delay:.3s}
+[data-skin="pulse"] .shell>*:nth-child(n+8){animation-delay:.35s}
+@keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+@keyframes ping{0%{box-shadow:0 0 0 0 hsl(var(--status,var(--success))/.65)}70%,100%{box-shadow:0 0 0 12px hsl(var(--status,var(--success))/0)}}
+@keyframes sweep{from{stroke-dashoffset:340}to{stroke-dashoffset:0}}
+@keyframes shine{0%,55%{transform:translateX(-130%)}100%{transform:translateX(130%)}}
+@keyframes flow{to{background-position:-200% 0}}
+@keyframes markPulse{0%,100%{box-shadow:0 0 0 0 hsl(var(--primary)/.5)}50%{box-shadow:0 0 0 7px hsl(var(--primary)/0)}}
+[data-skin="pulse"] .topbar{margin-bottom:24px;padding-bottom:14px;border-bottom:1px solid hsl(var(--primary)/.25)}
+[data-skin="pulse"] .brand{font-family:var(--font-display);font-size:.95rem;font-weight:700;letter-spacing:.18em;color:hsl(var(--fg))}
+[data-skin="pulse"] .brand-mark{width:28px;height:28px;border:0;border-radius:4px;background:linear-gradient(135deg,hsl(var(--primary)),hsl(var(--accent)));color:hsl(var(--primary-fg));box-shadow:none;animation:markPulse 2.4s ease-in-out infinite}
+[data-skin="pulse"] .panel-index{font-weight:700;letter-spacing:.16em;color:hsl(var(--primary))}
+[data-skin="pulse"] .kicker{color:hsl(var(--accent))}
+[data-skin="pulse"] .hero{margin-bottom:22px}
+[data-skin="pulse"] .hero h1{font-weight:700;font-size:clamp(2rem,5vw,3.3rem);letter-spacing:-.035em;line-height:1;background:linear-gradient(100deg,hsl(var(--fg)) 45%,hsl(var(--primary)) 80%,hsl(var(--accent)));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+[data-skin="pulse"] .uname{font-family:var(--font-mono);font-size:.85rem}
+[data-skin="pulse"] .online i{--status:var(--success);animation:ping 1.8s ease-out infinite;box-shadow:none}
+[data-skin="pulse"] .online.off i{animation:none}
+[data-skin="pulse"] .urlbar{background:hsl(var(--card));border-inline-start:3px solid hsl(var(--primary))}
+[data-skin="pulse"] .announce{border:1px solid hsl(var(--accent)/.5);border-inline-start:3px solid hsl(var(--accent));border-radius:6px;background:hsl(var(--accent)/.08);box-shadow:none}
+[data-skin="pulse"] .announce a{border:0;border-radius:4px;background:hsl(var(--accent));color:hsl(var(--primary-fg))}
+[data-skin="pulse"] .grid-top,[data-skin="pulse"] .grid-mid{gap:14px;margin-bottom:14px}
+[data-skin="pulse"] .panel-wide{margin-bottom:14px}
+[data-skin="pulse"] .panel{border:1px solid hsl(var(--primary)/.2);border-inline-start:3px solid hsl(var(--primary));border-radius:6px;background:hsl(var(--card));box-shadow:none}
+[data-skin="pulse"] .panel-hd{padding:12px 16px;border-bottom:1px solid hsl(var(--primary)/.16)}
+[data-skin="pulse"] .panel-hd h2{font-size:1.05rem;font-weight:700;letter-spacing:-.01em}
+[data-skin="pulse"] .links-body,[data-skin="pulse"] .chart-body,[data-skin="pulse"] .apps-body,[data-skin="pulse"] .guide-body{padding:16px}
+[data-skin="pulse"] .status-hero{padding:20px}
+[data-skin="pulse"] .status-hero::before{background:linear-gradient(120deg,hsl(var(--status)/.16),transparent 60%)}
+[data-skin="pulse"] .status-title{font-weight:700;font-size:clamp(1.8rem,3.4vw,2.7rem);letter-spacing:.02em}
+[data-skin="pulse"] .status-title .dot{width:11px;height:11px;border-radius:50%;box-shadow:none;animation:ping 1.6s ease-out infinite}
+[data-skin="pulse"] .expire-chip .val{font-weight:700;color:hsl(var(--accent))}
+[data-skin="pulse"] .gauge{width:152px;height:152px}
+[data-skin="pulse"] .gauge circle{stroke-width:8}
+[data-skin="pulse"] .gauge circle:last-child{stroke-linecap:round;filter:drop-shadow(0 0 6px hsl(var(--status)/.55));animation:sweep 1.3s cubic-bezier(.2,.7,.2,1) both}
+[data-skin="pulse"] .gauge-center strong{font-weight:700}
+[data-skin="pulse"] .metrics{gap:8px}
+[data-skin="pulse"] .metric{padding:10px 12px;border:1px solid hsl(var(--border));border-inline-start:2px solid hsl(var(--primary));border-radius:4px;background:hsl(var(--muted)/.45)}
+[data-skin="pulse"] .metric .v{font-weight:700}
+[data-skin="pulse"] .rail{gap:10px}
+[data-skin="pulse"] .rail-card{padding:14px 16px;border:1px solid hsl(var(--primary)/.2);border-radius:6px;background:hsl(var(--card));box-shadow:none}
+[data-skin="pulse"] .rail-card .v{font-weight:700}
+[data-skin="pulse"] .meter-track{height:10px;border:0;background:hsl(var(--muted-fg)/.2)}
+[data-skin="pulse"] .meter-fill{background:linear-gradient(90deg,hsl(var(--status)/.65),hsl(var(--status)),hsl(var(--status)/.65));background-size:200% 100%;animation:flow 2.2s linear infinite}
+[data-skin="pulse"] .meter.hot .meter-fill{background:linear-gradient(90deg,hsl(var(--danger)/.65),hsl(var(--danger)),hsl(var(--danger)/.65));background-size:200% 100%}
+[data-skin="pulse"] .step{border:1px solid hsl(var(--primary)/.22);border-top:2px solid hsl(var(--primary));background:hsl(var(--muted)/.35)}
+[data-skin="pulse"] .step-n{border:0;background:linear-gradient(135deg,hsl(var(--primary)),hsl(var(--accent)))}
+[data-skin="pulse"] .cta,[data-skin="pulse"] .copy-all,[data-skin="pulse"] .support-cta,[data-skin="pulse"] .app-actions .import-btn,[data-skin="pulse"] .app-card button{position:relative;overflow:hidden;border:0;border-radius:4px;background:linear-gradient(110deg,hsl(var(--primary)),hsl(var(--accent)));color:hsl(var(--primary-fg));box-shadow:none;font-weight:700}
+[data-skin="pulse"] .cta::after,[data-skin="pulse"] .copy-all::after,[data-skin="pulse"] .support-cta::after,[data-skin="pulse"] .app-actions .import-btn::after{content:"";position:absolute;inset:0;background:linear-gradient(105deg,transparent 30%,hsl(0 0% 100%/.42) 50%,transparent 70%);transform:translateX(-130%);animation:shine 3.2s ease-in-out infinite;pointer-events:none}
+[data-skin="pulse"] .cta.ghost{border:1px solid hsl(var(--primary)/.5);background:transparent;color:hsl(var(--fg))}
+[data-skin="pulse"] .cta.ghost::after{display:none}
+[data-skin="pulse"] .support-cta{text-transform:none;font-size:.82rem}
+[data-skin="pulse"] .link-row{padding:7px;border:1px solid hsl(var(--primary)/.25);border-radius:6px;background:hsl(var(--muted)/.4)}
+[data-skin="pulse"] .proto{border:0;border-radius:3px;background:hsl(var(--primary)/.16);font-weight:700}
+[data-skin="pulse"] .icon-btn{border:1px solid hsl(var(--primary));border-radius:4px;background:transparent;color:hsl(var(--primary));box-shadow:none;transition:background .15s,color .15s}
+[data-skin="pulse"] .icon-btn:hover{background:hsl(var(--primary));color:hsl(var(--primary-fg))}
+[data-skin="pulse"] .icon-btn:active{transform:scale(.96);box-shadow:none}
+[data-skin="pulse"] .empty{border:1px dashed hsl(var(--primary)/.35);border-radius:6px}
+[data-skin="pulse"] .range-btn{border:1px solid hsl(var(--border));border-radius:3px;font-weight:700}
+[data-skin="pulse"] .range-btn.active{border-color:hsl(var(--primary));background:hsl(var(--primary));color:hsl(var(--primary-fg))}
+[data-skin="pulse"] .chart-total{color:hsl(var(--accent))}
+[data-skin="pulse"] .chart-canvas-wrap{border:1px solid hsl(var(--primary)/.2);border-radius:6px;overflow:hidden}
+[data-skin="pulse"] .app-card{border:1px solid hsl(var(--primary)/.22);border-top:2px solid hsl(var(--primary));border-radius:6px;background:hsl(var(--card));box-shadow:none}
+[data-skin="pulse"] .app-icon{border:0;border-radius:8px}
+[data-skin="pulse"] .platform{border:0;border-radius:3px;background:hsl(var(--primary)/.16);font-weight:700}
+[data-skin="pulse"] .app-actions .dl-btn{border:1px solid hsl(var(--primary)/.4);border-radius:4px;background:transparent}
+[data-skin="pulse"] .device-row{border:1px solid hsl(var(--primary)/.22);border-radius:6px}
+[data-skin="pulse"] .quota-chip,[data-skin="pulse"] .group-quota-item,[data-skin="pulse"] .per-group-note{border-radius:4px}
+[data-skin="pulse"] .footer a{font-family:var(--font-display);font-weight:700;letter-spacing:.14em;background-image:linear-gradient(105deg,hsl(var(--muted-fg)),hsl(var(--primary)),hsl(var(--accent)),hsl(var(--primary)),hsl(var(--muted-fg)))}
+[data-skin="pulse"] .qr-popup{border:1px solid hsl(var(--primary)/.5);border-radius:10px;box-shadow:0 0 40px -10px hsl(var(--primary)/.5),0 0 0 100vmax hsl(200 50% 2%/.76)}
+[data-skin="pulse"] .qr-close button{border:0;border-radius:4px}
+[data-skin="pulse"] .match-tag{background:hsl(var(--accent));letter-spacing:.1em}
+@media (prefers-reduced-motion:reduce){[data-skin="pulse"] .shell>*{animation:none!important}}
+
 @media (max-width:640px){
   [data-skin="aurora"] body{padding:26px 14px 56px}
   [data-skin="aurora"] .topbar{margin-bottom:30px}
@@ -421,6 +674,9 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid hsl(v
   [data-skin="nova"] body{padding:18px 12px 110px}
   [data-skin="nova"] .status-orb{width:70px;height:70px;right:14px;bottom:14px;font-size:.54rem}
   [data-skin="nova"] .gauge{width:132px;height:132px}
+  [data-skin="atlas"] body,[data-skin="pulse"] body{padding:18px 12px 44px}
+  [data-skin="atlas"] .gauge,[data-skin="pulse"] .gauge{width:128px;height:128px}
+  .urlbar .cta{flex:1 1 100%}
   .topbar-end{width:100%;justify-content:space-between}
   .topbar-end .panel-index{display:none}
 }
@@ -430,9 +686,9 @@ var QRCode;!function(){function a(a){this.mode=c.MODE_8BIT_BYTE,this.data=a,this
         
 </script>
 </head>
-<body class="status-{{ user.status.value }}">
+<body class="status-{{ user.status.value }}{% if sub_mode == 'light' %} light{% endif %}">
 <script>
-(function(){try{var s=document.documentElement.getAttribute('data-skin')||'terminal';var m=localStorage.getItem('subMode.'+s);if(m===null&&s==='terminal')m=localStorage.getItem('theme');if(m==='light')document.body.classList.add('light');}catch(e){}})();
+(function(){try{var allow={{ 'true' if allow_toggle else 'false' }};var m=localStorage.getItem('subMode');if(allow&&(m==='light'||m==='dark'))document.body.classList.toggle('light',m==='light');}catch(e){}})();
 </script>
 {% set used = user.used_traffic or 0 %}
 {% set limit = user.data_limit or 0 %}
@@ -443,6 +699,10 @@ var QRCode;!function(){function a(a){this.mode=c.MODE_8BIT_BYTE,this.data=a,this
 {% set circ = 2 * 3.14159265 * 54 %}
 {% set dash = circ * (pct / 100) %}
 {% set online = user.online_at and ((now() - user.online_at).total_seconds() < 120) %}
+{% set days_left = ((user.expire - now()).days | int) if user.expire else none %}
+{% set warn_expiry = user.status.value == 'active' and days_left is not none and days_left <= 3 %}
+{% set warn_traffic = limit and raw_pct >= 90 and user.status.value in ('active', 'limited') %}
+{% set has_apps = show_apps and apps %}
 
 <div class="status-orb" role="status" aria-label="Account status: {{ user.status.value | replace('_', ' ') }}">{{ user.status.value | replace('_', ' ') }}</div>
 
@@ -450,36 +710,65 @@ var QRCode;!function(){function a(a){this.mode=c.MODE_8BIT_BYTE,this.data=a,this
   <div class="topbar">
     <div class="brand"><span class="brand-mark">H</span> HPXPANEL</div>
     <div class="topbar-end">
-      <span class="panel-index">Secure delivery // sub</span>
-      <div class="skin-ctl">
-        <span class="skin-lbl" id="skinLbl">Sub theme</span>
-        <div class="skin-seg" role="group" aria-labelledby="skinLbl">
-          <button type="button" class="skin-opt" data-skin-opt="terminal" aria-pressed="true" onclick="setSkin('terminal')">Terminal</button>
-          <button type="button" class="skin-opt" data-skin-opt="aurora" aria-pressed="false" onclick="setSkin('aurora')">Aurora</button>
-          <button type="button" class="skin-opt" data-skin-opt="nova" aria-pressed="false" onclick="setSkin('nova')">Nova</button>
-        </div>
-        <button type="button" class="mode-btn" id="modeBtn" onclick="toggleTheme()" title="Toggle light / dark" aria-label="Toggle light or dark mode">
-          <span id="theme-icon">Light</span>
-        </button>
-      </div>
+      <span class="panel-index" data-i18n="secure">Secure delivery // sub</span>
+      <button type="button" class="lang-btn" id="langBtn" onclick="toggleLang()" title="Language / زبان" aria-label="Switch language">FA</button>
+      {% if allow_toggle %}
+      <button type="button" class="mode-btn" id="modeBtn" onclick="toggleTheme()" title="Toggle light / dark" aria-label="Toggle light or dark mode">
+        <span id="theme-icon" data-i18n="{{ 'mode_dark' if sub_mode == 'light' else 'mode_light' }}">{{ 'Dark' if sub_mode == 'light' else 'Light' }}</span>
+      </button>
+      {% endif %}
     </div>
   </div>
 
   <header class="hero">
-    <h1>User dashboard</h1>
+    <div class="kicker" data-i18n="dashboard">User dashboard</div>
+    <h1>{{ (profile_title or 'Subscription') | e }}</h1>
     <div class="hero-meta">
       <span class="uname" dir="ltr">@{{ user.username }}</span>
       <span class="online {% if not online %}off{% endif %}">
         <i aria-hidden="true"></i>
-        <span>{% if online %}Online{% else %}Offline{% endif %}</span>
+        <span data-i18n="{{ 'online' if online else 'offline' }}">{% if online %}Online{% else %}Offline{% endif %}</span>
       </span>
+    </div>
+    <div class="urlbar">
+      <span class="urlbar-lbl" data-i18n="sub_url">Subscription URL</span>
+      <input id="subUrl" type="text" readonly dir="ltr" value="" aria-label="Subscription URL" onfocus="this.select()" />
+      <button class="cta" type="button" id="copyUrlBtn" onclick="copySubUrl(this)" data-i18n="copy_url">Copy subscription URL</button>
+      <button class="cta ghost" type="button" id="subQrBtn" onclick="showQr(this)" data-i18n="qr">QR</button>
     </div>
   </header>
 
   {% if announce %}
   <div class="announce">
     <span>{{ announce | replace('\n', '<br>') }}</span>
-    {% if announce_url %}<a href="{{ announce_url }}" target="_blank" rel="noopener">More info</a>{% endif %}
+    {% if announce_url %}<a href="{{ announce_url }}" target="_blank" rel="noopener" data-i18n="more_info">More info</a>{% endif %}
+  </div>
+  {% endif %}
+
+  {% if warn_expiry or warn_traffic %}
+  <div class="alerts" role="alert">
+    {% if warn_expiry %}
+    <div class="alert{% if days_left <= 0 %} danger{% endif %}">
+      <span class="alert-ic" aria-hidden="true">!</span>
+      <div>
+        <strong data-i18n="warn_expiry_t">Subscription expiring soon</strong>
+        {% if days_left <= 0 %}
+        <p data-i18n="warn_expiry_today">Your subscription expires today. Contact support to renew.</p>
+        {% else %}
+        <p data-i18n="warn_expiry_d" data-n="{{ days_left }}">Only {{ days_left }} day(s) left. Renew soon to stay connected.</p>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+    {% if warn_traffic %}
+    <div class="alert{% if raw_pct >= 100 %} danger{% endif %}">
+      <span class="alert-ic" aria-hidden="true">!</span>
+      <div>
+        <strong data-i18n="warn_traffic_t">Data almost used up</strong>
+        <p data-i18n="warn_traffic_d" data-p="{{ '%.0f'|format(pct) }}">You have used {{ '%.0f'|format(pct) }}% of your data allowance.</p>
+      </div>
+    </div>
+    {% endif %}
   </div>
   {% endif %}
 
@@ -487,16 +776,16 @@ var QRCode;!function(){function a(a){this.mode=c.MODE_8BIT_BYTE,this.data=a,this
     <article class="panel status-hero">
       <div class="status-row">
         <div class="status-title">
-          {{ user.status.value | replace('_', ' ') }}
+          <span data-i18n="st_{{ user.status.value }}">{{ user.status.value | replace('_', ' ') }}</span>
           <span class="dot" aria-hidden="true"></span>
         </div>
         <div class="expire-chip">
           {% if user.status.value == 'on_hold' %}
-            <div class="lbl">Available for</div>
-            <div class="val">{% if not user.on_hold_expire_duration %}∞{% else %}{{ (user.on_hold_expire_duration / 86400) | int }} days{% endif %}</div>
+            <div class="lbl" data-i18n="available_for">Available for</div>
+            {% if not user.on_hold_expire_duration %}<div class="val">∞</div>{% else %}<div class="val" data-i18n="days_n" data-n="{{ (user.on_hold_expire_duration / 86400) | int }}">{{ (user.on_hold_expire_duration / 86400) | int }} days</div>{% endif %}
           {% else %}
-            <div class="lbl">{% if not user.expire %}No expiry{% else %}Expires in{% endif %}</div>
-            <div class="val">{% if not user.expire %}∞{% else %}{{ ((user.expire - now()).days) | int }} days{% endif %}</div>
+            <div class="lbl" data-i18n="{{ 'no_expiry' if not user.expire else 'expires_in' }}">{% if not user.expire %}No expiry{% else %}Expires in{% endif %}</div>
+            {% if not user.expire %}<div class="val">∞</div>{% else %}<div class="val" data-i18n="days_n" data-n="{{ days_left }}">{{ days_left }} days</div>{% endif %}
           {% endif %}
         </div>
       </div>
@@ -511,50 +800,58 @@ var QRCode;!function(){function a(a){this.mode=c.MODE_8BIT_BYTE,this.data=a,this
           </svg>
           <div class="gauge-center">
             <strong>{% if limit %}{{ '%.0f'|format(pct) }}%{% else %}∞{% endif %}</strong>
-            <span>Used</span>
+            <span data-i18n="used">Used</span>
           </div>
         </div>
         <div class="metrics">
-          <div class="metric"><span class="k">Used traffic</span><span class="v">{{ used | bytesformat }}</span></div>
-          <div class="metric"><span class="k">Total limit</span><span class="v">{% if not limit %}∞{% else %}{{ limit | bytesformat }}{% endif %}</span></div>
-          <div class="metric"><span class="k">Remaining</span><span class="v remain">{% if remaining is none %}∞{% else %}{{ remaining | bytesformat }}{% endif %}</span></div>
+          <div class="metric"><span class="k" data-i18n="used_traffic">Used traffic</span><span class="v">{{ used | bytesformat }}</span></div>
+          <div class="metric"><span class="k" data-i18n="total_limit">Total limit</span><span class="v">{% if not limit %}∞{% else %}{{ limit | bytesformat }}{% endif %}</span></div>
+          <div class="metric"><span class="k" data-i18n="remaining">Remaining</span><span class="v remain">{% if remaining is none %}∞{% else %}{{ remaining | bytesformat }}{% endif %}</span></div>
           {% if group_quotas %}
-          <div class="per-group-note">This account has separate data limits per server group. See details below each config link.</div>
+          <div class="per-group-note" data-i18n="group_note">This account has separate data limits per server group. See details below each config link.</div>
           {% endif %}
         </div>
+      </div>
+
+      <div class="meter{% if raw_pct >= 90 %} hot{% endif %}" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ '%.0f'|format(pct) }}">
+        <div class="meter-top">
+          <span data-i18n="traffic_usage">Traffic usage</span>
+          <span>{% if limit %}{{ used | bytesformat }} / {{ limit | bytesformat }}{% else %}<span data-i18n="unlimited">Unlimited</span>{% endif %}</span>
+        </div>
+        <div class="meter-track"><span class="meter-fill" style="width:{% if limit %}{{ '%.1f'|format(pct) }}{% else %}0{% endif %}%"></span></div>
       </div>
     </article>
 
     <aside class="rail" aria-label="Key telemetry">
       <div class="rail-card">
-        <div class="k">01 / Lifetime traffic</div>
+        <div class="k"><span>01 / </span><span data-i18n="lifetime">Lifetime traffic</span></div>
         <div class="v">{{ lifetime | bytesformat }}</div>
       </div>
       <div class="rail-card">
-        <div class="k">02 / Expiry date</div>
+        <div class="k"><span>02 / </span><span data-i18n="expiry_date">Expiry date</span></div>
         {% if user.status.value == 'on_hold' %}
           <div class="v">{% if user.on_hold_timeout %}{{ user.on_hold_timeout | datetime }}{% else %}∞{% endif %}</div>
-          <div class="sub">On-hold timeout</div>
+          <div class="sub" data-i18n="onhold_timeout">On-hold timeout</div>
         {% else %}
           <div class="v">{% if not user.expire %}∞{% else %}{{ user.expire | datetime }}{% endif %}</div>
         {% endif %}
       </div>
       <div class="rail-card">
-        <div class="k">03 / Last online</div>
+        <div class="k"><span>03 / </span><span data-i18n="last_online">Last online</span></div>
         <div class="v">{% if user.online_at %}{{ user.online_at | datetime }}{% else %}—{% endif %}</div>
-        <div class="sub">{% if online %}Signal live{% else %}No recent heartbeat{% endif %}</div>
+        <div class="sub" data-i18n="{{ 'signal_live' if online else 'no_heartbeat' }}">{% if online %}Signal live{% else %}No recent heartbeat{% endif %}</div>
       </div>
       {% if group_quotas %}
       <div class="rail-card">
-        <div class="k">04 / Group limits</div>
+        <div class="k"><span>04 / </span><span data-i18n="group_limits">Group limits</span></div>
         <div class="group-quota-list">
           {% for quota in group_quotas %}
           <div class="group-quota-item">
             <div class="name">{{ quota.group_name }}</div>
             <div class="stats">
               {{ quota.used_traffic | bytesformat }} / {{ quota.data_limit | bytesformat }}
-              · <strong>{{ quota.remaining | bytesformat }} left</strong>
-              {% if quota.is_limited %} · limit reached{% endif %}
+              · <strong>{{ quota.remaining | bytesformat }} <span data-i18n="left">left</span></strong>
+              {% if quota.is_limited %} · <span data-i18n="limit_reached">limit reached</span>{% endif %}
             </div>
           </div>
           {% endfor %}
@@ -564,95 +861,99 @@ var QRCode;!function(){function a(a){this.mode=c.MODE_8BIT_BYTE,this.data=a,this
     </aside>
   </section>
 
-  <section class="grid-mid">
-    <article class="panel">
-      <div class="panel-hd">
-        <h2>Configuration links</h2>
-        <span class="panel-index">04 / Connect</span>
+  {% if show_guide %}
+  <section class="panel panel-wide" id="guidePanel">
+    <div class="panel-hd">
+      <h2 data-i18n="guide_title">Quick start</h2>
+      <span class="panel-index" data-i18n="guide_idx">02 / 3 steps</span>
+    </div>
+    <div class="guide-body">
+      <div class="steps">
+        <div class="step">
+          <span class="step-n">1</span>
+          <h3 data-i18n="step1_t">Download an app</h3>
+          <p><span data-i18n="step1_d">Install a client for your device. We highlight the best match below.</span> <span class="platform" id="platformChip" hidden></span></p>
+          {% if has_apps %}<a class="cta" href="#appsPanel" data-i18n="step1_b">Choose app</a>{% endif %}
+        </div>
+        <div class="step">
+          <span class="step-n">2</span>
+          <h3 data-i18n="step2_t">Add your subscription</h3>
+          <p data-i18n="step2_d">Copy your subscription URL and paste it into the app, or tap Import config.</p>
+          <button class="cta" type="button" onclick="copySubUrl(this)" data-i18n="copy_url">Copy subscription URL</button>
+        </div>
+        <div class="step">
+          <span class="step-n">3</span>
+          <h3 data-i18n="step3_t">Connect</h3>
+          <p data-i18n="step3_d">Refresh the subscription inside the app, pick a server and press connect.</p>
+        </div>
       </div>
-      <div class="links-body">
-        {% if user.status.value in ('active', 'on_hold') %}
-          {% if link_entries %}
-            {% for entry in link_entries %}
-            {% set proto = (entry.link.split('://')[0] if '://' in entry.link else entry.protocol or 'LINK') | upper %}
-            <div class="link-row">
-              <span class="proto">{{ proto[:8] }}</span>
-              <input class="link-input" type="text" value="{{ entry.link }}" readonly />
-              <button class="icon-btn" type="button" onclick="copyLink(this)" data-link="{{ entry.link }}">Copy</button>
-              <button class="icon-btn" type="button" onclick="showQr(this)" data-link="{{ entry.link }}">QR</button>
-              {% if entry.group_quotas %}
-              <div class="link-quota">
-                {% for gq in entry.group_quotas %}
-                <span class="quota-chip{% if gq.is_limited %} limited{% endif %}">
-                  {{ gq.group_name }}:
-                  <span class="remain">{{ gq.remaining | bytesformat }} left</span>
-                  / {{ gq.data_limit | bytesformat }}
-                </span>
-                {% endfor %}
-              </div>
-              {% endif %}
-            </div>
-            {% endfor %}
-            <button class="copy-all" type="button" onclick="copyAllLinks(this)">Copy all links</button>
-          {% elif links %}
-            {% for link in links %}
-            {% set proto = (link.split('://')[0] if '://' in link else 'LINK') | upper %}
-            <div class="link-row">
-              <span class="proto">{{ proto[:8] }}</span>
-              <input class="link-input" type="text" value="{{ link }}" readonly />
-              <button class="icon-btn" type="button" onclick="copyLink(this)" data-link="{{ link }}">Copy</button>
-              <button class="icon-btn" type="button" onclick="showQr(this)" data-link="{{ link }}">QR</button>
-            </div>
-            {% endfor %}
-            <button class="copy-all" type="button" onclick="copyAllLinks(this)">Copy all links</button>
-          {% else %}
-            <p class="empty">Direct browser links are hidden for this subscription. Open the subscription URL in a supported client.</p>
-          {% endif %}
-        {% else %}
-          <p class="empty">Links unavailable while account is {{ user.status.value | replace('_',' ') }}.</p>
-        {% endif %}
-      </div>
-    </article>
+      <p class="guide-note"><span data-i18n="guide_note">Profile:</span> <strong>{{ (profile_title or 'Subscription') | e }}</strong></p>
+    </div>
+  </section>
+  {% endif %}
 
-    <article class="panel">
-      <div class="panel-hd">
-        <h2>Usage statistics</h2>
-        <span class="panel-index">05 / Telemetry</span>
-      </div>
-      <div class="chart-body">
-        <div class="chart-meta">
-          <div class="ranges" role="tablist" aria-label="Time range">
-            <button type="button" class="range-btn" data-range="1h" onclick="setRange('1h', this)">1h</button>
-            <button type="button" class="range-btn" data-range="12h" onclick="setRange('12h', this)">12h</button>
-            <button type="button" class="range-btn" data-range="24h" onclick="setRange('24h', this)">24h</button>
-            <button type="button" class="range-btn active" data-range="7d" onclick="setRange('7d', this)">7d</button>
-            <button type="button" class="range-btn" data-range="30d" onclick="setRange('30d', this)">30d</button>
-            <button type="button" class="range-btn" data-range="90d" onclick="setRange('90d', this)">90d</button>
+  <section class="panel panel-wide" id="linksPanel">
+    <div class="panel-hd">
+      <h2 data-i18n="links_title">Configuration links</h2>
+      <span class="panel-index" data-i18n="links_idx">03 / Connect</span>
+    </div>
+    <div class="links-body">
+      {% if user.status.value in ('active', 'on_hold') %}
+        {% if link_entries %}
+          {% for entry in link_entries %}
+          {% set proto = (entry.link.split('://')[0] if '://' in entry.link else entry.protocol or 'LINK') | upper %}
+          <div class="link-row">
+            <span class="proto">{{ proto[:8] }}</span>
+            <input class="link-input" type="text" value="{{ entry.link }}" readonly />
+            <button class="icon-btn" type="button" onclick="copyLink(this)" data-link="{{ entry.link }}" data-i18n="copy">Copy</button>
+            <button class="icon-btn" type="button" onclick="showQr(this)" data-link="{{ entry.link }}" data-i18n="qr">QR</button>
+            {% if entry.group_quotas %}
+            <div class="link-quota">
+              {% for gq in entry.group_quotas %}
+              <span class="quota-chip{% if gq.is_limited %} limited{% endif %}">
+                {{ gq.group_name }}:
+                <span class="remain">{{ gq.remaining | bytesformat }} <span data-i18n="left">left</span></span>
+                / {{ gq.data_limit | bytesformat }}
+              </span>
+              {% endfor %}
+            </div>
+            {% endif %}
           </div>
-          <div class="chart-total" id="chartTotal">—</div>
-        </div>
-        <div class="chart-canvas-wrap">
-          <canvas id="usageChart" width="640" height="220" aria-label="Traffic usage chart"></canvas>
-          <div class="chart-loading" id="chartLoading">Loading…</div>
-          <div class="chart-empty" id="chartEmpty" hidden>No traffic in this range</div>
-        </div>
-      </div>
-    </article>
+          {% endfor %}
+          <button class="copy-all" type="button" onclick="copyAllLinks(this)" data-i18n="copy_all">Copy all links</button>
+        {% elif links %}
+          {% for link in links %}
+          {% set proto = (link.split('://')[0] if '://' in link else 'LINK') | upper %}
+          <div class="link-row">
+            <span class="proto">{{ proto[:8] }}</span>
+            <input class="link-input" type="text" value="{{ link }}" readonly />
+            <button class="icon-btn" type="button" onclick="copyLink(this)" data-link="{{ link }}" data-i18n="copy">Copy</button>
+            <button class="icon-btn" type="button" onclick="showQr(this)" data-link="{{ link }}" data-i18n="qr">QR</button>
+          </div>
+          {% endfor %}
+          <button class="copy-all" type="button" onclick="copyAllLinks(this)" data-i18n="copy_all">Copy all links</button>
+        {% else %}
+          <p class="empty" data-i18n="empty_hidden">Direct browser links are hidden for this subscription. Open the subscription URL in a supported client.</p>
+        {% endif %}
+      {% else %}
+        <p class="empty"><span data-i18n="empty_unavailable">Links unavailable while account is</span> <span data-i18n="st_{{ user.status.value }}">{{ user.status.value | replace('_',' ') }}</span>.</p>
+      {% endif %}
+    </div>
   </section>
 
-  {% if apps %}
+  {% if has_apps %}
   <section class="panel panel-wide" id="appsPanel">
     <div class="panel-hd">
-      <h2>Recommended applications</h2>
-      <span class="panel-index">06 / Clients</span>
+      <h2 data-i18n="apps_title">Recommended applications</h2>
+      <span class="panel-index" data-i18n="apps_idx">04 / Clients</span>
     </div>
     <div class="apps-body">
-      <p class="apps-hint">Install a client, then use <strong>Import config</strong> or paste your subscription link.</p>
-      <div class="apps-grid">
+      <p class="apps-hint" data-i18n="apps_hint">Install a client, then use Import config or paste your subscription link.</p>
+      <div class="apps-grid" id="appsGrid">
         {% for app in apps %}
         {% set en_links = app.download_links | selectattr('language.value', 'equalto', 'en') | list %}
         {% set shown_links = en_links or app.download_links[:1] %}
-        <div class="app-card">
+        <div class="app-card" data-platform="{{ app.platform.value if app.platform else '' }}">
           <div class="app-hd">
             {% if app.icon_url %}<img class="app-icon" src="{{ app.icon_url | e }}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'" />{% endif %}
             <div>
@@ -666,7 +967,7 @@ var QRCode;!function(){function a(a){this.mode=c.MODE_8BIT_BYTE,this.data=a,this
             <a class="dl-btn" href="{{ link.url | e }}" target="_blank" rel="noopener noreferrer">{{ link.name | e }}</a>
             {% endfor %}
             {% if app.import_url %}
-            <a class="import-btn" href="{{ app.import_url | e }}">Import config</a>
+            <a class="import-btn" href="{{ app.import_url | e }}" data-i18n="import">Import config</a>
             {% endif %}
           </div>
         </div>
@@ -676,28 +977,55 @@ var QRCode;!function(){function a(a){this.mode=c.MODE_8BIT_BYTE,this.data=a,this
   </section>
   {% endif %}
 
+  {% if show_usage %}
+  <section class="panel panel-wide" id="usagePanel">
+    <div class="panel-hd">
+      <h2 data-i18n="usage_title">Usage statistics</h2>
+      <span class="panel-index" data-i18n="usage_idx">05 / Telemetry</span>
+    </div>
+    <div class="chart-body">
+      <div class="chart-meta">
+        <div class="ranges" role="tablist" aria-label="Time range">
+          <button type="button" class="range-btn" data-range="1h" onclick="setRange('1h', this)">1h</button>
+          <button type="button" class="range-btn" data-range="12h" onclick="setRange('12h', this)">12h</button>
+          <button type="button" class="range-btn" data-range="24h" onclick="setRange('24h', this)">24h</button>
+          <button type="button" class="range-btn active" data-range="7d" onclick="setRange('7d', this)">7d</button>
+          <button type="button" class="range-btn" data-range="30d" onclick="setRange('30d', this)">30d</button>
+          <button type="button" class="range-btn" data-range="90d" onclick="setRange('90d', this)">90d</button>
+        </div>
+        <div class="chart-total" id="chartTotal">—</div>
+      </div>
+      <div class="chart-canvas-wrap">
+        <canvas id="usageChart" width="640" height="220" aria-label="Traffic usage chart"></canvas>
+        <div class="chart-loading" id="chartLoading" data-i18n="loading">Loading…</div>
+        <div class="chart-empty" id="chartEmpty" hidden data-i18n="no_traffic">No traffic in this range</div>
+      </div>
+    </div>
+  </section>
+  {% endif %}
+
   {% if is_hwid_enabled %}
   <section class="panel panel-wide" id="devicesPanel">
     <div class="panel-hd">
-      <h2>Devices</h2>
-      <span class="panel-index">07 / HWID{% if hwid_limit %} · limit {{ hwid_limit }}{% endif %}</span>
+      <h2 data-i18n="devices_title">Devices</h2>
+      <span class="panel-index">06 / HWID{% if hwid_limit %} · <span data-i18n="limit">limit</span> {{ hwid_limit }}{% endif %}</span>
     </div>
     <div class="apps-body">
       <div class="device-actions" style="margin-bottom:12px">
-        <button type="button" class="icon-btn" onclick="loadDevices()">Refresh</button>
-        <button type="button" class="icon-btn" onclick="resetDevices()">Reset all</button>
+        <button type="button" class="icon-btn" onclick="loadDevices()" data-i18n="refresh">Refresh</button>
+        <button type="button" class="icon-btn" onclick="resetDevices()" data-i18n="reset_all">Reset all</button>
       </div>
       <div class="device-list" id="deviceList">
-        <p class="empty" id="deviceEmpty">Loading devices…</p>
+        <p class="empty" id="deviceEmpty" data-i18n="devices_loading">Loading devices…</p>
       </div>
     </div>
   </section>
   {% endif %}
 
   <footer class="footer">
-    <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center">
+    <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:center">
       {% if support_url %}
-      <a class="support-cta" href="{{ support_url }}" target="_blank" rel="noopener noreferrer">Support</a>
+      <a class="support-cta" href="{{ support_url }}" target="_blank" rel="noopener noreferrer" data-i18n="support">Support</a>
       {% endif %}
       <a href="https://github.com/pooyahpx" target="_blank" rel="noopener noreferrer" aria-label="dev by hpx on GitHub">dev by hpx</a>
     </div>
@@ -712,8 +1040,69 @@ var QRCode;!function(){function a(a){this.mode=c.MODE_8BIT_BYTE,this.data=a,this
 <script>
 (function () {
   const path = location.pathname.replace(/\/$/, '');
+  const ALLOW_TOGGLE = {{ 'true' if allow_toggle else 'false' }};
 
-  const SKINS = ['terminal', 'aurora', 'nova'];
+  /* ---- UI strings (language only; appearance is controlled by the admin) ---- */
+  const I18N = {
+    en: {
+      secure: 'Secure delivery // sub', mode_light: 'Light', mode_dark: 'Dark', dashboard: 'User dashboard',
+      online: 'Online', offline: 'Offline', sub_url: 'Subscription URL', copy_url: 'Copy subscription URL',
+      qr: 'QR', more_info: 'More info', copied: 'Copied!',
+      warn_expiry_t: 'Subscription expiring soon', warn_expiry_today: 'Your subscription expires today. Contact support to renew.',
+      warn_expiry_d: 'Only {n} day(s) left. Renew soon to stay connected.',
+      warn_traffic_t: 'Data almost used up', warn_traffic_d: 'You have used {p}% of your data allowance.',
+      st_active: 'active', st_limited: 'limited', st_expired: 'expired', st_disabled: 'disabled', st_on_hold: 'on hold',
+      available_for: 'Available for', no_expiry: 'No expiry', expires_in: 'Expires in', days_n: '{n} days',
+      used: 'Used', used_traffic: 'Used traffic', total_limit: 'Total limit', remaining: 'Remaining', unlimited: 'Unlimited',
+      group_note: 'This account has separate data limits per server group. See details below each config link.',
+      traffic_usage: 'Traffic usage', lifetime: 'Lifetime traffic', expiry_date: 'Expiry date', onhold_timeout: 'On-hold timeout',
+      last_online: 'Last online', signal_live: 'Signal live', no_heartbeat: 'No recent heartbeat', group_limits: 'Group limits',
+      left: 'left', limit_reached: 'limit reached', limit: 'limit',
+      guide_title: 'Quick start', guide_idx: '02 / 3 steps', step1_t: 'Download an app',
+      step1_d: 'Install a client for your device. We highlight the best match below.', step1_b: 'Choose app',
+      step2_t: 'Add your subscription', step2_d: 'Copy your subscription URL and paste it into the app, or tap Import config.',
+      step3_t: 'Connect', step3_d: 'Refresh the subscription inside the app, pick a server and press connect.', guide_note: 'Profile:',
+      links_title: 'Configuration links', links_idx: '03 / Connect', copy: 'Copy', copy_all: 'Copy all links', copied_all: 'Copied all',
+      empty_hidden: 'Direct browser links are hidden for this subscription. Open the subscription URL in a supported client.',
+      empty_unavailable: 'Links unavailable while account is',
+      apps_title: 'Recommended applications', apps_idx: '04 / Clients', apps_hint: 'Install a client, then use Import config or paste your subscription link.',
+      import: 'Import config', your_device: 'Your device',
+      usage_title: 'Usage statistics', usage_idx: '05 / Telemetry', loading: 'Loading…', no_traffic: 'No traffic in this range', usage_error: 'Could not load usage',
+      devices_title: 'Devices', refresh: 'Refresh', reset_all: 'Reset all', devices_loading: 'Loading devices…',
+      devices_empty: 'No devices registered yet. Open this subscription in a client to register a device.', devices_error: 'Could not load devices',
+      remove: 'Remove', last: 'last', confirm_remove: 'Remove this device?', confirm_reset: 'Remove all registered devices?',
+      remove_fail: 'Could not remove device', reset_fail: 'Could not reset devices', qr_missing: 'QR library unavailable', support: 'Support'
+    },
+    fa: {
+      secure: 'تحویل امن // اشتراک', mode_light: 'روشن', mode_dark: 'تیره', dashboard: 'داشبورد کاربر',
+      online: 'آنلاین', offline: 'آفلاین', sub_url: 'لینک اشتراک', copy_url: 'کپی لینک اشتراک',
+      qr: 'QR', more_info: 'اطلاعات بیشتر', copied: 'کپی شد!',
+      warn_expiry_t: 'اشتراک شما به‌زودی تمام می‌شود', warn_expiry_today: 'اشتراک شما امروز منقضی می‌شود. برای تمدید با پشتیبانی تماس بگیرید.',
+      warn_expiry_d: 'فقط {n} روز باقی مانده است. برای قطع نشدن، زودتر تمدید کنید.',
+      warn_traffic_t: 'حجم شما رو به پایان است', warn_traffic_d: 'شما {p}٪ از حجم مجاز خود را مصرف کرده‌اید.',
+      st_active: 'فعال', st_limited: 'محدود شده', st_expired: 'منقضی', st_disabled: 'غیرفعال', st_on_hold: 'در انتظار',
+      available_for: 'مدت اعتبار', no_expiry: 'بدون انقضا', expires_in: 'انقضا تا', days_n: '{n} روز',
+      used: 'مصرف', used_traffic: 'حجم مصرفی', total_limit: 'حجم کل', remaining: 'باقی‌مانده', unlimited: 'نامحدود',
+      group_note: 'این حساب برای هر گروه سرور محدودیت حجم جداگانه دارد. جزئیات زیر هر لینک آمده است.',
+      traffic_usage: 'مصرف ترافیک', lifetime: 'ترافیک کل دوره', expiry_date: 'تاریخ انقضا', onhold_timeout: 'مهلت انتظار',
+      last_online: 'آخرین اتصال', signal_live: 'اتصال فعال', no_heartbeat: 'اتصال اخیر ثبت نشده', group_limits: 'محدودیت گروه‌ها',
+      left: 'باقی', limit_reached: 'به سقف رسیده', limit: 'سقف',
+      guide_title: 'شروع سریع', guide_idx: '۰۲ / ۳ مرحله', step1_t: 'دانلود برنامه',
+      step1_d: 'یک برنامه مناسب دستگاه خود نصب کنید. گزینه پیشنهادی پایین‌تر مشخص شده است.', step1_b: 'انتخاب برنامه',
+      step2_t: 'افزودن اشتراک', step2_d: 'لینک اشتراک را کپی و در برنامه وارد کنید یا روی «افزودن خودکار» بزنید.',
+      step3_t: 'اتصال', step3_d: 'اشتراک را در برنامه به‌روزرسانی کنید، سرور را انتخاب و وصل شوید.', guide_note: 'پروفایل:',
+      links_title: 'لینک‌های پیکربندی', links_idx: '۰۳ / اتصال', copy: 'کپی', copy_all: 'کپی همه لینک‌ها', copied_all: 'همه کپی شد',
+      empty_hidden: 'لینک‌های مستقیم برای این اشتراک پنهان است. لینک اشتراک را در برنامه‌ی پشتیبانی‌شده باز کنید.',
+      empty_unavailable: 'لینک‌ها در دسترس نیستند، وضعیت حساب:',
+      apps_title: 'برنامه‌های پیشنهادی', apps_idx: '۰۴ / برنامه‌ها', apps_hint: 'یک برنامه نصب کنید، سپس از «افزودن خودکار» استفاده کنید یا لینک اشتراک را وارد کنید.',
+      import: 'افزودن خودکار', your_device: 'دستگاه شما',
+      usage_title: 'آمار مصرف', usage_idx: '۰۵ / آمار', loading: 'در حال بارگذاری…', no_traffic: 'در این بازه ترافیکی ثبت نشده', usage_error: 'بارگذاری مصرف ناموفق بود',
+      devices_title: 'دستگاه‌ها', refresh: 'تازه‌سازی', reset_all: 'حذف همه', devices_loading: 'در حال بارگذاری دستگاه‌ها…',
+      devices_empty: 'هنوز دستگاهی ثبت نشده است. اشتراک را در یک برنامه باز کنید تا دستگاه ثبت شود.', devices_error: 'بارگذاری دستگاه‌ها ناموفق بود',
+      remove: 'حذف', last: 'آخرین', confirm_remove: 'این دستگاه حذف شود؟', confirm_reset: 'همه دستگاه‌های ثبت‌شده حذف شوند؟',
+      remove_fail: 'حذف دستگاه ناموفق بود', reset_fail: 'حذف دستگاه‌ها ناموفق بود', qr_missing: 'کتابخانه QR در دسترس نیست', support: 'پشتیبانی'
+    }
+  };
 
   function safeGet(key) {
     try { return localStorage.getItem(key); } catch (e) { return null; }
@@ -722,58 +1111,120 @@ var QRCode;!function(){function a(a){this.mode=c.MODE_8BIT_BYTE,this.data=a,this
     try { localStorage.setItem(key, value); } catch (e) { /* storage unavailable */ }
   }
 
-  function currentSkin() {
-    const s = document.documentElement.getAttribute('data-skin');
-    return SKINS.indexOf(s) >= 0 ? s : 'terminal';
+  let lang = 'en';
+  function t(key, vars) {
+    let s = (I18N[lang] && I18N[lang][key]) || I18N.en[key] || key;
+    if (vars) Object.keys(vars).forEach(function (k) { s = s.replace('{' + k + '}', vars[k]); });
+    return s;
   }
 
-  function savedMode(skin) {
-    let m = safeGet('subMode.' + skin);
-    if (m === null && skin === 'terminal') m = safeGet('theme'); // legacy key
-    return m === 'light' ? 'light' : 'dark';
-  }
-
-  function syncThemeControls() {
-    const skin = currentSkin();
-    const light = document.body.classList.contains('light');
-    const icon = document.getElementById('theme-icon');
-    if (icon) icon.textContent = light ? 'Dark' : 'Light';
-    document.querySelectorAll('[data-skin-opt]').forEach(function (btn) {
-      btn.setAttribute('aria-pressed', btn.getAttribute('data-skin-opt') === skin ? 'true' : 'false');
+  function applyLang(next) {
+    lang = next === 'fa' ? 'fa' : 'en';
+    document.documentElement.lang = lang;
+    document.documentElement.dir = lang === 'fa' ? 'rtl' : 'ltr';
+    document.querySelectorAll('[data-i18n]').forEach(function (el) {
+      const vars = {};
+      if (el.dataset.n !== undefined) vars.n = el.dataset.n;
+      if (el.dataset.p !== undefined) vars.p = el.dataset.p;
+      el.textContent = t(el.dataset.i18n, vars);
     });
+    const btn = document.getElementById('langBtn');
+    if (btn) btn.textContent = lang === 'fa' ? 'EN' : 'FA';
+    updatePlatformChip();
+    refreshChartState();
+    if (window.__devices) renderDevices(window.__devices);
+    document.querySelectorAll('.match-tag').forEach(function (tag) { tag.textContent = t('your_device'); });
   }
+  window.toggleLang = function () {
+    const next = lang === 'fa' ? 'en' : 'fa';
+    safeSet('subLang', next);
+    applyLang(next);
+  };
 
-  function applyMode(mode) {
-    document.body.classList.toggle('light', mode === 'light');
-  }
-
-  window.setSkin = function (skin) {
-    if (SKINS.indexOf(skin) < 0) skin = 'terminal';
-    document.documentElement.setAttribute('data-skin', skin);
-    safeSet('subSkin', skin);
-    applyMode(savedMode(skin));
-    syncThemeControls();
+  /* ---- light / dark: only when the admin allows it (never changes the skin) ---- */
+  window.toggleTheme = function () {
+    if (!ALLOW_TOGGLE) return;
+    const nextLight = !document.body.classList.contains('light');
+    document.body.classList.toggle('light', nextLight);
+    safeSet('subMode', nextLight ? 'light' : 'dark');
+    const icon = document.getElementById('theme-icon');
+    if (icon) {
+      icon.dataset.i18n = nextLight ? 'mode_dark' : 'mode_light';
+      icon.textContent = t(icon.dataset.i18n);
+    }
     drawChart(window.__chartPoints || []);
   };
 
-  function toggleTheme() {
-    const skin = currentSkin();
-    const nextLight = !document.body.classList.contains('light');
-    applyMode(nextLight ? 'light' : 'dark');
-    safeSet('subMode.' + skin, nextLight ? 'light' : 'dark');
-    if (skin === 'terminal') safeSet('theme', nextLight ? 'light' : 'dark');
-    syncThemeControls();
-    drawChart(window.__chartPoints || []);
+  /* ---- subscription URL ---- */
+  function subUrl() {
+    return location.origin + location.pathname + location.search;
   }
-  window.toggleTheme = toggleTheme;
+  function flash(button, key, restoreKey) {
+    button.textContent = t(key);
+    setTimeout(function () { button.textContent = t(restoreKey); }, 1400);
+  }
+  window.copySubUrl = function (button) {
+    const url = subUrl();
+    const done = function () { flash(button, 'copied', 'copy_url'); };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url).then(done).catch(function () { fallbackCopy(url); done(); });
+    } else {
+      fallbackCopy(url); done();
+    }
+  };
+
+  /* ---- platform detection + highlight ---- */
+  function detectPlatform() {
+    const ua = navigator.userAgent || '';
+    if (/android/i.test(ua)) return 'android';
+    if (/iphone|ipad|ipod/i.test(ua) || (/macintosh/i.test(ua) && navigator.maxTouchPoints > 1)) return 'ios';
+    if (/windows/i.test(ua)) return 'windows';
+    if (/macintosh|mac os x/i.test(ua)) return 'macos';
+    if (/linux|x11/i.test(ua)) return 'linux';
+    return '';
+  }
+  const PLATFORM_LABEL = { android: 'Android', ios: 'iOS', windows: 'Windows', macos: 'macOS', linux: 'Linux' };
+  const platform = detectPlatform();
+
+  function updatePlatformChip() {
+    const chip = document.getElementById('platformChip');
+    if (!chip) return;
+    if (!platform) { chip.hidden = true; return; }
+    chip.hidden = false;
+    chip.textContent = PLATFORM_LABEL[platform];
+  }
+
+  function highlightApps() {
+    const grid = document.getElementById('appsGrid');
+    if (!grid || !platform) return;
+    const cards = Array.from(grid.querySelectorAll('.app-card'));
+    const matches = cards.filter(function (c) { return c.dataset.platform === platform; });
+    matches.slice().reverse().forEach(function (card) {
+      card.classList.add('is-match');
+      const tag = document.createElement('span');
+      tag.className = 'match-tag';
+      tag.textContent = t('your_device');
+      card.appendChild(tag);
+      grid.insertBefore(card, grid.firstChild);
+    });
+  }
 
   document.addEventListener('DOMContentLoaded', function () {
-    const stored = safeGet('subSkin');
-    const skin = SKINS.indexOf(stored) >= 0 ? stored : 'terminal';
-    document.documentElement.setAttribute('data-skin', skin);
-    applyMode(savedMode(skin));
-    syncThemeControls();
-    setRange('7d', document.querySelector('.range-btn[data-range="7d"]'));
+    const urlInput = document.getElementById('subUrl');
+    if (urlInput) urlInput.value = subUrl();
+    const qrBtn = document.getElementById('subQrBtn');
+    if (qrBtn) qrBtn.dataset.link = subUrl();
+
+    const savedLang = safeGet('subLang');
+    const initialLang = savedLang === 'fa' || savedLang === 'en'
+      ? savedLang
+      : (/^fa\b/i.test(navigator.language || '') ? 'fa' : 'en');
+    highlightApps();
+    applyLang(initialLang);
+
+    if (document.getElementById('usageChart')) {
+      setRange('7d', document.querySelector('.range-btn[data-range="7d"]'));
+    }
     if (document.getElementById('deviceList')) {
       loadDevices();
     }
@@ -786,48 +1237,55 @@ var QRCode;!function(){function a(a){this.mode=c.MODE_8BIT_BYTE,this.data=a,this
     return d.toLocaleString();
   }
 
+  function renderDevices(rows) {
+    const list = document.getElementById('deviceList');
+    if (!list) return;
+    if (!rows.length) {
+      list.innerHTML = '<p class="empty">' + escapeHtml(t('devices_empty')) + '</p>';
+      return;
+    }
+    list.innerHTML = rows.map(function (row) {
+      const title = row.device_model || row.device_os || row.hwid;
+      const meta = [
+        row.device_os,
+        row.os_version,
+        t('last') + ' ' + formatDeviceTime(row.last_used_at)
+      ].filter(Boolean).join(' · ');
+      return (
+        '<div class="device-row">' +
+          '<div class="device-meta">' +
+            '<div class="name">' + escapeHtml(title) + '</div>' +
+            '<div class="sub">' + escapeHtml(meta) + '</div>' +
+            '<div class="sub">' + escapeHtml(row.hwid) + '</div>' +
+          '</div>' +
+          '<div class="device-actions">' +
+            '<button type="button" class="icon-btn" data-hwid="' + encodeURIComponent(row.hwid) + '" onclick="removeDevice(this)">' + escapeHtml(t('remove')) + '</button>' +
+          '</div>' +
+        '</div>'
+      );
+    }).join('');
+  }
+
   window.loadDevices = async function () {
     const list = document.getElementById('deviceList');
     if (!list) return;
-    list.innerHTML = '<p class="empty">Loading devices…</p>';
+    list.innerHTML = '<p class="empty">' + escapeHtml(t('devices_loading')) + '</p>';
     try {
       const res = await fetch(path + '/hwids');
       if (!res.ok) throw new Error('devices fetch failed');
       const data = await res.json();
-      const rows = data.hwids || [];
-      if (!rows.length) {
-        list.innerHTML = '<p class="empty">No devices registered yet. Open this subscription in a client to register a device.</p>';
-        return;
-      }
-      list.innerHTML = rows.map(function (row) {
-        const title = row.device_model || row.device_os || row.hwid;
-        const meta = [
-          row.device_os,
-          row.os_version,
-          'last ' + formatDeviceTime(row.last_used_at)
-        ].filter(Boolean).join(' · ');
-        return (
-          '<div class="device-row">' +
-            '<div class="device-meta">' +
-              '<div class="name">' + escapeHtml(title) + '</div>' +
-              '<div class="sub">' + escapeHtml(meta) + '</div>' +
-              '<div class="sub">' + escapeHtml(row.hwid) + '</div>' +
-            '</div>' +
-            '<div class="device-actions">' +
-              '<button type="button" class="icon-btn" data-hwid="' + encodeURIComponent(row.hwid) + '" onclick="removeDevice(this)">Remove</button>' +
-            '</div>' +
-          '</div>'
-        );
-      }).join('');
+      window.__devices = data.hwids || [];
+      renderDevices(window.__devices);
     } catch (e) {
-      list.innerHTML = '<p class="empty">Could not load devices</p>';
+      window.__devices = null;
+      list.innerHTML = '<p class="empty">' + escapeHtml(t('devices_error')) + '</p>';
     }
   };
 
   window.removeDevice = async function (button) {
     const hwid = decodeURIComponent(button.dataset.hwid || '');
     if (!hwid) return;
-    if (!window.confirm('Remove this device?')) return;
+    if (!window.confirm(t('confirm_remove'))) return;
     button.disabled = true;
     try {
       const res = await fetch(path + '/hwids/' + encodeURIComponent(hwid), { method: 'DELETE' });
@@ -835,18 +1293,18 @@ var QRCode;!function(){function a(a){this.mode=c.MODE_8BIT_BYTE,this.data=a,this
       await loadDevices();
     } catch (e) {
       button.disabled = false;
-      window.alert('Could not remove device');
+      window.alert(t('remove_fail'));
     }
   };
 
   window.resetDevices = async function () {
-    if (!window.confirm('Remove all registered devices?')) return;
+    if (!window.confirm(t('confirm_reset'))) return;
     try {
       const res = await fetch(path + '/hwids/reset', { method: 'POST' });
       if (!res.ok) throw new Error('reset failed');
       await loadDevices();
     } catch (e) {
-      window.alert('Could not reset devices');
+      window.alert(t('reset_fail'));
     }
   };
 
@@ -862,9 +1320,8 @@ var QRCode;!function(){function a(a){this.mode=c.MODE_8BIT_BYTE,this.data=a,this
   window.copyLink = function (button) {
     const link = button.dataset.link || '';
     const done = function () {
-      const prev = button.textContent;
       button.textContent = 'OK';
-      setTimeout(function () { button.textContent = prev; }, 1200);
+      setTimeout(function () { button.textContent = t('copy'); }, 1200);
     };
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(link).then(done).catch(function () {
@@ -876,21 +1333,18 @@ var QRCode;!function(){function a(a){this.mode=c.MODE_8BIT_BYTE,this.data=a,this
   };
 
   function fallbackCopy(text) {
-    const t = document.createElement('textarea');
-    t.value = text;
-    document.body.appendChild(t);
-    t.select();
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
     document.execCommand('copy');
-    document.body.removeChild(t);
+    document.body.removeChild(ta);
   }
 
   window.copyAllLinks = function (button) {
     const links = Array.from(document.querySelectorAll('.link-input')).map(function (i) { return i.value; }).join('\n');
     if (!links) return;
-    const finish = function () {
-      button.textContent = 'Copied all';
-      setTimeout(function () { button.textContent = 'Copy all links'; }, 1400);
-    };
+    const finish = function () { flash(button, 'copied_all', 'copy_all'); };
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(links).then(finish).catch(function () { fallbackCopy(links); finish(); });
     } else {
@@ -899,11 +1353,11 @@ var QRCode;!function(){function a(a){this.mode=c.MODE_8BIT_BYTE,this.data=a,this
   };
 
   window.showQr = function (btn) {
-    const link = btn.dataset.link;
+    const link = btn.dataset.link || subUrl();
     const box = document.getElementById('qrCodeContainer');
     while (box.firstChild) box.removeChild(box.firstChild);
     if (typeof QRCode === 'undefined') {
-      box.textContent = 'QR library unavailable';
+      box.textContent = t('qr_missing');
     } else {
       new QRCode(box, { text: link, width: 256, height: 256, correctLevel: QRCode.CorrectLevel.L });
     }
@@ -912,6 +1366,9 @@ var QRCode;!function(){function a(a){this.mode=c.MODE_8BIT_BYTE,this.data=a,this
   window.closeQr = function () {
     document.getElementById('qrPopup').style.display = 'none';
   };
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') window.closeQr();
+  });
 
   function formatBytes(bytes) {
     if (!bytes || bytes <= 0) return '0 B';
@@ -943,17 +1400,23 @@ var QRCode;!function(){function a(a){this.mode=c.MODE_8BIT_BYTE,this.data=a,this
   };
 
   // Exactly one overlay state at a time: 'loading' | 'empty' | 'error' | 'ready'.
-  function setChartState(state, message) {
+  let chartState = 'loading';
+  function setChartState(state) {
+    chartState = state;
     const loading = document.getElementById('chartLoading');
     const empty = document.getElementById('chartEmpty');
     if (!loading || !empty) return;
     const showLoading = state === 'loading';
     const showEmpty = state === 'empty' || state === 'error';
     if (showEmpty) {
-      empty.textContent = message || (state === 'error' ? 'Could not load usage' : 'No traffic in this range');
+      empty.dataset.i18n = state === 'error' ? 'usage_error' : 'no_traffic';
+      empty.textContent = t(empty.dataset.i18n);
     }
     loading.hidden = !showLoading;
     empty.hidden = !showEmpty;
+  }
+  function refreshChartState() {
+    if (document.getElementById('chartEmpty')) setChartState(chartState);
   }
 
   let usageRequestId = 0;
@@ -972,7 +1435,7 @@ var QRCode;!function(){function a(a){this.mode=c.MODE_8BIT_BYTE,this.data=a,this
       const total = series.reduce(function (s, pt) { return s + (pt.total_traffic || 0); }, 0);
       document.getElementById('chartTotal').textContent = total ? formatBytes(total) : '—';
       if (!series.length) {
-        setChartState('empty', 'No traffic in this range');
+        setChartState('empty');
         drawChart([]);
         return;
       }
@@ -982,7 +1445,7 @@ var QRCode;!function(){function a(a){this.mode=c.MODE_8BIT_BYTE,this.data=a,this
       if (requestId !== usageRequestId) return;
       window.__chartPoints = [];
       document.getElementById('chartTotal').textContent = '—';
-      setChartState('error', 'Could not load usage');
+      setChartState('error');
       drawChart([]);
     }
   }

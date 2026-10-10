@@ -34,6 +34,7 @@ const HpxTunnelPage = lazyWithChunkRecovery(() => import('../pages/_dashboard.hp
 const HpxPulsePage = lazyWithChunkRecovery(() => import('../pages/_dashboard.hpx-pulse'))
 const FleetPage = lazyWithChunkRecovery(() => import('../pages/_dashboard.fleet'))
 const ShopPage = lazyWithChunkRecovery(() => import('../pages/_dashboard.shop'))
+const SubThemePage = lazyWithChunkRecovery(() => import('../pages/_dashboard.sub-theme'))
 const Settings = lazyWithChunkRecovery(() => import('../pages/_dashboard.settings'))
 const CleanupSettings = lazyWithChunkRecovery(() => import('../pages/_dashboard.settings.cleanup'))
 const BackupSettings = lazyWithChunkRecovery(() => import('../pages/_dashboard.settings.backup'))
@@ -136,6 +137,14 @@ export const router = createHashRouter([
         element: (
           <Suspense fallback={<LoadingSpinner />}>
             <ShopPage />
+          </Suspense>
+        ),
+      },
+      {
+        path: '/sub-theme',
+        element: (
+          <Suspense fallback={<LoadingSpinner />}>
+            <SubThemePage />
           </Suspense>
         ),
       },

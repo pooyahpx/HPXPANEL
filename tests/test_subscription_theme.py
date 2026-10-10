@@ -158,3 +158,25 @@ def test_template_renders_for_legacy_payload_without_theme_keys():
     html = render_template(TEMPLATE, ctx)
     assert 'data-skin="terminal"' in html
     assert 'id="guidePanel"' in html
+
+
+@pytest.mark.parametrize("theme", SUB_THEMES)
+def test_template_exposes_structural_layout_hooks(theme):
+    html = render_template(TEMPLATE, _context(sub_theme=theme))
+    assert f'class="shell shell-{theme}"' in html
+    assert f'class="grid-top layout-{theme}"' in html
+    assert 'class="grid-mid"' in html
+    # connect + telemetry live in the same mid grid so skins can stack or split them
+    mid = html.index('class="grid-mid"')
+    assert mid < html.index('id="linksPanel"') < html.index('id="usagePanel"') < html.index('id="appsPanel"')
+
+
+def test_template_mid_grid_marks_solo_when_usage_hidden():
+    html = render_template(TEMPLATE, _context(sub_show_usage_chart=False))
+    assert 'class="grid-mid solo"' in html
+
+
+@pytest.mark.parametrize("theme", ["aurora", "nova", "atlas", "pulse"])
+def test_template_skins_define_distinct_top_layouts(theme):
+    html = render_template(TEMPLATE, _context(sub_theme=theme))
+    assert f'[data-skin="{theme}"] .grid-top' in html

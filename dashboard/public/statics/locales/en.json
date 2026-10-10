@@ -4666,6 +4666,31 @@
       "save": "Save theme",
       "saving": "Saving...",
       "reset": "Reset"
+    },
+    "preview": {
+      "title": "Preview",
+      "subtitle": "This is how the public subscription page will look for your users with the selected skin and mode. Save to apply it.",
+      "modeLabel": "Preview mode",
+      "skinBadge": "{{name}} skin",
+      "mock": {
+        "brand": "HPXPANEL",
+        "kicker": "Subscription",
+        "heroTitle": "Your subscription",
+        "heroSubtitle": "demo_user - Premium plan",
+        "status": "Active",
+        "used": "Used",
+        "remaining": "Remaining",
+        "expires": "Expires",
+        "expiresValue": "23 days",
+        "links": "Connection links",
+        "copy": "Copy",
+        "qr": "QR",
+        "apps": "Recommended apps",
+        "appsGet": "Get",
+        "chart": "Usage, last 7 days",
+        "support": "Need help? Contact support",
+        "supportButton": "Support"
+      }
     }
   }
 }

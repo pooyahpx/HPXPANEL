@@ -2,6 +2,7 @@ import { cn } from '@/lib/utils'
 import type { SubThemeMode } from '@/service/api'
 import { Moon, Sun } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { modeText, st } from '../lib/i18n'
 
 interface ModeControlCardProps {
   mode: SubThemeMode
@@ -20,11 +21,11 @@ export function ModeControlCard({ mode, disabled, onChange }: ModeControlCardPro
   return (
     <div className="border-border bg-card flex flex-col justify-between gap-5 border-2 border-dashed p-5">
       <div className="space-y-1.5">
-        <span className="text-primary font-mono text-[10px] font-bold tracking-[0.16em] uppercase">{t('subTheme.mode.kicker')}</span>
-        <h3 className="font-display text-lg font-bold tracking-tight">{t('subTheme.mode.title')}</h3>
-        <p className="text-muted-foreground text-xs leading-relaxed">{t('subTheme.mode.description')}</p>
+        <span className="text-primary font-mono text-[10px] font-bold tracking-[0.16em] uppercase">{st(t, 'subTheme.mode.kicker', 'Default appearance')}</span>
+        <h3 className="font-display text-lg font-bold tracking-tight">{st(t, 'subTheme.mode.title', 'Dark or light')}</h3>
+        <p className="text-muted-foreground text-xs leading-relaxed">{st(t, 'subTheme.mode.description', 'Forced for all users. Enable the toggle below if users may switch between light and dark themselves.')}</p>
       </div>
-      <div role="radiogroup" aria-label={t('subTheme.mode.title')} className="grid grid-cols-2 gap-2">
+      <div role="radiogroup" aria-label={st(t, 'subTheme.mode.title', 'Dark or light')} className="grid grid-cols-2 gap-2">
         {OPTIONS.map(({ value, icon: Icon }) => {
           const active = mode === value
           return (
@@ -42,7 +43,7 @@ export function ModeControlCard({ mode, disabled, onChange }: ModeControlCardPro
               )}
             >
               <Icon className="size-4" aria-hidden="true" />
-              {t(`subTheme.mode.${value}`)}
+              {modeText(t, value)}
             </button>
           )
         })}

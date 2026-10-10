@@ -34,6 +34,7 @@ from app.models.user import (
     UsersResponseWithInbounds,
 )
 from app.settings import hwid_settings, subscription_settings
+from app.subscription.default_apps import build_default_applications
 from app.subscription.share import (
     apply_custom_format_variables,
     build_inbound_group_quota_map,
@@ -843,9 +844,12 @@ class SubscriptionOperation(BaseOperation):
         self, applications: list[Application], format_variables: dict, *, is_hwid_enabled: bool
     ) -> list[Application]:
         apps_with_updated_urls = []
+        if not applications:
+            # Admin has not configured any applications: show the built-in recommended catalog.
+            applications = build_default_applications()
         for app in applications:
             updated_app = app.model_copy()
-            import_url = app.import_url.format_map(format_variables)
+            import_url = app.import_url.format_map(format_variables) if app.import_url else ""
             updated_app.import_url = import_url
             if is_hwid_enabled:
                 if app.show_when_hwid_enabled:

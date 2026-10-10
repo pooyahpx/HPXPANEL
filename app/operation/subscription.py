@@ -691,6 +691,14 @@ class SubscriptionOperation(BaseOperation):
                 format_variables,
                 is_hwid_enabled=is_hwid_enabled,
             ),
+            "profile_title": self._format_profile_title(user, format_variables, sub_settings) or "Subscription",
+            # Appearance is admin-controlled; users cannot change it from the public page.
+            "sub_theme": getattr(sub_settings, "sub_theme", None) or "terminal",
+            "sub_theme_mode": getattr(sub_settings, "sub_theme_mode", None) or "dark",
+            "sub_show_install_guide": bool(getattr(sub_settings, "sub_show_install_guide", True)),
+            "sub_show_apps": bool(getattr(sub_settings, "sub_show_apps", True)),
+            "sub_show_usage_chart": bool(getattr(sub_settings, "sub_show_usage_chart", True)),
+            "sub_allow_mode_toggle": bool(getattr(sub_settings, "sub_allow_mode_toggle", False)),
         }
 
     def _build_raw_subscription_payload(

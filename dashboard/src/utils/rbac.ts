@@ -84,6 +84,7 @@ export const canAccessRoute = (admin: AdminDetails | null | undefined, pathname:
   if (pathname.startsWith('/templates/client')) return canReadResourcePage(admin, 'client_templates')
   if (pathname.startsWith('/templates/user')) return canReadResourcePage(admin, 'templates')
   if (pathname.startsWith('/templates')) return false
+  if (pathname.startsWith('/sub-theme')) return hasPermission(admin, 'settings', 'read') && hasPermission(admin, 'settings', 'update')
   if (pathname.startsWith('/admin-roles')) return isOwner(admin)
   if (pathname.startsWith('/admins')) return canReadResourcePage(admin, 'admins')
   if (pathname.startsWith('/api-keys')) return canReadResourcePage(admin, 'api_keys')

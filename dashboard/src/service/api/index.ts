@@ -1525,7 +1525,20 @@ export interface Subscription {
   disable_sub_template?: boolean
   randomize_order?: boolean
   custom_variables?: CustomVariable[]
+  /** Subscription page skin chosen by the admin (users cannot change it) */
+  sub_theme?: SubTheme
+  /** Forced appearance of the subscription page */
+  sub_theme_mode?: SubThemeMode
+  sub_show_install_guide?: boolean
+  sub_show_apps?: boolean
+  sub_show_usage_chart?: boolean
+  /** Show the light/dark toggle on the public subscription page */
+  sub_allow_mode_toggle?: boolean
 }
+
+export type SubTheme = 'terminal' | 'aurora' | 'nova' | 'atlas' | 'pulse'
+
+export type SubThemeMode = 'dark' | 'light'
 
 export type SingBoxMuxSettingsBrutal = Brutal | null
 

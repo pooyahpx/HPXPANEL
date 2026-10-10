@@ -4584,5 +4584,88 @@
     "apply": "Apply Stealth preset",
     "applied": "Applied {{name}} — set inbound tag and address, then create",
     "hint": "Click a preset to apply"
+  },
+  "subTheme": {
+    "title": "Sub Theme",
+    "subtitle": "Choose how the public subscription page looks for every user. Only admins can change this.",
+    "sector": "Appearance",
+    "live": "Live",
+    "denied": "You do not have access to Sub Theme",
+    "deniedHint": "Ask an owner to grant settings read and update permissions.",
+    "loadFailed": "Could not load subscription settings",
+    "retry": "Retry",
+    "saveSuccess": "Subscription page theme saved",
+    "saveFailed": "Could not save subscription page theme",
+    "skins": {
+      "title": "Choose a skin",
+      "description": "Previews use the default appearance below. The selected skin is applied to every subscription page."
+    },
+    "themes": {
+      "terminal": {
+        "name": "Terminal",
+        "tag": "Pixel",
+        "description": "The classic HPXPANEL look: hard pixel borders, offset shadows and a hacker-console grid."
+      },
+      "aurora": {
+        "name": "Aurora",
+        "tag": "Editorial",
+        "description": "Elegant serif headlines with teal and gold accents, generous spacing and rounded pills."
+      },
+      "nova": {
+        "name": "Nova",
+        "tag": "Glass",
+        "description": "Soft frosted-glass cards over a teal and cyan mesh, with a floating status orb."
+      },
+      "atlas": {
+        "name": "Atlas",
+        "tag": "Ops",
+        "description": "A clean operations dashboard: slate and emerald, crisp cards, subtle grid and dense but tidy data."
+      },
+      "pulse": {
+        "name": "Pulse",
+        "tag": "Kinetic",
+        "description": "Electric cyan and lime on near-black with live status pulses and shimmering call-to-actions."
+      }
+    },
+    "mode": {
+      "kicker": "Default appearance",
+      "title": "Dark or light",
+      "description": "Forced for all users. Enable the toggle below if users may switch between light and dark themselves.",
+      "dark": "Dark",
+      "light": "Light"
+    },
+    "features": {
+      "title": "Page features",
+      "description": "Show or hide sections on the public subscription page.",
+      "installGuide": {
+        "label": "Install guide",
+        "hint": "Three-step quick start: download an app, add the subscription, connect."
+      },
+      "apps": {
+        "label": "Recommended apps",
+        "hint": "App cards with download and import buttons; the card for the visitor's platform is highlighted."
+      },
+      "usageChart": {
+        "label": "Usage chart",
+        "hint": "Traffic usage statistics with time range selector."
+      },
+      "modeToggle": {
+        "label": "Allow light/dark toggle",
+        "hint": "Let users flip between light and dark. They can never change the skin."
+      }
+    },
+    "summary": {
+      "title": "Summary",
+      "saved": "Saved",
+      "unsaved": "Unsaved changes",
+      "theme": "Skin",
+      "mode": "Default mode",
+      "features": "Features on",
+      "featuresCount": "{{enabled}} of {{total}}",
+      "lockNote": "Admin only. Visitors of the subscription page cannot change the theme; the skin is rendered by the server.",
+      "save": "Save theme",
+      "saving": "Saving...",
+      "reset": "Reset"
+    }
   }
 }

@@ -310,6 +310,12 @@ def validate_custom_variables(value: list[CustomVariable]) -> list[CustomVariabl
     return value
 
 
+SUB_THEMES: tuple[str, ...] = ("terminal", "aurora", "nova", "atlas", "pulse")
+SUB_THEME_MODES: tuple[str, ...] = ("dark", "light")
+DEFAULT_SUB_THEME = "terminal"
+DEFAULT_SUB_THEME_MODE = "dark"
+
+
 class Subscription(BaseModel):
     url_prefix: str = Field(default="")
     update_interval: int = Field(default=12)
@@ -327,6 +333,27 @@ class Subscription(BaseModel):
     disable_sub_template: bool = Field(default=False)
     randomize_order: bool = Field(default=False)
     custom_variables: list[CustomVariable] = Field(default_factory=list)
+    # Admin-controlled subscription page appearance (users cannot change these)
+    sub_theme: str = Field(default=DEFAULT_SUB_THEME)
+    sub_theme_mode: str = Field(default=DEFAULT_SUB_THEME_MODE)
+    sub_show_install_guide: bool = Field(default=True)
+    sub_show_apps: bool = Field(default=True)
+    sub_show_usage_chart: bool = Field(default=True)
+    sub_allow_mode_toggle: bool = Field(default=False)
+
+    @field_validator("sub_theme", mode="before")
+    @classmethod
+    def validate_sub_theme(cls, value: Any) -> str:
+        if isinstance(value, str) and value.strip().lower() in SUB_THEMES:
+            return value.strip().lower()
+        return DEFAULT_SUB_THEME
+
+    @field_validator("sub_theme_mode", mode="before")
+    @classmethod
+    def validate_sub_theme_mode(cls, value: Any) -> str:
+        if isinstance(value, str) and value.strip().lower() in SUB_THEME_MODES:
+            return value.strip().lower()
+        return DEFAULT_SUB_THEME_MODE
 
     @field_validator("custom_variables")
     @classmethod

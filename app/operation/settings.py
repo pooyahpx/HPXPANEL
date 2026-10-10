@@ -13,6 +13,15 @@ from app.telegram import startup_telegram_bot
 
 from . import BaseOperation
 
+SUB_PAGE_FIELDS = (
+    "sub_theme",
+    "sub_theme_mode",
+    "sub_show_install_guide",
+    "sub_show_apps",
+    "sub_show_usage_chart",
+    "sub_allow_mode_toggle",
+)
+
 
 class SettingsOperation(BaseOperation):
     @staticmethod
@@ -30,6 +39,18 @@ class SettingsOperation(BaseOperation):
     async def modify_settings(self, db: AsyncSession, modify: SettingsSchema) -> SettingsSchema:
         db_settings = await get_settings(db)
         old_settings = SettingsSchema.model_validate(db_settings)
+
+        # Older clients (e.g. the subscriptions settings form) may omit the sub page appearance
+        # fields; keep the stored values instead of silently resetting them to defaults.
+        if modify.subscription and db_settings.subscription:
+            stored_subscription = Subscription.model_validate(db_settings.subscription)
+            preserved = {
+                field: getattr(stored_subscription, field)
+                for field in SUB_PAGE_FIELDS
+                if field not in modify.subscription.model_fields_set
+            }
+            if preserved:
+                modify.subscription = modify.subscription.model_copy(update=preserved)
 
         if modify.general and modify.general.custom_variables is not None:
             subscription = modify.subscription or Subscription.model_validate(db_settings.subscription)

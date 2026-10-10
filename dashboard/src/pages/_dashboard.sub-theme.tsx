@@ -6,7 +6,9 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { FeatureTogglesCard } from '@/features/sub-theme/components/feature-toggles-card'
 import { ModeControlCard } from '@/features/sub-theme/components/mode-control-card'
 import { SummaryCard } from '@/features/sub-theme/components/summary-card'
+import { ThemePreview } from '@/features/sub-theme/components/theme-preview'
 import { ThemeCard } from '@/features/sub-theme/components/theme-card'
+import { st } from '@/features/sub-theme/lib/i18n'
 import { SUB_THEME_IDS, draftFromSubscription, isDraftEqual, mergeSubscriptionDraft, type SubThemeDraft } from '@/features/sub-theme/lib/sub-theme'
 import { useAdmin } from '@/hooks/use-admin'
 import useDirDetection from '@/hooks/use-dir-detection'
@@ -61,13 +63,13 @@ export default function SubThemePage() {
   const { mutateAsync: modifySettings, isPending: isSaving } = useModifySettings({
     mutation: {
       onSuccess: updated => {
-        toast.success(t('subTheme.saveSuccess'))
+        toast.success(st(t, 'subTheme.saveSuccess', 'Subscription page theme saved'))
         queryClient.setQueryData(getGetSettingsQueryKey(), updated)
         if (updated?.general) queryClient.setQueryData(getGetGeneralSettingsQueryKey(), updated.general)
         queryClient.invalidateQueries({ queryKey: ['/api/settings'] })
       },
       onError: (err: any) => {
-        toast.error(t('subTheme.saveFailed'), { description: extractErrorMessage(err) })
+        toast.error(st(t, 'subTheme.saveFailed', 'Could not save subscription page theme'), { description: extractErrorMessage(err) })
       },
     },
   })
@@ -87,7 +89,7 @@ export default function SubThemePage() {
   const handleSave = async () => {
     const existing = settings?.subscription
     if (!existing) {
-      toast.error(t('subTheme.loadFailed'))
+      toast.error(st(t, 'subTheme.loadFailed', 'Could not load subscription settings'))
       return
     }
     try {
@@ -101,7 +103,7 @@ export default function SubThemePage() {
   if (!canEdit) {
     return (
       <PageTransition isContentTransition className="w-full">
-        <EmptyState icon={Lock} title={t('subTheme.denied')} description={t('subTheme.deniedHint')} />
+        <EmptyState icon={Lock} title={st(t, 'subTheme.denied', 'You do not have access to Sub Theme')} description={st(t, 'subTheme.deniedHint', 'Ask an owner to grant settings read and update permissions.')} />
       </PageTransition>
     )
   }
@@ -109,7 +111,12 @@ export default function SubThemePage() {
   return (
     <div className="flex w-full flex-col items-start">
       <div className="animate-fade-in w-full transform-gpu" style={{ animationDuration: '400ms' }}>
-        <PageHeader title="subTheme.title" description="subTheme.subtitle" index="09" sectorLabel={t('subTheme.sector')} />
+        <PageHeader
+          title={st(t, 'subTheme.title', 'Sub Theme')}
+          description={st(t, 'subTheme.subtitle', 'Choose how the public subscription page looks for every user. Only admins can change this.')}
+          index="09"
+          sectorLabel={st(t, 'subTheme.sector', 'Appearance')}
+        />
       </div>
 
       {isLoading ? (
@@ -118,11 +125,11 @@ export default function SubThemePage() {
         <div className="mx-auto w-full max-w-[1400px] px-4 py-5 md:px-6 md:py-7">
           <EmptyState
             icon={Paintbrush}
-            title={t('subTheme.loadFailed')}
+            title={st(t, 'subTheme.loadFailed', 'Could not load subscription settings')}
             action={
               <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
                 <RefreshCw className="size-4" />
-                {t('subTheme.retry')}
+                {st(t, 'subTheme.retry', 'Retry')}
               </Button>
             }
           />
@@ -132,11 +139,11 @@ export default function SubThemePage() {
           <section className="space-y-3" dir={dir}>
             <div className="flex flex-wrap items-end justify-between gap-2">
               <div className="space-y-0.5">
-                <h2 className="font-display text-lg font-bold tracking-tight">{t('subTheme.skins.title')}</h2>
-                <p className="text-muted-foreground text-xs">{t('subTheme.skins.description')}</p>
+                <h2 className="font-display text-lg font-bold tracking-tight">{st(t, 'subTheme.skins.title', 'Choose a skin')}</h2>
+                <p className="text-muted-foreground text-xs">{st(t, 'subTheme.skins.description', 'Previews use the default appearance below. The selected skin is applied to every subscription page.')}</p>
               </div>
             </div>
-            <div role="radiogroup" aria-label={t('subTheme.skins.title')} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div role="radiogroup" aria-label={st(t, 'subTheme.skins.title', 'Choose a skin')} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {SUB_THEME_IDS.map(theme => (
                 <ThemeCard
                   key={theme}
@@ -151,6 +158,10 @@ export default function SubThemePage() {
               <ModeControlCard mode={draft.sub_theme_mode} disabled={isSaving} onChange={value => update('sub_theme_mode', value)} />
             </div>
           </section>
+
+          <div dir={dir}>
+            <ThemePreview theme={draft.sub_theme} mode={draft.sub_theme_mode} disabled={isSaving} onModeChange={value => update('sub_theme_mode', value)} />
+          </div>
 
           <section className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]" dir={dir}>
             <FeatureTogglesCard draft={draft} disabled={isSaving} onToggle={(key, value) => update(key, value)} />

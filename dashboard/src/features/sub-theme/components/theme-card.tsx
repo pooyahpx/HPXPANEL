@@ -3,6 +3,7 @@ import { cn } from '@/lib/utils'
 import type { SubTheme, SubThemeMode } from '@/service/api'
 import { Check } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { st, themeText } from '../lib/i18n'
 import { ThemeMock } from './theme-mock'
 
 const FONT_PAIRS: Record<SubTheme, string> = {
@@ -43,8 +44,8 @@ export function ThemeCard({ theme, mode, selected, live, disabled, onSelect }: T
         <ThemeMock theme={theme} mode={mode} />
         <div className="absolute end-2 top-2 flex items-center gap-1.5">
           {live && (
-            <Badge variant="green" className="shadow-none">
-              {t('subTheme.live')}
+            <Badge variant="green" className="shadow-none normal-case">
+              {st(t, 'subTheme.live', 'Live')}
             </Badge>
           )}
           {selected && (
@@ -56,10 +57,10 @@ export function ThemeCard({ theme, mode, selected, live, disabled, onSelect }: T
       </div>
       <div className="flex flex-1 flex-col gap-1.5 p-4">
         <div className="flex items-center justify-between gap-2">
-          <h3 className="font-display text-base font-bold tracking-tight">{t(`subTheme.themes.${theme}.name`)}</h3>
-          <span className="text-muted-foreground font-mono text-[10px] tracking-wider uppercase">{t(`subTheme.themes.${theme}.tag`)}</span>
+          <h3 className="font-display text-base font-bold tracking-tight">{themeText(t, theme, 'name')}</h3>
+          <span className="text-muted-foreground font-mono text-[10px] tracking-wider uppercase">{themeText(t, theme, 'tag')}</span>
         </div>
-        <p className="text-muted-foreground text-xs leading-relaxed">{t(`subTheme.themes.${theme}.description`)}</p>
+        <p className="text-muted-foreground text-xs leading-relaxed">{themeText(t, theme, 'description')}</p>
         <p className="text-muted-foreground/80 mt-auto pt-2 font-mono text-[10px]" dir="ltr">
           {FONT_PAIRS[theme]}
         </p>

@@ -3398,7 +3398,12 @@
     "activeNextPlanTitle": "激活用户的下一个计划",
     "activeNextPlanPrompt": "您确定要为「{{name}}」激活下一个计划吗？",
     "activeNextPlanSubmit": "激活下一个计划",
-    "downloadStarted": "开始下载"
+    "downloadStarted": "开始下载",
+    "usageShare": {
+      "title": "按路径统计流量",
+      "hint": "各节点流量占比",
+      "mostUsed": "使用最多"
+    }
   },
   "setOwnerModal": {
     "title": "设置所有者",
@@ -4287,6 +4292,21 @@
         "name": "Pulse",
         "tag": "Kinetic",
         "description": "Electric cyan and lime on near-black with live status pulses and shimmering call-to-actions."
+      },
+      "ember": {
+        "name": "Ember",
+        "tag": "工业风",
+        "description": "暖炭色搭配琥珀色点缀，醒目的状态条、方正卡片，以及适合移动端的单列布局。"
+      },
+      "folio": {
+        "name": "Folio",
+        "tag": "瑞士风",
+        "description": "近黑与白搭配酸橙色点缀：非对称标题区、紧凑的链接列表和锐利的细线。"
+      },
+      "harbor": {
+        "name": "Harbor",
+        "tag": "沉稳运维",
+        "description": "深石板色与天蓝色：横向指标条、柔和的状态卡片，对移动端非常友好。"
       }
     },
     "mode": {
@@ -4310,6 +4330,10 @@
       "usageChart": {
         "label": "Usage chart",
         "hint": "Traffic usage statistics with time range selector."
+      },
+      "configShare": {
+        "label": "按路径统计流量",
+        "hint": "按节点（配置路径）显示流量占比及百分比，使用最多的路径会高亮显示。"
       },
       "modeToggle": {
         "label": "Allow light/dark toggle",

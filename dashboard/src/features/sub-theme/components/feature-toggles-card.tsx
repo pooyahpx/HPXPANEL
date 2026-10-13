@@ -1,17 +1,18 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
-import { BookOpen, LayoutGrid, LineChart, SunMoon, type LucideIcon } from 'lucide-react'
+import { BookOpen, LayoutGrid, LineChart, PieChart, SunMoon, type LucideIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { st } from '../lib/i18n'
 import type { SubThemeDraft } from '../lib/sub-theme'
 
-type ToggleKey = 'sub_show_install_guide' | 'sub_show_apps' | 'sub_show_usage_chart' | 'sub_allow_mode_toggle'
+type ToggleKey = 'sub_show_install_guide' | 'sub_show_apps' | 'sub_show_usage_chart' | 'sub_show_config_share' | 'sub_allow_mode_toggle'
 
 const TOGGLES: { key: ToggleKey; i18n: string; icon: LucideIcon; label: string; hint: string }[] = [
   { key: 'sub_show_install_guide', i18n: 'installGuide', icon: BookOpen, label: 'Install guide', hint: 'Three-step quick start: download an app, add the subscription, connect.' },
   { key: 'sub_show_apps', i18n: 'apps', icon: LayoutGrid, label: 'Recommended apps', hint: "App cards with download and import buttons; the card for the visitor's platform is highlighted." },
   { key: 'sub_show_usage_chart', i18n: 'usageChart', icon: LineChart, label: 'Usage chart', hint: 'Traffic usage statistics with time range selector.' },
+  { key: 'sub_show_config_share', i18n: 'configShare', icon: PieChart, label: 'Traffic by path', hint: 'Ranked share of traffic per node (config path) with percentages; the most used path is highlighted.' },
   { key: 'sub_allow_mode_toggle', i18n: 'modeToggle', icon: SunMoon, label: 'Allow light/dark toggle', hint: 'Let users flip between light and dark. They can never change the skin.' },
 ]
 

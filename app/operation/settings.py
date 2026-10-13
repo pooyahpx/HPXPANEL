@@ -19,6 +19,7 @@ SUB_PAGE_FIELDS = (
     "sub_show_install_guide",
     "sub_show_apps",
     "sub_show_usage_chart",
+    "sub_show_config_share",
     "sub_allow_mode_toggle",
 )
 

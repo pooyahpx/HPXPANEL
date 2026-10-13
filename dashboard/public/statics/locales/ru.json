@@ -3362,7 +3362,12 @@
     "activeNextPlanTitle": "Активировать следующий план пользователя",
     "activeNextPlanPrompt": "Вы уверены, что хотите активировать следующий план для «{{name}}»?",
     "activeNextPlanSubmit": "Активировать следующий план",
-    "downloadStarted": "Загрузка началась"
+    "downloadStarted": "Загрузка началась",
+    "usageShare": {
+      "title": "Трафик по путям",
+      "hint": "Доля трафика по узлам",
+      "mostUsed": "Чаще всего"
+    }
   },
   "setOwnerModal": {
     "title": "Назначить владельца",
@@ -4232,6 +4237,21 @@
         "name": "Pulse",
         "tag": "Kinetic",
         "description": "Electric cyan and lime on near-black with live status pulses and shimmering call-to-actions."
+      },
+      "ember": {
+        "name": "Ember",
+        "tag": "Индустриальный",
+        "description": "Тёплый графит с янтарными акцентами, яркая полоса статуса, квадратные карточки и чёткая одноколоночная раскладка для мобильных."
+      },
+      "folio": {
+        "name": "Folio",
+        "tag": "Швейцарский",
+        "description": "Почти чёрный и белый с лаймовым акцентом: асимметричный заголовок, плотный список ссылок и тонкие линии."
+      },
+      "harbor": {
+        "name": "Harbor",
+        "tag": "Спокойные операции",
+        "description": "Тёмный сланец и небесно-голубой: горизонтальная полоса показателей, мягкая карточка статуса и удобство на мобильных."
       }
     },
     "mode": {
@@ -4255,6 +4275,10 @@
       "usageChart": {
         "label": "Usage chart",
         "hint": "Traffic usage statistics with time range selector."
+      },
+      "configShare": {
+        "label": "Трафик по путям",
+        "hint": "Рейтинг долей трафика по узлам (путям конфигурации) в процентах; самый используемый путь выделен."
       },
       "modeToggle": {
         "label": "Allow light/dark toggle",

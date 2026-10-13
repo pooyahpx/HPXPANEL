@@ -45,6 +45,7 @@ from app.services.hpx_pulse.config_linker import (
     forward_listen_ports,
     host_belongs_to_other_pulse,
     rewrite_host_addresses_to_iran,
+    rewrite_host_ip_change,
     scan_hosts_for_pulse,
 )
 from app.services.hpx_pulse.diagnose import (
@@ -100,6 +101,42 @@ from app.utils.crypto import decrypt_secret, encrypt_secret, hash_api_key
 from app.utils.helpers import resolve_panel_base_url
 
 JOIN_TOKEN_TTL_HOURS = 24
+
+# Edits to any of these change what the tunnel agents must run (or where they connect), so the
+# running tunnel has to be torn down and agents rejoin with fresh tokens.
+HARD_UPDATE_KEYS = frozenset(
+    {
+        "iran_public_ip",
+        "abroad_public_ip",
+        "control_port",
+        "port_forwards",
+        "profile_id",
+        "tunnel_mode",
+        "domain",
+        "sni_hint",
+        "carrier",
+        "preset",
+    }
+)
+_NON_NULLABLE_UPDATE_KEYS = frozenset(
+    {
+        "name",
+        "iran_public_ip",
+        "abroad_public_ip",
+        "goal",
+        "profile_id",
+        "control_port",
+        "port_forwards",
+        "enabled",
+        "auto_heal_enabled",
+        "auto_failover",
+        "auto_failback",
+        "priority",
+    }
+)
+_STRIPPED_TEXT_KEYS = frozenset({"iran_public_ip", "abroad_public_ip", "domain", "sni_hint"})
+HARD_CHANGE_MESSAGE = "Config changed — agents disconnecting; rejoin with new tokens"
+REGENERATE_MESSAGE = "Join tokens regenerated — agents disconnecting; rejoin with new tokens"
 GITHUB_AGENT_SCRIPT = "https://raw.githubusercontent.com/pooyahpx/HPXPANEL/main/scripts/hpx-pulse-agent.sh"
 _JOIN_CURL = "--http1.1 --connect-timeout 20 --max-time 120 -fsSL"
 
@@ -237,6 +274,37 @@ def _to_response(db_pulse: HpxPulse) -> HpxPulseResponse:
     return HpxPulseResponse.model_validate(data)
 
 
+def _normalize_pulse_value(key: str, value):
+    if key in _STRIPPED_TEXT_KEYS:
+        return (value or "").strip()
+    if key == "port_forwards":
+        return [str(item).strip() for item in (value or [])]
+    return value
+
+
+def _changed_hard_keys(db_pulse: HpxPulse, update_data: dict) -> set[str]:
+    """Hard fields in the update whose value really differs from what's stored."""
+    changed: set[str] = set()
+    for key in HARD_UPDATE_KEYS & update_data.keys():
+        if _normalize_pulse_value(key, update_data[key]) != _normalize_pulse_value(key, getattr(db_pulse, key, None)):
+            changed.add(key)
+    return changed
+
+
+def _can_queue_command(db_pulse: HpxPulse, side: str) -> bool:
+    """A claimed agent can take a new command unless a `leave` is still waiting for its ack."""
+    key = db_pulse.iran_agent_key_hash if side == "iran" else db_pulse.abroad_agent_key_hash
+    cmd = db_pulse.iran_agent_command if side == "iran" else db_pulse.abroad_agent_command
+    return bool(key) and (cmd or "").strip().lower() != "leave"
+
+
+def _is_leaving(db_pulse: HpxPulse) -> bool:
+    return "leave" in {
+        (db_pulse.iran_agent_command or "").strip().lower(),
+        (db_pulse.abroad_agent_command or "").strip().lower(),
+    }
+
+
 def _desired_status(db_pulse: HpxPulse) -> str:
     if not db_pulse.enabled:
         return HpxPulseStatus.stopped.value
@@ -305,6 +373,117 @@ class HpxPulseOperation(BaseOperation):
         abroad_cmd = _build_join_command_panel(panel_url, abroad_token, "abroad")
         abroad_cmd_alt = _build_join_command_github(panel_url, abroad_token, "abroad")
         return iran_token, iran_cmd, iran_cmd_alt, abroad_token, abroad_cmd, abroad_cmd_alt, expires_at
+
+    async def _rotate_join_tokens_keep_agents(
+        self, db: AsyncSession, db_pulse: HpxPulse, *, panel_url: str | None
+    ) -> tuple[str, str, str, str, str, str, dt]:
+        """Mint fresh join tokens WITHOUT touching agent keys or queued agent commands.
+
+        Connected agents keep authenticating (so they can fetch their `leave` command); once they
+        ack the leave their key is dropped and the new join tokens can be claimed.
+        """
+        expires_at = dt.now(UTC) + td(hours=JOIN_TOKEN_TTL_HOURS)
+        iran_token = _mint_token("hpxpi")
+        abroad_token = _mint_token("hpxpa")
+        set_join_token(db_pulse, side="iran", token=iran_token, expires_at=expires_at)
+        set_join_token(db_pulse, side="abroad", token=abroad_token, expires_at=expires_at)
+        await db.flush()
+        iran_cmd, iran_cmd_alt = await self._iran_join_commands(panel_url, iran_token)
+        abroad_cmd = _build_join_command_panel(panel_url, abroad_token, "abroad")
+        abroad_cmd_alt = _build_join_command_github(panel_url, abroad_token, "abroad")
+        return iran_token, iran_cmd, iran_cmd_alt, abroad_token, abroad_cmd, abroad_cmd_alt, expires_at
+
+    async def _disconnect_and_rotate(
+        self,
+        db: AsyncSession,
+        db_pulse: HpxPulse,
+        *,
+        panel_url: str | None,
+        fields: dict | None = None,
+        message: str,
+    ) -> tuple[str, str, str, str, str, str, dt]:
+        """Kill the running tunnel and hand out new join tokens.
+
+        1. new tunnel token (old tunnel can no longer authenticate)
+        2. claimed agents are told to `leave` (keys kept until the leave ack)
+        3. join tokens rotated, status back to pending_claim
+        """
+        tunnel_token = mint_tunnel_token()
+        update: dict = dict(fields or {})
+        update["token_encrypted"] = await self._encrypt_token(db, tunnel_token)
+        if db_pulse.iran_agent_key_hash:
+            update["iran_agent_command"] = "leave"
+        if db_pulse.abroad_agent_key_hash:
+            update["abroad_agent_command"] = "leave"
+        update["status"] = HpxPulseStatus.pending_claim
+        update["message"] = message
+        update["last_status_change"] = dt.now(UTC)
+        await update_hpx_pulse(db, db_pulse, update)
+        return await self._rotate_join_tokens_keep_agents(db, db_pulse, panel_url=panel_url)
+
+    async def _rewrite_hosts_for_iran_change(
+        self,
+        db: AsyncSession,
+        db_pulse: HpxPulse,
+        *,
+        old_iran: str,
+        old_abroad: str,
+        new_iran: str,
+    ) -> list[str]:
+        """Point Hosts at the new Iran IP (old Iran + old abroad -> new Iran); returns notes."""
+        notes: list[str] = []
+        hosts = await get_hosts(db)
+        my_ports = forward_listen_ports(db_pulse.port_forwards)
+        peer_iran_ips: set[str] = set()
+        peer_forward_ports: dict[str, set[int]] = {}
+        try:
+            peers, _ = await get_hpx_pulses(db, offset=0, limit=100)
+            for peer in peers:
+                if peer.id == db_pulse.id:
+                    continue
+                pip = (peer.iran_public_ip or "").strip()
+                if not pip:
+                    continue
+                peer_iran_ips.add(pip)
+                peer_forward_ports.setdefault(pip, set()).update(forward_listen_ports(peer.port_forwards))
+        except Exception as exc:
+            logger.debug("pulse edit peer scan skipped: %s", exc)
+
+        targets = {ip for ip in (old_iran, old_abroad) if ip}
+        rewritten: list = []
+        for db_host in hosts:
+            raw = getattr(db_host, "address", None) or []
+            addrs = [str(a).strip() for a in raw if str(a).strip()]
+            if not targets.intersection(addrs):
+                continue
+            if host_belongs_to_other_pulse(
+                addresses=addrs,
+                host_port=getattr(db_host, "port", None),
+                my_iran_ip=old_iran,
+                my_forward_ports=my_ports,
+                peer_iran_ips=peer_iran_ips,
+                peer_forward_ports=peer_forward_ports,
+            ):
+                notes.append(f"Host #{getattr(db_host, 'id', '?')} skipped — belongs to another Pulse")
+                continue
+            new_addrs = rewrite_host_ip_change(
+                addrs,
+                old_iran=old_iran,
+                old_abroad=old_abroad,
+                new_iran=new_iran,
+                protected_iran_ips=peer_iran_ips,
+            )
+            if new_addrs and new_addrs != set(addrs):
+                db_host.address = new_addrs
+                rewritten.append(db_host)
+                notes.append(f"Host #{getattr(db_host, 'id', '?')} address → Iran {new_iran}")
+        if rewritten:
+            await db.flush()
+            try:
+                await host_manager.add_hosts(db, rewritten)
+            except Exception as exc:
+                logger.warning("host_manager refresh after Pulse IP change failed: %s", exc)
+        return notes
 
     async def create_pulse(
         self,
@@ -445,9 +624,20 @@ class HpxPulseOperation(BaseOperation):
         if db_pulse is None:
             await self.raise_error(message="Pulse not found", code=404)
         resolved_panel = await self._panel_url(panel_url)
-        iran_t, iran_c, iran_c_alt, abroad_t, abroad_c, abroad_c_alt, exp = await self._issue_join_tokens(
-            db, db_pulse, panel_url=resolved_panel
-        )
+        has_agents = bool(db_pulse.iran_agent_key_hash or db_pulse.abroad_agent_key_hash)
+        if has_agents:
+            # Keep agent keys until they ack `leave` (otherwise the old tunnel keeps running with
+            # keys the panel no longer knows). A new tunnel token also kills the old tunnel.
+            iran_t, iran_c, iran_c_alt, abroad_t, abroad_c, abroad_c_alt, exp = await self._disconnect_and_rotate(
+                db, db_pulse, panel_url=resolved_panel, message=REGENERATE_MESSAGE
+            )
+            message = REGENERATE_MESSAGE
+        else:
+            db_pulse.token_encrypted = await self._encrypt_token(db, mint_tunnel_token())
+            iran_t, iran_c, iran_c_alt, abroad_t, abroad_c, abroad_c_alt, exp = await self._issue_join_tokens(
+                db, db_pulse, panel_url=resolved_panel
+            )
+            message = "Join tokens regenerated"
         await db.commit()
         return HpxPulseActionResponse(
             pulse=_to_response(db_pulse),
@@ -459,7 +649,7 @@ class HpxPulseOperation(BaseOperation):
             abroad_join_command_alt=abroad_c_alt,
             iran_join_expires_at=exp,
             abroad_join_expires_at=exp,
-            message="Join tokens regenerated",
+            message=message,
         )
 
     async def sync_pulse(self, db: AsyncSession, *, admin: AdminDetails, pulse_id: int) -> HpxPulseActionResponse:
@@ -474,9 +664,9 @@ class HpxPulseOperation(BaseOperation):
             "message": "Sync requested — agents will refresh tunnel config",
             "last_status_change": dt.now(UTC),
         }
-        if db_pulse.iran_agent_key_hash:
+        if _can_queue_command(db_pulse, "iran"):
             update["iran_agent_command"] = "restart"
-        if db_pulse.abroad_agent_key_hash:
+        if _can_queue_command(db_pulse, "abroad"):
             update["abroad_agent_command"] = "restart"
         db_pulse = await update_hpx_pulse(db, db_pulse, update)
         await db.commit()
@@ -586,10 +776,10 @@ class HpxPulseOperation(BaseOperation):
                 fix_notes.append(f"profile → {extreme_id} (TCP Extreme mss=1000)")
 
         probe_queued = False
-        if db_pulse.iran_agent_key_hash:
+        if _can_queue_command(db_pulse, "iran"):
             update["iran_agent_command"] = agent_cmd
             probe_queued = True
-        if db_pulse.abroad_agent_key_hash:
+        if _can_queue_command(db_pulse, "abroad"):
             update["abroad_agent_command"] = agent_cmd
             probe_queued = True
         if apply_fix and fix_notes:
@@ -719,7 +909,13 @@ class HpxPulseOperation(BaseOperation):
         )
 
     async def update_pulse(
-        self, db: AsyncSession, *, admin: AdminDetails, pulse_id: int, model: HpxPulseUpdate
+        self,
+        db: AsyncSession,
+        *,
+        admin: AdminDetails,
+        pulse_id: int,
+        model: HpxPulseUpdate,
+        panel_url: str | None = None,
     ) -> HpxPulseActionResponse:
         _ = admin
         db_pulse = await get_hpx_pulse_by_id(db, pulse_id)
@@ -732,6 +928,12 @@ class HpxPulseOperation(BaseOperation):
                 await self.raise_error(message="Pulse name already exists", code=409)
 
         update_data = model.model_dump(exclude_unset=True)
+        # An explicit null must never blank a required column (e.g. profile_id / IPs).
+        for key in [k for k, v in update_data.items() if v is None and k in _NON_NULLABLE_UPDATE_KEYS]:
+            del update_data[key]
+        for key in ("iran_public_ip", "abroad_public_ip"):
+            if isinstance(update_data.get(key), str):
+                update_data[key] = update_data[key].strip()
         if not update_data:
             await self.raise_error(message="No fields to update", code=422)
 
@@ -775,11 +977,24 @@ class HpxPulseOperation(BaseOperation):
             "auto_failback",
             "priority",
         }
-        needs_agent_restart = bool(set(update_data.keys()) - soft_keys)
+        hard_changed = _changed_hard_keys(db_pulse, update_data)
+        if hard_changed:
+            return await self._apply_hard_update(
+                db, db_pulse, update_data, hard_changed=hard_changed, panel_url=panel_url
+            )
+
+        # The wizard echoes every field on each save; only fields that really changed count.
+        # advice_json is recomputed whenever `goal` is sent, so it never decides on its own.
+        changed_keys = {
+            key
+            for key, value in update_data.items()
+            if key != "advice_json" and getattr(db_pulse, key, None) != value
+        }
+        needs_agent_restart = bool(changed_keys - soft_keys)
         if needs_agent_restart:
-            if db_pulse.iran_agent_key_hash:
+            if _can_queue_command(db_pulse, "iran"):
                 update_data.setdefault("iran_agent_command", "restart")
-            if db_pulse.abroad_agent_key_hash:
+            if _can_queue_command(db_pulse, "abroad"):
                 update_data.setdefault("abroad_agent_command", "restart")
             update_data.setdefault("message", "Config updated — agents syncing")
             update_data["last_status_change"] = dt.now(UTC)
@@ -793,6 +1008,55 @@ class HpxPulseOperation(BaseOperation):
         db_pulse = await update_hpx_pulse(db, db_pulse, update_data)
         await db.commit()
         return HpxPulseActionResponse(pulse=_to_response(db_pulse), message="Pulse updated")
+
+    async def _apply_hard_update(
+        self,
+        db: AsyncSession,
+        db_pulse: HpxPulse,
+        update_data: dict,
+        *,
+        hard_changed: set[str],
+        panel_url: str | None,
+    ) -> HpxPulseActionResponse:
+        """Persist a tunnel-affecting edit, disconnect agents and issue new join tokens."""
+        old_iran = (db_pulse.iran_public_ip or "").strip()
+        old_abroad = (db_pulse.abroad_public_ip or "").strip()
+        fields = dict(update_data)
+        for key in ("iran_public_ip", "abroad_public_ip"):
+            if isinstance(fields.get(key), str):
+                fields[key] = fields[key].strip()
+        resolved_panel = await self._panel_url(panel_url)
+        iran_t, iran_c, iran_c_alt, abroad_t, abroad_c, abroad_c_alt, exp = await self._disconnect_and_rotate(
+            db,
+            db_pulse,
+            panel_url=resolved_panel,
+            fields=fields,
+            message=HARD_CHANGE_MESSAGE,
+        )
+
+        host_notes: list[str] = []
+        new_iran = (db_pulse.iran_public_ip or "").strip()
+        if "iran_public_ip" in hard_changed and new_iran and new_iran != old_iran:
+            host_notes = await self._rewrite_hosts_for_iran_change(
+                db, db_pulse, old_iran=old_iran, old_abroad=old_abroad, new_iran=new_iran
+            )
+        await db.commit()
+
+        message = HARD_CHANGE_MESSAGE
+        if host_notes:
+            message += f" ({len([n for n in host_notes if 'skipped' not in n])} host(s) re-pointed to {new_iran})"
+        return HpxPulseActionResponse(
+            pulse=_to_response(db_pulse),
+            message=message,
+            iran_join_token=iran_t,
+            iran_join_command=iran_c,
+            iran_join_command_alt=iran_c_alt,
+            abroad_join_token=abroad_t,
+            abroad_join_command=abroad_c,
+            abroad_join_command_alt=abroad_c_alt,
+            iran_join_expires_at=exp,
+            abroad_join_expires_at=exp,
+        )
 
     async def claim_agent(
         self, db: AsyncSession, *, model: HpxPulseAgentClaimRequest, panel_url: str | None = None
@@ -951,7 +1215,11 @@ class HpxPulseOperation(BaseOperation):
             verdict = incoming.get("verdict") if isinstance(incoming.get("verdict"), dict) else None
             if verdict and verdict.get("summary") and model.message is None:
                 update_data["message"] = str(verdict["summary"])[:240]
-        if db_pulse.iran_agent_key_hash and db_pulse.abroad_agent_key_hash:
+        # While a `leave` is queued (config changed / tokens regenerated) the old tunnel must not
+        # flip the pulse back to running; it is about to disconnect.
+        if _is_leaving(db_pulse):
+            update_data.pop("message", None)
+        elif db_pulse.iran_agent_key_hash and db_pulse.abroad_agent_key_hash:
             if model.forward_ok is False:
                 update_data["status"] = HpxPulseStatus.unhealthy
                 update_data["message"] = model.message or (

@@ -310,7 +310,7 @@ def validate_custom_variables(value: list[CustomVariable]) -> list[CustomVariabl
     return value
 
 
-SUB_THEMES: tuple[str, ...] = ("terminal", "aurora", "nova", "atlas", "pulse")
+SUB_THEMES: tuple[str, ...] = ("terminal", "aurora", "nova", "atlas", "pulse", "ember", "folio", "harbor")
 SUB_THEME_MODES: tuple[str, ...] = ("dark", "light")
 DEFAULT_SUB_THEME = "terminal"
 DEFAULT_SUB_THEME_MODE = "dark"
@@ -339,6 +339,7 @@ class Subscription(BaseModel):
     sub_show_install_guide: bool = Field(default=True)
     sub_show_apps: bool = Field(default=True)
     sub_show_usage_chart: bool = Field(default=True)
+    sub_show_config_share: bool = Field(default=True)
     sub_allow_mode_toggle: bool = Field(default=False)
 
     @field_validator("sub_theme", mode="before")

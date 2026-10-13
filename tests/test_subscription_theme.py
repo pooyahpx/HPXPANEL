@@ -29,7 +29,7 @@ def test_subscription_theme_defaults_are_backward_compatible():
 
 
 def test_subscription_accepts_every_known_theme():
-    assert set(SUB_THEMES) == {"terminal", "aurora", "nova", "atlas", "pulse"}
+    assert set(SUB_THEMES) == {"terminal", "aurora", "nova", "atlas", "pulse", "ember", "folio", "harbor"}
     for theme in SUB_THEMES:
         assert _subscription(sub_theme=theme).sub_theme == theme
 

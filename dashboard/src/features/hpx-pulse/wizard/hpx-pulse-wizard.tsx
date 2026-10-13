@@ -19,7 +19,7 @@ import {
 } from '@/service/api/hpx-pulse'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Dices, Sparkles, Trash2 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -72,6 +72,8 @@ interface Props {
   onOpenChange: (open: boolean) => void
   onSuccess?: () => void
   onCreated?: (res: HpxPulseActionResponse) => void
+  /** Called after an edit is saved (the response carries new join commands when agents must rejoin). */
+  onUpdated?: (res: HpxPulseActionResponse) => void
   editingPulse?: HpxPulseResponse | null
 }
 
@@ -95,7 +97,7 @@ function pulseToFormValues(pulse: HpxPulseResponse): FormValues {
   }
 }
 
-export default function HpxPulseWizard({ open, onOpenChange, onCreated, editingPulse }: Props) {
+export default function HpxPulseWizard({ open, onOpenChange, onCreated, onUpdated, editingPulse }: Props) {
   const { t, i18n } = useTranslation()
   const dir = useDirDetection()
   const fa = i18n.language?.startsWith('fa')
@@ -125,12 +127,20 @@ export default function HpxPulseWizard({ open, onOpenChange, onCreated, editingP
     },
   })
 
+  // The list re-fetches in the background and hands us a fresh object every time. Resetting the
+  // form on object identity wiped what the admin was typing (IPs "reverting"), so only reset when
+  // the dialog opens or a different pulse is being edited, using the latest DB snapshot.
+  const editingPulseRef = useRef<HpxPulseResponse | null | undefined>(editingPulse)
+  editingPulseRef.current = editingPulse
+  const editingId = editingPulse?.id ?? null
+
   useEffect(() => {
     if (!open) return
-    if (editingPulse) {
-      form.reset(pulseToFormValues(editingPulse))
-      setAdvice(editingPulse.advice)
-      setSelectedProfile(editingPulse.profile_id)
+    const current = editingPulseRef.current
+    if (current) {
+      form.reset(pulseToFormValues(current))
+      setAdvice(current.advice)
+      setSelectedProfile(current.profile_id)
       return
     }
     form.reset({
@@ -149,7 +159,7 @@ export default function HpxPulseWizard({ open, onOpenChange, onCreated, editingP
     })
     setAdvice(null)
     setSelectedProfile(null)
-  }, [open, editingPulse, form])
+  }, [open, editingId, form])
 
   const runAdvise = async (values?: FormValues) => {
     const v = values ?? form.getValues()
@@ -177,7 +187,7 @@ export default function HpxPulseWizard({ open, onOpenChange, onCreated, editingP
       const autoRestart = values.auto_restart_interval_minutes > 0 ? values.auto_restart_interval_minutes : 0
 
       if (isEditing && editingPulse) {
-        await updateMutation.mutateAsync({
+        const updated = await updateMutation.mutateAsync({
           id: editingPulse.id,
           data: {
             name: values.name.trim(),
@@ -195,7 +205,19 @@ export default function HpxPulseWizard({ open, onOpenChange, onCreated, editingP
             priority: values.priority,
           },
         })
-        toast.success(t('hpxPulse.updateSuccess', { defaultValue: 'Pulse updated — agents will sync' }))
+        const mustRejoin = Boolean(updated?.iran_join_command || updated?.abroad_join_command)
+        if (mustRejoin) {
+          toast.warning(
+            t('hpxPulse.updateRejoin', {
+              defaultValue: 'IP/config changed — agents are disconnecting. Reconnect both servers with the new join tokens.',
+            }),
+            { duration: 10000 },
+          )
+        } else {
+          toast.success(t('hpxPulse.updateSuccess', { defaultValue: 'Pulse updated — agents will sync' }))
+        }
+        // Hand the response (join commands) to the list instead of just closing, then re-read the DB.
+        onUpdated?.(updated)
         onOpenChange(false)
         return
       }

@@ -148,3 +148,35 @@ def rewrite_host_addresses_to_iran(
     if iran and not out:
         out.add(iran)
     return out
+
+
+def rewrite_host_ip_change(
+    addresses: Any,
+    *,
+    old_iran: str,
+    old_abroad: str,
+    new_iran: str,
+    protected_iran_ips: set[str] | None = None,
+) -> set[str]:
+    """Point Host addresses at the new Iran IP after a Pulse Iran-IP edit.
+
+    Replaces both the previous Iran IP and the previous abroad IP (clients must enter via the
+    Iran side of the reverse tunnel) with ``new_iran``. Addresses that already belong to a
+    sibling Pulse's Iran IP are left untouched.
+    """
+    old_i = (old_iran or "").strip()
+    old_a = (old_abroad or "").strip()
+    new_i = (new_iran or "").strip()
+    protected = {p.strip() for p in (protected_iran_ips or set()) if p and p.strip() and p.strip() not in {new_i, old_i}}
+    out: set[str] = set()
+    for a in _addr_list(addresses):
+        if a in protected:
+            out.add(a)
+            continue
+        if new_i and ((old_i and a == old_i) or (old_a and a == old_a)):
+            out.add(new_i)
+        else:
+            out.add(a)
+    if new_i and not out:
+        out.add(new_i)
+    return out

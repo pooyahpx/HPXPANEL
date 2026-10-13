@@ -243,12 +243,122 @@ function PulseMock({ p, skin, surface, button }: MockCtx) {
   )
 }
 
+/** Ember: industrial single column; full-width status band on top, stacked square cards below. */
+function EmberMock({ p, skin, surface, button }: MockCtx) {
+  return (
+    <>
+      <div className="flex items-center justify-between">
+        <span className="text-[7px] font-bold tracking-[0.2em] uppercase">HPXPANEL</span>
+        <span className="text-[6px] tracking-widest uppercase opacity-60">sub // 01</span>
+      </div>
+      <div className="mt-1.5 flex items-center gap-2 px-2 py-1.5" style={{ background: p.primary, color: p.onPrimary, borderRadius: skin.radius }}>
+        <span className="text-[9px] leading-none" style={skin.titleStyle}>
+          Active
+        </span>
+        <span className="text-[6px] font-bold uppercase opacity-80">23 d left</span>
+        <span className="ms-auto text-[9px] font-bold">68%</span>
+      </div>
+      <div className="mt-1.5 space-y-1.5">
+        <div className="flex items-center gap-2 px-2 py-1.5" style={surface}>
+          <Bar w="100%" h={5} color={p.muted} radius={0} className="flex-1" />
+          <span className="px-2 py-0.5 text-[6px] font-bold" style={button}>
+            COPY
+          </span>
+        </div>
+        <div className="grid grid-cols-2 gap-1.5">
+          {[0, 1].map(i => (
+            <div key={i} className="px-2 py-1.5" style={surface}>
+              <Bar w={14} h={2} color={p.muted} radius={0} />
+              <Bar w={26} h={4} color={p.fg} radius={0} className="mt-1 opacity-70" />
+            </div>
+          ))}
+        </div>
+      </div>
+    </>
+  )
+}
+
+/** Folio: Swiss grid; title left, status chip right, dense hairline link list. */
+function FolioMock({ p, skin, surface, button }: MockCtx) {
+  return (
+    <>
+      <div className="flex items-center justify-between pb-1" style={{ borderBottom: `1px solid ${p.border}` }}>
+        <span className="text-[7px] font-bold tracking-[0.12em]">HPXPANEL</span>
+        <span className="text-[6px] opacity-60">No. 01</span>
+      </div>
+      <div className="mt-2 flex items-start justify-between gap-2">
+        <div className="text-[15px]" style={skin.titleStyle}>
+          Your
+          <br />
+          dashboard
+        </div>
+        <span className="px-1.5 py-0.5 text-[6px] font-bold tracking-widest uppercase" style={{ background: p.primary, color: p.onPrimary }}>
+          Active
+        </span>
+      </div>
+      <div className="mt-2" style={{ borderTop: `1px solid ${p.fg}` }}>
+        {[0, 1, 2].map(i => (
+          <div key={i} className="flex items-center gap-2 py-1" style={{ borderBottom: `1px solid ${p.border}` }}>
+            <span className="text-[6px] opacity-50">0{i + 1}</span>
+            <Bar w="55%" h={3} color={p.muted} radius={0} className="flex-1" />
+            <span className="px-1.5 py-px text-[5px] font-bold uppercase" style={i === 0 ? button : { border: `1px solid ${p.border}` }}>
+              Copy
+            </span>
+          </div>
+        ))}
+      </div>
+      <div className="mt-1.5 h-[3px] w-full" style={{ background: p.muted }}>
+        <span className="block h-full" style={{ width: '68%', background: p.primary }} />
+      </div>
+      <span className="sr-only" style={surface} />
+    </>
+  )
+}
+
+/** Harbor: soft calm ops; horizontal KPI strip on top, then one rounded status card. */
+function HarborMock({ p, skin, surface, button }: MockCtx) {
+  return (
+    <>
+      <div className="flex items-center gap-1.5">
+        <span className="block size-3" style={{ background: p.primary, borderRadius: 6 }} />
+        <span className="text-[7px] font-extrabold tracking-[0.1em]">HPXPANEL</span>
+      </div>
+      <div className="mt-2 grid grid-cols-3 gap-1.5">
+        {['Used', 'Left', 'Ends'].map(label => (
+          <div key={label} className="px-1.5 py-1" style={surface}>
+            <Bar w={10} h={2} color={p.muted} />
+            <Bar w={22} h={4} color={p.fg} className="mt-1 opacity-70" />
+            <span className="sr-only">{label}</span>
+          </div>
+        ))}
+      </div>
+      <div className="mt-1.5 flex items-center gap-2 px-2.5 py-2" style={surface}>
+        <Ring size={30} hole={22} color={p.ok} track={p.muted} bg={p.card}>
+          <span style={{ fontSize: 6 }}>68%</span>
+        </Ring>
+        <div className="min-w-0 flex-1 space-y-1">
+          <span className="block text-[8px] font-extrabold" style={{ color: p.ok }}>
+            Active
+          </span>
+          <Bar w="100%" h={3} color={p.muted} radius={skin.radius} />
+        </div>
+        <span className="px-2.5 py-1 text-[7px] font-bold" style={button}>
+          Copy URL
+        </span>
+      </div>
+    </>
+  )
+}
+
 const MOCKS: Record<SubTheme, ComponentType<MockCtx>> = {
   terminal: TerminalMock,
   aurora: AuroraMock,
   nova: NovaMock,
   atlas: AtlasMock,
   pulse: PulseMock,
+  ember: EmberMock,
+  folio: FolioMock,
+  harbor: HarborMock,
 }
 
 /** CSS-only miniature of the public subscription page; every skin has a different composition. */

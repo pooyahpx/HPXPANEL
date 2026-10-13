@@ -6,7 +6,10 @@ import { ChartContainer, ChartTooltip, ChartConfig } from '@/components/ui/chart
 import { BarChart3, PieChart as PieChartIcon, TrendingUp, Calendar, Info } from 'lucide-react'
 import TimeSelector, { TRAFFIC_TIME_SELECTOR_SHORTCUTS } from '@/components/charts/time-selector'
 import { useTranslation } from 'react-i18next'
-import { Period, useGetNodesSimple, useGetCurrentAdmin, useGetUserUsageById } from '@/service/api'
+import { useQuery } from '@tanstack/react-query'
+import { Badge } from '@/components/ui/badge'
+import { formatBytes } from '@/utils/formatByte'
+import { Period, useGetNodesSimple, useGetCurrentAdmin, useGetUserUsageById, getUserUsageShareById } from '@/service/api'
 import type { GetUserUsageParams, NodeSimple, UserUsageStat, UserUsageStatsListStats } from '@/service/api'
 import { DateRange } from 'react-day-picker'
 import { TimeRangeSelector } from '@/components/common/time-range-selector'
@@ -363,6 +366,14 @@ const UsageModal = ({ open, onClose, userId }: UsageModalProps) => {
 
   // Only fetch when modal is open
   const { data, isLoading } = useGetUserUsageById(userId, userUsageParams, { query: { enabled: open && !!userId } })
+
+  // Ranked traffic share per node (config path) for the same range; always shown when data exists
+  const { data: shareData } = useQuery({
+    queryKey: ['user-usage-share', userId, queryRange.startDate, queryRange.endDate],
+    queryFn: ({ signal }) => getUserUsageShareById(userId, { start: queryRange.startDate, end: queryRange.endDate }, signal),
+    enabled: open && !!userId,
+  })
+  const shareItems = useMemo(() => (shareData?.total_bytes ? (shareData.items ?? []).filter(item => Number(item.bytes ?? 0) > 0) : []), [shareData])
 
   // Prepare chart data for BarChart with node grouping
   const processedChartData = useMemo<UsageChartDataPoint[]>(() => {
@@ -866,6 +877,47 @@ const UsageModal = ({ open, onClose, userId }: UsageModalProps) => {
               )}
             </div>
           </CardContent>
+          {shareItems.length > 0 && (
+            <div className="mt-3 space-y-2 rounded-lg border p-3" data-testid="usage-share-list">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 text-sm font-semibold">
+                  <PieChartIcon className="h-4 w-4" />
+                  {t('usersTable.usageShare.title', { defaultValue: 'Traffic by path' })}
+                </div>
+                <span className="text-muted-foreground text-[11px]">{t('usersTable.usageShare.hint', { defaultValue: 'Share of traffic per node' })}</span>
+              </div>
+              <ul className="space-y-2">
+                {shareItems.map((item, index) => {
+                  const percent = Number(item.percent ?? 0)
+                  const color = index === 0 ? 'hsl(var(--primary))' : `hsl(var(--chart-${(index % 5) + 1}))`
+                  return (
+                    <li key={`${item.node_id ?? 'panel'}-${item.name}`} className="space-y-1">
+                      <div className="flex items-center justify-between gap-2 text-xs">
+                        <span className="flex min-w-0 items-center gap-1.5">
+                          <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: color }} />
+                          <span className="truncate font-medium" title={item.name}>
+                            {item.name}
+                          </span>
+                          {index === 0 && (
+                            <Badge variant="blue" className="shrink-0 px-1.5 py-0 text-[10px] normal-case shadow-none">
+                              {t('usersTable.usageShare.mostUsed', { defaultValue: 'Most used' })}
+                            </Badge>
+                          )}
+                        </span>
+                        <span dir="ltr" className="shrink-0 font-mono tabular-nums">
+                          <span className="font-semibold">{percent.toFixed(1)}%</span>
+                          <span className="text-muted-foreground"> · {formatBytes(Number(item.bytes ?? 0))}</span>
+                        </span>
+                      </div>
+                      <div className="bg-muted h-1.5 overflow-hidden rounded-full" dir="ltr">
+                        <div className="h-full rounded-full" style={{ width: `${Math.min(100, Math.max(percent, 0))}%`, backgroundColor: color }} />
+                      </div>
+                    </li>
+                  )
+                })}
+              </ul>
+            </div>
+          )}
           <CardFooter className="mt-0 flex-col items-start gap-2 text-xs sm:text-sm">
             {trend !== null && trend > 0 && (
               <div className="flex gap-2 leading-none font-medium text-green-600 dark:text-green-400">

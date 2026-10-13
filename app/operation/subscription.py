@@ -1,4 +1,5 @@
 import re
+from datetime import UTC, datetime as dt, timedelta as td
 from json import dumps as json_dumps
 from typing import Any, ClassVar
 
@@ -14,8 +15,10 @@ from app.db.crud.hwid import (
     register_user_hwid,
     reset_user_hwids,
 )
+from app.db.crud.node import get_node_names
 from app.db.crud.user import (
     attach_user_group_quotas,
+    get_user_usage_by_node,
     get_user_usages,
     load_user_attrs,
     refresh_and_load_user,
@@ -25,7 +28,7 @@ from app.db.models import User
 from app.models.admin import AdminDetails
 from app.models.settings import Application, ConfigFormat, HWIDSettings, SubRule, Subscription as SubSettings
 from app.models.stats import UserUsageStatsList
-from app.models.subscription import SubscriptionUsageQuery
+from app.models.subscription import ConfigUsageShareQuery, ConfigUsageShareResponse, SubscriptionUsageQuery
 from app.models.user import (
     SubscriptionUserResponse,
     UserGroupQuotaResponse,
@@ -46,6 +49,7 @@ from app.subscription.share import (
 )
 from app.templates import render_template
 from app.utils.hwid import resolve_effective_hwid_settings
+from app.utils.usage_share import build_config_usage_share
 from config import template_settings
 
 from . import BaseOperation
@@ -698,6 +702,7 @@ class SubscriptionOperation(BaseOperation):
             "sub_show_install_guide": bool(getattr(sub_settings, "sub_show_install_guide", True)),
             "sub_show_apps": bool(getattr(sub_settings, "sub_show_apps", True)),
             "sub_show_usage_chart": bool(getattr(sub_settings, "sub_show_usage_chart", True)),
+            "sub_show_config_share": bool(getattr(sub_settings, "sub_show_config_share", True)),
             "sub_allow_mode_toggle": bool(getattr(sub_settings, "sub_allow_mode_toggle", False)),
         }
 
@@ -934,4 +939,22 @@ class SubscriptionOperation(BaseOperation):
 
         db_user = await self.get_validated_sub(db, token=token)
 
-        return await get_user_usages(db, db_user.id, start, end, query.period)
+        return await get_user_usages(db, db_user.id, start, end, query.period, group_by_node=query.group_by_node)
+
+    async def get_user_usage_share(
+        self,
+        db: AsyncSession,
+        token: str,
+        query: ConfigUsageShareQuery,
+    ) -> ConfigUsageShareResponse:
+        """Per-node (config path) traffic share for the subscription owner. Defaults to the last 7 days."""
+        start = query.start
+        end = query.end or dt.now((start.tzinfo if start and start.tzinfo else None) or UTC)
+        start = start or (end - td(days=7))
+        start, end = await self.validate_dates(start, end, True)
+
+        db_user = await self.get_validated_sub(db, token=token)
+
+        rows = await get_user_usage_by_node(db, db_user.id, start, end)
+        node_names = await get_node_names(db, [node_id for node_id, _ in rows])
+        return build_config_usage_share(rows, node_names, start=start, end=end)

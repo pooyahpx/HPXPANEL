@@ -13,7 +13,7 @@ from .node import (
     get_node_stats_period_query,
     get_node_usage_query,
 )
-from .subscription import get_subscription_headers, get_subscription_usage_query
+from .subscription import get_config_usage_share_query, get_subscription_headers, get_subscription_usage_query
 from .user import (
     get_expired_users_query,
     get_user_list_query,
@@ -31,6 +31,7 @@ __all__ = [
     "get_api_key_list_query",
     "get_client_template_list_query",
     "get_client_template_simple_list_query",
+    "get_config_usage_share_query",
     "get_core_list_query",
     "get_core_simple_list_query",
     "get_expired_users_query",

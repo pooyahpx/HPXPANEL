@@ -234,6 +234,15 @@ async def get_nodes_simple(
     return rows, total
 
 
+async def get_node_names(db: AsyncSession, node_ids: list[int]) -> dict[int, str]:
+    """Resolve node ids to names (ids that no longer exist are simply absent)."""
+    ids = sorted({int(node_id) for node_id in node_ids if node_id})
+    if not ids:
+        return {}
+    result = await db.execute(select(Node.id, Node.name).where(Node.id.in_(ids)))
+    return {row[0]: row[1] for row in result.all()}
+
+
 async def get_limited_nodes(db: AsyncSession) -> list[Node]:
     """
     Retrieves nodes that have exceeded their data limit and are in

@@ -273,7 +273,10 @@ async def path_ping_hpx_pulse(
 async def update_hpx_pulse(
     pulse_id: int,
     model: HpxPulseUpdate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     admin: AdminDetails = Depends(require_permission("hpx_pulse", "update")),
 ):
-    return await pulse_operator.update_pulse(db, admin=admin, pulse_id=pulse_id, model=model)
+    return await pulse_operator.update_pulse(
+        db, admin=admin, pulse_id=pulse_id, model=model, panel_url=_request_base_url(request)
+    )

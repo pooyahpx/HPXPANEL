@@ -22,6 +22,7 @@ from app.db.crud.bulk import (
     update_users_proxy_settings,
 )
 from app.db.crud.hwid import get_user_hwid_count
+from app.db.crud.node import get_node_names
 from app.db.crud.user import (
     attach_user_group_quotas,
     attach_users_group_quotas,
@@ -35,6 +36,7 @@ from app.db.crud.user import (
     get_existing_usernames,
     get_expired_users,
     get_user_count_metric_stats,
+    get_user_usage_by_node,
     get_user_usages,
     get_users,
     get_users_by_ids,
@@ -59,6 +61,7 @@ from app.db.models import User, UserStatus, UserTemplate
 from app.models.admin import AdminDetails
 from app.models.proxy import ProxyTable
 from app.models.settings import HWIDSettings
+from app.models.subscription import ConfigUsageShareQuery, ConfigUsageShareResponse
 from app.models.stats import (
     Period,
     UserCountMetric,
@@ -123,6 +126,7 @@ from app.utils.helpers import (
     resolve_subscription_url_prefix,
 )
 from app.utils.hwid import resolve_effective_hwid_settings
+from app.utils.usage_share import build_config_usage_share
 from app.utils.jwt import create_subscription_token
 from app.utils.logger import get_logger
 from app.utils.openvpn import ensure_openvpn_credentials
@@ -1979,6 +1983,27 @@ class UserOperation(BaseOperation):
             query.node_id,
             query.group_by_node,
         )
+
+    async def get_user_usage_share_by_id(
+        self,
+        db: AsyncSession,
+        user_id: int,
+        admin: AdminDetails,
+        query: ConfigUsageShareQuery,
+    ) -> ConfigUsageShareResponse:
+        """Per-node (config path) traffic share for a user, default last 7 days."""
+        db_user = await self.get_validated_user_by_id(db, user_id, admin)
+        start = query.start
+        end = query.end or dt.now((start.tzinfo if start and start.tzinfo else None) or UTC)
+        start = start or (end - td(days=7))
+        start, end = await self.validate_dates(start, end, True)
+
+        rows = await get_user_usage_by_node(db, db_user.id, start, end)
+        # Without node-stats permission only the aggregate is returned (no per-node breakdown).
+        if not _has_permission(admin, "nodes", "stats"):
+            return ConfigUsageShareResponse(total_bytes=sum(used for _, used in rows), items=[], start=start, end=end)
+        node_names = await get_node_names(db, [node_id for node_id, _ in rows])
+        return build_config_usage_share(rows, node_names, start=start, end=end)
 
     async def get_user(self, db: AsyncSession, username: str, admin: AdminDetails) -> UserNotificationResponse:
         warnings.warn(

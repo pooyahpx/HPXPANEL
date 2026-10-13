@@ -780,6 +780,34 @@ async def get_user_usages(
     return UserUsageStatsList(period=period, start=start, end=end, stats=stats)
 
 
+async def get_user_usage_by_node(
+    db: AsyncSession,
+    user_id: int,
+    start: datetime,
+    end: datetime,
+) -> list[tuple[int, int]]:
+    """
+    Sum a user's traffic per node over [start, end).
+
+    Returns (node_id, total_bytes) rows. Rows without a node (legacy/panel traffic) are
+    bucketed under node_id 0. Highest usage first.
+    """
+    total = func.sum(NodeUserUsage.used_traffic)
+    node_key = func.coalesce(NodeUserUsage.node_id, 0)
+    stmt = (
+        select(node_key.label("node_id"), total.label("total_traffic"))
+        .where(
+            NodeUserUsage.user_id == user_id,
+            NodeUserUsage.created_at >= to_utc_for_filter(start),
+            NodeUserUsage.created_at < to_utc_for_filter(end),
+        )
+        .group_by(node_key)
+        .order_by(total.desc())
+    )
+    result = await db.execute(stmt)
+    return [(int(row.node_id or 0), int(row.total_traffic or 0)) for row in result.all()]
+
+
 async def get_users_count_by_admin(db: AsyncSession, admin_id: int | None) -> int:
     """
     Gets the total count of users belonging to a specific admin.

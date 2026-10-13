@@ -38,6 +38,28 @@ export type GetUserTemplatesParams = {
 
 export type GetSubUserUsageParams = {
   period?: Period
+  group_by_node?: boolean
+  start?: string | null
+  end?: string | null
+}
+
+export type GetUserUsageShareByIdParams = {
+  start?: string | null
+  end?: string | null
+}
+
+/** One row of the per-node ("config path") traffic share. */
+export interface ConfigUsageShareItem {
+  node_id?: number | null
+  name: string
+  bytes?: number
+  percent?: number
+}
+
+/** Traffic share per node for one user, sorted by usage descending. */
+export interface ConfigUsageShareResponse {
+  total_bytes?: number
+  items?: ConfigUsageShareItem[]
   start?: string | null
   end?: string | null
 }
@@ -1532,11 +1554,13 @@ export interface Subscription {
   sub_show_install_guide?: boolean
   sub_show_apps?: boolean
   sub_show_usage_chart?: boolean
+  /** Show the "Traffic by path" node-share bars on the public subscription page */
+  sub_show_config_share?: boolean
   /** Show the light/dark toggle on the public subscription page */
   sub_allow_mode_toggle?: boolean
 }
 
-export type SubTheme = 'terminal' | 'aurora' | 'nova' | 'atlas' | 'pulse'
+export type SubTheme = 'terminal' | 'aurora' | 'nova' | 'atlas' | 'pulse' | 'ember' | 'folio' | 'harbor'
 
 export type SubThemeMode = 'dark' | 'light'
 
@@ -15664,6 +15688,14 @@ export function useGetUserUsageByUsername<TData = Awaited<ReturnType<typeof getU
  */
 export const getUserUsageById = (userId: number, params?: GetUserUsageByIdParams, signal?: AbortSignal) => {
   return orvalFetcher<UserUsageStatsList>({ url: `/api/user/by-id/${userId}/usage`, method: 'GET', params, signal })
+}
+
+/**
+ * Traffic share per node (config path) for one user. Defaults to the last 7 days.
+ * @summary Get User Usage Share By Id
+ */
+export const getUserUsageShareById = (userId: number, params?: GetUserUsageShareByIdParams, signal?: AbortSignal) => {
+  return orvalFetcher<ConfigUsageShareResponse>({ url: `/api/user/by-id/${userId}/usage/share`, method: 'GET', params, signal })
 }
 
 export const getGetUserUsageByIdQueryKey = (userId: number, params?: GetUserUsageByIdParams) => {

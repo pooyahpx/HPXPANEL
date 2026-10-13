@@ -53,6 +53,8 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 type JoinCommandSet = {
+  /** Set after an edit/regenerate that disconnected agents — they must rejoin with these tokens. */
+  warning?: string
   iran?: string
   iranAlt?: string
   abroad?: string
@@ -639,6 +641,14 @@ export default function HpxPulseList() {
 
       {joinCommands && (
         <Card className="space-y-3 border-sky-500/20 bg-gradient-to-br from-sky-500/5 to-transparent p-4 text-xs">
+          {joinCommands.warning && (
+            <div
+              role="alert"
+              className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-[12px] font-medium leading-relaxed text-amber-700 dark:text-amber-300"
+            >
+              {joinCommands.warning}
+            </div>
+          )}
           <div>
             <p className="text-sm font-semibold">{t('hpxPulse.installCommands', { defaultValue: 'Install commands' })}</p>
             <p className="text-muted-foreground mt-1 text-[11px] leading-relaxed">
@@ -812,6 +822,12 @@ export default function HpxPulseList() {
               onRegenerate={async () => {
                 const res = await regenMutation.mutateAsync(pulse.id)
                 setJoinCommands({
+                  warning: pulse.iran_claimed || pulse.abroad_claimed
+                    ? t('hpxPulse.rejoinWarning', {
+                        defaultValue:
+                          'Config changed — the running tunnel is disconnecting. Run the new join commands below on both servers (old tokens no longer work).',
+                      })
+                    : undefined,
                   iran: res.iran_join_command ?? undefined,
                   iranAlt: res.iran_join_command_alt ?? undefined,
                   abroad: res.abroad_join_command ?? undefined,
@@ -829,7 +845,7 @@ export default function HpxPulseList() {
           setWizardOpen(open)
           if (!open) setEditingPulse(null)
         }}
-        editingPulse={editingPulse}
+        editingPulse={editingPulse ? (data?.pulses?.find(p => p.id === editingPulse.id) ?? editingPulse) : null}
         onCreated={res => {
           setJoinCommands({
             iran: res.iran_join_command ?? undefined,
@@ -837,6 +853,23 @@ export default function HpxPulseList() {
             abroad: res.abroad_join_command ?? undefined,
             abroadAlt: res.abroad_join_command_alt ?? undefined,
           })
+          refetch()
+        }}
+        onUpdated={res => {
+          // Tunnel-affecting edit: agents were told to leave and must rejoin with the new tokens.
+          if (res.iran_join_command || res.abroad_join_command) {
+            setJoinCommands({
+              warning: t('hpxPulse.rejoinWarning', {
+                defaultValue:
+                  'Config changed — the running tunnel is disconnecting. Run the new join commands below on both servers (old tokens no longer work).',
+              }),
+              iran: res.iran_join_command ?? undefined,
+              iranAlt: res.iran_join_command_alt ?? undefined,
+              abroad: res.abroad_join_command ?? undefined,
+              abroadAlt: res.abroad_join_command_alt ?? undefined,
+            })
+          }
+          // Always re-read from the DB so the list never shows stale IPs/ports.
           refetch()
         }}
       />

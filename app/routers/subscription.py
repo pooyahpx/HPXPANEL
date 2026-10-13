@@ -4,13 +4,14 @@ from fastapi.responses import JSONResponse
 from app.db import AsyncSession, get_db
 from app.models.settings import Application, ConfigFormat
 from app.models.stats import UserUsageStatsList
+from app.models.subscription import ConfigUsageShareResponse
 from app.models.user import SubscriptionUserResponse, UserHWIDListResponse
 from app.operation import OperatorType
 from app.operation.subscription import SubscriptionOperation
 from app.rate_limit import rate_limiter
 from config import rate_limit_settings, subscription_env_settings
 
-from .dependencies import get_subscription_headers, get_subscription_usage_query
+from .dependencies import get_config_usage_share_query, get_subscription_headers, get_subscription_usage_query
 
 
 async def _rate_limit_subscription(request: Request) -> None:
@@ -101,6 +102,16 @@ async def get_sub_user_usage(
 ):
     """Fetches the usage statistics for the user within a specified date range."""
     return await subscription_operator.get_user_usage(db, token=token, query=query)
+
+
+@router.get("/{token}/usage/share", response_model=ConfigUsageShareResponse)
+async def get_sub_user_usage_share(
+    token: str,
+    query=Depends(get_config_usage_share_query),
+    db: AsyncSession = Depends(get_db),
+):
+    """Traffic share per node (config path) for this subscription, default last 7 days."""
+    return await subscription_operator.get_user_usage_share(db, token=token, query=query)
 
 
 @router.get("/{token}/hwids", response_model=UserHWIDListResponse)

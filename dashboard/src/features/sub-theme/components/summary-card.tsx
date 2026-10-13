@@ -16,7 +16,7 @@ interface SummaryCardProps {
 
 export function SummaryCard({ draft, dirty, isSaving, onSave, onReset }: SummaryCardProps) {
   const { t } = useTranslation()
-  const enabledFeatures = [draft.sub_show_install_guide, draft.sub_show_apps, draft.sub_show_usage_chart, draft.sub_allow_mode_toggle].filter(Boolean).length
+  const enabledFeatures = [draft.sub_show_install_guide, draft.sub_show_apps, draft.sub_show_usage_chart, draft.sub_show_config_share, draft.sub_allow_mode_toggle].filter(Boolean).length
 
   return (
     <Card className="lg:sticky lg:top-4">
@@ -40,7 +40,7 @@ export function SummaryCard({ draft, dirty, isSaving, onSave, onReset }: Summary
           </div>
           <div className="flex items-center justify-between gap-3 py-2 last:pb-0">
             <dt className="text-muted-foreground">{st(t, 'subTheme.summary.features', 'Features on')}</dt>
-            <dd className="font-semibold">{st(t, 'subTheme.summary.featuresCount', '{{enabled}} of {{total}}', { enabled: enabledFeatures, total: 4 })}</dd>
+            <dd className="font-semibold">{st(t, 'subTheme.summary.featuresCount', '{{enabled}} of {{total}}', { enabled: enabledFeatures, total: 5 })}</dd>
           </div>
         </dl>
 

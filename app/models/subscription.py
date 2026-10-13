@@ -309,6 +309,7 @@ class SubscriptionInboundData(BaseModel):
 
 class SubscriptionUsageQuery(BaseModel):
     period: Period = Field(default=Period.hour)
+    group_by_node: bool = Field(default=False)
     start: dt | None = Field(default=None, examples=["2024-01-01T00:00:00+03:30"])
     end: dt | None = Field(default=None, examples=["2024-01-31T23:59:59+03:30"])
 
@@ -318,6 +319,36 @@ class SubscriptionUsageQuery(BaseModel):
         if not value:
             return value
         return fix_datetime_timezone(value)
+
+
+class ConfigUsageShareQuery(BaseModel):
+    """Range for the per-node (config path) traffic share. Defaults to the last 7 days."""
+
+    start: dt | None = Field(default=None, examples=["2024-01-01T00:00:00+03:30"])
+    end: dt | None = Field(default=None, examples=["2024-01-31T23:59:59+03:30"])
+
+    @field_validator("start", "end", mode="before")
+    @classmethod
+    def validate_datetimes(cls, value):
+        if not value:
+            return value
+        return fix_datetime_timezone(value)
+
+
+class ConfigUsageShareItem(BaseModel):
+    node_id: int | None = None
+    name: str
+    bytes: int = 0
+    percent: float = 0.0
+
+
+class ConfigUsageShareResponse(BaseModel):
+    """Traffic share per node ("path") for one user over a time range, sorted by usage desc."""
+
+    total_bytes: int = 0
+    items: list[ConfigUsageShareItem] = Field(default_factory=list)
+    start: dt | None = None
+    end: dt | None = None
 
 
 class SubscriptionHeaders(BaseModel):

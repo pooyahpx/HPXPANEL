@@ -16,6 +16,9 @@ export const THEME_DEFAULTS: Record<string, { name: string; tag: string; descrip
   nova: { name: 'Nova', tag: 'Glass', description: 'Soft frosted-glass cards over a teal and cyan mesh, with a floating status orb.' },
   atlas: { name: 'Atlas', tag: 'Ops', description: 'A clean operations dashboard: slate and emerald, crisp cards, subtle grid and dense but tidy data.' },
   pulse: { name: 'Pulse', tag: 'Kinetic', description: 'Electric cyan and lime on near-black with live status pulses and shimmering call-to-actions.' },
+  ember: { name: 'Ember', tag: 'Industrial', description: 'Warm charcoal with amber accents, a bold status band, square cards and a strong single-column mobile stack.' },
+  folio: { name: 'Folio', tag: 'Swiss', description: 'Near-black and white with a lime accent: asymmetric hero, dense link list and crisp hairlines.' },
+  harbor: { name: 'Harbor', tag: 'Calm ops', description: 'Deep slate and sky blue: a horizontal KPI strip, a soft status card and a very mobile-friendly layout.' },
 }
 
 export const themeText = (t: TFunction, theme: string, field: 'name' | 'tag' | 'description'): string =>

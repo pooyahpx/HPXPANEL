@@ -12,6 +12,9 @@ const FONT_PAIRS: Record<SubTheme, string> = {
   nova: 'Syne · Manrope',
   atlas: 'Outfit · Source Sans 3',
   pulse: 'Space Grotesk · IBM Plex Sans',
+  ember: 'Space Grotesk',
+  folio: 'Outfit',
+  harbor: 'Manrope',
 }
 
 interface ThemeCardProps {

@@ -49,6 +49,12 @@ const LINKS = [
   { proto: 'TROJAN', url: 'trojan://9c1d...e44a@hpx.example.com:443?sni=hpx.example.com#HPX-3' },
 ]
 const APPS = ['Hiddify', 'v2rayN', 'Streisand']
+const SHARE: [string, number, string][] = [
+  ['Frankfurt · VLESS', 54.2, '22.3 GB'],
+  ['Amsterdam · Trojan', 31.6, '13.0 GB'],
+  ['Panel / Unknown', 14.2, '5.9 GB'],
+]
+const SHARE_TITLE = 'Traffic by path'
 const BARS = [34, 52, 41, 68, 47, 82, 58, 74, 49, 63, 88, 55]
 const MONO = '"JetBrains Mono", ui-monospace, monospace'
 
@@ -734,12 +740,349 @@ function PulseLayout({ ctx }: { ctx: Ctx }) {
   )
 }
 
+/** Ranked "traffic by path" bars with percentages; the top row is highlighted. */
+function ShareBars({ ctx, radius, rowStyle, label }: { ctx: Ctx; radius: number; rowStyle?: CSSProperties; label?: string }) {
+  const { p } = ctx
+  return (
+    <div className="space-y-2.5">
+      {SHARE.map(([name, pct, size], i) => (
+        <div key={name} className="p-2" style={rowStyle}>
+          <div className="flex items-center justify-between gap-2 text-[11px]">
+            <span className="flex min-w-0 items-center gap-2 font-semibold">
+              <span className="truncate">{name}</span>
+              {i === 0 && (
+                <span className="shrink-0 px-1.5 py-px text-[8px] font-bold tracking-widest uppercase" style={{ background: p.primary, color: p.onPrimary, borderRadius: Math.min(radius, 6) }}>
+                  {label ?? 'Most used'}
+                </span>
+              )}
+            </span>
+            <span className="shrink-0 tabular-nums">
+              <span className="font-bold">{pct}%</span> <span className="opacity-60">{size}</span>
+            </span>
+          </div>
+          <div className="mt-1.5 h-2 overflow-hidden" style={{ background: p.muted, borderRadius: radius }}>
+            <div className="h-full" style={{ width: `${pct}%`, background: i === 0 ? p.primary : `${p.primary}88`, borderRadius: radius }} />
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/* ------------------------------ EMBER ------------------------------ */
+function EmberLayout({ ctx }: { ctx: Ctx }) {
+  const { p, tx, surface } = ctx
+  const display: CSSProperties = { fontFamily: '"Space Grotesk", system-ui, sans-serif' }
+  const plate: CSSProperties = { ...surface, borderTop: `3px solid ${p.primary}` }
+  return (
+    <div className="mx-auto max-w-3xl space-y-3 p-4 md:p-6" style={display}>
+      <div className="flex items-center justify-between text-[11px] font-bold tracking-[0.2em] uppercase">
+        <span className="flex items-center gap-2">
+          <span className="block size-4" style={{ background: p.primary, borderRadius: 2 }} />
+          {tx.brand}
+        </span>
+        <span className="opacity-60">sub // 01</span>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 px-4 py-3" style={{ background: p.primary, color: p.onPrimary, borderRadius: ctx.skin.radius }}>
+        <span className="text-3xl leading-none font-bold uppercase md:text-4xl" style={{ letterSpacing: '-0.02em' }}>
+          {tx.status}
+        </span>
+        <span className="text-xs font-bold tracking-widest uppercase opacity-80">
+          {tx.expires} · {tx.expiresValue}
+        </span>
+        <span className="ms-auto text-2xl font-bold tabular-nums">68%</span>
+      </div>
+      <div className="h-2" style={{ background: p.muted }}>
+        <div className="h-full w-[68%]" style={{ background: p.accent }} />
+      </div>
+
+      <div>
+        <h3 className="text-2xl leading-tight font-bold uppercase md:text-3xl" style={{ letterSpacing: '-0.02em' }}>
+          {tx.heroTitle}
+        </h3>
+        <div className="text-[11px] opacity-60" style={{ fontFamily: MONO }}>
+          @{tx.heroSubtitle}
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 p-2" style={plate}>
+        <span className="min-w-0 flex-1 basis-40 truncate ps-1 text-[11px] opacity-70" style={{ fontFamily: MONO }}>
+          https://sub.example.com/sub/aB3dE9
+        </span>
+        <Btn ctx={ctx}>{tx.copy}</Btn>
+        <Btn ctx={ctx} ghost>
+          {tx.qr}
+        </Btn>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        {[
+          [tx.used, '41.2 GB'],
+          [tx.remaining, '18.8 GB'],
+          ['Lifetime', '212.4 GB'],
+          ['Last online', '2 min ago'],
+        ].map(([k, v]) => (
+          <div key={k} className="p-3" style={plate}>
+            <div className="text-[9px] font-bold tracking-widest uppercase opacity-60">{k}</div>
+            <div className="mt-0.5 text-lg font-bold tabular-nums">{v}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={plate}>
+        <div className="px-3 py-2 text-xs font-bold tracking-widest uppercase" style={{ borderBottom: hairline(p) }}>
+          {tx.links}
+        </div>
+        <div className="space-y-2 p-3">
+          {LINKS.map(l => (
+            <div key={l.proto} className="flex flex-wrap items-center gap-2 p-2" style={{ border: hairline(p), background: `${p.muted}66` }}>
+              <span className="px-2 py-0.5 text-[9px] font-bold" style={{ background: p.primary, color: p.onPrimary }}>
+                {l.proto}
+              </span>
+              <span className="min-w-0 flex-1 basis-32 truncate text-[10px] opacity-75" style={{ fontFamily: MONO }}>
+                {l.url}
+              </span>
+              <Btn ctx={ctx}>{tx.copy}</Btn>
+              <Btn ctx={ctx} ghost>
+                {tx.qr}
+              </Btn>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="p-3" style={plate}>
+        <SectionTitle>{SHARE_TITLE}</SectionTitle>
+        <ShareBars ctx={ctx} radius={1} />
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-2">
+        <div className="p-3" style={plate}>
+          <SectionTitle>{tx.apps}</SectionTitle>
+          <AppRow ctx={ctx} cardStyle={{ border: hairline(p), background: `${p.muted}55` }} grid="grid-cols-1" compact />
+        </div>
+        <div style={plate}>
+          <div className="px-3 pt-3 text-xs font-bold">{tx.chart}</div>
+          <Chart ctx={ctx} radius={1} />
+        </div>
+      </div>
+      <Support ctx={ctx} style={{ borderTop: hairline(p), paddingTop: 12 }} />
+    </div>
+  )
+}
+
+/* ------------------------------ FOLIO ------------------------------ */
+function FolioLayout({ ctx }: { ctx: Ctx }) {
+  const { p, tx } = ctx
+  const rule = `1px solid ${p.fg}`
+  return (
+    <div className="mx-auto max-w-4xl space-y-6 p-5 md:p-8" style={{ fontFamily: '"Outfit", system-ui, sans-serif' }}>
+      <div className="flex items-center justify-between pb-2 text-[11px] font-semibold tracking-[0.14em] uppercase" style={{ borderBottom: rule }}>
+        <span>{tx.brand}</span>
+        <span className="opacity-60">No. 01 — {tx.kicker}</span>
+      </div>
+
+      <div className="grid items-start gap-4 md:grid-cols-[1fr_auto] md:gap-8">
+        <div>
+          <h3 className="text-5xl md:text-7xl" style={ctx.skin.titleStyle}>
+            {tx.heroTitle}
+          </h3>
+          <div className="mt-3 text-sm opacity-60">@{tx.heroSubtitle}</div>
+        </div>
+        <div className="md:text-end">
+          <span className="inline-block px-3 py-1 text-xs font-bold tracking-[0.18em] uppercase" style={{ background: p.primary, color: p.onPrimary }}>
+            {tx.status}
+          </span>
+          <div className="mt-2 text-[10px] tracking-widest uppercase opacity-60">{tx.expires}</div>
+          <div className="text-2xl font-bold tabular-nums">{tx.expiresValue}</div>
+        </div>
+      </div>
+
+      <div style={{ borderTop: rule }}>
+        <div className="flex items-center justify-between py-1.5 text-[10px] font-semibold tracking-widest uppercase opacity-70" style={{ borderBottom: hairline(p) }}>
+          <span>
+            {tx.used} 41.2 GB / 60 GB
+          </span>
+          <span>68%</span>
+        </div>
+        <div className="h-1.5" style={{ background: p.muted }}>
+          <div className="h-full w-[68%]" style={{ background: p.primary }} />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4" style={{ borderTop: rule, borderBottom: hairline(p) }}>
+        {[
+          [tx.used, '41.2 GB'],
+          [tx.remaining, '18.8 GB'],
+          ['Lifetime', '212.4 GB'],
+          ['Last online', '2 min ago'],
+        ].map(([k, v], i) => (
+          <div key={k} className="px-3 py-3" style={{ borderInlineStart: i ? hairline(p) : undefined }}>
+            <div className="text-[9px] font-semibold tracking-widest uppercase opacity-60">{k}</div>
+            <div className="text-xl font-bold tabular-nums">{v}</div>
+          </div>
+        ))}
+      </div>
+
+      <div>
+        <div className="mb-1 flex items-center justify-between text-xs font-bold tracking-widest uppercase">
+          <span>{tx.links}</span>
+          <span className="opacity-50">03</span>
+        </div>
+        <div style={{ borderTop: rule }}>
+          {LINKS.map((l, i) => (
+            <div key={l.proto} className="grid grid-cols-[auto_1fr_auto] items-center gap-x-3 gap-y-1.5 py-2" style={{ borderBottom: hairline(p) }}>
+              <span className="text-[10px] opacity-50 tabular-nums">0{i + 1}</span>
+              <span className="text-[11px] font-bold tracking-widest" style={{ color: p.primary }}>
+                {l.proto}
+              </span>
+              <span className="flex gap-1.5">
+                <Btn ctx={ctx} className="!px-2.5 !py-1">
+                  {tx.copy}
+                </Btn>
+                <Btn ctx={ctx} ghost className="!px-2.5 !py-1">
+                  {tx.qr}
+                </Btn>
+              </span>
+              <span className="col-span-3 truncate text-[10px] opacity-70" style={{ fontFamily: MONO }}>
+                {l.url}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <div className="mb-2 text-xs font-bold tracking-widest uppercase">{SHARE_TITLE}</div>
+        <div style={{ borderTop: rule }} className="pt-3">
+          <ShareBars ctx={ctx} radius={0} />
+        </div>
+      </div>
+
+      <div className="grid gap-6 md:grid-cols-2">
+        <div>
+          <div className="mb-1 text-xs font-bold tracking-widest uppercase">{tx.apps}</div>
+          <div className="pt-2" style={{ borderTop: rule }}>
+            <AppRow ctx={ctx} cardStyle={{ border: hairline(p) }} grid="grid-cols-1" compact />
+          </div>
+        </div>
+        <div>
+          <div className="mb-1 text-xs font-bold tracking-widest uppercase">{tx.chart}</div>
+          <div style={{ borderTop: rule }}>
+            <Chart ctx={ctx} radius={0} thin />
+          </div>
+        </div>
+      </div>
+      <Support ctx={ctx} style={{ borderTop: rule, paddingTop: 12 }} />
+    </div>
+  )
+}
+
+/* ------------------------------ HARBOR ------------------------------ */
+function HarborLayout({ ctx }: { ctx: Ctx }) {
+  const { p, tx, surface } = ctx
+  const card: CSSProperties = { ...surface, borderRadius: 16 }
+  return (
+    <div className="mx-auto max-w-3xl space-y-4 p-4 md:p-6" style={{ fontFamily: '"Manrope", system-ui, sans-serif' }}>
+      <div className="flex items-center justify-between">
+        <span className="flex items-center gap-2 text-sm font-extrabold tracking-[0.1em]">
+          <span className="block size-6" style={{ background: p.primary, borderRadius: 9 }} />
+          {tx.brand}
+        </span>
+        <span className="px-2.5 py-1 text-[10px] font-bold" style={{ background: `${p.ok}22`, color: p.ok, borderRadius: 999 }}>
+          ● {tx.status}
+        </span>
+      </div>
+
+      <div>
+        <h3 className="text-2xl font-extrabold md:text-3xl" style={{ letterSpacing: '-0.02em' }}>
+          {tx.heroTitle}
+        </h3>
+        <div className="text-xs opacity-60">@{tx.heroSubtitle}</div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        {[
+          [tx.used, '41.2 GB'],
+          [tx.remaining, '18.8 GB'],
+          [tx.expires, tx.expiresValue],
+        ].map(([k, v]) => (
+          <div key={k} className="px-4 py-3" style={card}>
+            <div className="text-[10px] font-bold tracking-widest uppercase opacity-60">{k}</div>
+            <div className="mt-0.5 text-xl font-extrabold tabular-nums">{v}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-5 p-5" style={card}>
+        <Gauge ctx={ctx} size={120} thick={12} label />
+        <div className="min-w-[200px] flex-1 space-y-3">
+          <div className="text-2xl font-extrabold" style={{ color: p.ok }}>
+            {tx.status}
+          </div>
+          <div className="h-2.5 overflow-hidden rounded-full" style={{ background: p.muted }}>
+            <div className="h-full w-[68%] rounded-full" style={{ background: p.ok }} />
+          </div>
+          <div className="flex flex-wrap items-center gap-2 p-1.5 ps-3" style={{ border: hairline(p), borderRadius: 12, background: `${p.muted}66` }}>
+            <span className="min-w-0 flex-1 basis-32 truncate text-[10px] opacity-70" style={{ fontFamily: MONO }}>
+              https://sub.example.com/sub/aB3dE9
+            </span>
+            <Btn ctx={ctx}>{tx.copy}</Btn>
+            <Btn ctx={ctx} ghost>
+              {tx.qr}
+            </Btn>
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-2.5 p-4" style={card}>
+        <SectionTitle>{tx.links}</SectionTitle>
+        {LINKS.map(l => (
+          <div key={l.proto} className="flex flex-wrap items-center gap-2 p-2" style={{ border: hairline(p), borderRadius: 12, background: `${p.muted}55` }}>
+            <span className="px-2.5 py-0.5 text-[9px] font-extrabold" style={{ background: `${p.primary}26`, color: p.primary, borderRadius: 999 }}>
+              {l.proto}
+            </span>
+            <span className="min-w-0 flex-1 basis-32 truncate text-[10px] opacity-75" style={{ fontFamily: MONO }}>
+              {l.url}
+            </span>
+            <Btn ctx={ctx}>{tx.copy}</Btn>
+            <Btn ctx={ctx} ghost>
+              {tx.qr}
+            </Btn>
+          </div>
+        ))}
+      </div>
+
+      <div className="p-4" style={card}>
+        <SectionTitle>{SHARE_TITLE}</SectionTitle>
+        <ShareBars ctx={ctx} radius={999} rowStyle={{ borderRadius: 12 }} />
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="p-4" style={card}>
+          <SectionTitle>{tx.apps}</SectionTitle>
+          <AppRow ctx={ctx} cardStyle={{ border: hairline(p), borderRadius: 12, background: `${p.muted}55` }} grid="grid-cols-1" compact />
+        </div>
+        <div style={card}>
+          <div className="px-4 pt-4 text-xs font-bold">{tx.chart}</div>
+          <Chart ctx={ctx} radius={6} thin />
+        </div>
+      </div>
+      <Support ctx={ctx} style={{ borderTop: hairline(p), paddingTop: 12 }} />
+    </div>
+  )
+}
+
 const LAYOUTS: Record<SubTheme, (props: { ctx: Ctx }) => ReactNode> = {
   terminal: TerminalLayout,
   aurora: AuroraLayout,
   nova: NovaLayout,
   atlas: AtlasLayout,
   pulse: PulseLayout,
+  ember: EmberLayout,
+  folio: FolioLayout,
+  harbor: HarborLayout,
 }
 
 const MODES: { value: SubThemeMode; icon: typeof Sun }[] = [
@@ -836,7 +1179,7 @@ export function ThemePreview({ theme, mode, disabled, onModeChange }: ThemePrevi
         <div
           key={`${theme}-${mode}`}
           aria-label={title}
-          className="relative min-h-[420px] overflow-hidden transition-colors duration-300"
+          className="relative min-h-[420px] overflow-x-auto transition-colors duration-300 [&>*]:min-w-0"
           style={{ background: p.bg, backgroundImage: skin.background?.(p), backgroundSize: skin.backgroundSize, color: p.fg, fontFamily: skin.fontFamily }}
         >
           <Layout ctx={ctx} />

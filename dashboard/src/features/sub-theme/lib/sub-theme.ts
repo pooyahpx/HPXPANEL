@@ -1,6 +1,6 @@
 import type { Subscription, SubTheme, SubThemeMode } from '@/service/api'
 
-export const SUB_THEME_IDS: readonly SubTheme[] = ['terminal', 'aurora', 'nova', 'atlas', 'pulse'] as const
+export const SUB_THEME_IDS: readonly SubTheme[] = ['terminal', 'aurora', 'nova', 'atlas', 'pulse', 'ember', 'folio', 'harbor'] as const
 
 export const DEFAULT_SUB_THEME: SubTheme = 'terminal'
 export const DEFAULT_SUB_THEME_MODE: SubThemeMode = 'dark'
@@ -11,6 +11,7 @@ export interface SubThemeDraft {
   sub_show_install_guide: boolean
   sub_show_apps: boolean
   sub_show_usage_chart: boolean
+  sub_show_config_share: boolean
   sub_allow_mode_toggle: boolean
 }
 
@@ -23,6 +24,7 @@ export const draftFromSubscription = (subscription?: Subscription | null): SubTh
   sub_show_install_guide: subscription?.sub_show_install_guide ?? true,
   sub_show_apps: subscription?.sub_show_apps ?? true,
   sub_show_usage_chart: subscription?.sub_show_usage_chart ?? true,
+  sub_show_config_share: subscription?.sub_show_config_share ?? true,
   sub_allow_mode_toggle: subscription?.sub_allow_mode_toggle ?? false,
 })
 

@@ -4275,7 +4275,12 @@
     "activeNextPlanTitle": "Activate User Next Plan",
     "activeNextPlanPrompt": "Are you sure you want to activate next plan for «{{name}}»?",
     "activeNextPlanSubmit": "Activate Next Plan",
-    "downloadStarted": "Download started"
+    "downloadStarted": "Download started",
+    "usageShare": {
+      "title": "Traffic by path",
+      "hint": "Share of traffic per node",
+      "mostUsed": "Most used"
+    }
   },
   "setOwnerModal": {
     "title": "Set Owner",
@@ -4625,6 +4630,21 @@
         "name": "Pulse",
         "tag": "Kinetic",
         "description": "Electric cyan and lime on near-black with live status pulses and shimmering call-to-actions."
+      },
+      "ember": {
+        "name": "Ember",
+        "tag": "Industrial",
+        "description": "Warm charcoal with amber accents, a bold status band, square cards and a strong single-column mobile stack."
+      },
+      "folio": {
+        "name": "Folio",
+        "tag": "Swiss",
+        "description": "Near-black and white with a lime accent: asymmetric hero, dense link list and crisp hairlines."
+      },
+      "harbor": {
+        "name": "Harbor",
+        "tag": "Calm ops",
+        "description": "Deep slate and sky blue: a horizontal KPI strip, a soft status card and a very mobile-friendly layout."
       }
     },
     "mode": {
@@ -4648,6 +4668,10 @@
       "usageChart": {
         "label": "Usage chart",
         "hint": "Traffic usage statistics with time range selector."
+      },
+      "configShare": {
+        "label": "Traffic by path",
+        "hint": "Ranked share of traffic per node (config path) with percentages; the most used path is highlighted."
       },
       "modeToggle": {
         "label": "Allow light/dark toggle",

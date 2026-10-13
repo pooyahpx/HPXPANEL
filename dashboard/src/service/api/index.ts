@@ -118,6 +118,11 @@ export type GetUsersUsageParams = {
   admin?: string[] | null
 }
 
+export type GetUsersUsageShareParams = {
+  start?: string | null
+  end?: string | null
+  admin?: string[] | null
+}
 export type GetUserUsageByIdParams = {
   period?: Period
   node_id?: number | null
@@ -15820,6 +15825,49 @@ export function useGetUsersUsage<TData = Awaited<ReturnType<typeof getUsersUsage
   return query
 }
 
+/**
+ * Most used configs (paths by node) across the admin's users. Defaults to the last 7 days.
+ * @summary Get Users Usage Share
+ */
+export const getUsersUsageShare = (params?: GetUsersUsageShareParams, signal?: AbortSignal) => {
+  return orvalFetcher<ConfigUsageShareResponse>({ url: `/api/users/usage/share`, method: 'GET', params, signal })
+}
+
+export const getGetUsersUsageShareQueryKey = (params?: GetUsersUsageShareParams) => {
+  return [`/api/users/usage/share`, ...(params ? [params] : [])] as const
+}
+
+export const getGetUsersUsageShareQueryOptions = <TData = Awaited<ReturnType<typeof getUsersUsageShare>>, TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>>(
+  params?: GetUsersUsageShareParams,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getUsersUsageShare>>, TError, TData>> },
+) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey = queryOptions?.queryKey ?? getGetUsersUsageShareQueryKey(params)
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getUsersUsageShare>>> = ({ signal }) => getUsersUsageShare(params, signal)
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<Awaited<ReturnType<typeof getUsersUsageShare>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetUsersUsageShareQueryResult = NonNullable<Awaited<ReturnType<typeof getUsersUsageShare>>>
+export type GetUsersUsageShareQueryError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>
+
+/**
+ * @summary Get Users Usage Share
+ */
+export function useGetUsersUsageShare<TData = Awaited<ReturnType<typeof getUsersUsageShare>>, TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>>(
+  params?: GetUsersUsageShareParams,
+  options?: { query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getUsersUsageShare>>, TError, TData>> },
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getGetUsersUsageShareQueryOptions(params, options)
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
+}
 /**
  * Get one users activity/status count metric from usage rows.
  * @summary Get Users Count Metric

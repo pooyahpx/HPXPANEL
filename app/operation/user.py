@@ -35,6 +35,7 @@ from app.db.crud.user import (
     get_all_users_usages,
     get_existing_usernames,
     get_expired_users,
+    get_panel_usage_by_node,
     get_user_count_metric_stats,
     get_user_usage_by_node,
     get_user_usages,
@@ -61,7 +62,6 @@ from app.db.models import User, UserStatus, UserTemplate
 from app.models.admin import AdminDetails
 from app.models.proxy import ProxyTable
 from app.models.settings import HWIDSettings
-from app.models.subscription import ConfigUsageShareQuery, ConfigUsageShareResponse
 from app.models.stats import (
     Period,
     UserCountMetric,
@@ -69,6 +69,7 @@ from app.models.stats import (
     UserUsageStatsList,
     validate_user_count_metric_scope,
 )
+from app.models.subscription import ConfigUsageShareQuery, ConfigUsageShareResponse, PanelUsageShareQuery
 from app.models.user import (
     BulkOperationDryRunResponse,
     BulkUser,
@@ -126,11 +127,11 @@ from app.utils.helpers import (
     resolve_subscription_url_prefix,
 )
 from app.utils.hwid import resolve_effective_hwid_settings
-from app.utils.usage_share import build_config_usage_share
 from app.utils.jwt import create_subscription_token
 from app.utils.logger import get_logger
 from app.utils.openvpn import ensure_openvpn_credentials
 from app.utils.system import readable_duration, readable_size
+from app.utils.usage_share import build_config_usage_share
 from app.utils.wireguard import ensure_unique_wireguard_public_key, prepare_wireguard_keys
 from config import subscription_env_settings, usage_settings
 
@@ -1176,8 +1177,9 @@ class UserOperation(BaseOperation):
             await self.raise_error(message=str(exc), code=400, db=db)
 
         if budget_cost > 0 and db_admin is not None:
-            from app.db.models import CreateBudgetLedger
             from sqlalchemy import select, update
+
+            from app.db.models import CreateBudgetLedger
 
             row_id = (
                 await db.execute(
@@ -1999,6 +2001,27 @@ class UserOperation(BaseOperation):
         start, end = await self.validate_dates(start, end, True)
 
         rows = await get_user_usage_by_node(db, db_user.id, start, end)
+        # Without node-stats permission only the aggregate is returned (no per-node breakdown).
+        if not _has_permission(admin, "nodes", "stats"):
+            return ConfigUsageShareResponse(total_bytes=sum(used for _, used in rows), items=[], start=start, end=end)
+        node_names = await get_node_names(db, [node_id for node_id, _ in rows])
+        return build_config_usage_share(rows, node_names, start=start, end=end)
+
+    async def get_panel_usage_share(
+        self,
+        db: AsyncSession,
+        admin: AdminDetails,
+        query: PanelUsageShareQuery,
+    ) -> ConfigUsageShareResponse:
+        """Per-node (config path) traffic share across the admin's users, default last 7 days."""
+        start = query.start
+        end = query.end or dt.now((start.tzinfo if start and start.tzinfo else None) or UTC)
+        start = start or (end - td(days=7))
+        start, end = await self.validate_dates(start, end, True)
+
+        admins_filter = await _resolve_users_usage_admins_filter(self, db, admin, query.owner)
+
+        rows = await get_panel_usage_by_node(db, start, end, admins=admins_filter)
         # Without node-stats permission only the aggregate is returned (no per-node breakdown).
         if not _has_permission(admin, "nodes", "stats"):
             return ConfigUsageShareResponse(total_bytes=sum(used for _, used in rows), items=[], start=start, end=end)

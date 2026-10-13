@@ -10,7 +10,7 @@ from app.models.stats import (
     UserCountMetricStatsList,
     UserUsageStatsList,
 )
-from app.models.subscription import ConfigUsageShareQuery, ConfigUsageShareResponse
+from app.models.subscription import ConfigUsageShareQuery, ConfigUsageShareResponse, PanelUsageShareQuery
 from app.models.user import (
     BulkUser,
     BulkUsersActionResponse,
@@ -47,6 +47,7 @@ from .authentication import require_permission, require_scope_all
 from .dependencies import (
     get_config_usage_share_query,
     get_expired_users_query,
+    get_panel_usage_share_query,
     get_user_list_query,
     get_user_simple_list_query,
     get_user_usage_query,
@@ -620,6 +621,20 @@ async def get_users_usage(
 ):
     """Get all users usage"""
     return await user_operator.get_users_usage(db, admin=admin, query=query)
+
+
+@router.get(
+    "s/usage/share",
+    response_model=ConfigUsageShareResponse,
+    responses={403: responses._403},
+)
+async def get_users_usage_share(
+    query: Annotated[PanelUsageShareQuery, Depends(get_panel_usage_share_query)],
+    db: AsyncSession = Depends(get_db),
+    admin: AdminDetails = Depends(require_permission("users", "read")),
+):
+    """Most used configs (paths by node) across the admin's users. Defaults to the last 7 days."""
+    return await user_operator.get_panel_usage_share(db, admin=admin, query=query)
 
 
 @router.get("s/counts/{metric}", response_model=UserCountMetricStatsList)

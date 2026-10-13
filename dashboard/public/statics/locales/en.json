@@ -4282,6 +4282,23 @@
       "mostUsed": "Most used"
     }
   },
+  "topConfigs": {
+    "title": "Most used configs",
+    "subtitle": "Ranked by traffic share per server (node/path)",
+    "range": "Time range",
+    "ranges": {
+      "24h": "Last 24h",
+      "7d": "Last 7d",
+      "30d": "Last 30d",
+      "90d": "Last 90d"
+    },
+    "mostUsed": "Most used",
+    "empty": "No traffic recorded in this period.",
+    "error": "Could not load config usage.",
+    "locked": "You need the \"node statistics\" permission to see which configs are used the most.",
+    "total": "Total traffic",
+    "note": "Traffic is tracked per server (node), not per inbound."
+  },
   "setOwnerModal": {
     "title": "Set Owner",
     "currentOwner": "Current owner:",

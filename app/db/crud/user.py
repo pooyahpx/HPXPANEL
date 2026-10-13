@@ -1,5 +1,5 @@
-from collections.abc import Sequence
 from collections import defaultdict
+from collections.abc import Sequence
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta
 from typing import Literal
@@ -801,6 +801,41 @@ async def get_user_usage_by_node(
             NodeUserUsage.created_at >= to_utc_for_filter(start),
             NodeUserUsage.created_at < to_utc_for_filter(end),
         )
+        .group_by(node_key)
+        .order_by(total.desc())
+    )
+    result = await db.execute(stmt)
+    return [(int(row.node_id or 0), int(row.total_traffic or 0)) for row in result.all()]
+
+
+async def get_panel_usage_by_node(
+    db: AsyncSession,
+    start: datetime,
+    end: datetime,
+    admins: Sequence[str] | None = None,
+) -> list[tuple[int, int]]:
+    """
+    Sum panel-wide traffic per node over [start, end), optionally limited to users owned by the given admins.
+
+    Returns (node_id, total_bytes) rows. Rows without a node (legacy/panel traffic) are
+    bucketed under node_id 0. Highest usage first.
+    """
+    total = func.sum(NodeUserUsage.used_traffic)
+    node_key = func.coalesce(NodeUserUsage.node_id, 0)
+    conditions = [
+        NodeUserUsage.created_at >= to_utc_for_filter(start),
+        NodeUserUsage.created_at < to_utc_for_filter(end),
+    ]
+    from_clause = NodeUserUsage.__table__
+    admins_filter = list(admins) if admins else None
+    if admins_filter:
+        from_clause = from_clause.join(User, User.id == NodeUserUsage.user_id).join(Admin, Admin.id == User.admin_id)
+        conditions.append(Admin.username.in_(admins_filter))
+
+    stmt = (
+        select(node_key.label("node_id"), total.label("total_traffic"))
+        .select_from(from_clause)
+        .where(and_(*conditions))
         .group_by(node_key)
         .order_by(total.desc())
     )

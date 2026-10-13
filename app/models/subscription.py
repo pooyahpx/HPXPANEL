@@ -8,7 +8,7 @@ from __future__ import annotations
 from datetime import datetime as dt
 from typing import Any
 
-from pydantic import BaseModel, Field, computed_field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
 
 from app.models.host import FinalMask
 from app.models.stats import Period
@@ -333,6 +333,13 @@ class ConfigUsageShareQuery(BaseModel):
         if not value:
             return value
         return fix_datetime_timezone(value)
+
+
+class PanelUsageShareQuery(ConfigUsageShareQuery):
+    """Panel-wide per-node traffic share; optionally filtered by owning admin usernames."""
+
+    owner: list[str] | None = Field(default=None, alias="admin")
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class ConfigUsageShareItem(BaseModel):

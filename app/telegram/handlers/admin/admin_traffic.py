@@ -9,7 +9,11 @@ from aiogram.types import CallbackQuery, Message
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.crud.admin import get_admin_by_id, list_admins_with_telegram
+from sqlalchemy import select
+from sqlalchemy.orm import joinedload
+
+from app.db.crud.admin import get_admin_by_id
+from app.db.models import Admin, AdminRole, AdminStatus
 from app.models.admin import AdminDetails, AdminModify
 from app.operation import OperatorType
 from app.operation.admin import AdminOperation
@@ -36,6 +40,28 @@ async def _lang(db: AsyncSession, telegram_id: int) -> str:
     return (await get_telegram_lang(db, telegram_id)) or "fa"
 
 
+async def _list_editable_admins(db: AsyncSession) -> list[Admin]:
+    """All non-owner, non-disabled panel admins (Telegram-linked or dashboard-only)."""
+    stmt = (
+        select(Admin)
+        .options(joinedload(Admin.role))
+        .where(Admin.status != AdminStatus.disabled)
+        .where(Admin.role.has(AdminRole.is_owner.is_(False)))
+        .order_by(Admin.username.asc())
+    )
+    return list((await db.execute(stmt)).unique().scalars().all())
+
+
+def _is_owner_admin(target: Admin | None) -> bool:
+    if target is None:
+        return True
+    role = getattr(target, "role", None)
+    if role is not None and bool(getattr(role, "is_owner", False)):
+        return True
+    # Legacy fallback when role is not loaded
+    return int(getattr(target, "role_id", 0) or 0) == 1
+
+
 def _usage_line(target) -> str:
     used = int(target.used_traffic or 0)
     limit = int(target.data_limit or 0)
@@ -52,7 +78,7 @@ async def _show(event: CallbackQuery, text: str, markup) -> None:
 
 async def _render_list(event: CallbackQuery, db: AsyncSession) -> None:
     lang = await _lang(db, event.from_user.id)
-    admins = [a for a in await list_admins_with_telegram(db) if a.role_id != 1]
+    admins = await _list_editable_admins(db)
     kb = InlineKeyboardBuilder()
     cb = AdminPanel.Callback
     if not admins:
@@ -60,7 +86,8 @@ async def _render_list(event: CallbackQuery, db: AsyncSession) -> None:
     else:
         text = rich(lang, "admin_traffic_home")
         for target in admins:
-            label = f"{target.username} · {_usage_line(target)}"
+            tag = "" if getattr(target, "telegram_id", None) else " · 🖥"
+            label = f"{target.username}{tag} · {_usage_line(target)}"
             if len(label) > 60:
                 label = label[:57] + "…"
             kb.button(text=label, callback_data=cb(action=AdminPanelAction.admin_traffic_pick, id=target.id))
@@ -72,7 +99,7 @@ async def _render_list(event: CallbackQuery, db: AsyncSession) -> None:
 async def _render_detail(event: CallbackQuery, db: AsyncSession, admin_id: int) -> None:
     lang = await _lang(db, event.from_user.id)
     target = await get_admin_by_id(db, admin_id, load_users=False, load_usage_logs=False, load_role=True)
-    if target is None or target.role_id == 1:
+    if target is None or _is_owner_admin(target):
         await event.answer(t(lang, "admin_traffic_not_found"), show_alert=True)
         return
     used = int(target.used_traffic or 0)
@@ -114,7 +141,7 @@ async def admin_traffic_set_ask(
 ):
     lang = await _lang(db, event.from_user.id)
     target = await get_admin_by_id(db, callback_data.id, load_users=False, load_usage_logs=False, load_role=True)
-    if target is None or target.role_id == 1:
+    if target is None or _is_owner_admin(target):
         await event.answer(t(lang, "admin_traffic_not_found"), show_alert=True)
         return
     await state.set_state(forms.AdminTrafficSet.waiting_value)
@@ -140,7 +167,7 @@ async def admin_traffic_set_value(event: Message, db: AsyncSession, state: FSMCo
         return
 
     target = await get_admin_by_id(db, int(admin_id), load_users=False, load_usage_logs=False, load_role=True)
-    if target is None or target.role_id == 1:
+    if target is None or _is_owner_admin(target):
         await state.clear()
         await event.answer(t(lang, "admin_traffic_not_found"))
         return
@@ -175,7 +202,7 @@ async def admin_traffic_reset(
 ):
     lang = await _lang(db, event.from_user.id)
     target = await get_admin_by_id(db, callback_data.id, load_users=False, load_usage_logs=False, load_role=True)
-    if target is None or target.role_id == 1:
+    if target is None or _is_owner_admin(target):
         await event.answer(t(lang, "admin_traffic_not_found"), show_alert=True)
         return
     try:

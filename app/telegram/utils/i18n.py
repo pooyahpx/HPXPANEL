@@ -404,8 +404,8 @@ STRINGS: dict[str, dict[str, str]] = {
         "admin_rt_one_missing": "❌ کاربری با این آیدی پیدا نشد.",
         # --- Owner: admin traffic ---
         "btn_admin_traffic": "📊 حجم ادمین‌ها",
-        "admin_traffic_home": "📊 {b}حجم ادمین‌ها{/b}\nیک ادمین را انتخاب کنید:",
-        "admin_traffic_empty": "ادمینی با تلگرام متصل وجود ندارد.",
+        "admin_traffic_home": "📊 {b}حجم ادمین‌ها{/b}\nهمه ادمین‌های پنل (🖥 = فقط داشبورد):\nیک ادمین را انتخاب کنید:",
+        "admin_traffic_empty": "ادمینی در پنل یافت نشد.",
         "admin_traffic_detail": "📊 {b}{username}{/b}\nمصرف: {used}\nسقف: {limit}\nباقی‌مانده: {remaining}",
         "btn_at_set": "✏️ تنظیم حجم باقی‌مانده",
         "btn_at_reset": "♻️ ریست مصرف",
@@ -864,8 +864,8 @@ STRINGS: dict[str, dict[str, str]] = {
         "admin_rt_one_missing": "❌ No user found with that ID.",
         # --- Owner: admin traffic ---
         "btn_admin_traffic": "📊 Admin traffic",
-        "admin_traffic_home": "📊 {b}Admin traffic{/b}\nPick an admin:",
-        "admin_traffic_empty": "No admins with a linked Telegram account.",
+        "admin_traffic_home": "📊 {b}Admin traffic{/b}\nAll panel admins (🖥 = dashboard-only):\nPick an admin:",
+        "admin_traffic_empty": "No panel admins found.",
         "admin_traffic_detail": "📊 {b}{username}{/b}\nUsed: {used}\nLimit: {limit}\nRemaining: {remaining}",
         "btn_at_set": "✏️ Set remaining volume",
         "btn_at_reset": "♻️ Reset used traffic",

@@ -120,9 +120,9 @@ def test_node_status_mapping():
 
 def test_match_host_to_node():
     nodes = [
-        NodeInfo("de-1", "de1.example.com", "connected"),
-        NodeInfo("nl-1", "10.0.0.5", "error"),
-        NodeInfo("fr-1", "fr1.example.com", "connecting"),
+        NodeInfo("de-1", "de1.example.com", ONLINE),
+        NodeInfo("nl-1", "10.0.0.5", OFFLINE),
+        NodeInfo("fr-1", "fr1.example.com", CONNECTING),
     ]
     assert match_host_state(["de1.example.com"], nodes) == ONLINE
     assert match_host_state(["DE1.example.com "], nodes) == ONLINE  # case/space insensitive
@@ -137,12 +137,37 @@ def test_match_host_to_node():
 
 
 def test_match_prefers_best_state_among_matches():
-    nodes = [NodeInfo("a", "x.example.com", "error"), NodeInfo("b", "x.example.com", "connected")]
+    nodes = [NodeInfo("a", "x.example.com", OFFLINE), NodeInfo("b", "x.example.com", ONLINE)]
     assert match_host_state(["x.example.com"], nodes) == ONLINE
 
 
+def test_match_host_to_pulse_iran_ip():
+    """Hosts on reverse tunnels point at Iran IP — Pulse status must drive Online."""
+    from app.telegram.utils.server_status import EndpointInfo, endpoints_from_pulses, pulse_status_to_state
+
+    assert pulse_status_to_state("running") == ONLINE
+    assert pulse_status_to_state("starting") == CONNECTING
+    assert pulse_status_to_state("partial") == CONNECTING
+    assert pulse_status_to_state("unhealthy") == OFFLINE
+    assert pulse_status_to_state("error") == OFFLINE
+
+    class FakePulse:
+        name = "de-tun"
+        enabled = True
+        status = "running"
+        iran_public_ip = "185.10.20.30"
+        abroad_public_ip = "91.1.2.3"
+
+    endpoints = endpoints_from_pulses([FakePulse()])
+    assert {e.address for e in endpoints} == {"185.10.20.30", "91.1.2.3"}
+    assert match_host_state(["185.10.20.30"], endpoints) == ONLINE
+    assert match_host_state(["91.1.2.3"], endpoints) == ONLINE
+    # Still unknown when IP is unrelated
+    assert match_host_state(["8.8.8.8"], endpoints) == UNKNOWN
+
+
 def test_build_rows_dedupes_by_remark():
-    nodes = [NodeInfo("a", "a.example.com", "connected")]
+    nodes = [NodeInfo("a", "a.example.com", ONLINE)]
     rows = build_server_status_rows(
         [
             ("Germany", ["a.example.com"]),

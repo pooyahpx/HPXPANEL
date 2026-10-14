@@ -1531,6 +1531,13 @@ class ShopConfig(Base, CreatedAtUTCMixin):
     tutorial_enabled: Mapped[bool] = mapped_column(server_default="0", default=False)
     tutorial_text: Mapped[str | None] = mapped_column(String(2000), default=None)
     tutorial_url: Mapped[str | None] = mapped_column(String(512), default=None)
+    # Forced channel join (buyers must join before using the bot)
+    force_join_enabled: Mapped[bool] = mapped_column(server_default="0", default=False)
+    force_join_channel_id: Mapped[str | None] = mapped_column(String(128), default=None)
+    force_join_channel_url: Mapped[str | None] = mapped_column(String(512), default=None)
+    # Server status for buyers (hosts of one panel Group)
+    server_status_enabled: Mapped[bool] = mapped_column(server_default="0", default=False)
+    server_status_group_id: Mapped[int | None] = mapped_column(Integer, default=None)
 
 
 class ShopPlan(Base, CreatedAtUTCMixin):

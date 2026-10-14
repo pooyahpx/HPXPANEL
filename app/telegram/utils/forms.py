@@ -147,3 +147,19 @@ class ShopAdminWalletCredit(StatesGroup):
 
 class ShopAdminBroadcast(StatesGroup):
     waiting_message = State()
+
+
+class ShopAdminForceJoinChannel(StatesGroup):
+    waiting_value = State()
+
+
+class ShopAdminForceJoinUrl(StatesGroup):
+    waiting_value = State()
+
+
+class ShopAdminResetTest(StatesGroup):
+    waiting_id = State()
+
+
+class AdminTrafficSet(StatesGroup):
+    waiting_value = State()

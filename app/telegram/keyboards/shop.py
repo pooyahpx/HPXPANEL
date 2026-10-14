@@ -48,6 +48,8 @@ class ShopAction(str, Enum):
     tutorial = "tutorial"
     back = "back"
     pick_seller = "psel"
+    server_status = "srvst"
+    check_join = "chj"
 
 
 class ShopKeyboardCallback(CallbackData, prefix="shop"):
@@ -67,6 +69,7 @@ class ShopHomeKeyboard(InlineKeyboardBuilder):
         show_wallet: bool = False,
         show_referral: bool = False,
         show_tutorial: bool = False,
+        show_server_status: bool = False,
         *args,
         **kwargs,
     ):
@@ -107,6 +110,8 @@ class ShopHomeKeyboard(InlineKeyboardBuilder):
             extras.append(("btn_wallet", ShopAction.wallet))
         if show_referral:
             extras.append(("btn_referral", ShopAction.referral))
+        if show_server_status:
+            extras.append(("btn_server_status", ShopAction.server_status))
         extras.append(("btn_support", ShopAction.support))
         while extras:
             chunk = extras[:2]
@@ -115,6 +120,24 @@ class ShopHomeKeyboard(InlineKeyboardBuilder):
                 self.button(text=t(lang, key), callback_data=cb(action=action))
             rows.append(len(chunk))
         self.button(text=t(lang, "btn_lang"), callback_data=cb(action=ShopAction.lang))
+        rows.append(1)
+        self.adjust(*rows)
+
+
+class ForceJoinKeyboard(InlineKeyboardBuilder):
+    """Gate shown to buyers who have not joined the required channel."""
+
+    def __init__(self, lang: str, channel_url: str | None, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        rows: list[int] = []
+        if channel_url:
+            self.button(text=t(lang, "btn_force_join"), url=channel_url)
+            rows.append(1)
+        self.button(
+            text=t(lang, "btn_force_joined"),
+            callback_data=ShopKeyboardCallback(action=ShopAction.check_join),
+            style=ButtonStyle.SUCCESS,
+        )
         rows.append(1)
         self.adjust(*rows)
 
@@ -321,6 +344,18 @@ class ShopAdminAction(str, Enum):
     add_discount = "adisc"
     toggle_discount = "tdisc"
     delete_discount = "ddisc"
+    force_join = "fj"
+    toggle_force_join = "tfj"
+    set_force_join_channel = "sfjc"
+    set_force_join_url = "sfju"
+    server_status = "ss"
+    toggle_server_status = "tss"
+    set_status_group = "ssg"
+    pick_status_group = "pssg"
+    reset_test = "rt"
+    reset_test_all = "rta"
+    reset_test_all_confirm = "rtac"
+    reset_test_one = "rto"
 
 
 class ShopAdminKeyboard(InlineKeyboardBuilder):
@@ -364,12 +399,108 @@ class ShopAdminKeyboard(InlineKeyboardBuilder):
         )
         self.button(text=t(lang, "btn_set_tutorial"), callback_data=self.Callback(action=ShopAdminAction.set_tutorial))
         self.button(text=t(lang, "btn_broadcast"), callback_data=self.Callback(action=ShopAdminAction.broadcast))
+        self.button(text=t(lang, "btn_force_join_menu"), callback_data=self.Callback(action=ShopAdminAction.force_join))
+        self.button(
+            text=t(lang, "btn_server_status_menu"), callback_data=self.Callback(action=ShopAdminAction.server_status)
+        )
+        self.button(text=t(lang, "btn_reset_test_menu"), callback_data=self.Callback(action=ShopAdminAction.reset_test))
         self.button(text=t(lang, "btn_add_plan"), callback_data=self.Callback(action=ShopAdminAction.add_plan))
         self.button(text=t(lang, "btn_list_plans"), callback_data=self.Callback(action=ShopAdminAction.list_plans))
         self.button(text=t(lang, "btn_discounts"), callback_data=self.Callback(action=ShopAdminAction.discounts))
         self.button(text=t(lang, "btn_pending"), callback_data=self.Callback(action=ShopAdminAction.pending))
         self.button(text=t(lang, "btn_back"), callback_data=self.Callback(action=ShopAdminAction.home, id=-1))
-        self.adjust(2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 2, 2, 1)
+        self.adjust(2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 2, 1, 2, 2, 1)
+
+
+class ShopAdminForceJoinKeyboard(InlineKeyboardBuilder):
+    def __init__(self, lang: str, enabled: bool, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        cb = ShopAdminKeyboard.Callback
+        self.button(
+            text=t(lang, "btn_fj_disable") if enabled else t(lang, "btn_fj_enable"),
+            callback_data=cb(action=ShopAdminAction.toggle_force_join),
+        )
+        self.button(
+            text=t(lang, "btn_fj_set_channel"), callback_data=cb(action=ShopAdminAction.set_force_join_channel)
+        )
+        self.button(text=t(lang, "btn_fj_set_url"), callback_data=cb(action=ShopAdminAction.set_force_join_url))
+        self.button(text=t(lang, "btn_back"), callback_data=cb(action=ShopAdminAction.home))
+        self.adjust(1, 1, 1, 1)
+
+
+class ShopAdminServerStatusKeyboard(InlineKeyboardBuilder):
+    def __init__(self, lang: str, enabled: bool, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        cb = ShopAdminKeyboard.Callback
+        self.button(
+            text=t(lang, "btn_ss_disable") if enabled else t(lang, "btn_ss_enable"),
+            callback_data=cb(action=ShopAdminAction.toggle_server_status),
+        )
+        self.button(text=t(lang, "btn_ss_set_group"), callback_data=cb(action=ShopAdminAction.set_status_group, id=0))
+        self.button(text=t(lang, "btn_back"), callback_data=cb(action=ShopAdminAction.home))
+        self.adjust(1, 1, 1)
+
+
+STATUS_GROUPS_PAGE_SIZE = 8
+
+
+class ShopAdminStatusGroupsKeyboard(InlineKeyboardBuilder):
+    """Paginated list of panel groups; picking one saves ``server_status_group_id``."""
+
+    def __init__(
+        self,
+        lang: str,
+        groups: list[tuple[int, str]],
+        page: int,
+        total: int,
+        selected_id: int | None = None,
+        *args,
+        **kwargs,
+    ):
+        super().__init__(*args, **kwargs)
+        cb = ShopAdminKeyboard.Callback
+        for group_id, name in groups:
+            mark = "✅ " if selected_id is not None and int(group_id) == int(selected_id) else ""
+            label = f"{mark}{name}"
+            if len(label) > 40:
+                label = label[:37] + "…"
+            self.button(text=label, callback_data=cb(action=ShopAdminAction.pick_status_group, id=int(group_id)))
+        nav = 0
+        if page > 0:
+            self.button(text="◀️", callback_data=cb(action=ShopAdminAction.set_status_group, id=page - 1))
+            nav += 1
+        if (page + 1) * STATUS_GROUPS_PAGE_SIZE < total:
+            self.button(text="▶️", callback_data=cb(action=ShopAdminAction.set_status_group, id=page + 1))
+            nav += 1
+        self.button(text=t(lang, "btn_back"), callback_data=cb(action=ShopAdminAction.server_status))
+        rows = [1] * len(groups)
+        if nav:
+            rows.append(nav)
+        rows.append(1)
+        self.adjust(*rows)
+
+
+class ShopAdminResetTestKeyboard(InlineKeyboardBuilder):
+    def __init__(self, lang: str, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        cb = ShopAdminKeyboard.Callback
+        self.button(text=t(lang, "btn_rt_all"), callback_data=cb(action=ShopAdminAction.reset_test_all))
+        self.button(text=t(lang, "btn_rt_one"), callback_data=cb(action=ShopAdminAction.reset_test_one))
+        self.button(text=t(lang, "btn_back"), callback_data=cb(action=ShopAdminAction.home))
+        self.adjust(1, 1, 1)
+
+
+class ShopAdminResetTestConfirmKeyboard(InlineKeyboardBuilder):
+    def __init__(self, lang: str, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        cb = ShopAdminKeyboard.Callback
+        self.button(
+            text=t(lang, "btn_rt_confirm"),
+            callback_data=cb(action=ShopAdminAction.reset_test_all_confirm),
+            style=ButtonStyle.DANGER,
+        )
+        self.button(text=t(lang, "btn_back"), callback_data=cb(action=ShopAdminAction.reset_test))
+        self.adjust(1, 1)
 
 
 # id encoding for payment admin callbacks

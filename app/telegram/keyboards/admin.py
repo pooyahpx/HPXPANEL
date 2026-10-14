@@ -38,6 +38,10 @@ class AdminPanelAction(str, Enum):
     alert_settings = "alert_settings"
     toggle_tunnel_alerts = "tog_tun_alrt"
     toggle_cpu_alerts = "tog_cpu_alrt"
+    admin_traffic = "admin_traffic"
+    admin_traffic_pick = "at_pick"
+    admin_traffic_set = "at_set"
+    reset_admin_usage = "at_reset"
 
 
 def _has_permission(admin: AdminDetails | None, resource: str, action: str) -> bool:

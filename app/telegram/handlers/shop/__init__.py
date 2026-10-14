@@ -1,3 +1,5 @@
+from html import escape
+
 from aiogram import F, Router, types
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
@@ -35,6 +37,7 @@ from app.telegram.keyboards.shop import (
     ShopRenewPlansKeyboard,
     ShopUsernameKeyboard,
 )
+from app.telegram.middlewares.force_join import ForceJoinMiddleware
 from app.telegram.utils import forms
 from app.telegram.utils.i18n import format_bytes, format_price, rich, t
 from app.telegram.utils.shop_helpers import (
@@ -55,6 +58,8 @@ from app.utils.shop_quote import quote_custom_purchase, validate_custom_bounds
 user_operator = UserOperation(OperatorType.TELEGRAM)
 
 router = Router(name="shop")
+router.message.middleware(ForceJoinMiddleware())
+router.callback_query.middleware(ForceJoinMiddleware())
 
 
 async def _lang(db: AsyncSession, telegram_id: int) -> str:
@@ -73,6 +78,9 @@ async def _home_markup(db: AsyncSession, lang: str, telegram_id: int, config):
         show_wallet=bool(getattr(config, "wallet_enabled", False)),
         show_referral=bool(getattr(config, "referral_enabled", False)),
         show_tutorial=bool(getattr(config, "tutorial_enabled", False)),
+        show_server_status=bool(
+            getattr(config, "server_status_enabled", False) and getattr(config, "server_status_group_id", None)
+        ),
     ).as_markup()
 
 
@@ -321,6 +329,67 @@ async def shop_referral(event: types.CallbackQuery, db: AsyncSession, state: FSM
     except TelegramBadRequest:
         await event.message.answer(text, reply_markup=kb.as_markup())
     await event.answer()
+
+
+@router.callback_query(ShopKeyboard.Callback.filter(ShopAction.server_status == F.action))
+async def shop_server_status(event: types.CallbackQuery, db: AsyncSession, state: FSMContext):
+    from aiogram.utils.keyboard import InlineKeyboardBuilder
+
+    from app.telegram.utils.server_status import load_server_status_rows
+
+    lang = await _lang(db, event.from_user.id)
+    config = await get_buyer_shop_config(db, state, telegram_id=event.from_user.id)
+    if (
+        not config
+        or not config.enabled
+        or not getattr(config, "server_status_enabled", False)
+        or not getattr(config, "server_status_group_id", None)
+    ):
+        await event.answer(t(lang, "server_status_off"), show_alert=True)
+        return
+    rows = await load_server_status_rows(db, int(config.server_status_group_id))
+    if not rows:
+        text = t(lang, "server_status_empty")
+    else:
+        lines = [rich(lang, "server_status_title"), ""]
+        for remark, status in rows:
+            lines.append(f"{escape(remark)} — {t(lang, f'server_status_{status}')}")
+        text = "\n".join(lines)
+    kb = InlineKeyboardBuilder()
+    kb.button(text=t(lang, "btn_back"), callback_data=ShopKeyboardCallback(action=ShopAction.home))
+    kb.adjust(1)
+    try:
+        await event.message.edit_text(text, reply_markup=kb.as_markup())
+    except TelegramBadRequest:
+        await event.message.answer(text, reply_markup=kb.as_markup())
+    await event.answer()
+
+
+@router.callback_query(ShopKeyboard.Callback.filter(ShopAction.check_join == F.action))
+async def shop_check_join(
+    event: types.CallbackQuery,
+    db: AsyncSession,
+    state: FSMContext,
+    admin: AdminDetails | None,
+):
+    """Re-check channel membership after the buyer taps «I've joined»."""
+    from app.telegram import get_bot
+    from app.telegram.handlers.base import open_main_menu
+    from app.telegram.utils.force_join import user_passes_force_join
+
+    lang = await _lang(db, event.from_user.id)
+    config = await get_buyer_shop_config(db, state, telegram_id=event.from_user.id)
+    if not await user_passes_force_join(get_bot(), config, event.from_user.id):
+        await event.answer(t(lang, "force_join_still"), show_alert=True)
+        return
+    await event.answer(t(lang, "force_join_ok"))
+    if config is not None:
+        await state.update_data(shop_admin_id=config.admin_id, admin_id=config.admin_id)
+    try:
+        await event.message.delete()
+    except TelegramBadRequest:
+        pass
+    await open_main_menu(event.message, db, admin, lang, state=state)
 
 
 @router.callback_query(ShopKeyboard.Callback.filter(ShopAction.tutorial == F.action))

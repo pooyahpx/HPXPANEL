@@ -4,6 +4,7 @@ from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.crud.shop import (
+    count_test_claimed,
     create_shop_discount_code,
     create_shop_plan,
     delete_shop_discount_code,
@@ -17,6 +18,8 @@ from app.db.crud.shop import (
     list_pending_orders,
     list_plans_for_admin,
     list_shop_discount_codes,
+    reset_all_test_claimed,
+    reset_test_claimed,
     set_plan_active,
     toggle_shop_discount_code,
     update_order_status,
@@ -36,13 +39,19 @@ from app.telegram.keyboards.shop import (
     PAY_GW_PAYPAL,
     PAY_GW_STRIPE,
     PAY_GW_ZARINPAL,
+    STATUS_GROUPS_PAGE_SIZE,
     ShopAdminAction,
     ShopAdminCardsKeyboard,
     ShopAdminDiscountsKeyboard,
+    ShopAdminForceJoinKeyboard,
     ShopAdminKeyboard,
     ShopAdminPaymentsKeyboard,
     ShopAdminPlanEditKeyboard,
     ShopAdminPlansKeyboard,
+    ShopAdminResetTestConfirmKeyboard,
+    ShopAdminResetTestKeyboard,
+    ShopAdminServerStatusKeyboard,
+    ShopAdminStatusGroupsKeyboard,
 )
 from app.telegram.utils import forms
 from app.telegram.utils.filters import IsAdminFilter
@@ -149,6 +158,32 @@ async def _lang(db: AsyncSession, telegram_id: int) -> str:
     return (await get_telegram_lang(db, telegram_id)) or "fa"
 
 
+def _force_join_summary(lang: str, config) -> str:
+    on = bool(config and getattr(config, "force_join_enabled", False))
+    channel = (getattr(config, "force_join_channel_id", None) or "").strip() if config else ""
+    label = t(lang, "fj_status_on" if on else "fj_status_off")
+    return f"{label} · {channel}" if channel else label
+
+
+async def _status_group_name(db: AsyncSession, lang: str, config) -> str:
+    group_id = getattr(config, "server_status_group_id", None) if config else None
+    if not group_id:
+        return t(lang, "ss_group_none")
+    from app.db.crud.group import get_group_by_id
+
+    group = await get_group_by_id(db, int(group_id), load_users=False, load_inbounds=False)
+    if group is None:
+        return t(lang, "ss_group_missing", id=int(group_id))
+    return str(group.name)
+
+
+async def _server_status_summary(db: AsyncSession, lang: str, config) -> str:
+    on = bool(config and getattr(config, "server_status_enabled", False))
+    label = t(lang, "fj_status_on" if on else "fj_status_off")
+    group = await _status_group_name(db, lang, config)
+    return f"{label} · {group}"
+
+
 async def _render_admin_shop(event: types.Message | types.CallbackQuery, db: AsyncSession, admin: AdminDetails):
     lang = await _lang(db, event.from_user.id)
     config = await get_shop_config_by_admin(db, admin.id)
@@ -167,6 +202,8 @@ async def _render_admin_shop(event: types.Message | types.CallbackQuery, db: Asy
         custom=custom_config_summary(config, lang),
         plans=sum(1 for p in plans if p.is_active),
         pending=len(pending),
+        force_join=_force_join_summary(lang, config),
+        server_status=await _server_status_summary(db, lang, config),
     )
     markup = ShopAdminKeyboard(lang, enabled).as_markup()
     message = event.message if isinstance(event, types.CallbackQuery) else event
@@ -1853,3 +1890,254 @@ async def support_reply_send(event: types.Message, state: FSMContext, db: AsyncS
 
     await state.clear()
     await event.answer(t(lang, "support_reply_sent"))
+
+
+# ---------------------------------------------------------------------------
+# Forced channel join / server status / reset test claims (v4.10.6)
+# ---------------------------------------------------------------------------
+
+
+async def _show(event: types.Message | types.CallbackQuery, text: str, markup) -> None:
+    if isinstance(event, types.CallbackQuery):
+        try:
+            await event.message.edit_text(text, reply_markup=markup)
+        except TelegramBadRequest:
+            await event.message.answer(text, reply_markup=markup)
+        await event.answer()
+    else:
+        await event.answer(text, reply_markup=markup)
+
+
+async def _render_force_join(event: types.Message | types.CallbackQuery, db: AsyncSession, admin: AdminDetails):
+    lang = await _lang(db, event.from_user.id)
+    config = await get_shop_config_by_admin(db, admin.id)
+    on = bool(config and config.force_join_enabled)
+    text = rich(
+        lang,
+        "admin_force_join_home",
+        status=t(lang, "fj_status_on" if on else "fj_status_off"),
+        channel=(config.force_join_channel_id if config and config.force_join_channel_id else "-"),
+        url=(config.force_join_channel_url if config and config.force_join_channel_url else "-"),
+    )
+    await _show(event, text, ShopAdminForceJoinKeyboard(lang, on).as_markup())
+
+
+@router.callback_query(ShopAdminKeyboard.Callback.filter(ShopAdminAction.force_join == F.action))
+async def force_join_home(event: types.CallbackQuery, db: AsyncSession, admin: AdminDetails, state: FSMContext):
+    await state.clear()
+    await _render_force_join(event, db, admin)
+
+
+@router.callback_query(ShopAdminKeyboard.Callback.filter(ShopAdminAction.toggle_force_join == F.action))
+async def toggle_force_join(event: types.CallbackQuery, db: AsyncSession, admin: AdminDetails):
+    lang = await _lang(db, event.from_user.id)
+    config = await get_shop_config_by_admin(db, admin.id)
+    enabled = not bool(config and config.force_join_enabled)
+    if enabled and not (config and (config.force_join_channel_id or "").strip()):
+        await event.answer(t(lang, "admin_fj_need_channel"), show_alert=True)
+        return
+    await upsert_shop_config(db, admin.id, force_join_enabled=enabled)
+    await event.answer(t(lang, "admin_fj_enabled_on" if enabled else "admin_fj_enabled_off"))
+    await _render_force_join(event, db, admin)
+
+
+@router.callback_query(ShopAdminKeyboard.Callback.filter(ShopAdminAction.set_force_join_channel == F.action))
+async def ask_force_join_channel(event: types.CallbackQuery, db: AsyncSession, state: FSMContext):
+    lang = await _lang(db, event.from_user.id)
+    await state.set_state(forms.ShopAdminForceJoinChannel.waiting_value)
+    await state.update_data(lang=lang)
+    msg = await event.message.answer(t(lang, "admin_ask_fj_channel"))
+    await add_to_messages_to_delete(state, msg)
+    await event.answer()
+
+
+@router.message(forms.ShopAdminForceJoinChannel.waiting_value)
+async def save_force_join_channel(event: types.Message, state: FSMContext, db: AsyncSession, admin: AdminDetails):
+    from app.telegram.utils.force_join import default_channel_url, normalize_channel_id
+
+    data = await state.get_data()
+    lang = data.get("lang", "fa")
+    raw = (event.text or "").strip()
+    if raw in ("-", "0"):
+        await upsert_shop_config(db, admin.id, force_join_channel_id="", force_join_enabled=False)
+    else:
+        channel = normalize_channel_id(raw)
+        if channel is None:
+            await event.answer(t(lang, "admin_fj_channel_invalid"))
+            return
+        config = await get_shop_config_by_admin(db, admin.id)
+        url = None
+        if not (config and config.force_join_channel_url):
+            url = default_channel_url(channel)
+        await upsert_shop_config(db, admin.id, force_join_channel_id=channel, force_join_channel_url=url)
+    await state.clear()
+    await event.answer(t(lang, "admin_fj_channel_saved"))
+    await _render_force_join(event, db, admin)
+
+
+@router.callback_query(ShopAdminKeyboard.Callback.filter(ShopAdminAction.set_force_join_url == F.action))
+async def ask_force_join_url(event: types.CallbackQuery, db: AsyncSession, state: FSMContext):
+    lang = await _lang(db, event.from_user.id)
+    await state.set_state(forms.ShopAdminForceJoinUrl.waiting_value)
+    await state.update_data(lang=lang)
+    msg = await event.message.answer(t(lang, "admin_ask_fj_url"))
+    await add_to_messages_to_delete(state, msg)
+    await event.answer()
+
+
+@router.message(forms.ShopAdminForceJoinUrl.waiting_value)
+async def save_force_join_url(event: types.Message, state: FSMContext, db: AsyncSession, admin: AdminDetails):
+    data = await state.get_data()
+    lang = data.get("lang", "fa")
+    raw = (event.text or "").strip()
+    if raw in ("-", "0"):
+        await upsert_shop_config(db, admin.id, force_join_channel_url="")
+    elif raw.startswith(("http://", "https://")):
+        await upsert_shop_config(db, admin.id, force_join_channel_url=raw)
+    else:
+        await event.answer(t(lang, "admin_fj_url_invalid"))
+        return
+    await state.clear()
+    await event.answer(t(lang, "admin_fj_url_saved"))
+    await _render_force_join(event, db, admin)
+
+
+# --- Server status (admin setup) ---
+
+
+async def _render_server_status_admin(event: types.Message | types.CallbackQuery, db: AsyncSession, admin: AdminDetails):
+    lang = await _lang(db, event.from_user.id)
+    config = await get_shop_config_by_admin(db, admin.id)
+    on = bool(config and config.server_status_enabled)
+    text = rich(
+        lang,
+        "admin_server_status_home",
+        status=t(lang, "fj_status_on" if on else "fj_status_off"),
+        group=await _status_group_name(db, lang, config),
+    )
+    await _show(event, text, ShopAdminServerStatusKeyboard(lang, on).as_markup())
+
+
+@router.callback_query(ShopAdminKeyboard.Callback.filter(ShopAdminAction.server_status == F.action))
+async def server_status_home(event: types.CallbackQuery, db: AsyncSession, admin: AdminDetails):
+    await _render_server_status_admin(event, db, admin)
+
+
+@router.callback_query(ShopAdminKeyboard.Callback.filter(ShopAdminAction.toggle_server_status == F.action))
+async def toggle_server_status(event: types.CallbackQuery, db: AsyncSession, admin: AdminDetails):
+    lang = await _lang(db, event.from_user.id)
+    config = await get_shop_config_by_admin(db, admin.id)
+    enabled = not bool(config and config.server_status_enabled)
+    if enabled and not (config and config.server_status_group_id):
+        await event.answer(t(lang, "admin_ss_need_group"), show_alert=True)
+        return
+    await upsert_shop_config(db, admin.id, server_status_enabled=enabled)
+    await event.answer(t(lang, "admin_ss_enabled_on" if enabled else "admin_ss_enabled_off"))
+    await _render_server_status_admin(event, db, admin)
+
+
+@router.callback_query(ShopAdminKeyboard.Callback.filter(ShopAdminAction.set_status_group == F.action))
+async def list_status_groups(
+    event: types.CallbackQuery,
+    callback_data: ShopAdminKeyboard.Callback,
+    db: AsyncSession,
+    admin: AdminDetails,
+):
+    from app.db.crud.group import get_groups_simple
+    from app.models.group import GroupSimpleListQuery, GroupSimpleSortOption
+
+    lang = await _lang(db, event.from_user.id)
+    page = max(0, int(callback_data.id or 0))
+    rows, total = await get_groups_simple(
+        db,
+        GroupSimpleListQuery(
+            offset=page * STATUS_GROUPS_PAGE_SIZE,
+            limit=STATUS_GROUPS_PAGE_SIZE,
+            sort=[GroupSimpleSortOption.id],
+        ),
+    )
+    total = int(total or 0)
+    if total == 0:
+        await event.answer(t(lang, "admin_ss_no_groups"), show_alert=True)
+        return
+    config = await get_shop_config_by_admin(db, admin.id)
+    groups = [(int(gid), str(name)) for gid, name in rows]
+    markup = ShopAdminStatusGroupsKeyboard(
+        lang, groups, page, total, selected_id=config.server_status_group_id if config else None
+    ).as_markup()
+    await _show(event, t(lang, "admin_ss_pick_group"), markup)
+
+
+@router.callback_query(ShopAdminKeyboard.Callback.filter(ShopAdminAction.pick_status_group == F.action))
+async def pick_status_group(
+    event: types.CallbackQuery,
+    callback_data: ShopAdminKeyboard.Callback,
+    db: AsyncSession,
+    admin: AdminDetails,
+):
+    from app.db.crud.group import get_group_by_id
+
+    lang = await _lang(db, event.from_user.id)
+    group = await get_group_by_id(db, int(callback_data.id), load_users=False, load_inbounds=False)
+    if group is None:
+        await event.answer(t(lang, "admin_ss_no_groups"), show_alert=True)
+        return
+    await upsert_shop_config(db, admin.id, server_status_group_id=int(group.id))
+    await event.answer(t(lang, "admin_ss_group_saved"))
+    await _render_server_status_admin(event, db, admin)
+
+
+# --- Reset test claims ---
+
+
+@router.callback_query(ShopAdminKeyboard.Callback.filter(ShopAdminAction.reset_test == F.action))
+async def reset_test_home(event: types.CallbackQuery, db: AsyncSession, state: FSMContext):
+    await state.clear()
+    lang = await _lang(db, event.from_user.id)
+    text = rich(lang, "admin_reset_test_home", count=await count_test_claimed(db))
+    await _show(event, text, ShopAdminResetTestKeyboard(lang).as_markup())
+
+
+@router.callback_query(ShopAdminKeyboard.Callback.filter(ShopAdminAction.reset_test_all == F.action))
+async def reset_test_all_ask(event: types.CallbackQuery, db: AsyncSession):
+    lang = await _lang(db, event.from_user.id)
+    text = t(lang, "admin_rt_confirm_all", count=await count_test_claimed(db))
+    await _show(event, text, ShopAdminResetTestConfirmKeyboard(lang).as_markup())
+
+
+@router.callback_query(ShopAdminKeyboard.Callback.filter(ShopAdminAction.reset_test_all_confirm == F.action))
+async def reset_test_all_confirm(event: types.CallbackQuery, db: AsyncSession, admin: AdminDetails):
+    lang = await _lang(db, event.from_user.id)
+    count = await reset_all_test_claimed(db, admin.id)
+    await event.answer(t(lang, "admin_rt_all_done", count=count), show_alert=True)
+    text = rich(lang, "admin_reset_test_home", count=await count_test_claimed(db))
+    await _show(event, text, ShopAdminResetTestKeyboard(lang).as_markup())
+
+
+@router.callback_query(ShopAdminKeyboard.Callback.filter(ShopAdminAction.reset_test_one == F.action))
+async def reset_test_one_ask(event: types.CallbackQuery, db: AsyncSession, state: FSMContext):
+    lang = await _lang(db, event.from_user.id)
+    await state.set_state(forms.ShopAdminResetTest.waiting_id)
+    await state.update_data(lang=lang)
+    msg = await event.message.answer(t(lang, "admin_ask_rt_id"))
+    await add_to_messages_to_delete(state, msg)
+    await event.answer()
+
+
+@router.message(forms.ShopAdminResetTest.waiting_id)
+async def reset_test_one_save(event: types.Message, state: FSMContext, db: AsyncSession):
+    data = await state.get_data()
+    lang = data.get("lang", "fa")
+    raw = (event.text or "").strip().translate(str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789"))
+    if not raw.isdigit():
+        await event.answer(t(lang, "invalid_number"))
+        return
+    telegram_id = int(raw)
+    ok = await reset_test_claimed(db, telegram_id)
+    await state.clear()
+    if not ok:
+        await event.answer(t(lang, "admin_rt_one_missing"))
+        return
+    await event.answer(t(lang, "admin_rt_one_done", id=telegram_id))
+    text = rich(lang, "admin_reset_test_home", count=await count_test_claimed(db))
+    await event.answer(text, reply_markup=ShopAdminResetTestKeyboard(lang).as_markup())

@@ -125,6 +125,11 @@ class DeckPanel(InlineKeyboardBuilder):
             )
             rows.append(2)
             self.button(
+                text=t(lang, "btn_admin_traffic"),
+                callback_data=panel_cb(action=AdminPanelAction.admin_traffic),
+            )
+            rows.append(1)
+            self.button(
                 text=t(lang, "btn_alert_settings"),
                 callback_data=panel_cb(action=AdminPanelAction.alert_settings),
             )

@@ -87,6 +87,47 @@ async def mark_test_claimed(db: AsyncSession, telegram_id: int) -> None:
     await db.refresh(profile)
 
 
+async def reset_test_claimed(db: AsyncSession, telegram_id: int) -> bool:
+    """
+    Clear the test-claimed flag for one Telegram user so they can claim a test config again.
+
+    Returns True when the profile exists (flag is now cleared), False when the user has no profile.
+    The old test account is left untouched.
+    """
+    profile = await db.get(TelegramProfile, int(telegram_id))
+    if profile is None:
+        return False
+    profile.test_claimed = False
+    profile.updated_at = datetime.now(UTC)
+    await db.commit()
+    await db.refresh(profile)
+    return True
+
+
+async def count_test_claimed(db: AsyncSession) -> int:
+    stmt = select(func.count()).select_from(TelegramProfile).where(TelegramProfile.test_claimed.is_(True))
+    return int((await db.execute(stmt)).scalar_one() or 0)
+
+
+async def reset_all_test_claimed(db: AsyncSession, admin_id: int | None = None) -> int:
+    """
+    Clear ``test_claimed`` for every profile that has it set; returns how many were reset.
+
+    NOTE: ``TelegramProfile.test_claimed`` is a global flag on the profile (not per shop), so the
+    reset is bot-wide. ``admin_id`` is accepted for API symmetry/audit only and does not narrow the
+    scope. Old test accounts are not deleted.
+    """
+    del admin_id
+    result = await db.execute(select(TelegramProfile).where(TelegramProfile.test_claimed.is_(True)))
+    profiles = list(result.scalars().all())
+    now = datetime.now(UTC)
+    for profile in profiles:
+        profile.test_claimed = False
+        profile.updated_at = now
+    await db.commit()
+    return len(profiles)
+
+
 async def open_support_ticket(db: AsyncSession, buyer_telegram_id: int) -> TelegramSupportTicket:
     ticket = await db.get(TelegramSupportTicket, buyer_telegram_id)
     if ticket is None:
@@ -251,6 +292,11 @@ async def upsert_shop_config(
     tutorial_enabled: bool | None = None,
     tutorial_text: str | None = None,
     tutorial_url: str | None = None,
+    force_join_enabled: bool | None = None,
+    force_join_channel_id: str | None = None,
+    force_join_channel_url: str | None = None,
+    server_status_enabled: bool | None = None,
+    server_status_group_id: int | None = None,
 ) -> ShopConfig:
     config = await get_shop_config_by_admin(db, admin_id)
     if config is None:
@@ -359,6 +405,16 @@ async def upsert_shop_config(
         config.tutorial_text = tutorial_text or None
     if tutorial_url is not None:
         config.tutorial_url = tutorial_url or None
+    if force_join_enabled is not None:
+        config.force_join_enabled = force_join_enabled
+    if force_join_channel_id is not None:
+        config.force_join_channel_id = force_join_channel_id.strip() or None
+    if force_join_channel_url is not None:
+        config.force_join_channel_url = force_join_channel_url.strip() or None
+    if server_status_enabled is not None:
+        config.server_status_enabled = server_status_enabled
+    if server_status_group_id is not None:
+        config.server_status_group_id = int(server_status_group_id) if int(server_status_group_id) > 0 else None
     await db.commit()
     await db.refresh(config)
     return config

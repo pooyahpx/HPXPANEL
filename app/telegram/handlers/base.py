@@ -13,6 +13,7 @@ from app.settings import telegram_settings
 from app.telegram.keyboards.base import CancelAction, CancelKeyboard
 from app.telegram.keyboards.deck import DeckPanel
 from app.telegram.keyboards.shop import LangKeyboard, ShopHomeKeyboard
+from app.telegram.middlewares.force_join import ForceJoinMiddleware
 from app.telegram.utils import forms
 from app.telegram.utils.i18n import t
 from app.telegram.utils.shared import delete_messages
@@ -22,6 +23,8 @@ from app.telegram.utils.texts import Message as Texts
 system_operator = SystemOperation(OperatorType.TELEGRAM)
 
 router = Router(name="base")
+router.message.middleware(ForceJoinMiddleware())
+router.callback_query.middleware(ForceJoinMiddleware())
 
 
 async def open_main_menu(

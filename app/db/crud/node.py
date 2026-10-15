@@ -8,6 +8,7 @@ from sqlalchemy.sql.functions import coalesce
 
 from app.db.compiles_types import DateDiff
 from app.db.models import (
+    NODE_VERSION_MAX_LENGTH,
     DataLimitResetStrategy,
     Node,
     NodeCoreBinding,
@@ -531,6 +532,13 @@ async def modify_node(db: AsyncSession, db_node: Node, modify: NodeModify) -> No
     return db_node
 
 
+def _fit_version(value: str | None) -> str | None:
+    """Clamp a reported version to the column size so a long value can't fail the whole update."""
+    if value is None or len(value) <= NODE_VERSION_MAX_LENGTH:
+        return value
+    return value[: NODE_VERSION_MAX_LENGTH - 3] + "..."
+
+
 async def update_node_status(
     db: AsyncSession,
     db_node: Node,
@@ -558,8 +566,8 @@ async def update_node_status(
         .values(
             status=status,
             message=message,
-            xray_version=xray_version,
-            node_version=node_version,
+            xray_version=_fit_version(xray_version),
+            node_version=_fit_version(node_version),
             last_status_change=datetime.now(UTC),
         )
     )
@@ -621,6 +629,8 @@ async def bulk_update_node_status(
     now = datetime.now(UTC)
     for upd in updates:
         upd["now"] = now
+        upd["xray_version"] = _fit_version(upd.get("xray_version"))
+        upd["node_version"] = _fit_version(upd.get("node_version"))
 
     # Execute using connection-level execute (bypasses ORM, allows bindparam with WHERE)
     conn = await db.connection()

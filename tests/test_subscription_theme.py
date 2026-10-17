@@ -29,7 +29,7 @@ def test_subscription_theme_defaults_are_backward_compatible():
 
 
 def test_subscription_accepts_every_known_theme():
-    assert set(SUB_THEMES) == {"terminal", "aurora", "nova", "atlas", "pulse", "ember", "folio", "harbor"}
+    assert set(SUB_THEMES) == {"terminal", "aurora", "nova", "atlas", "pulse", "ember", "folio", "harbor", "lumen", "rift"}
     for theme in SUB_THEMES:
         assert _subscription(sub_theme=theme).sub_theme == theme
 
@@ -180,3 +180,47 @@ def test_template_mid_grid_marks_solo_when_usage_hidden():
 def test_template_skins_define_distinct_top_layouts(theme):
     html = render_template(TEMPLATE, _context(sub_theme=theme))
     assert f'[data-skin="{theme}"] .grid-top' in html
+
+def test_new_themes_lumen_and_rift_are_allowed():
+    assert {"lumen", "rift"} <= set(SUB_THEMES)
+    assert _subscription(sub_theme="LUMEN").sub_theme == "lumen"
+    assert _subscription(sub_theme="rift").sub_theme == "rift"
+
+
+@pytest.mark.parametrize("theme", ["lumen", "rift"])
+def test_new_themes_have_css_and_distinct_layouts(theme):
+    html = render_template(TEMPLATE, _context(sub_theme=theme))
+    assert f'<html lang="en" data-skin="{theme}">' in html
+    assert f'[data-skin="{theme}"]{{' in html
+    assert f'[data-skin="{theme}"] body.light{{' in html
+    assert f'[data-skin="{theme}"] .grid-top' in html
+    assert f'[data-skin="{theme}"] .hero' in html
+    assert "@media (max-width:900px)" in html
+    assert "@media (max-width:600px)" in html
+
+
+def test_new_theme_fonts_are_loaded():
+    html = render_template(TEMPLATE, _context(sub_theme="rift"))
+    for family in ("family=Sora", "family=Bebas+Neue", "family=Oswald", "family=Source+Sans+3", "family=IBM+Plex+Sans"):
+        assert family in html
+
+
+def test_apps_section_has_platform_filter_and_cards():
+    html = render_template(TEMPLATE, _context())
+    assert 'id="appsFilter"' in html
+    assert 'data-platform="all"' in html
+    assert 'data-platform="ios"' in html
+    assert 'class="app-card" data-platform="ios"' in html
+    assert "setAppsFilter" in html
+    assert 'class="app-dl"' in html
+    assert 'class="app-add"' in html
+    assert 'id="appsEmpty"' in html
+
+
+def test_apps_section_empty_state_and_gating():
+    empty = render_template(TEMPLATE, _context(apps=[]))
+    assert 'id="appsPanel"' in empty
+    assert 'id="appsGrid"' not in empty
+    assert "apps_empty_all" in empty
+    gated = render_template(TEMPLATE, _context(sub_show_apps=False))
+    assert 'id="appsPanel"' not in gated

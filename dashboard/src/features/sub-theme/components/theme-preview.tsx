@@ -48,7 +48,11 @@ const LINKS = [
   { proto: 'VMESS', url: 'vmess://eyJhZGQiOiJocHguZXhhbXBsZS5jb20iLCJwb3J0IjoiNDQzIn0=' },
   { proto: 'TROJAN', url: 'trojan://9c1d...e44a@hpx.example.com:443?sni=hpx.example.com#HPX-3' },
 ]
-const APPS = ['Hiddify', 'v2rayN', 'Streisand']
+const APPS: { name: string; platform: string; star?: boolean }[] = [
+  { name: 'Streisand', platform: 'iOS', star: true },
+  { name: 'v2rayNG', platform: 'Android', star: true },
+  { name: 'v2rayN', platform: 'Windows' },
+]
 const SHARE: [string, number, string][] = [
   ['Frankfurt · VLESS', 54.2, '22.3 GB'],
   ['Amsterdam · Trojan', 31.6, '13.0 GB'],
@@ -116,14 +120,17 @@ function AppRow({ ctx, cardStyle, grid = 'grid-cols-3', compact }: { ctx: Ctx; c
   const { p, tx } = ctx
   return (
     <div className={cn('grid gap-2.5', grid)}>
-      {APPS.map((app, i) => (
-        <div key={app} className={cn('flex items-center gap-2.5', compact ? 'p-2' : 'p-3')} style={cardStyle}>
+      {APPS.map(app => (
+        <div key={app.name} className={cn('flex items-center gap-2.5', compact ? 'p-2' : 'p-3')} style={cardStyle}>
           <span className="grid size-8 shrink-0 place-items-center text-xs font-bold" style={{ background: `${p.primary}22`, color: p.primary, borderRadius: ctx.skin.btnRadius === 999 ? 10 : ctx.skin.btnRadius }}>
-            {app[0]}
+            {app.name[0]}
           </span>
           <div className="min-w-0 flex-1">
-            <div className="truncate text-[11px] font-bold">{app}</div>
-            <div className="text-[9px] opacity-60">{['Android', 'Windows', 'iOS'][i]}</div>
+            <div className="truncate text-[11px] font-bold">
+              {app.name}
+              {app.star ? <span style={{ color: p.accent }}> ★</span> : null}
+            </div>
+            <div className="text-[9px] opacity-60">{app.platform}</div>
           </div>
           <Btn ctx={ctx} className="!px-2 !py-1 !text-[9px]">
             {tx.appsGet}
@@ -1074,6 +1081,179 @@ function HarborLayout({ ctx }: { ctx: Ctx }) {
   )
 }
 
+/* ------------------------------ LUMEN ------------------------------ */
+function LumenLayout({ ctx }: { ctx: Ctx }) {
+  const { p, tx, surface } = ctx
+  const card: CSSProperties = { ...surface, borderRadius: 16 }
+  const title: CSSProperties = { fontFamily: '"Sora", system-ui, sans-serif', letterSpacing: '-0.03em' }
+  return (
+    <div className="mx-auto max-w-2xl space-y-4 p-4 md:p-6" style={{ fontFamily: '"Source Sans 3", system-ui, sans-serif' }}>
+      <div className="flex items-center justify-between">
+        <span className="flex items-center gap-2 text-sm font-bold tracking-[0.08em]" style={title}>
+          <span className="block size-6" style={{ background: p.primary, borderRadius: 8 }} />
+          {tx.brand}
+        </span>
+        <span className="px-2.5 py-1 text-[10px] font-semibold" style={{ background: `${p.primary}1f`, color: p.primary, borderRadius: 999 }}>
+          ● {tx.status}
+        </span>
+      </div>
+
+      <div className="text-center">
+        <div className="text-[10px] font-semibold tracking-widest uppercase" style={{ color: p.primary }}>
+          {tx.kicker}
+        </div>
+        <h3 className="mt-1 text-3xl font-bold md:text-4xl" style={title}>
+          {tx.heroTitle}
+        </h3>
+        <div className="mt-1 text-xs opacity-60">@{tx.heroSubtitle}</div>
+        <div className="mx-auto mt-4 flex max-w-md flex-wrap items-center gap-2 p-1.5 ps-4" style={{ ...card, borderRadius: 999 }}>
+          <span className="min-w-0 flex-1 basis-28 truncate text-start text-[10px] opacity-70" style={{ fontFamily: MONO }}>
+            https://sub.example.com/sub/aB3dE9
+          </span>
+          <Btn ctx={ctx} className="!rounded-full">
+            {tx.copy}
+          </Btn>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-center gap-6 p-6" style={card}>
+        <Gauge ctx={ctx} size={132} thick={10} label />
+        <div className="grid min-w-[180px] flex-1 grid-cols-3 gap-2 text-center sm:grid-cols-1 sm:text-start">
+          {[
+            [tx.used, '41.2 GB'],
+            [tx.remaining, '18.8 GB'],
+            [tx.expires, tx.expiresValue],
+          ].map(([k, v]) => (
+            <div key={k}>
+              <div className="text-[9px] font-semibold tracking-widest uppercase opacity-60">{k}</div>
+              <div className="text-lg font-bold tabular-nums" style={title}>
+                {v}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="space-y-2.5 p-4" style={card}>
+        <SectionTitle style={title}>{tx.links}</SectionTitle>
+        {LINKS.map(l => (
+          <div key={l.proto} className="flex flex-wrap items-center gap-2 p-2" style={{ border: hairline(p), borderRadius: 12, background: `${p.muted}88` }}>
+            <span className="px-2.5 py-0.5 text-[9px] font-bold" style={{ background: `${p.primary}1f`, color: p.primary, borderRadius: 999 }}>
+              {l.proto}
+            </span>
+            <span className="min-w-0 flex-1 basis-32 truncate text-[10px] opacity-75" style={{ fontFamily: MONO }}>
+              {l.url}
+            </span>
+            <Btn ctx={ctx}>{tx.copy}</Btn>
+          </div>
+        ))}
+      </div>
+
+      <div className="p-4" style={card}>
+        <SectionTitle style={title}>{tx.apps}</SectionTitle>
+        <AppRow ctx={ctx} cardStyle={{ border: hairline(p), borderRadius: 14, background: `${p.muted}66` }} grid="grid-cols-1 sm:grid-cols-3" compact />
+      </div>
+
+      <div style={card}>
+        <div className="px-4 pt-4 text-xs font-bold" style={title}>
+          {tx.chart}
+        </div>
+        <Chart ctx={ctx} radius={6} thin />
+      </div>
+      <Support ctx={ctx} style={{ borderTop: hairline(p), paddingTop: 12 }} />
+    </div>
+  )
+}
+
+/* ------------------------------ RIFT ------------------------------ */
+function RiftLayout({ ctx }: { ctx: Ctx }) {
+  const { p, tx, surface } = ctx
+  const card: CSSProperties = { ...surface, borderRadius: 0 }
+  const display: CSSProperties = { fontFamily: '"Bebas Neue", "Oswald", Impact, sans-serif', letterSpacing: '0.03em', textTransform: 'uppercase' }
+  const sectionTitle: CSSProperties = { ...display, fontSize: 18, letterSpacing: '0.06em' }
+  return (
+    <div className="mx-auto max-w-5xl space-y-4 p-4 md:p-6" style={{ fontFamily: '"IBM Plex Sans", system-ui, sans-serif' }}>
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-bold tracking-[0.28em]">{tx.brand}</span>
+        <span className="mx-4 h-px flex-1" style={{ background: `linear-gradient(90deg, ${p.primary}, transparent)` }} />
+        <span className="text-[10px] font-bold tracking-widest uppercase" style={{ color: p.primary }}>
+          {tx.kicker}
+        </span>
+      </div>
+
+      <div className="relative grid gap-4 md:grid-cols-[1.45fr_1fr]">
+        <div className="relative z-10 py-2">
+          <h3 className="text-6xl leading-[0.88] md:text-7xl" style={display}>
+            {tx.heroTitle}
+          </h3>
+          <div className="mt-3 text-xs opacity-60">@{tx.heroSubtitle}</div>
+          <div className="mt-4 flex max-w-md flex-wrap items-center gap-2 p-1.5 ps-3" style={card}>
+            <span className="min-w-0 flex-1 basis-28 truncate text-[10px] opacity-70" style={{ fontFamily: MONO }}>
+              https://sub.example.com/sub/aB3dE9
+            </span>
+            <Btn ctx={ctx}>{tx.copy}</Btn>
+            <Btn ctx={ctx} ghost>
+              {tx.qr}
+            </Btn>
+          </div>
+        </div>
+        <span className="pointer-events-none absolute inset-y-[-8px] end-[-24px] hidden w-40 md:block" style={{ background: `linear-gradient(180deg, ${p.primary}40, ${p.accent}10)`, transform: 'skewX(-14deg)' }} />
+        <div className="relative z-10 space-y-3 p-5" style={{ ...card, borderInlineStartWidth: 6, borderInlineStartColor: p.primary }}>
+          <div className="text-5xl leading-none" style={{ ...display, color: p.ok }}>
+            ■ {tx.status}
+          </div>
+          <div className="flex items-center gap-4">
+            <Gauge ctx={ctx} size={96} thick={9} glow label />
+            <div className="space-y-1.5 text-[10px] font-bold tracking-widest uppercase">
+              {[
+                [tx.used, '41.2 GB'],
+                [tx.remaining, '18.8 GB'],
+                [tx.expires, tx.expiresValue],
+              ].map(([k, v]) => (
+                <div key={k}>
+                  <span className="opacity-60">{k}</span>{' '}
+                  <span className="tabular-nums" style={{ color: p.primary }}>
+                    {v}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-2 p-4" style={card}>
+        <SectionTitle style={sectionTitle}>{tx.links}</SectionTitle>
+        {LINKS.map(l => (
+          <div key={l.proto} className="flex flex-wrap items-center gap-2 p-2" style={{ borderInlineStart: `3px solid ${p.primary}`, background: `${p.muted}aa` }}>
+            <span className="px-2 py-0.5 text-[9px] font-bold tracking-wider" style={{ background: p.primary, color: p.onPrimary }}>
+              {l.proto}
+            </span>
+            <span className="min-w-0 flex-1 basis-32 truncate text-[10px] opacity-75" style={{ fontFamily: MONO }}>
+              {l.url}
+            </span>
+            <Btn ctx={ctx}>{tx.copy}</Btn>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="p-4" style={card}>
+          <SectionTitle style={sectionTitle}>{tx.apps}</SectionTitle>
+          <AppRow ctx={ctx} cardStyle={{ borderInlineStart: `3px solid ${p.primary}`, background: `${p.muted}aa` }} grid="grid-cols-1" compact />
+        </div>
+        <div style={card}>
+          <div className="px-4 pt-4" style={sectionTitle}>
+            {tx.chart}
+          </div>
+          <Chart ctx={ctx} radius={0} glow />
+        </div>
+      </div>
+      <Support ctx={ctx} style={{ borderTop: hairline(p), paddingTop: 12 }} />
+    </div>
+  )
+}
+
 const LAYOUTS: Record<SubTheme, (props: { ctx: Ctx }) => ReactNode> = {
   terminal: TerminalLayout,
   aurora: AuroraLayout,
@@ -1083,6 +1263,8 @@ const LAYOUTS: Record<SubTheme, (props: { ctx: Ctx }) => ReactNode> = {
   ember: EmberLayout,
   folio: FolioLayout,
   harbor: HarborLayout,
+  lumen: LumenLayout,
+  rift: RiftLayout,
 }
 
 const MODES: { value: SubThemeMode; icon: typeof Sun }[] = [

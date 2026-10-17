@@ -350,6 +350,83 @@ function HarborMock({ p, skin, surface, button }: MockCtx) {
   )
 }
 
+/** Lumen: bright airy ops; centered hero, single clean column, soft 16px cards. */
+function LumenMock({ p, skin, surface, button }: MockCtx) {
+  return (
+    <>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1.5">
+          <span className="block size-3" style={{ background: p.primary, borderRadius: 5 }} />
+          <span className="text-[7px] font-bold tracking-[0.1em]">HPXPANEL</span>
+        </div>
+        <span className="px-1.5 py-px text-[6px] font-semibold" style={{ background: `${p.primary}1f`, color: p.primary, borderRadius: 999 }}>
+          Active
+        </span>
+      </div>
+      <div className="mt-2 text-center text-[11px]" style={skin.titleStyle}>
+        Your dashboard
+      </div>
+      <div className="mt-1.5 flex items-center gap-2 px-2.5 py-2" style={surface}>
+        <Ring size={30} hole={22} color={p.primary} track={p.muted} bg={p.card}>
+          <span style={{ fontSize: 6 }}>68%</span>
+        </Ring>
+        <div className="min-w-0 flex-1 space-y-1">
+          <Bar w="70%" h={4} color={p.fg} className="opacity-70" />
+          <Bar w="100%" h={3} color={p.muted} radius={skin.radius} />
+        </div>
+        <span className="px-2.5 py-1 text-[7px] font-bold" style={button}>
+          Copy
+        </span>
+      </div>
+      <div className="mt-1.5 grid grid-cols-2 gap-1.5">
+        {[0, 1].map(i => (
+          <div key={i} className="px-2 py-1.5" style={surface}>
+            <Bar w={12} h={2} color={p.muted} />
+            <Bar w={24} h={4} color={p.fg} className="mt-1 opacity-70" />
+          </div>
+        ))}
+      </div>
+    </>
+  )
+}
+
+/** Rift: dark cinematic; asymmetric oversized title with a slanted accent slab, sharp bold status band. */
+function RiftMock({ p, skin, surface, button }: MockCtx) {
+  return (
+    <>
+      <div className="flex items-center justify-between">
+        <span className="text-[7px] font-bold tracking-[0.22em]">HPXPANEL</span>
+        <span className="h-px w-8" style={{ background: p.primary }} />
+      </div>
+      <div className="relative mt-1.5 grid grid-cols-[1.5fr_1fr] gap-2">
+        <div className="relative z-10">
+          <div className="text-[19px]" style={skin.titleStyle}>
+            Your
+            <br />
+            <span style={{ color: p.primary }}>Signal</span>
+          </div>
+        </div>
+        <span
+          className="absolute inset-y-[-4px] end-[-6px] w-12"
+          style={{ background: `linear-gradient(180deg, ${p.primary}55, ${p.accent}18)`, transform: 'skewX(-14deg)' }}
+        />
+        <div className="relative z-10 p-1.5" style={surface}>
+          <span className="block text-[8px] font-bold tracking-widest uppercase" style={{ color: p.ok }}>
+            ■ Active
+          </span>
+          <Bar w="100%" h={3} color={p.muted} radius={0} className="mt-1" />
+        </div>
+      </div>
+      <div className="mt-1.5 flex items-center gap-2 px-2 py-1.5" style={surface}>
+        <Bar w="100%" h={4} color={p.muted} radius={0} className="flex-1" />
+        <span className="px-2 py-0.5 text-[6px] font-bold" style={button}>
+          COPY
+        </span>
+      </div>
+    </>
+  )
+}
+
 const MOCKS: Record<SubTheme, ComponentType<MockCtx>> = {
   terminal: TerminalMock,
   aurora: AuroraMock,
@@ -359,6 +436,8 @@ const MOCKS: Record<SubTheme, ComponentType<MockCtx>> = {
   ember: EmberMock,
   folio: FolioMock,
   harbor: HarborMock,
+  lumen: LumenMock,
+  rift: RiftMock,
 }
 
 /** CSS-only miniature of the public subscription page; every skin has a different composition. */

@@ -683,7 +683,36 @@
     "pathPingQueued": "Sampling…",
     "pathPingQueuedToast": "Path ping queued — agent sampling abroad→Iran",
     "pathPingNoAgent": "No agent joined — Tokens → join abroad first",
-    "pathPingTargetPort": "Target {{ip}}:{{port}} ({{target}})"
+    "pathPingTargetPort": "Target {{ip}}:{{port}} ({{target}})",
+    "speedTest": {
+      "button": "Speed test",
+      "title": "Tunnel speed test",
+      "subtitle": "Measures latency, min/max range and packet loss across the tunnel path. Not a bandwidth (Mbps) test.",
+      "start": "Start speed test",
+      "runAgain": "Run again",
+      "running": "Testing tunnel…",
+      "runningHint": "Agent is sampling the path — this takes a few seconds…",
+      "idle": "Ready to test",
+      "emptyTitle": "No speed test yet",
+      "emptyHint": "Pick TCP or UDP and Control or Forward, then start. Results appear here in a few seconds.",
+      "failed": "Speed test failed",
+      "avg": "Avg latency",
+      "min": "Min",
+      "max": "Max",
+      "loss": "Packet loss",
+      "lossShort": "loss",
+      "legend": "Quality: Excellent <80 ms · Good <150 ms · Fair <300 ms · Poor ≥300 ms or ≥25% loss",
+      "lastResult": "Last speed test",
+      "collapse": "Collapse",
+      "protocol": "Protocol",
+      "endpoint": "Endpoint",
+      "quality": {
+        "excellent": "Excellent",
+        "good": "Good",
+        "fair": "Fair",
+        "poor": "Poor"
+      }
+    }
   },
   "groups": "Groups",
   "documentation": "Documentation",
@@ -4662,6 +4691,16 @@
         "name": "Harbor",
         "tag": "Calm ops",
         "description": "Deep slate and sky blue: a horizontal KPI strip, a soft status card and a very mobile-friendly layout."
+      },
+      "lumen": {
+        "name": "Lumen",
+        "tag": "Bright ops",
+        "description": "Airy white and slate with an electric-blue accent: a single clean column, soft 16px cards and a strong mobile layout."
+      },
+      "rift": {
+        "name": "Rift",
+        "tag": "Cinematic",
+        "description": "Near-black with a coral-orange accent: asymmetric hero, sharp edges, condensed display type and a bold status band."
       }
     },
     "mode": {

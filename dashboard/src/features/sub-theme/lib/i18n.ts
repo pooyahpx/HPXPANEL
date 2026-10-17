@@ -19,6 +19,8 @@ export const THEME_DEFAULTS: Record<string, { name: string; tag: string; descrip
   ember: { name: 'Ember', tag: 'Industrial', description: 'Warm charcoal with amber accents, a bold status band, square cards and a strong single-column mobile stack.' },
   folio: { name: 'Folio', tag: 'Swiss', description: 'Near-black and white with a lime accent: asymmetric hero, dense link list and crisp hairlines.' },
   harbor: { name: 'Harbor', tag: 'Calm ops', description: 'Deep slate and sky blue: a horizontal KPI strip, a soft status card and a very mobile-friendly layout.' },
+  lumen: { name: 'Lumen', tag: 'Bright ops', description: 'Airy white and slate with an electric-blue accent: a single clean column, soft 16px cards and a strong mobile layout.' },
+  rift: { name: 'Rift', tag: 'Cinematic', description: 'Near-black with a coral-orange accent: asymmetric hero, sharp edges, condensed display type and a bold status band.' },
 }
 
 export const themeText = (t: TFunction, theme: string, field: 'name' | 'tag' | 'description'): string =>

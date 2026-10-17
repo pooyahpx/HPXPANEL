@@ -143,7 +143,7 @@ def test_match_prefers_best_state_among_matches():
 
 def test_match_host_to_pulse_iran_ip():
     """Hosts on reverse tunnels point at Iran IP — Pulse status must drive Online."""
-    from app.telegram.utils.server_status import EndpointInfo, endpoints_from_pulses, pulse_status_to_state
+    from app.telegram.utils.server_status import endpoints_from_pulses, pulse_status_to_state
 
     assert pulse_status_to_state("running") == ONLINE
     assert pulse_status_to_state("starting") == CONNECTING
@@ -164,6 +164,101 @@ def test_match_host_to_pulse_iran_ip():
     assert match_host_state(["91.1.2.3"], endpoints) == ONLINE
     # Still unknown when IP is unrelated
     assert match_host_state(["8.8.8.8"], endpoints) == UNKNOWN
+
+
+class _FakePulse:
+    def __init__(
+        self,
+        name="de-tun",
+        status="running",
+        iran="185.10.20.30",
+        abroad="91.1.2.3",
+        domain=None,
+        forwards=None,
+        enabled=True,
+    ):
+        self.name = name
+        self.status = status
+        self.iran_public_ip = iran
+        self.abroad_public_ip = abroad
+        self.domain = domain
+        self.port_forwards = forwards or []
+        self.enabled = enabled
+
+
+def _rows(hosts, *pulse_models):
+    from app.telegram.utils.server_status import endpoints_from_pulses, pulse_infos_from_pulses
+
+    return build_server_status_rows(
+        hosts, endpoints_from_pulses(pulse_models), pulse_infos_from_pulses(pulse_models)
+    )
+
+
+def test_normalize_label():
+    from app.telegram.utils.server_status import normalize_label
+
+    assert normalize_label("🇮🇷 DE-TUN 🇩🇪") == "detun"
+    assert normalize_label("de_tun") == "detun"
+    assert normalize_label("  De Tun ") == "detun"
+    assert normalize_label(None) == ""
+
+
+def test_fuzzy_remark_matches_pulse_name_even_with_domain_address():
+    rows = _rows([("🇮🇷 DE-TUN 🇩🇪", ["tunnel.example.com"])], _FakePulse())
+    assert rows == [("🇮🇷 DE-TUN 🇩🇪", ONLINE)]
+
+
+def test_fuzzy_too_short_does_not_match():
+    rows = _rows([("DE", ["x.example.com"])], _FakePulse(name="de"))
+    assert rows == [("DE", UNKNOWN)]
+
+
+def test_host_address_equals_pulse_domain():
+    rows = _rows([("Whatever", ["tun.example.com"])], _FakePulse(domain="tun.example.com", name="zzzz"))
+    assert rows == [("Whatever", ONLINE)]
+
+
+def test_host_port_in_pulse_forwards_with_iran_ip():
+    rows = _rows(
+        [("Edge", ["185.10.20.30"], 443)],
+        _FakePulse(name="zzzz", forwards=["443=127.0.0.1:443"]),
+    )
+    assert rows == [("Edge", ONLINE)]
+
+
+def test_host_port_only_unique_owner_matches():
+    pulse = _FakePulse(name="zzzz", forwards=["8443=127.0.0.1:8443"], status="starting")
+    assert _rows([("Edge", ["cdn.other.net"], 8443)], pulse) == [("Edge", CONNECTING)]
+    assert _rows([("Edge", ["cdn.other.net"], 9999)], pulse) == [("Edge", UNKNOWN)]
+
+
+def test_host_port_shared_by_pulses_needs_relation():
+    a = _FakePulse(name="aaaa", iran="1.1.1.1", abroad="2.2.2.2", forwards=["443=127.0.0.1:443"], status="running")
+    b = _FakePulse(name="bbbb", iran="3.3.3.3", abroad="4.4.4.4", forwards=["443=127.0.0.1:443"], status="error")
+    # unrelated host + shared port → ambiguous → unknown
+    assert _rows([("Edge", ["cdn.other.net"], 443)], a, b) == [("Edge", UNKNOWN)]
+    # related by name → picks that pulse
+    assert _rows([("bbbb edge", ["cdn.other.net"], 443)], a, b) == [("bbbb edge", OFFLINE)]
+
+
+def test_pulse_name_as_address_label():
+    rows = _rows([("x", ["de-tun.example.com"])], _FakePulse(domain=None))
+    assert rows == [("x", ONLINE)]
+    assert _rows([("x", ["de-tun"])], _FakePulse()) == [("x", ONLINE)]
+
+
+def test_disabled_pulse_is_ignored_and_best_state_wins():
+    assert _rows([("DE-TUN", ["t.example.com"])], _FakePulse(enabled=False)) == [("DE-TUN", UNKNOWN)]
+    up = _FakePulse(name="de-tun", status="running")
+    down = _FakePulse(name="de-tun-2", status="error", iran="9.9.9.9")
+    assert _rows([("de-tun", ["185.10.20.30"])], down, up) == [("de-tun", ONLINE)]
+
+
+def test_build_pulse_rows_lists_every_tunnel():
+    from app.telegram.utils.server_status import build_pulse_rows, pulse_infos_from_pulses
+
+    infos = pulse_infos_from_pulses([_FakePulse(), _FakePulse(name="nl-tun", status="error", iran="5.5.5.5")])
+    assert build_pulse_rows(infos) == [("de-tun", ONLINE), ("nl-tun", OFFLINE)]
 
 
 def test_build_rows_dedupes_by_remark():

@@ -15,6 +15,8 @@ const FONT_PAIRS: Record<SubTheme, string> = {
   ember: 'Space Grotesk',
   folio: 'Outfit',
   harbor: 'Manrope',
+  lumen: 'Sora · Source Sans 3',
+  rift: 'Bebas Neue · Oswald · IBM Plex Sans',
 }
 
 interface ThemeCardProps {

@@ -215,6 +215,64 @@ def _rank(state: str) -> int:
     return _RANK.get(state, 0)
 
 
+def _inherit_sibling_status(states: dict[str, str]) -> None:
+    """
+    Fill remaining Unknown hosts from siblings with a shared stem.
+
+    Example: ``DE-TUN`` matched Online via Iran IP, but ``DE-TUN 2`` uses a domain →
+    still Unknown. After normalize both are ``detun`` / ``detun2``; inherit Online.
+    """
+    known = [(label, state) for label, state in states.items() if state != UNKNOWN]
+    if not known:
+        return
+    for label, state in list(states.items()):
+        if state != UNKNOWN:
+            continue
+        key = normalize_label(label)
+        if len(key) < _MIN_FUZZY_LEN:
+            continue
+        best: str | None = None
+        for other, other_state in known:
+            other_key = normalize_label(other)
+            if len(other_key) < _MIN_FUZZY_LEN:
+                continue
+            # shared stem: detun ⊂ detun2, or equal after stripping trailing digits
+            stem_a = key.rstrip("0123456789")
+            stem_b = other_key.rstrip("0123456789")
+            related = (
+                key in other_key
+                or other_key in key
+                or (len(stem_a) >= _MIN_FUZZY_LEN and stem_a == stem_b)
+            )
+            if related:
+                best = _better(best, other_state)
+        if best is not None:
+            states[label] = best
+
+
+def _fill_unknown_from_healthy_pulses(states: dict[str, str], pulses: list[PulseInfo]) -> None:
+    """
+    When every Pulse is Online and at least one host already matched Online, treat
+    remaining Unknown hosts as Online.
+
+    Buyer UI no longer lists Pulse tunnel names. Hosts like ``FL - STUN`` often use a
+    domain/remark that never matches ``andishe`` / ``pulse_…`` — without this fill they
+    stay Unknown even though every tunnel is up. Requiring one proven Online host avoids
+    inventing status when nothing matched.
+    """
+    if not pulses or not states:
+        return
+    if not any(state == ONLINE for state in states.values()):
+        return
+    if not any(state == UNKNOWN for state in states.values()):
+        return
+    if any(p.status != ONLINE for p in pulses):
+        return
+    for label, state in list(states.items()):
+        if state == UNKNOWN:
+            states[label] = ONLINE
+
+
 def build_server_status_rows(
     hosts: Iterable[tuple],
     endpoints: Iterable[EndpointInfo],
@@ -239,6 +297,8 @@ def build_server_status_rows(
             states[label] = state
         elif _rank(state) > _rank(states[label]):
             states[label] = state
+    _inherit_sibling_status(states)
+    _fill_unknown_from_healthy_pulses(states, pulse_list)
     return [(label, states[label]) for label in order]
 
 

@@ -5,7 +5,10 @@ from aiogram.filters.callback_data import CallbackData
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from app.db.models import ShopOrder, ShopPlan
-from app.telegram.utils.i18n import format_price, t
+from app.telegram.utils.i18n import buyer_plan_label, format_price, t
+
+_PLAN_BUTTON_STYLES = (ButtonStyle.SUCCESS, ButtonStyle.PRIMARY, ButtonStyle.DANGER)
+_PLAN_BUTTON_EMOJIS = ("🟢", "🔵", "🟠")
 
 
 class LangAction(str, Enum):
@@ -163,12 +166,26 @@ class ShopPlansKeyboard(InlineKeyboardBuilder):
     def __init__(self, lang: str, plans: list[ShopPlan], *args, custom_enabled: bool = False, **kwargs):
         super().__init__(*args, **kwargs)
         cb = ShopKeyboardCallback
-        for plan in plans:
-            label = f"{plan.name} · {format_price(plan.price_toman)}T"
-            self.button(text=label, callback_data=cb(action=ShopAction.buy, plan_id=plan.id))
+        for index, plan in enumerate(plans):
+            emoji = _PLAN_BUTTON_EMOJIS[index % len(_PLAN_BUTTON_EMOJIS)]
+            name = buyer_plan_label(plan.name)
+            label = f"{emoji} {format_price(plan.price_toman)}T · {name}"
+            self.button(
+                text=label,
+                callback_data=cb(action=ShopAction.buy, plan_id=plan.id),
+                style=_PLAN_BUTTON_STYLES[index % len(_PLAN_BUTTON_STYLES)],
+            )
         if custom_enabled:
-            self.button(text=t(lang, "btn_custom_purchase"), callback_data=cb(action=ShopAction.custom))
-        self.button(text=t(lang, "btn_back"), callback_data=cb(action=ShopAction.home))
+            self.button(
+                text=t(lang, "btn_custom_purchase"),
+                callback_data=cb(action=ShopAction.custom),
+                style=ButtonStyle.PRIMARY,
+            )
+        self.button(
+            text=t(lang, "btn_back"),
+            callback_data=cb(action=ShopAction.home),
+            style=ButtonStyle.DANGER,
+        )
         n = len(plans) + (1 if custom_enabled else 0)
         if n:
             self.adjust(*([1] * n), 1)
@@ -276,13 +293,20 @@ class ShopRenewPlansKeyboard(InlineKeyboardBuilder):
     def __init__(self, lang: str, plans: list[ShopPlan], user_id: int, *args, **kwargs):
         super().__init__(*args, **kwargs)
         cb = ShopKeyboardCallback
-        for plan in plans:
-            label = f"{plan.name} · {format_price(plan.price_toman)}T"
+        for index, plan in enumerate(plans):
+            emoji = _PLAN_BUTTON_EMOJIS[index % len(_PLAN_BUTTON_EMOJIS)]
+            name = buyer_plan_label(plan.name)
+            label = f"{emoji} {format_price(plan.price_toman)}T · {name}"
             self.button(
                 text=label,
                 callback_data=cb(action=ShopAction.renew_buy, plan_id=plan.id, user_id=user_id),
+                style=_PLAN_BUTTON_STYLES[index % len(_PLAN_BUTTON_STYLES)],
             )
-        self.button(text=t(lang, "btn_back"), callback_data=cb(action=ShopAction.renew))
+        self.button(
+            text=t(lang, "btn_back"),
+            callback_data=cb(action=ShopAction.renew),
+            style=ButtonStyle.DANGER,
+        )
         n = len(plans)
         if n:
             self.adjust(*([1] * n), 1)

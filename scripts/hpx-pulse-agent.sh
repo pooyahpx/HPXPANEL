@@ -1654,8 +1654,12 @@ finally:
         fi
         ;;
       *)
-        if [ -n "${IRAN_PUBLIC_IP:-}" ] && [ -n "${CONTROL_PORT:-}" ]; then
-          tcp_ctl="$(probe_tcp_connect_json "$IRAN_PUBLIC_IP" "$CONTROL_PORT" "control")"
+        # reverse_tcp / reverse_stealth / reverse_wss / … — do NOT TCP-connect
+        # Iran:control. That accept+close resets the live stealth/TCP control session.
+        if tunnel_service_active; then
+          tcp_ctl=$(jq -nc --arg d "local tunnel unit active (skip remote control probe — unsafe on ${TUNNEL_MODE})" '{ok:true, state:"ok", detail:$d}')
+        else
+          tcp_ctl=$(jq -nc --arg d "local tunnel unit not active" --arg f "sudo systemctl restart $(tunnel_service_name)" '{ok:false, state:"fail", detail:$d, fix:$f}')
         fi
         ;;
     esac
@@ -1837,10 +1841,23 @@ handle_diagnose_command() {
 }
 
 # Panel queues: pp:t:4:c | pp:u:8:f  (also legacy path-ping:tcp:4:control)
+#
+# CRITICAL: never open raw TCP to the reverse/stealth CONTROL port. The tunnel
+# engine accepts those probes as peers; closing them resets the live control
+# session and drops user configs until Sync/restart. Forward (user path) only.
 run_path_ping_samples() {
   local proto="$1" count="$2" target_kind="$3"
   local host="${IRAN_PUBLIC_IP:-}" port="" i ms status detail replies_json="[]" ok_n=0
   [ -n "$host" ] || { echo '{"status":"error","detail":"iran_public_ip missing"}'; return 1; }
+
+  case "${TUNNEL_MODE:-}" in
+    reverse_*)
+      if [ "$target_kind" = "control" ]; then
+        warn "path-ping: refusing control probe on ${TUNNEL_MODE} (resets tunnel) — using forward"
+        target_kind="forward"
+      fi
+      ;;
+  esac
 
   if [ "$target_kind" = "forward" ]; then
     port="$(first_forward_listen_port || true)"
@@ -2059,13 +2076,11 @@ send_heartbeat() {
       ;;
     reverse_*)
       # Abroad measures live user-path: Iran public IP + forwarded port (e.g. 443).
-      # Control-port-only ping looked "up" while real configs still got -1.
+      # NEVER TCP-probe CONTROL on reverse/stealth — raw connect/close resets the
+      # control session (same failure mode as Speed test → Control).
       if [ "${PULSE_SIDE:-}" = "abroad" ] && [ "$running" = "true" ] \
         && [ -n "${IRAN_PUBLIC_IP:-}" ]; then
         fwd_port="$(first_forward_listen_port)"
-        if [ -n "${CONTROL_PORT:-}" ]; then
-          control_lat="$(measure_tcp_ms "$IRAN_PUBLIC_IP" "$CONTROL_PORT" || true)"
-        fi
         if [ -n "$fwd_port" ]; then
           forward_lat="$(measure_tcp_ms "$IRAN_PUBLIC_IP" "$fwd_port" || true)"
         fi
@@ -2073,18 +2088,17 @@ send_heartbeat() {
           lat="$forward_lat"
           fwd_json="true"
           msg="user path OK (Iran:${fwd_port})"
-        elif [ -n "$control_lat" ]; then
-          # Tunnel control works but 443 path dead — configs will show -1
-          lat="$control_lat"
+        elif tunnel_service_active; then
+          # Service up but forward closed — do not poke control to "confirm".
           fwd_json="false"
-          msg="control OK but Iran:${fwd_port:-443} closed — open firewall + Xray on abroad 127.0.0.1:${fwd_port:-443}"
+          msg="tunnel up but Iran:${fwd_port:-443} closed — open firewall + Xray on abroad 127.0.0.1:${fwd_port:-443}"
         else
           fwd_json="false"
-          msg="cannot reach Iran tunnel/control — check Iran IP/firewall"
+          msg="cannot reach Iran forward path — check Iran IP/firewall"
         fi
       fi
       ;;
-  esac
+    esac
 
   [ -n "$lat" ] && lat_json="$lat"
   # Iran must not overwrite abroad's diagnostic message every 5s.

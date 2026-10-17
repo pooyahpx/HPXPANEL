@@ -237,7 +237,8 @@ export default function PathPingPanel({
 }) {
   const { t } = useTranslation()
   const [proto, setProto] = useState<PathPingProto>('tcp')
-  const [target, setTarget] = useState<PathPingTarget>('control')
+  // Forward = user path. Control probes can reset reverse/stealth tunnels.
+  const [target, setTarget] = useState<PathPingTarget>('forward')
   const rootRef = useRef<HTMLDivElement>(null)
   const runRef = useRef<HTMLButtonElement>(null)
   const pathPing = pulse.path_ping
@@ -278,7 +279,8 @@ export default function PathPingPanel({
           </div>
           <p className="text-muted-foreground text-[11px] leading-relaxed">
             {t('hpxPulse.speedTest.subtitle', {
-              defaultValue: 'Measures latency, jitter range and packet loss across the tunnel path. Not a bandwidth (Mbps) test.',
+              defaultValue:
+                'Measures latency on the Forward (user) path. Prefer Forward — Control probes can reset reverse/stealth tunnels. Not a bandwidth (Mbps) test.',
             })}
           </p>
         </div>

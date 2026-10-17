@@ -15,8 +15,9 @@
 </p>
 
 <p align="center">
-  <img alt="build" src="https://img.shields.io/github/actions/workflow/status/pooyahpx/HPXPANEL/build.yml?style=flat-square&label=build">
+  <img alt="build" src="https://img.shields.io/github/actions/workflow/status/pooyahpx/HPXPANEL/build-ghcr.yml?branch=main&style=flat-square&label=CI">
   <img alt="license" src="https://img.shields.io/github/license/pooyahpx/HPXPANEL?style=flat-square">
+  <a href="https://t.me/pooya_ze"><img alt="support" src="https://img.shields.io/badge/Support-@pooya__ze-26A5E4?style=flat-square&logo=telegram&logoColor=white"></a>
   <img alt="stars" src="https://img.shields.io/github/stars/pooyahpx/HPXPANEL?style=social">
   <img alt="dev" src="https://img.shields.io/badge/dev-hpx-0ea5e9?style=flat-square&logo=github">
 </p>
@@ -198,9 +199,12 @@ cd dashboard && bun install && bun run dev
 
 ---
 
-## Документация
+## Документация · Поддержка
 
-**https://pooyahpx.github.io/HPXPANEL/ru/**
+| | |
+| --- | --- |
+| **Docs** | https://pooyahpx.github.io/HPXPANEL/ru/ |
+| **Telegram** | [@pooya_ze](https://t.me/pooya_ze) |
 
 ```bash
 cd docs && bun install && bun run dev
@@ -217,5 +221,6 @@ cd docs && bun install && bun run dev
 
 <p align="center">
   <b>dev by <a href="https://github.com/pooyahpx">hpx</a></b><br/>
-  <a href="https://github.com/pooyahpx/HPXPANEL">pooyahpx/HPXPANEL</a>
+  <a href="https://github.com/pooyahpx/HPXPANEL">pooyahpx/HPXPANEL</a><br/>
+  <a href="https://t.me/pooya_ze">Telegram · @pooya_ze</a>
 </p>

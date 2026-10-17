@@ -18,13 +18,14 @@
 <p align="center">
   <img alt="version" src="https://img.shields.io/github/v/release/pooyahpx/HPXPANEL?style=for-the-badge&label=release&color=8b5cf6">
   <a href="https://github.com/pooyahpx/HPXPANEL/pkgs/container/hpxpanel"><img alt="downloads" src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fpooyahpx%2FHPXPANEL%2Fmain%2Fdocs%2Fbadges%2Fdownloads.json&style=for-the-badge"></a>
-  <img alt="build" src="https://img.shields.io/github/actions/workflow/status/pooyahpx/HPXPANEL/build.yml?style=for-the-badge&label=CI">
+  <img alt="build" src="https://img.shields.io/github/actions/workflow/status/pooyahpx/HPXPANEL/build-ghcr.yml?branch=main&style=for-the-badge&label=CI">
   <img alt="license" src="https://img.shields.io/github/license/pooyahpx/HPXPANEL?style=for-the-badge">
 </p>
 
 <p align="center">
   <img alt="pulse" src="https://img.shields.io/badge/HPX%20Pulse-13%20profiles%20·%20live%20ping-a855f7?style=flat-square">
   <img alt="telegram" src="https://img.shields.io/badge/Telegram%20Command%20Center-native-26A5E4?style=flat-square&logo=telegram&logoColor=white">
+  <a href="https://t.me/pooya_ze"><img alt="support" src="https://img.shields.io/badge/Support-@pooya__ze-26A5E4?style=flat-square&logo=telegram&logoColor=white"></a>
   <img alt="icmp" src="https://img.shields.io/badge/HPX%20ICMP%20Tunnel-built--in-0ea5e9?style=flat-square">
   <img alt="xray" src="https://img.shields.io/badge/Xray--core-full%20ops-6366f1?style=flat-square">
   <img alt="ipsec" src="https://img.shields.io/badge/IKEv2%20%2F%20L2TP%20IPsec-native-10b981?style=flat-square">
@@ -299,7 +300,8 @@ Most panels stop at webhook glue.
 **HPXPANEL** runs commerce, support, and governance **inside the same stack** as your panel.
 
 <p align="center">
-  <b>🛍 Sell · 💬 Support · 🛡 Govern · 📡 Auto-deliver subs — from one bot.</b>
+  <b>🛍 Sell · 💬 Support · 🛡 Govern · 📡 Auto-deliver subs — from one bot.</b><br/>
+  <sub>Project support: <a href="https://t.me/pooya_ze"><b>@pooya_ze</b></a></sub>
 </p>
 
 | Feature | What it does |
@@ -310,6 +312,7 @@ Most panels stop at webhook glue.
 | **📋 Owner audit log** | Instant alert when a non-owner admin creates a user |
 | **📡 Sold-sub registry** | Owner sees every sub sold via bot — buyer, plan, **live subscription URL** |
 | **🔄 Auto sub refresh** | Revoke / config drift detected → **new link + QR to buyer** → owner notified |
+| **🆘 Maintainer** | Telegram support for the project: [**@pooya_ze**](https://t.me/pooya_ze) |
 
 ---
 
@@ -596,12 +599,13 @@ Dashboard dev: `http://127.0.0.1:5173/dashboard/`
 
 ---
 
-## Docs · Donate · Stack
+## Docs · Donate · Support · Stack
 
 | | |
 | --- | --- |
 | **Docs** | https://pooyahpx.github.io/HPXPANEL/ |
 | **Donate** | https://pooyahpx.github.io/HPXPANEL/donate/ |
+| **Telegram support** | [@pooya_ze](https://t.me/pooya_ze) |
 | **Backend** | Python 3.14 · FastAPI · SQLAlchemy · Alembic · APScheduler |
 | **Frontend** | React 19 · Vite · Tailwind 4 · shadcn/ui |
 | **Engines** | Xray-core · WireGuard · Hysteria2 · IPsec · **HPX ICMP** |
@@ -612,5 +616,6 @@ Dashboard dev: `http://127.0.0.1:5173/dashboard/`
 <p align="center">
   <b>Built by <a href="https://github.com/pooyahpx">hpx</a></b><br/>
   <a href="https://github.com/pooyahpx/HPXPANEL">github.com/pooyahpx/HPXPANEL</a><br/>
+  <a href="https://t.me/pooya_ze">Telegram support · @pooya_ze</a><br/>
   <sub>If this panel saves you hours — ⭐ star the repo.</sub>
 </p>

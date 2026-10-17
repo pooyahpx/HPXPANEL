@@ -274,6 +274,64 @@ def test_build_rows_dedupes_by_remark():
     assert rows == [("Germany", ONLINE), ("Unknown host", UNKNOWN)]
 
 
+def test_sibling_inherits_online_from_shared_stem():
+    """DE-TUN matched via Iran IP; DE-TUN 2 has only a domain → inherit Online."""
+    pulse = _FakePulse(name="andishe", iran="185.10.20.30", domain=None)
+    rows = _rows(
+        [
+            ("🇮🇷 DE-TUN 🇩🇪", ["185.10.20.30"]),
+            ("🇮🇷 DE-TUN 2 🇩🇪", ["other.example.com"]),
+        ],
+        pulse,
+    )
+    assert rows == [
+        ("🇮🇷 DE-TUN 🇩🇪", ONLINE),
+        ("🇮🇷 DE-TUN 2 🇩🇪", ONLINE),
+    ]
+
+
+def test_all_pulses_online_fills_unmatched_when_sibling_is_up():
+    """FL-STUN never matches Pulse names; still Online when every tunnel is up."""
+    pulses = [
+        _FakePulse(name="andishe", iran="185.10.20.30"),
+        _FakePulse(name="germanafra", iran="185.10.20.31", abroad="91.1.2.4"),
+    ]
+    rows = _rows(
+        [
+            ("🇮🇷 DE-TUN 🇩🇪", ["185.10.20.30"]),
+            ("🇫🇮 FL - STUN 🇫🇮", ["stun.example.com"]),
+        ],
+        *pulses,
+    )
+    assert rows == [
+        ("🇮🇷 DE-TUN 🇩🇪", ONLINE),
+        ("🇫🇮 FL - STUN 🇫🇮", ONLINE),
+    ]
+
+
+def test_offline_pulse_blocks_unknown_fill():
+    up = _FakePulse(name="andishe", iran="185.10.20.30")
+    down = _FakePulse(name="broken", iran="9.9.9.9", status="error")
+    rows = _rows(
+        [
+            ("DE-TUN", ["185.10.20.30"]),
+            ("FL-STUN", ["stun.example.com"]),
+        ],
+        up,
+        down,
+    )
+    assert rows == [("DE-TUN", ONLINE), ("FL-STUN", UNKNOWN)]
+
+
+def test_buyer_plan_label_strips_tunnel_words():
+    from app.telegram.utils.i18n import buyer_plan_label
+
+    assert buyer_plan_label("تانل مولتی ۱۰ گیگ") == "مولتی ۱۰ گیگ"
+    assert buyer_plan_label("Fair Unlimited Tunnel 1 User") == "Fair Unlimited 1 User"
+    assert buyer_plan_label("نامحدود منصفانه تانل ۲ کاربر") == "نامحدود منصفانه ۲ کاربر"
+    assert buyer_plan_label("Basic 10GB") == "Basic 10GB"
+
+
 # --------------------------------------------------------------- admin traffic
 
 

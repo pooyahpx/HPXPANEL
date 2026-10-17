@@ -1,6 +1,7 @@
 from html import escape
 
 from aiogram import F, Router, types
+from aiogram.enums import ButtonStyle
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -39,7 +40,7 @@ from app.telegram.keyboards.shop import (
 )
 from app.telegram.middlewares.force_join import ForceJoinMiddleware
 from app.telegram.utils import forms
-from app.telegram.utils.i18n import format_bytes, format_price, rich, t
+from app.telegram.utils.i18n import buyer_plan_label, format_bytes, format_price, rich, t
 from app.telegram.utils.shop_helpers import (
     buyer_show_test_button,
     continue_card_checkout,
@@ -235,25 +236,32 @@ async def shop_tariffs(event: types.CallbackQuery, db: AsyncSession, state: FSMC
     if not plans:
         text = t(lang, "shop_empty")
     else:
-        lines = [t(lang, "tariffs_header"), ""]
-        for plan in plans:
+        emojis = ("🟢", "🔵", "🟠", "🟣", "🟡")
+        lines = [rich(lang, "tariffs_header"), ""]
+        for index, plan in enumerate(plans):
             days = t(lang, "days_unlimited") if not plan.expire_days else str(plan.expire_days)
             data = format_bytes(plan.data_limit) if plan.data_limit else t(lang, "days_unlimited")
             lines.append(
-                t(
+                rich(
                     lang,
                     "tariff_row",
-                    name=plan.name,
+                    emoji=emojis[index % len(emojis)],
+                    name=buyer_plan_label(plan.name),
                     data=data,
                     days=days,
                     price=format_price(plan.price_toman),
                 )
             )
-        text = "\n".join(lines)
+            lines.append("")
+        text = "\n".join(lines).rstrip()
     from aiogram.utils.keyboard import InlineKeyboardBuilder
 
     kb = InlineKeyboardBuilder()
-    kb.button(text=t(lang, "btn_back"), callback_data=ShopKeyboardCallback(action=ShopAction.home))
+    kb.button(
+        text=t(lang, "btn_back"),
+        callback_data=ShopKeyboardCallback(action=ShopAction.home),
+        style=ButtonStyle.PRIMARY,
+    )
     kb.adjust(1)
     try:
         await event.message.edit_text(text, reply_markup=kb.as_markup())
@@ -348,20 +356,14 @@ async def shop_server_status(event: types.CallbackQuery, db: AsyncSession, state
         await event.answer(t(lang, "server_status_off"), show_alert=True)
         return
     view = await load_server_status(db, int(config.server_status_group_id))
+    # Buyers only see Host remarks — never raw Pulse tunnel names (andishe, pulse_…).
     host_rows = view.host_rows if view else []
-    pulse_rows = view.pulse_rows if view else []
-    if not host_rows and not pulse_rows:
+    if not host_rows:
         text = t(lang, "server_status_empty")
     else:
         lines = [rich(lang, "server_status_title"), ""]
         for remark, status in host_rows:
             lines.append(f"{escape(remark)} — {t(lang, f'server_status_{status}')}")
-        if pulse_rows:
-            if host_rows:
-                lines.append("")
-            lines.append(rich(lang, "server_status_tunnels_title"))
-            for name, status in pulse_rows:
-                lines.append(f"📡 {escape(name)} — {t(lang, f'server_status_{status}')}")
         text = "\n".join(lines)
     kb = InlineKeyboardBuilder()
     kb.button(text=t(lang, "btn_back"), callback_data=ShopKeyboardCallback(action=ShopAction.home))
@@ -551,7 +553,7 @@ async def _show_fixed_pay(event: types.CallbackQuery, db: AsyncSession, state: F
     text = rich(
         lang,
         "pay_title",
-        name=plan.name,
+        name=buyer_plan_label(plan.name),
         data=format_bytes(plan.data_limit),
         days=days,
         price=format_price(plan.price_toman),
@@ -579,7 +581,7 @@ async def _show_fixed_pay_message(event: types.Message, db: AsyncSession, state:
     text = rich(
         lang,
         "pay_title",
-        name=plan.name,
+        name=buyer_plan_label(plan.name),
         data=format_bytes(plan.data_limit),
         days=days,
         price=format_price(plan.price_toman),
@@ -975,7 +977,7 @@ async def renew_buy_plan(
         lang,
         "renew_pay_title",
         username=target.username,
-        name=plan.name,
+        name=buyer_plan_label(plan.name),
         data=format_bytes(plan.data_limit),
         days=days,
         price=format_price(plan.price_toman),

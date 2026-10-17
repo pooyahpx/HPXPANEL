@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from html import escape
 
 from aiogram.utils.formatting import html_decoration
@@ -10,6 +11,17 @@ b = html_decoration.bold
 c = html_decoration.code
 
 GB = 1024**3
+
+# Strip tunnel jargon from plan labels shown to shop buyers.
+_TUNNEL_NAME_RE = re.compile(r"(?i)\b(?:tunnel|tun)\b|تانل‌?|تونل‌?")
+_MULTI_SPACE_RE = re.compile(r"\s{2,}")
+
+
+def buyer_plan_label(name: str) -> str:
+    """Clean plan name for buyers — drop tunnel/تانل words, keep the rest."""
+    text = _TUNNEL_NAME_RE.sub(" ", name or "")
+    text = _MULTI_SPACE_RE.sub(" ", text).strip(" -·|/–—")
+    return text or (name or "").strip()
 
 
 def rich(lang: str, key: str, **kwargs) -> str:
@@ -68,7 +80,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "shop_disabled": "🛍 فروشگاه فعلاً غیرفعال است.",
         "choose_shop_seller": "🏪 چند فروشگاه فعال است.\nلطفاً فروشنده را انتخاب کنید:",
         "shop_home": "🛍 {b}فروشگاه HPXPANEL{/b}\n\nبه فروشگاه ما خوش آمدید.",
-        "shop_plans_prompt": "📦 {b}پلن‌ها{/b}\n\nیکی از پلن‌ها را انتخاب کنید:",
+        "shop_plans_prompt": "📦 {b}پلن‌ها{/b}\n\nیکی را لمس کنید تا خرید شروع شود:",
         "shop_empty": "هنوز پلنی تعریف نشده است.",
         "plan_line": "{name}\n📦 {data} · 📅 {days} روز · 💰 {price} تومان",
         "days_unlimited": "نامحدود",
@@ -109,8 +121,8 @@ STRINGS: dict[str, dict[str, str]] = {
         "btn_tutorial": "📚 آموزش",
         "btn_open_tutorial": "🔗 باز کردن آموزش",
         "btn_pay_wallet": "💰 پرداخت از کیف پول",
-        "tariffs_header": "💰 تعرفه‌ها:",
-        "tariff_row": "• {name} — {data} / {days} روز — {price} تومان",
+        "tariffs_header": "💰 {b}تعرفه‌ها{/b}\nبرای خرید از منوی «پلن‌ها» اقدام کنید:",
+        "tariff_row": "{emoji} {b}{name}{/b}\n   📦 {data}  ·  📅 {days} روز\n   💵 {price} تومان",
         "wallet_balance": "💰 موجودی کیف پول شما: {balance} تومان",
         "wallet_disabled": "💰 کیف پول فعلاً غیرفعال است.",
         "wallet_insufficient": "❌ موجودی کافی نیست.\nموجودی: {balance} تومان\nمبلغ: {price} تومان",
@@ -529,7 +541,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "shop_disabled": "🛍 Shop is currently disabled.",
         "choose_shop_seller": "🏪 Multiple shops are enabled.\nPlease choose a seller:",
         "shop_home": "🛍 {b}HPXPANEL Shop{/b}\n\nWelcome to our shop.",
-        "shop_plans_prompt": "📦 {b}Plans{/b}\n\nPick a plan:",
+        "shop_plans_prompt": "📦 {b}Plans{/b}\n\nTap a plan to start checkout:",
         "shop_empty": "No plans available yet.",
         "plan_line": "{name}\n📦 {data} · 📅 {days} days · 💰 {price} Toman",
         "days_unlimited": "Unlimited",
@@ -569,8 +581,8 @@ STRINGS: dict[str, dict[str, str]] = {
         "btn_tutorial": "📚 Tutorial",
         "btn_open_tutorial": "🔗 Open tutorial",
         "btn_pay_wallet": "💰 Pay from wallet",
-        "tariffs_header": "💰 Tariffs:",
-        "tariff_row": "• {name} — {data} / {days} days — {price} Toman",
+        "tariffs_header": "💰 {b}Tariffs{/b}\nBuy from the Plans menu:",
+        "tariff_row": "{emoji} {b}{name}{/b}\n   📦 {data}  ·  📅 {days} days\n   💵 {price} Toman",
         "wallet_balance": "💰 Your wallet balance: {balance} Toman",
         "wallet_disabled": "💰 Wallet is currently disabled.",
         "wallet_insufficient": "❌ Insufficient balance.\nBalance: {balance} Toman\nPrice: {price} Toman",
@@ -992,7 +1004,7 @@ def plan_caption(lang: str, name: str, data_limit: int, expire_days: int, price:
     return t(
         lang,
         "plan_line",
-        name=escape(name),
+        name=escape(buyer_plan_label(name)),
         data=format_bytes(data_limit),
         days=days,
         price=format_price(price),

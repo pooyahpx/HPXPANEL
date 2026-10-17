@@ -187,7 +187,7 @@ def test_new_themes_lumen_and_rift_are_allowed():
     assert _subscription(sub_theme="rift").sub_theme == "rift"
 
 
-@pytest.mark.parametrize("theme", ["lumen", "rift"])
+@pytest.mark.parametrize("theme", ["ember", "folio", "harbor", "lumen", "rift"])
 def test_new_themes_have_css_and_distinct_layouts(theme):
     html = render_template(TEMPLATE, _context(sub_theme=theme))
     assert f'<html lang="en" data-skin="{theme}">' in html
@@ -201,8 +201,25 @@ def test_new_themes_have_css_and_distinct_layouts(theme):
 
 def test_new_theme_fonts_are_loaded():
     html = render_template(TEMPLATE, _context(sub_theme="rift"))
-    for family in ("family=Sora", "family=Bebas+Neue", "family=Oswald", "family=Source+Sans+3", "family=IBM+Plex+Sans"):
+    for family in (
+        "family=Sora",
+        "family=Bebas+Neue",
+        "family=Oswald",
+        "family=Source+Sans+3",
+        "family=IBM+Plex+Sans",
+        "family=Space+Grotesk",
+        "family=Outfit",
+        "family=Manrope",
+    ):
         assert family in html
+
+
+@pytest.mark.parametrize("theme", ["ember", "folio", "harbor"])
+def test_ember_folio_harbor_have_distinct_grid_overrides(theme):
+    html = render_template(TEMPLATE, _context(sub_theme=theme))
+    assert f'[data-skin="{theme}"] .grid-top,[data-skin="{theme}"] .grid-mid' in html
+    assert f'[data-skin="{theme}"] .status-hero' in html
+    assert f'[data-skin="{theme}"] .rail-card' in html
 
 
 def test_apps_section_has_platform_filter_and_cards():

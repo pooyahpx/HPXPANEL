@@ -58,6 +58,7 @@ Most panels stop at “create user → copy link.” HPXPANEL goes further:
 
 - **GitHub:** [pooyahpx/HPXPANEL](https://github.com/pooyahpx/HPXPANEL)
 - **dev by hpx:** [github.com/pooyahpx](https://github.com/pooyahpx)
+- **Telegram support:** [@pooya_ze](https://t.me/pooya_ze)
 
 ---
 

@@ -77,7 +77,7 @@ def test_subscription_portal_html_includes_support_and_devices(access_token):
         assert page.status_code == status.HTTP_200_OK, page.text
         assert "text/html" in page.headers.get("content-type", "")
         assert "Devices" in page.text
-        assert "https://t.me/" in page.text
+        assert "https://t.me/pooya_ze" in page.text
         assert "Support" in page.text
     finally:
         delete_user(access_token, user["username"])

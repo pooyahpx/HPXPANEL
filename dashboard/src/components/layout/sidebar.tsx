@@ -11,7 +11,7 @@ import { SidebarTriggerWithBadge } from '@/components/layout/sidebar-trigger-wit
 import { VersionBadge } from '@/components/layout/version-badge'
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from '@/components/ui/sidebar'
 import { HPX_LOGO_URL } from '@/constants/brand'
-import { DOCUMENTATION, DONATION_URL, REPO_URL } from '@/constants/Project'
+import { DOCUMENTATION, DONATION_URL, REPO_URL, TELEGRAM_SUPPORT_URL } from '@/constants/Project'
 import { useAdmin } from '@/hooks/use-admin'
 import useDirDetection from '@/hooks/use-dir-detection'
 import { useSystemVersion } from '@/hooks/use-system-version'
@@ -447,6 +447,17 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       },
     ],
     navSecondary: [
+      // Owners already get Telegram via community links; everyone else needs it here.
+      ...(!isOwner(admin)
+        ? [
+            {
+              title: t('telegramSupport'),
+              url: TELEGRAM_SUPPORT_URL,
+              icon: Send,
+              target: '_blank' as const,
+            },
+          ]
+        : []),
       {
         title: t('supportUs'),
         url: DONATION_URL,
@@ -459,6 +470,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         title: 'documentation',
         url: DOCUMENTATION,
         icon: BookOpen,
+        target: '_blank',
+      },
+      {
+        title: 'telegramSupport',
+        url: TELEGRAM_SUPPORT_URL,
+        icon: Send,
         target: '_blank',
       },
       {
@@ -489,7 +506,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           icon: item.icon,
           target: item.target,
         }))
-      : []),
+      : [
+          {
+            title: 'telegramSupport',
+            url: TELEGRAM_SUPPORT_URL,
+            icon: Send,
+            target: '_blank' as const,
+          },
+        ]),
     {
       title: 'supportUs',
       url: DONATION_URL,

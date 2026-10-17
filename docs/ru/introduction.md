@@ -30,3 +30,4 @@ outline: deep
 
 - **GitHub:** [pooyahpx/HPXPANEL](https://github.com/pooyahpx/HPXPANEL)
 - **dev by hpx:** [github.com/pooyahpx](https://github.com/pooyahpx)
+- **Telegram:** [@pooya_ze](https://t.me/pooya_ze)

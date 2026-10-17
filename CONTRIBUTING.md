@@ -6,7 +6,8 @@ HPXPANEL is a command-deck proxy ops console. Contributions should make the pane
 
 Repo: [pooyahpx/HPXPANEL](https://github.com/pooyahpx/HPXPANEL)  
 Docs: [pooyahpx.github.io/HPXPANEL](https://pooyahpx.github.io/HPXPANEL/)  
-Maintainer: [pooyahpx](https://github.com/pooyahpx)
+Maintainer: [pooyahpx](https://github.com/pooyahpx)  
+Telegram support: [@pooya_ze](https://t.me/pooya_ze)
 
 ---
 
@@ -14,7 +15,7 @@ Maintainer: [pooyahpx](https://github.com/pooyahpx)
 
 | You want to… | Do this |
 | --- | --- |
-| Ask a quick question | Open a [GitHub Discussion / Issue](https://github.com/pooyahpx/HPXPANEL/issues) with context |
+| Ask a quick question | Telegram [@pooya_ze](https://t.me/pooya_ze) or a [GitHub Issue](https://github.com/pooyahpx/HPXPANEL/issues) |
 | Report a bug | File an issue with the checklist below |
 | Ship a change | Branch → PR against `main` |
 

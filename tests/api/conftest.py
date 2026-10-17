@@ -109,7 +109,7 @@ def mock_settings(monkeypatch: pytest.MonkeyPatch):
         "subscription": {
             "url_prefix": "",
             "update_interval": 12,
-            "support_url": "https://t.me/",
+            "support_url": "https://t.me/pooya_ze",
             "profile_title": "Subscription",
             "host_status_filter": False,
             "randomize_order": False,

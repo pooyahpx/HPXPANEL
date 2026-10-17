@@ -18,13 +18,14 @@
 <p align="center">
   <img alt="version" src="https://img.shields.io/github/v/release/pooyahpx/HPXPANEL?style=for-the-badge&label=release&color=8b5cf6">
   <a href="https://github.com/pooyahpx/HPXPANEL/pkgs/container/hpxpanel"><img alt="downloads" src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fpooyahpx%2FHPXPANEL%2Fmain%2Fdocs%2Fbadges%2Fdownloads.json&style=for-the-badge"></a>
-  <img alt="build" src="https://img.shields.io/github/actions/workflow/status/pooyahpx/HPXPANEL/build.yml?style=for-the-badge&label=CI">
+  <img alt="build" src="https://img.shields.io/github/actions/workflow/status/pooyahpx/HPXPANEL/build-ghcr.yml?branch=main&style=for-the-badge&label=CI">
   <img alt="license" src="https://img.shields.io/github/license/pooyahpx/HPXPANEL?style=for-the-badge">
 </p>
 
 <p align="center">
   <img alt="pulse" src="https://img.shields.io/badge/HPX%20Pulse-13%20پروفایل%20·%20پینگ%20زنده-a855f7?style=flat-square">
   <img alt="telegram" src="https://img.shields.io/badge/مرکز%20فرمان%20تلگرام-نیتیو-26A5E4?style=flat-square&logo=telegram&logoColor=white">
+  <a href="https://t.me/pooya_ze"><img alt="support" src="https://img.shields.io/badge/پشتیبانی-@pooya__ze-26A5E4?style=flat-square&logo=telegram&logoColor=white"></a>
   <img alt="icmp" src="https://img.shields.io/badge/تونل%20HPX%20ICMP-داخلی-0ea5e9?style=flat-square">
   <img alt="xray" src="https://img.shields.io/badge/Xray--core-عملیات%20کامل-6366f1?style=flat-square">
   <img alt="ipsec" src="https://img.shields.io/badge/IKEv2%20%2F%20L2TP%20IPsec-نیتیو-10b981?style=flat-square">
@@ -299,6 +300,10 @@ curl -fsSL https://raw.githubusercontent.com/pooyahpx/HPXPANEL/main/scripts/hpx-
 
 ## اولین پنل با مرکز فرمان تلگرام نیتیو
 
+<p align="center">
+  <sub>پشتیبانی پروژه: <a href="https://t.me/pooya_ze"><b>@pooya_ze</b></a></sub>
+</p>
+
 | امکان | کاربرد |
 | --- | --- |
 | **🛍 فروشگاه** | پلن، کارت‌به‌کارت، رسید، کانفیگ تست، QR |
@@ -307,6 +312,7 @@ curl -fsSL https://raw.githubusercontent.com/pooyahpx/HPXPANEL/main/scripts/hpx-
 | **📋 لاگ مالک** | ساخت یوزر توسط ادمین غیرمالک → اعلان فوری |
 | **📡 رجیستری ساب فروخته** | مالک همه ساب‌ها را با **URL زنده** می‌بیند |
 | **🔄 آپدیت خودکار ساب** | revoke / تغییر کانفیگ → لینک + QR برای خریدار |
+| **🆘 پشتیبان پروژه** | تلگرام: [**@pooya_ze**](https://t.me/pooya_ze) |
 
 ---
 
@@ -510,14 +516,18 @@ Copilot context زنده پنل را می‌خواند و می‌تواند لی
 
 ---
 
-## مستندات
+## مستندات · پشتیبانی
 
-**https://pooyahpx.github.io/HPXPANEL/**
+| | |
+| --- | --- |
+| **مستندات** | https://pooyahpx.github.io/HPXPANEL/ |
+| **پشتیبانی تلگرام** | [@pooya_ze](https://t.me/pooya_ze) |
 
 ---
 
 <p align="center">
   <b>ساخته‌شده توسط <a href="https://github.com/pooyahpx">hpx</a></b><br/>
   <a href="https://github.com/pooyahpx/HPXPANEL">github.com/pooyahpx/HPXPANEL</a><br/>
+  <a href="https://t.me/pooya_ze">پشتیبانی تلگرام · @pooya_ze</a><br/>
   <sub>اگر این پنل وقتت را ذخیره کرد — ⭐ استار بده.</sub>
 </p>

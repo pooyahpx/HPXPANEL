@@ -319,7 +319,7 @@ DEFAULT_SUB_THEME_MODE = "dark"
 class Subscription(BaseModel):
     url_prefix: str = Field(default="")
     update_interval: int = Field(default=12)
-    support_url: str = Field(default="https://t.me/")
+    support_url: str = Field(default="https://t.me/pooya_ze")
     profile_title: str = Field(default="Subscription")
     # only supported by v2RayTun and Happ apps
     announce: str = Field(default="", max_length=128)

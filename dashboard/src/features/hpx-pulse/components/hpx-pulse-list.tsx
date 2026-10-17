@@ -40,6 +40,7 @@ import {
   KeyRound,
   Pencil,
   Plus,
+  Rocket,
   RefreshCw,
   Save,
   Stethoscope,
@@ -365,6 +366,13 @@ function PulseCard({
   const isRunning = pulse.status === 'running'
   const bothAgents = pulse.iran_claimed && pulse.abroad_claimed
   const autoLabel = formatAutoRestart(pulse.auto_restart_interval_minutes, t)
+  const [speedOpen, setSpeedOpen] = useState(false)
+  const [speedFocus, setSpeedFocus] = useState(0)
+  const showSpeed = speedOpen || pathPingLoading
+  const openSpeedTest = () => {
+    setSpeedOpen(true)
+    setSpeedFocus(n => n + 1)
+  }
 
   return (
     <Card
@@ -444,6 +452,17 @@ function PulseCard({
           </div>
 
           <div className="flex flex-wrap gap-1">
+            {(canUpdate || pulse.path_ping) && (
+              <Button
+                size="sm"
+                className="h-8 gap-1.5 font-semibold"
+                onClick={openSpeedTest}
+                disabled={pathPingLoading && !showSpeed}
+              >
+                <Rocket className={cn('size-3.5', pathPingLoading && 'animate-pulse')} />
+                {t('hpxPulse.speedTest.button', { defaultValue: 'Speed test' })}
+              </Button>
+            )}
             <Button size="sm" variant="outline" className="h-8 gap-1.5" onClick={onDiagnose} disabled={diagnoseLoading || fixLoading}>
               <Stethoscope className={cn('size-3.5', diagnoseLoading && 'animate-pulse')} />
               {t('hpxPulse.runDiagnose', { defaultValue: 'Run Diagnose' })}
@@ -568,12 +587,31 @@ function PulseCard({
         )}
 
         {canUpdate ? (
-          <PathPingPanel
-            pulse={pulse}
-            disabled={!canUpdate}
-            loading={pathPingLoading}
-            onRun={onPathPing}
-          />
+          showSpeed ? (
+            <PathPingPanel
+              pulse={pulse}
+              disabled={!canUpdate}
+              loading={pathPingLoading}
+              onRun={onPathPing}
+              onClose={() => setSpeedOpen(false)}
+              focusSignal={speedFocus}
+            />
+          ) : pulse.path_ping ? (
+            <button
+              type="button"
+              onClick={openSpeedTest}
+              className="text-muted-foreground hover:text-foreground flex w-full items-center justify-between gap-2 rounded-lg border border-dashed px-3 py-2 text-start text-xs transition-colors"
+            >
+              <span className="flex items-center gap-1.5">
+                <Rocket className="size-3.5" />
+                {t('hpxPulse.speedTest.lastResult', { defaultValue: 'Last speed test' })}
+              </span>
+              <span className="font-mono tabular-nums" dir="ltr">
+                {pulse.path_ping.avg_ms != null ? `${pulse.path_ping.avg_ms.toFixed(1)} ms` : '—'}
+                {pulse.path_ping.loss_pct != null ? ` · ${pulse.path_ping.loss_pct.toFixed(0)}%` : ''}
+              </span>
+            </button>
+          ) : null
         ) : pulse.path_ping ? (
           <PathPingPanel pulse={pulse} canRun={false} loading={false} onRun={async () => {}} />
         ) : null}

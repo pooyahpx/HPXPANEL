@@ -3950,7 +3950,36 @@
     "pathPingQueued": "采样中…",
     "pathPingQueuedToast": "路径探测已排队 — 境外代理采样到伊朗",
     "pathPingNoAgent": "尚无代理 — 先 Tokens 再 join 境外",
-    "pathPingTargetPort": "目标 {{ip}}:{{port}} ({{target}})"
+    "pathPingTargetPort": "目标 {{ip}}:{{port}} ({{target}})",
+    "speedTest": {
+      "button": "测速",
+      "title": "隧道测速",
+      "subtitle": "测量隧道路径的延迟、最小/最大范围和丢包率，并非带宽（Mbps）测试。",
+      "start": "开始测速",
+      "runAgain": "再次测试",
+      "running": "正在测试隧道…",
+      "runningHint": "代理正在采样路径，需要几秒钟…",
+      "idle": "准备测试",
+      "emptyTitle": "尚未测速",
+      "emptyHint": "选择 TCP 或 UDP 以及控制口或转发口，然后开始。几秒后在此显示结果。",
+      "failed": "测速失败",
+      "avg": "平均延迟",
+      "min": "最小",
+      "max": "最大",
+      "loss": "丢包率",
+      "lossShort": "丢包",
+      "legend": "质量：优秀 <80 ms · 良好 <150 ms · 一般 <300 ms · 较差 ≥300 ms 或丢包 ≥25%",
+      "lastResult": "上次测速",
+      "collapse": "收起",
+      "protocol": "协议",
+      "endpoint": "端点",
+      "quality": {
+        "excellent": "优秀",
+        "good": "良好",
+        "fair": "一般",
+        "poor": "较差"
+      }
+    }
   },
   "hpxTunnel": {
     "title": "HPX ICMP",
@@ -4324,6 +4353,16 @@
         "name": "Harbor",
         "tag": "沉稳运维",
         "description": "深石板色与天蓝色：横向指标条、柔和的状态卡片，对移动端非常友好。"
+      },
+      "lumen": {
+        "name": "Lumen",
+        "tag": "明亮运维",
+        "description": "通透的白色与石板灰，搭配电光蓝点缀：单列清爽布局、16px 柔和卡片，移动端体验出色。"
+      },
+      "rift": {
+        "name": "Rift",
+        "tag": "电影感",
+        "description": "近黑底色搭配珊瑚橙点缀：不对称主视觉、锐利边角、窄体标题和醒目的状态条。"
       }
     },
     "mode": {

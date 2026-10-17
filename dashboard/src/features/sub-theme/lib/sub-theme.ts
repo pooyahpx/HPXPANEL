@@ -1,6 +1,6 @@
 import type { Subscription, SubTheme, SubThemeMode } from '@/service/api'
 
-export const SUB_THEME_IDS: readonly SubTheme[] = ['terminal', 'aurora', 'nova', 'atlas', 'pulse', 'ember', 'folio', 'harbor'] as const
+export const SUB_THEME_IDS: readonly SubTheme[] = ['terminal', 'aurora', 'nova', 'atlas', 'pulse', 'ember', 'folio', 'harbor', 'lumen', 'rift'] as const
 
 export const DEFAULT_SUB_THEME: SubTheme = 'terminal'
 export const DEFAULT_SUB_THEME_MODE: SubThemeMode = 'dark'

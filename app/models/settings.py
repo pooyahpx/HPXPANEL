@@ -310,7 +310,7 @@ def validate_custom_variables(value: list[CustomVariable]) -> list[CustomVariabl
     return value
 
 
-SUB_THEMES: tuple[str, ...] = ("terminal", "aurora", "nova", "atlas", "pulse", "ember", "folio", "harbor")
+SUB_THEMES: tuple[str, ...] = ("terminal", "aurora", "nova", "atlas", "pulse", "ember", "folio", "harbor", "lumen", "rift")
 SUB_THEME_MODES: tuple[str, ...] = ("dark", "light")
 DEFAULT_SUB_THEME = "terminal"
 DEFAULT_SUB_THEME_MODE = "dark"

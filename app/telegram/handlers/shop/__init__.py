@@ -335,7 +335,7 @@ async def shop_referral(event: types.CallbackQuery, db: AsyncSession, state: FSM
 async def shop_server_status(event: types.CallbackQuery, db: AsyncSession, state: FSMContext):
     from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-    from app.telegram.utils.server_status import load_server_status_rows
+    from app.telegram.utils.server_status import load_server_status
 
     lang = await _lang(db, event.from_user.id)
     config = await get_buyer_shop_config(db, state, telegram_id=event.from_user.id)
@@ -347,13 +347,21 @@ async def shop_server_status(event: types.CallbackQuery, db: AsyncSession, state
     ):
         await event.answer(t(lang, "server_status_off"), show_alert=True)
         return
-    rows = await load_server_status_rows(db, int(config.server_status_group_id))
-    if not rows:
+    view = await load_server_status(db, int(config.server_status_group_id))
+    host_rows = view.host_rows if view else []
+    pulse_rows = view.pulse_rows if view else []
+    if not host_rows and not pulse_rows:
         text = t(lang, "server_status_empty")
     else:
         lines = [rich(lang, "server_status_title"), ""]
-        for remark, status in rows:
+        for remark, status in host_rows:
             lines.append(f"{escape(remark)} — {t(lang, f'server_status_{status}')}")
+        if pulse_rows:
+            if host_rows:
+                lines.append("")
+            lines.append(rich(lang, "server_status_tunnels_title"))
+            for name, status in pulse_rows:
+                lines.append(f"📡 {escape(name)} — {t(lang, f'server_status_{status}')}")
         text = "\n".join(lines)
     kb = InlineKeyboardBuilder()
     kb.button(text=t(lang, "btn_back"), callback_data=ShopKeyboardCallback(action=ShopAction.home))

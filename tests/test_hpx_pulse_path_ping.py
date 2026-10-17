@@ -7,7 +7,8 @@ def test_path_ping_request_defaults():
     req = HpxPulsePathPingRequest()
     assert req.proto == "tcp"
     assert req.count == 4
-    assert req.target == "control"
+    # Forward is default — control probes reset reverse/stealth tunnels.
+    assert req.target == "forward"
 
 
 def test_path_ping_compact_command_fits_legacy_column():

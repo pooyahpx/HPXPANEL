@@ -847,8 +847,17 @@ class HpxPulseOperation(BaseOperation):
         if db_pulse is None:
             await self.raise_error(message="Pulse not found", code=404)
 
+        target = model.target
+        mode = str(getattr(db_pulse, "tunnel_mode", "") or "")
+        # Raw TCP to the reverse/stealth control port can tear down the live session
+        # (engine accepts the probe as a peer, then the probe closes → control reset).
+        coerced = False
+        if target == "control" and mode.startswith("reverse"):
+            target = "forward"
+            coerced = True
+
         port: int | None = db_pulse.control_port
-        if model.target == "forward":
+        if target == "forward":
             forwards = db_pulse.port_forwards or []
             if forwards:
                 left = str(forwards[0]).split("=", 1)[0].strip()
@@ -859,24 +868,27 @@ class HpxPulseOperation(BaseOperation):
         # Compact command stays ≤16 chars for panels that have not widened agent_command yet.
         # Agent accepts both `pp:*` and legacy `path-ping:*`.
         proto_s = "t" if model.proto == "tcp" else "u"
-        target_s = "c" if model.target == "control" else "f"
+        target_s = "c" if target == "control" else "f"
         cmd = f"pp:{proto_s}:{model.count}:{target_s}"
         existing = db_pulse.diag_report if isinstance(db_pulse.diag_report, dict) else {}
         pending = {
             "status": "queued",
             "proto": model.proto,
             "count": model.count,
-            "target": model.target,
+            "target": target,
             "port": port,
             "from": "abroad",
             "to": db_pulse.iran_public_ip,
             "ts": int(dt.now(UTC).timestamp()),
             "replies": [],
         }
+        if coerced:
+            pending["coerced_from"] = "control"
+            pending["coerce_reason"] = "reverse control probe unsafe"
         update: dict = {
             "last_health_check": dt.now(UTC),
             "diag_report": {**existing, "path_ping": pending},
-            "message": f"Path ping queued ({model.proto.upper()} ×{model.count} → Iran {model.target})",
+            "message": f"Path ping queued ({model.proto.upper()} ×{model.count} → Iran {target})",
         }
         queued = False
         if db_pulse.abroad_agent_key_hash:
@@ -892,7 +904,12 @@ class HpxPulseOperation(BaseOperation):
         db_pulse = await update_hpx_pulse(db, db_pulse, update)
         await db.commit()
         hint = None
-        if queued:
+        if queued and coerced:
+            hint = (
+                "Reverse/stealth: Control probe skipped (it can reset the tunnel). "
+                "Sampling Forward (user path) instead — results in ~5–15s"
+            )
+        elif queued:
             hint = "Abroad agent will sample Iran path in ~5–15s — keep this panel open"
         else:
             hint = "No agents joined — Tokens → join abroad (preferred) then Path Ping again"
@@ -902,7 +919,7 @@ class HpxPulseOperation(BaseOperation):
             queued=queued,
             proto=model.proto,
             count=model.count,
-            target=model.target,
+            target=target,
             port=port,
             hint=hint,
             path_ping=pending if queued else None,

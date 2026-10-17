@@ -246,11 +246,16 @@ class HpxPulseDiagnoseResponse(BaseModel):
 
 
 class HpxPulsePathPingRequest(BaseModel):
-    """Queue TCP/UDP path samples from abroad agent → Iran (XRayMesh-style live ping)."""
+    """Queue TCP/UDP path samples from abroad agent → Iran (XRayMesh-style live ping).
+
+    Default target is ``forward`` (user path). Probing ``control`` with raw TCP on
+    reverse/stealth tunnels can accept-then-reset the control session and drop the
+    live tunnel — agents coerce control→forward for reverse_* modes.
+    """
 
     proto: Literal["tcp", "udp"] = "tcp"
     count: int = Field(default=4, ge=1, le=20)
-    target: Literal["control", "forward"] = "control"
+    target: Literal["control", "forward"] = "forward"
 
 
 class HpxPulsePathPingReply(BaseModel):

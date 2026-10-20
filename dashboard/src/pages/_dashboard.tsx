@@ -7,12 +7,14 @@ import RouteGuard from '@/components/layout/route-guard'
 import { TopLoadingBar } from '@/components/layout/top-loading-bar'
 import { VersionUpdateBanner } from '@/components/layout/version-update-banner'
 import DonationPopup from '@/components/common/donation-popup'
+import { Language } from '@/components/common/language'
+import { ThemeToggle } from '@/components/common/theme-toggle'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
 import { getCurrentAdmin } from '@/service/api'
 import { Outlet } from 'react-router'
 import TopbarAd from '@/components/common/topbar-ad'
 import { CopilotLauncher } from '@/features/copilot/components/copilot-launcher'
-import { Activity, Command, Radio } from 'lucide-react'
+import { Activity } from 'lucide-react'
 
 export const clientLoader = async (): Promise<any> => {
   try {
@@ -35,31 +37,38 @@ export default function DashboardLayout() {
           <SidebarInset className="command-viewport scroll-smooth">
             <TopbarAd />
             <VersionUpdateBanner />
-            <header className="command-deck sticky top-0 z-20 px-3 py-3 md:px-5">
+            <header className="command-deck sticky top-0 z-20 px-2 py-2 sm:px-4 sm:py-3">
               <div className="command-deck__frame">
-                <div className="hidden min-w-44 items-center gap-3 lg:flex">
-                  <div className="command-deck__mark">
-                    <Command className="h-4 w-4" />
+                <div className="hidden min-w-0 items-center gap-2.5 lg:flex">
+                  <div className="command-deck__mark" aria-hidden="true">
+                    <Activity className="h-4 w-4" />
                   </div>
-                  <div>
-                    <p className="text-primary font-mono text-[10px] font-bold tracking-[0.16em] uppercase">HPX // Command deck</p>
-                    <p className="text-muted-foreground text-xs">Global operations console</p>
+                  <div className="min-w-0">
+                    <p className="text-foreground truncate text-sm font-semibold tracking-tight">HPXPANEL</p>
+                    <p className="text-muted-foreground truncate text-[11px]">Operations console</p>
                   </div>
                 </div>
                 <QuestSearch compact className="max-w-2xl flex-1" />
-                <div className="flex shrink-0 items-center gap-2">
+                <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
                   <CopilotLauncher />
-                  <span className="command-signal hidden sm:grid" aria-hidden="true">
-                    <Radio className="h-3.5 w-3.5" />
+                  <div className="bg-border/70 mx-0.5 hidden h-5 w-px sm:block" aria-hidden="true" />
+                  <div className="hidden items-center gap-1 sm:flex">
+                    <Language />
+                    <ThemeToggle />
+                  </div>
+                  <span
+                    className="ms-0.5 hidden items-center gap-1.5 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold tracking-wide text-emerald-400 uppercase md:inline-flex"
+                    title="Live uplink"
+                  >
+                    <span className="online-beacon" />
+                    Live
                   </span>
-                  <span className="hidden font-mono text-[10px] font-bold tracking-[0.12em] uppercase sm:inline">Live uplink</span>
-                  <Activity className="hidden h-4 w-4 text-emerald-400 sm:block" />
                 </div>
               </div>
             </header>
-            <div className="command-stage flex min-h-0 w-full flex-1 flex-col justify-between gap-y-4">
+            <div className="command-stage flex min-h-0 w-full flex-1 flex-col justify-between gap-y-3 sm:gap-y-4">
               <div className="command-stage__scan" aria-hidden="true" />
-              <PageTransition duration={250} className="relative z-10 flex min-h-0 flex-1 flex-col">
+              <PageTransition duration={220} className="relative z-10 flex min-h-0 flex-1 flex-col">
                 <Outlet />
               </PageTransition>
               <Footer />

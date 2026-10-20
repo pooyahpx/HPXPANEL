@@ -81,11 +81,11 @@ export function SidebarHoverRail({ items, footerItems = [], header, footer, feat
     const inner = (
       <span
         className={cn(
-          'flex h-9 w-full items-center gap-2.5 rounded-lg px-2.5 text-[13px] font-medium transition-[background-color,color,box-shadow] duration-150 ease-out',
-          nested && 'h-8 ps-9 text-[12px]',
+          'flex h-9 w-full cursor-pointer items-center gap-2.5 rounded-xl px-2.5 text-[13px] font-medium transition-[background-color,color,box-shadow,transform] duration-150 ease-out',
+          nested && 'h-8 rounded-lg ps-9 text-[12px]',
           active
-            ? 'bg-sidebar-accent text-sidebar-accent-foreground shadow-[inset_2px_0_0_0_hsl(var(--sidebar-primary))]'
-            : 'text-sidebar-foreground/75 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground',
+            ? 'bg-sidebar-primary text-sidebar-primary-foreground shadow-[0_8px_20px_-12px_hsl(var(--sidebar-primary))]'
+            : 'text-sidebar-foreground/75 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground',
         )}
       >
         <Icon className={cn('shrink-0', nested ? 'h-3.5 w-3.5' : 'h-4 w-4')} />
@@ -130,8 +130,10 @@ export function SidebarHoverRail({ items, footerItems = [], header, footer, feat
     const iconButton = (
       <span
         className={cn(
-          'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors duration-150',
-          active ? 'bg-sidebar-primary text-sidebar-primary-foreground' : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+          'flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-xl transition-colors duration-150',
+          active
+            ? 'bg-sidebar-primary text-sidebar-primary-foreground shadow-[0_8px_18px_-10px_hsl(var(--sidebar-primary))]'
+            : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
         )}
       >
         <Icon className="h-4 w-4" />
@@ -194,13 +196,15 @@ export function SidebarHoverRail({ items, footerItems = [], header, footer, feat
             <button type="button" className="flex min-w-0 flex-1 items-center outline-none" onClick={() => !sectionOpen && navigate(item.url)}>
               <span
                 className={cn(
-                  'flex h-9 w-full items-center gap-2.5 rounded-lg px-2.5 text-[13px] font-medium transition-colors duration-150',
-                  active ? 'bg-sidebar-accent/80 text-sidebar-accent-foreground' : 'text-sidebar-foreground/75 hover:bg-sidebar-accent/50',
+                  'flex h-9 w-full cursor-pointer items-center gap-2.5 rounded-xl px-2.5 text-[13px] font-medium transition-colors duration-150',
+                  active
+                    ? 'bg-sidebar-primary/90 text-sidebar-primary-foreground shadow-[0_8px_20px_-12px_hsl(var(--sidebar-primary))]'
+                    : 'text-sidebar-foreground/75 hover:bg-sidebar-accent/60',
                 )}
               >
                 <Icon className="h-4 w-4 shrink-0" />
                 <span className="truncate">{t(item.title)}</span>
-                <ChevronDown className={cn('text-muted-foreground ms-auto h-3.5 w-3.5 transition-transform duration-200', sectionOpen && 'rotate-180')} />
+                <ChevronDown className={cn('ms-auto h-3.5 w-3.5 opacity-70 transition-transform duration-200', sectionOpen && 'rotate-180')} />
               </span>
             </button>
           </CollapsibleTrigger>
@@ -216,7 +220,7 @@ export function SidebarHoverRail({ items, footerItems = [], header, footer, feat
     )
   }
 
-  const widthClass = expanded ? 'w-[15.5rem]' : 'w-[3.75rem]'
+  const widthClass = expanded ? 'w-[16rem]' : 'w-[4rem]'
 
   return (
     <aside
@@ -229,10 +233,10 @@ export function SidebarHoverRail({ items, footerItems = [], header, footer, feat
         className,
       )}
     >
-      {header && <div className={cn('flex shrink-0 py-3', expanded ? 'px-3' : 'justify-center px-2')}>{header}</div>}
+      {header && <div className={cn('flex shrink-0 border-b border-sidebar-border/60 py-3.5', expanded ? 'px-3' : 'justify-center px-2')}>{header}</div>}
 
       <ScrollArea className="min-h-0 flex-1">
-        <nav className="flex flex-col gap-1 py-1">{items.map(item => <PrimaryItem key={item.title} item={item} />)}</nav>
+        <nav className="flex flex-col gap-0.5 px-0.5 py-2">{items.map(item => <PrimaryItem key={item.title} item={item} />)}</nav>
       </ScrollArea>
 
       {footerItems.length > 0 && (

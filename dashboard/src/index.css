@@ -3,139 +3,139 @@
 @import 'tailwindcss';
 
 @layer base {
-  /* Readable Pixel — cool neutral surfaces with cobalt accents */
+  /* HPX Ops Deck — Nexora-inspired pro dark/light surfaces (violet active, emerald status) */
   :root {
-    --background: 220 25% 97%;
-    --foreground: 222 47% 11%;
-    --muted: 220 18% 91%;
-    --muted-foreground: 215 20% 36%;
+    --background: 240 10% 97%;
+    --foreground: 240 10% 8%;
+    --muted: 240 8% 92%;
+    --muted-foreground: 240 6% 40%;
     --card: 0 0% 100%;
     --card-foreground: var(--foreground);
     --popover: 0 0% 100%;
     --popover-foreground: var(--foreground);
-    --border: 218 18% 68%;
+    --border: 240 8% 86%;
     --input: 0 0% 100%;
-    --input-placeholder: 215 16% 47%;
-    --primary: 158 64% 40%;
+    --input-placeholder: 240 6% 48%;
+    --primary: 262 72% 52%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 220 18% 92%;
-    --secondary-foreground: 222 47% 14%;
-    --accent: 158 40% 92%;
-    --accent-foreground: 160 60% 22%;
+    --secondary: 240 8% 93%;
+    --secondary-foreground: 240 10% 14%;
+    --accent: 262 60% 94%;
+    --accent-foreground: 262 60% 28%;
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
-    --ring: 158 64% 40%;
-    --radius: 0.85rem;
-    --hover-primary: 158 64% 34%;
-    --hover-secondary: 220 18% 85%;
+    --ring: 262 72% 52%;
+    --radius: 0.75rem;
+    --hover-primary: 262 72% 46%;
+    --hover-secondary: 240 8% 88%;
     --hover-destructive: 0 72% 43%;
     --success: 152 55% 36%;
     --hover-success: 152 55% 30%;
     --border-destructive-50: 12 76% 53%;
     --bg-destructive-10: 12 76% 53%;
     --hover-destructive-20: 12 76% 53%;
-    --bg-muted-50: 220 18% 93%;
-    --bg-accent-50: 158 40% 94%;
-    --bg-muted-40: 220 18% 93%;
-    --border-muted-40: 218 18% 76%;
-    --sidebar-background: 222 40% 9%;
-    --sidebar-foreground: 214 32% 94%;
-    --sidebar-primary: 158 70% 48%;
-    --sidebar-primary-foreground: 222 47% 10%;
-    --sidebar-accent: 222 30% 15%;
-    --sidebar-accent-foreground: 214 32% 96%;
-    --sidebar-border: 220 24% 20%;
-    --sidebar-ring: 158 70% 48%;
-    --sidebar-foreground-70: 215 20% 70%;
-    --snow-color: 158 70% 48%;
+    --bg-muted-50: 240 8% 94%;
+    --bg-accent-50: 262 60% 95%;
+    --bg-muted-40: 240 8% 94%;
+    --border-muted-40: 240 8% 82%;
+    --sidebar-background: 240 12% 7%;
+    --sidebar-foreground: 240 8% 94%;
+    --sidebar-primary: 262 78% 62%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 262 40% 16%;
+    --sidebar-accent-foreground: 240 10% 98%;
+    --sidebar-border: 240 10% 14%;
+    --sidebar-ring: 262 78% 62%;
+    --sidebar-foreground-70: 240 6% 68%;
+    --snow-color: 262 78% 62%;
     --neon-green: 152 70% 48%;
-    --background-custom: 220 25% 97%;
-    --chart-1: 158 64% 40%;
-    --chart-2: 0 72% 51%;
-    --chart-3: 38 92% 50%;
-    --chart-4: 199 89% 48%;
-    --chart-5: 280 40% 48%;
-    --scrollbar-track: 220 25% 97%;
-    --scrollbar-thumb: 218 15% 58%;
-    --scrollbar-thumb-hover: 222 24% 38%;
-    --scrollbar-thumb-active: 158 64% 40%;
-    --surface-glow: 158 70% 48%;
-    --mesh-a: 158 50% 90%;
-    --mesh-b: 200 55% 92%;
-    --mesh-c: 170 45% 93%;
+    --background-custom: 240 10% 97%;
+    --chart-1: 262 72% 52%;
+    --chart-2: 152 60% 42%;
+    --chart-3: 199 89% 48%;
+    --chart-4: 38 92% 50%;
+    --chart-5: 0 72% 55%;
+    --scrollbar-track: 240 10% 97%;
+    --scrollbar-thumb: 240 6% 70%;
+    --scrollbar-thumb-hover: 240 8% 50%;
+    --scrollbar-thumb-active: 262 72% 52%;
+    --surface-glow: 262 72% 56%;
+    --mesh-a: 262 40% 92%;
+    --mesh-b: 200 40% 94%;
+    --mesh-c: 152 30% 94%;
     --color-bone: #f8fafc;
-    --color-ink: #0f172a;
+    --color-ink: #0a0a0b;
     --color-sky-cobalt: #10b981;
     --color-sky-cobalt-pressed: #059669;
     --color-sunset-vermillion: #dc3f3f;
-    --pixel-border: 222 20% 28%;
+    --pixel-border: 240 8% 78%;
   }
 
   .dark {
-    --background: 222 47% 6%;
-    --foreground: 210 40% 96%;
-    --muted: 222 28% 13%;
-    --muted-foreground: 215 20% 68%;
-    --card: 222 36% 9%;
+    --background: 240 8% 4%;
+    --foreground: 240 6% 96%;
+    --muted: 240 6% 11%;
+    --muted-foreground: 240 5% 62%;
+    --card: 240 7% 7%;
     --card-foreground: var(--foreground);
-    --popover: 222 36% 9%;
+    --popover: 240 7% 8%;
     --popover-foreground: var(--foreground);
-    --border: 220 18% 22%;
-    --input: 222 28% 12%;
-    --input-placeholder: 215 16% 58%;
-    --primary: 158 72% 46%;
-    --primary-foreground: 160 80% 6%;
-    --secondary: 222 24% 16%;
-    --secondary-foreground: 214 32% 94%;
-    --accent: 160 28% 16%;
-    --accent-foreground: 158 60% 82%;
+    --border: 240 6% 14%;
+    --input: 240 6% 10%;
+    --input-placeholder: 240 5% 48%;
+    --primary: 262 78% 62%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 240 6% 12%;
+    --secondary-foreground: 240 6% 94%;
+    --accent: 262 35% 14%;
+    --accent-foreground: 262 70% 86%;
     --destructive: 0 72% 58%;
     --destructive-foreground: 0 0% 100%;
-    --ring: 158 72% 46%;
-    --radius: 0.85rem;
-    --hover-primary: 158 72% 54%;
-    --hover-secondary: 222 24% 22%;
+    --ring: 262 78% 62%;
+    --radius: 0.75rem;
+    --hover-primary: 262 78% 68%;
+    --hover-secondary: 240 6% 16%;
     --hover-destructive: 0 72% 50%;
-    --success: 152 60% 44%;
-    --hover-success: 152 60% 38%;
+    --success: 152 60% 46%;
+    --hover-success: 152 60% 40%;
     --border-destructive-50: 12 78% 55%;
     --bg-destructive-10: 12 78% 55%;
     --hover-destructive-20: 12 78% 55%;
-    --bg-muted-50: 222 28% 15%;
-    --bg-accent-50: 160 28% 16%;
-    --bg-muted-40: 222 28% 15%;
-    --border-muted-40: 220 20% 28%;
-    --sidebar-background: 224 50% 5%;
-    --sidebar-foreground: 214 32% 94%;
-    --sidebar-primary: 158 72% 48%;
-    --sidebar-primary-foreground: 160 80% 6%;
-    --sidebar-accent: 222 32% 14%;
-    --sidebar-accent-foreground: 214 40% 96%;
-    --sidebar-border: 220 24% 18%;
-    --sidebar-ring: 158 72% 48%;
-    --sidebar-foreground-70: 215 20% 68%;
-    --snow-color: 158 72% 48%;
+    --bg-muted-50: 240 6% 12%;
+    --bg-accent-50: 262 35% 14%;
+    --bg-muted-40: 240 6% 12%;
+    --border-muted-40: 240 6% 18%;
+    --sidebar-background: 240 10% 5%;
+    --sidebar-foreground: 240 6% 94%;
+    --sidebar-primary: 262 78% 62%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 262 42% 16%;
+    --sidebar-accent-foreground: 240 8% 98%;
+    --sidebar-border: 240 8% 12%;
+    --sidebar-ring: 262 78% 62%;
+    --sidebar-foreground-70: 240 5% 62%;
+    --snow-color: 262 78% 62%;
     --neon-green: 152 70% 52%;
-    --background-custom: 222 47% 6%;
-    --chart-1: 158 72% 46%;
-    --chart-2: 0 72% 58%;
-    --chart-3: 38 92% 58%;
-    --chart-4: 199 89% 55%;
-    --chart-5: 280 50% 62%;
-    --scrollbar-track: 222 47% 6%;
-    --scrollbar-thumb: 220 18% 28%;
-    --scrollbar-thumb-hover: 215 20% 48%;
-    --scrollbar-thumb-active: 158 72% 46%;
-    --surface-glow: 158 70% 42%;
-    --mesh-a: 158 40% 12%;
-    --mesh-b: 200 35% 11%;
-    --mesh-c: 170 30% 10%;
+    --background-custom: 240 8% 4%;
+    --chart-1: 262 78% 62%;
+    --chart-2: 152 60% 48%;
+    --chart-3: 199 89% 55%;
+    --chart-4: 38 92% 58%;
+    --chart-5: 0 72% 58%;
+    --scrollbar-track: 240 8% 4%;
+    --scrollbar-thumb: 240 6% 22%;
+    --scrollbar-thumb-hover: 240 5% 36%;
+    --scrollbar-thumb-active: 262 78% 62%;
+    --surface-glow: 262 70% 48%;
+    --mesh-a: 262 40% 8%;
+    --mesh-b: 200 30% 7%;
+    --mesh-c: 152 25% 6%;
     --color-bone: #f8fafc;
-    --color-ink: #0f172a;
+    --color-ink: #0a0a0b;
     --color-sky-cobalt: #34d399;
     --color-sky-cobalt-pressed: #10b981;
     --color-sunset-vermillion: #f05b5b;
-    --pixel-border: 215 18% 40%;
+    --pixel-border: 240 6% 18%;
   }
 }
 
@@ -504,36 +504,38 @@
 
   .command-viewport {
     position: relative;
-    background: hsl(var(--background) / 0.96);
+    background: hsl(var(--background));
   }
 
   .command-deck {
-    border-bottom: 2px solid hsl(var(--pixel-border));
-    background: hsl(var(--background) / 0.9);
-    backdrop-filter: blur(18px);
+    border-bottom: 1px solid hsl(var(--border) / 0.8);
+    background: hsl(var(--background) / 0.82);
+    backdrop-filter: blur(20px) saturate(1.2);
   }
 
   .command-deck__frame {
     display: flex;
-    min-height: 64px;
+    min-height: 56px;
     align-items: center;
-    gap: 20px;
-    padding: 8px 12px;
-    border: 1px solid hsl(var(--border));
-    background: hsl(var(--card) / 0.75);
-    box-shadow: 3px 3px 0 hsl(var(--pixel-border));
+    gap: 12px;
+    padding: 6px 10px;
+    border: 1px solid hsl(var(--border) / 0.7);
+    border-radius: calc(var(--radius) + 2px);
+    background: hsl(var(--card) / 0.72);
+    box-shadow: 0 1px 0 hsl(var(--foreground) / 0.03), 0 8px 24px -18px hsl(0 0% 0% / 0.45);
   }
 
   .command-deck__mark {
     display: grid;
-    width: 36px;
-    height: 36px;
+    width: 34px;
+    height: 34px;
     flex: none;
     place-items: center;
-    border: 2px solid hsl(var(--pixel-border));
-    background: hsl(var(--primary));
+    border: 1px solid hsl(var(--primary) / 0.35);
+    border-radius: calc(var(--radius) - 2px);
+    background: linear-gradient(145deg, hsl(var(--primary)), hsl(var(--primary) / 0.75));
     color: hsl(var(--primary-foreground));
-    box-shadow: 3px 3px 0 hsl(var(--pixel-border));
+    box-shadow: 0 0 0 1px hsl(var(--primary) / 0.12), 0 6px 16px -8px hsl(var(--primary) / 0.55);
   }
 
   .command-signal {
@@ -566,8 +568,7 @@
        fullscreen statistics (charts + sticky scope rail) when the viewport grows. */
     overflow-x: clip;
     overflow-y: visible;
-    background-image: linear-gradient(hsl(var(--primary) / 0.035) 1px, transparent 1px), linear-gradient(90deg, hsl(var(--primary) / 0.035) 1px, transparent 1px);
-    background-size: 32px 32px;
+    background-image: none;
   }
 
   .command-stage::before {
@@ -575,44 +576,40 @@
     z-index: -1;
     inset: 0;
     content: '';
-    background: radial-gradient(circle at 15% 5%, hsl(var(--primary) / 0.1), transparent 28rem), radial-gradient(circle at 92% 70%, hsl(190 70% 45% / 0.07), transparent 24rem);
+    background:
+      radial-gradient(circle at 12% 0%, hsl(var(--primary) / 0.12), transparent 26rem),
+      radial-gradient(circle at 88% 8%, hsl(199 80% 50% / 0.06), transparent 22rem);
     pointer-events: none;
   }
 
   .command-stage__scan {
-    position: absolute;
-    z-index: 0;
-    top: -25%;
-    right: 0;
-    left: 0;
-    height: 18%;
-    background: linear-gradient(to bottom, transparent, hsl(var(--primary) / 0.035), transparent);
-    pointer-events: none;
-    animation: deck-scan 12s linear infinite;
+    display: none;
   }
 
   .mission-brief {
-    border-bottom: 1px solid hsl(var(--border));
-    background: linear-gradient(105deg, hsl(var(--card) / 0.78), hsl(var(--card) / 0.28) 65%, transparent);
+    border-bottom: 1px solid hsl(var(--border) / 0.7);
+    background: linear-gradient(180deg, hsl(var(--card) / 0.55), transparent);
   }
 
   .mission-brief__index {
     position: absolute;
-    right: 22px;
-    bottom: -22px;
-    color: hsl(var(--primary) / 0.08);
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 6rem;
-    font-weight: 900;
+    right: 18px;
+    bottom: -10px;
+    color: hsl(var(--primary) / 0.06);
+    font-family: 'Fira Sans', ui-sans-serif, system-ui, sans-serif;
+    font-size: 5rem;
+    font-weight: 800;
     line-height: 1;
+    letter-spacing: -0.04em;
     pointer-events: none;
   }
 
   .command-surface {
     position: relative;
-    border: 1px solid hsl(var(--border));
-    background: hsl(var(--card) / 0.72);
-    box-shadow: 4px 4px 0 hsl(var(--pixel-border));
+    border: 1px solid hsl(var(--border) / 0.85);
+    border-radius: var(--radius);
+    background: hsl(var(--card) / 0.88);
+    box-shadow: 0 1px 0 hsl(var(--foreground) / 0.03), 0 12px 32px -24px hsl(0 0% 0% / 0.55);
   }
 
   .online-beacon {
@@ -1000,9 +997,8 @@
       radial-gradient(circle at 100% 0%, hsl(188 70% 45% / 0.12), transparent 45%),
       radial-gradient(circle at 0% 100%, hsl(152 70% 42% / 0.1), transparent 40%);
     box-shadow:
-      0 24px 60px hsl(220 40% 4% / 0.45),
-      0 0 0 1px hsl(var(--primary) / 0.08) inset,
-      4px 4px 0 hsl(var(--pixel-border) / 0.65);
+      0 24px 60px hsl(240 10% 2% / 0.5),
+      0 0 0 1px hsl(var(--primary) / 0.1) inset;
     backdrop-filter: blur(18px);
     padding: 1rem 1rem 0.9rem;
   }
@@ -1028,10 +1024,11 @@
     height: 2.75rem;
     flex: none;
     place-items: center;
-    border: 2px solid hsl(var(--pixel-border));
-    background: linear-gradient(135deg, hsl(152 70% 42%), hsl(188 75% 55%));
+    border: 1px solid hsl(var(--primary) / 0.35);
+    border-radius: 0.85rem;
+    background: linear-gradient(135deg, hsl(var(--primary)), hsl(199 80% 55%));
     color: white;
-    box-shadow: 3px 3px 0 hsl(var(--pixel-border));
+    box-shadow: 0 8px 20px -10px hsl(var(--primary) / 0.65);
     animation: update-toast-bob 2.8s ease-in-out infinite;
   }
 
@@ -1101,9 +1098,10 @@
   }
 
   .update-toast__btn-primary {
-    border: 2px solid hsl(var(--pixel-border));
-    box-shadow: 2px 2px 0 hsl(var(--pixel-border));
-    background: linear-gradient(135deg, hsl(152 70% 42%), hsl(188 75% 55%));
+    border: 1px solid hsl(var(--primary) / 0.4);
+    border-radius: 0.65rem;
+    box-shadow: 0 8px 18px -12px hsl(var(--primary) / 0.7);
+    background: linear-gradient(135deg, hsl(var(--primary)), hsl(199 80% 55%));
     color: white;
   }
 
@@ -1112,9 +1110,10 @@
   }
 
   .update-toast__btn-secondary {
-    border: 2px solid hsl(var(--pixel-border));
-    box-shadow: 2px 2px 0 hsl(var(--pixel-border));
-    background: hsl(var(--card) / 0.8);
+    border: 1px solid hsl(var(--border));
+    border-radius: 0.65rem;
+    box-shadow: none;
+    background: hsl(var(--card) / 0.9);
   }
 
   @keyframes update-toast-glow {

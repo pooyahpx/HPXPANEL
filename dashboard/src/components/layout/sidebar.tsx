@@ -472,13 +472,15 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   }
 
   const brandMark = (
-    <Link
-      to="/"
-      className="relative flex h-8 w-8 items-center justify-center overflow-hidden rounded-lg border border-sidebar-border/80 bg-sidebar-accent/30"
-      aria-label="HPXPANEL home"
-    >
-      <img src={HPX_LOGO_URL} alt="HPXPANEL" className="h-full w-full object-cover" draggable={false} />
-      {canReadSystem && <VersionBadge currentVersion={systemVersion ?? null} compact className="z-10" />}
+    <Link to="/" className="group flex w-full items-center gap-2.5 rounded-xl px-0.5 py-0.5 outline-none" aria-label="HPXPANEL home">
+      <div className="border-sidebar-border/80 bg-sidebar-accent/40 relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl border">
+        <img src={HPX_LOGO_URL} alt="HPXPANEL" className="h-full w-full object-cover" draggable={false} />
+        {canReadSystem && <VersionBadge currentVersion={systemVersion ?? null} compact className="z-10" />}
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-semibold tracking-tight text-sidebar-foreground">HPXPANEL</p>
+        <p className="text-sidebar-foreground/45 truncate text-[10px] font-medium tracking-wide uppercase">Ops console</p>
+      </div>
     </Link>
   )
 
@@ -504,6 +506,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     return (
       <SidebarHoverRail
         side={isRTL ? 'right' : 'left'}
+        className="hidden lg:flex"
         items={data.navMain}
         footerItems={dualTierFooterItems}
         header={brandMark}

@@ -158,16 +158,19 @@ export function NavUser({
     )
   }
 
-  // Expanded state - full dropdown
+  // Expanded state - full dropdown (Nexora-style bottom profile)
   return (
     <SidebarMenu>
       <SidebarMenuItem>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <SidebarMenuButton size="lg" className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground pl-3">
+            <SidebarMenuButton
+              size="lg"
+              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground hover:bg-sidebar-accent/60 h-12 rounded-xl px-2.5"
+            >
               <div className="grid flex-1 text-left text-sm leading-tight">
                 <div className="flex items-center gap-2">
-                  <span className="truncate font-semibold">{username.name}</span>
+                  <span className="truncate font-semibold text-sidebar-foreground">{username.name}</span>
                   {admin && (
                     <Badge variant={isOwner(admin) ? 'secondary' : 'outline'} className="hidden h-4 px-1 py-0 text-[10px] lg:hidden">
                       <RoleIcon className="mr-1 size-3" />
@@ -176,8 +179,8 @@ export function NavUser({
                   )}
                 </div>
                 {admin && (
-                  <div className="text-muted-foreground flex items-center gap-2 text-xs">
-                    <ChartPie className="size-3" />
+                  <div className="text-sidebar-foreground/55 flex items-center gap-1.5 text-xs">
+                    <ChartPie className="size-3 shrink-0" />
                     <span dir="ltr" style={{ unicodeBidi: 'isolate' }}>
                       {formatBytes(usedTraffic)}
                       {hasDataLimit ? ` / ${formatBytes(dataLimit)}` : ''}
@@ -185,7 +188,7 @@ export function NavUser({
                   </div>
                 )}
               </div>
-              <ChevronsUpDown className="ml-auto size-4" />
+              <ChevronsUpDown className="text-sidebar-foreground/50 ml-auto size-4 shrink-0" />
             </SidebarMenuButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg" side={'bottom'} align="end" sideOffset={4}>

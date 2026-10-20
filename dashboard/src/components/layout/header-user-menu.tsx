@@ -69,7 +69,7 @@ export function HeaderUserMenu({ className }: { className?: string }) {
           variant="outline"
           aria-label={t('header.accountMenu', { defaultValue: 'Account menu' })}
           className={cn(
-            'border-border/60 bg-card/45 hover:bg-card/70 h-9 cursor-pointer gap-2 rounded-xl px-2.5 shadow-[0_8px_24px_-18px_hsl(0_0%_0%/0.55)] backdrop-blur-md transition-[background-color,border-color,box-shadow] duration-200',
+            'border-border/50 bg-background/80 hover:bg-accent/60 h-9 cursor-pointer gap-2 rounded-xl px-2 shadow-none backdrop-blur-md transition-[background-color,border-color] duration-200 sm:px-2.5',
             'focus-visible:ring-ring focus-visible:ring-2',
             className,
           )}
@@ -77,13 +77,13 @@ export function HeaderUserMenu({ className }: { className?: string }) {
           <span className="bg-primary/20 text-primary inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-[11px] font-bold">
             {initial}
           </span>
-          <span className="hidden min-w-0 text-start sm:block">
+          <span className="hidden min-w-0 text-start md:block">
             <span className="block max-w-[7.5rem] truncate text-xs font-semibold leading-tight">{username}</span>
             <span className="text-muted-foreground block font-mono text-[10px] leading-tight tabular-nums" dir="ltr">
               {formatBytes(usedTraffic)}
             </span>
           </span>
-          <ChevronsUpDown className="text-muted-foreground hidden h-3.5 w-3.5 shrink-0 sm:block" />
+          <ChevronsUpDown className="text-muted-foreground hidden h-3.5 w-3.5 shrink-0 md:block" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" sideOffset={8} className="border-border/70 bg-popover/95 w-72 rounded-2xl p-2 shadow-xl backdrop-blur-xl">

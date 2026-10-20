@@ -32,7 +32,7 @@ export function ThemeToggle({ variant = 'default' }: ThemeToggleProps) {
       size={variant === 'header' ? 'sm' : 'icon'}
       className={
         variant === 'header'
-          ? 'border-border/70 bg-card/40 hover:bg-accent/60 h-8 w-8 cursor-pointer px-0'
+          ? 'border-border/50 bg-background/80 hover:bg-accent/60 h-9 w-9 cursor-pointer rounded-xl px-0 shadow-none sm:h-8 sm:w-8'
           : 'cursor-pointer transition-colors duration-200'
       }
     >

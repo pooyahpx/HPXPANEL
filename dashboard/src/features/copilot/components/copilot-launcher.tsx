@@ -33,12 +33,13 @@ export function CopilotLauncher() {
         type="button"
         variant="outline"
         size="sm"
-        className="command-copilot shrink-0 gap-2"
+        className="command-copilot border-border/50 bg-background/80 hover:bg-accent/60 h-9 w-9 shrink-0 cursor-pointer gap-0 rounded-xl px-0 shadow-none sm:h-8 sm:w-auto sm:gap-2 sm:px-2.5"
         onClick={() => setOpen(true)}
         title={configured ? t('copilot.title') : t('copilot.notConfigured')}
+        aria-label={t('copilot.title')}
       >
         <Sparkles className="h-4 w-4" />
-        <span className="max-[420px]:sr-only sm:inline">{t('copilot.title')}</span>
+        <span className="hidden sm:inline">{t('copilot.title')}</span>
       </Button>
       <CopilotSheet
         open={open}

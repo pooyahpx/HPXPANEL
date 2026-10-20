@@ -16,7 +16,7 @@ export const LANGUAGE_PICKER_OPTIONS = [
 ] as const
 
 type LanguageProps = {
-  /** Compact top-bar control showing current code (EN / FA) like Nexora. */
+  /** Compact top-bar control showing current language code (EN / FA). */
   variant?: 'default' | 'header'
 }
 

@@ -158,7 +158,7 @@ export function NavUser({
     )
   }
 
-  // Expanded state - full dropdown (Nexora-style bottom profile)
+  // Expanded state - full dropdown (bottom profile)
   return (
     <SidebarMenu>
       <SidebarMenuItem>

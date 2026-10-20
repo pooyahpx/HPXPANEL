@@ -3,7 +3,7 @@
 @import 'tailwindcss';
 
 @layer base {
-  /* HPX Ops Deck — Nexora-inspired pro dark/light surfaces (violet active, emerald status) */
+  /* HPX Ops Deck — pro dark/light surfaces (violet active, emerald status) */
   :root {
     --background: 240 10% 97%;
     --foreground: 240 10% 8%;

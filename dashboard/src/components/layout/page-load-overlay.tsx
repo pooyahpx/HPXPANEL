@@ -1,12 +1,19 @@
 import { useEffect, useRef, useState } from 'react'
-import { GradientLoader } from '@/components/ui/gradient-loader'
+import { GooeyLoader } from '@/components/ui/loader-10'
 import { cn } from '@/lib/utils'
 import { useTranslation } from 'react-i18next'
 
 const MIN_VISIBLE_MS = 2000
 
+/** Electric blue / ink — premium ops splash (not pink). */
+const GOOEY_THEME = {
+  primaryColor: '#38bdf8',
+  secondaryColor: '#1e3a8a',
+  borderColor: '#e2e8f0',
+} as const
+
 /**
- * Full-screen gradient loader shown only on the first dashboard mount.
+ * Full-screen gooey loader centered on first dashboard mount.
  * Sidebar / in-app navigations use TopLoadingBar instead — no overlay.
  */
 export function PageLoadOverlay({ minDurationMs = MIN_VISIBLE_MS }: { minDurationMs?: number }) {
@@ -37,15 +44,15 @@ export function PageLoadOverlay({ minDurationMs = MIN_VISIBLE_MS }: { minDuratio
   return (
     <div
       className={cn(
-        'bg-background/85 fixed inset-0 z-[100] flex flex-col items-center justify-center backdrop-blur-md transition-opacity duration-300',
+        'fixed inset-0 z-[100] flex flex-col items-center justify-center bg-[#05070c]/92 backdrop-blur-md transition-opacity duration-300',
         fading ? 'opacity-0' : 'opacity-100',
       )}
       role="status"
       aria-live="polite"
       aria-busy="true"
     >
-      <GradientLoader size={96} />
-      <p className="text-muted-foreground mt-6 text-sm font-medium tracking-wide">{t('loading')}</p>
+      <GooeyLoader {...GOOEY_THEME} className="scale-110 sm:scale-125" />
+      <p className="mt-8 text-sm font-medium tracking-[0.18em] text-slate-300 uppercase">{t('loading')}</p>
     </div>
   )
 }

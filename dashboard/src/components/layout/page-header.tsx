@@ -46,9 +46,11 @@ export default function PageHeader({
         className,
       )}
     >
-      <div className="mission-brief__index hidden sm:block" aria-hidden="true">
-        {index}
-      </div>
+      {index ? (
+        <div className="mission-brief__index hidden sm:block" aria-hidden="true">
+          {index}
+        </div>
+      ) : null}
       <div className="relative z-10 flex min-w-0 flex-1 flex-col gap-y-1">
         <span className="text-primary/90 text-[10px] font-semibold tracking-[0.14em] uppercase">{sectorLabel}</span>
         <div className="flex min-w-0 items-center gap-2">

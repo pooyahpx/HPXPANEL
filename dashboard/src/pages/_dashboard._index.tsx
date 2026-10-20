@@ -239,16 +239,18 @@ const Dashboard = () => {
         <PageHeader
           title="dashboard"
           description="dashboardDescription"
-          sectorLabel="Dashboard"
+          sectorLabel="Overview"
+          index=""
           buttonIcon={Bookmark}
           buttonText="quickActions.title"
           onButtonClick={handleOpenQuickActions}
+          className="!py-3 sm:!py-4"
         />
-        <Separator className="opacity-60" />
+        <Separator className="opacity-50" />
       </div>
 
-      <div className="w-full px-3 pt-2 pb-4 sm:px-5 sm:pb-6 md:px-6">
-        <div className="flex flex-col gap-4 sm:gap-5 lg:gap-6">
+      <div className="w-full px-3 pt-1 pb-5 sm:px-5 sm:pb-8 md:px-6">
+        <div className="flex flex-col gap-5 sm:gap-6 lg:gap-7">
           <SetupChecklistCard
               onCreateNode={handleCreateNode}
               onCreateCore={handleCreateCore}

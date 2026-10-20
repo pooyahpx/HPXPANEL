@@ -258,6 +258,67 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             },
           ]
         : []),
+      // Settings mid-nav (Nexora-style) — not buried under the footer / theme toggles
+      {
+        title: 'settings.title',
+        url: '/settings',
+        icon: Settings2,
+        items: [
+          ...(hasPermission(admin, 'settings', 'read_general') && hasPermission(admin, 'settings', 'update')
+            ? [
+                {
+                  title: 'settings.general.title',
+                  url: '/settings/general',
+                  icon: Settings,
+                },
+              ]
+            : []),
+          ...(hasPermission(admin, 'settings', 'read') && hasPermission(admin, 'settings', 'update')
+            ? [
+                {
+                  title: 'settings.notifications.title',
+                  url: '/settings/notifications',
+                  icon: Bell,
+                },
+                {
+                  title: 'settings.subscriptions.title',
+                  url: '/settings/subscriptions',
+                  icon: ListTodo,
+                },
+                {
+                  title: 'settings.hwid.title',
+                  url: '/settings/hwid',
+                  icon: Fingerprint,
+                },
+                {
+                  title: 'settings.telegram.title',
+                  url: '/settings/telegram',
+                  icon: Send,
+                },
+                {
+                  title: 'settings.webhook.title',
+                  url: '/settings/webhook',
+                  icon: Webhook,
+                },
+                {
+                  title: 'settings.cleanup.title',
+                  url: '/settings/cleanup',
+                  icon: Database,
+                },
+                {
+                  title: 'settings.backup.title',
+                  url: '/settings/backup',
+                  icon: HardDriveDownload,
+                },
+              ]
+            : []),
+          {
+            title: 'theme.title',
+            url: '/settings/theme',
+            icon: Palette,
+          },
+        ],
+      },
       ...(canReadHosts
         ? [
             {
@@ -385,66 +446,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             },
           ]
         : []),
-      {
-        title: 'settings.title',
-        url: '/settings',
-        icon: Settings2,
-        items: [
-          ...(hasPermission(admin, 'settings', 'read_general') && hasPermission(admin, 'settings', 'update')
-            ? [
-                {
-                  title: 'settings.general.title',
-                  url: '/settings/general',
-                  icon: Settings,
-                },
-              ]
-            : []),
-          ...(hasPermission(admin, 'settings', 'read') && hasPermission(admin, 'settings', 'update')
-            ? [
-                {
-                  title: 'settings.notifications.title',
-                  url: '/settings/notifications',
-                  icon: Bell,
-                },
-                {
-                  title: 'settings.subscriptions.title',
-                  url: '/settings/subscriptions',
-                  icon: ListTodo,
-                },
-                {
-                  title: 'settings.hwid.title',
-                  url: '/settings/hwid',
-                  icon: Fingerprint,
-                },
-                {
-                  title: 'settings.telegram.title',
-                  url: '/settings/telegram',
-                  icon: Send,
-                },
-                {
-                  title: 'settings.webhook.title',
-                  url: '/settings/webhook',
-                  icon: Webhook,
-                },
-                {
-                  title: 'settings.cleanup.title',
-                  url: '/settings/cleanup',
-                  icon: Database,
-                },
-                {
-                  title: 'settings.backup.title',
-                  url: '/settings/backup',
-                  icon: HardDriveDownload,
-                },
-              ]
-            : []),
-          {
-            title: 'theme.title',
-            url: '/settings/theme',
-            icon: Palette,
-          },
-        ],
-      },
     ],
     navSecondary: [
       {

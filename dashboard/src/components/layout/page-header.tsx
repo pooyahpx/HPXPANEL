@@ -82,7 +82,11 @@ export default function PageHeader({
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button className="flex w-full cursor-pointer items-center sm:w-auto" onClick={onButtonClick} size="sm">
+                  <Button
+                    className="flex w-full cursor-pointer items-center rounded-xl shadow-[0_10px_28px_-16px_hsl(var(--primary)/0.65)] transition-[transform,box-shadow] duration-200 hover:-translate-y-0.5 sm:w-auto"
+                    onClick={onButtonClick}
+                    size="sm"
+                  >
                     {Icon && <Icon />}
                     <span>{t(buttonText)}</span>
                   </Button>
@@ -93,7 +97,11 @@ export default function PageHeader({
               </Tooltip>
             </TooltipProvider>
           ) : (
-            <Button className="flex w-full cursor-pointer items-center sm:w-auto" onClick={onButtonClick} size="sm">
+            <Button
+              className="flex w-full cursor-pointer items-center rounded-xl shadow-[0_10px_28px_-16px_hsl(var(--primary)/0.65)] transition-[transform,box-shadow] duration-200 hover:-translate-y-0.5 sm:w-auto"
+              onClick={onButtonClick}
+              size="sm"
+            >
               {Icon && <Icon />}
               <span>{t(buttonText)}</span>
             </Button>

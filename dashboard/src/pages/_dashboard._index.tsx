@@ -246,11 +246,11 @@ const Dashboard = () => {
           onButtonClick={handleOpenQuickActions}
           className="!py-3 sm:!py-4"
         />
-        <Separator className="opacity-50" />
+        <Separator className="from-border/0 via-border/60 to-border/0 h-px border-0 bg-gradient-to-r opacity-80" />
       </div>
 
-      <div className="w-full px-3 pt-1 pb-5 sm:px-5 sm:pb-8 md:px-6">
-        <div className="flex flex-col gap-5 sm:gap-6 lg:gap-7">
+      <div className="w-full px-3 pt-2 pb-6 sm:px-5 sm:pb-8 md:px-6">
+        <div className="flex flex-col gap-5 sm:gap-6 lg:gap-8">
           <SetupChecklistCard
               onCreateNode={handleCreateNode}
               onCreateCore={handleCreateCore}

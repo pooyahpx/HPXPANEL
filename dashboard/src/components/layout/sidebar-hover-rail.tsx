@@ -258,10 +258,14 @@ export function SidebarHoverRail({ items, footerItems = [], header, footer, feat
           </div>
         )}
 
-        {expanded && featureCard && <div className="shrink-0 px-3 pt-1 pb-2">{featureCard}</div>}
-        {footer && (
-          <div className={cn('border-sidebar-border/80 mt-auto shrink-0 border-t py-2.5', expanded ? 'px-2' : 'flex justify-center px-2')}>
-            {footer}
+        {(featureCard || footer) && (
+          <div className="mt-auto shrink-0">
+            {expanded && featureCard && <div className="px-3 pt-1 pb-2">{featureCard}</div>}
+            {footer && (
+              <div className={cn('border-sidebar-border/80 border-t py-2.5', expanded ? 'px-2' : 'flex justify-center px-2')}>
+                {footer}
+              </div>
+            )}
           </div>
         )}
       </aside>

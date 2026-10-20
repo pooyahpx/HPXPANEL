@@ -508,9 +508,9 @@
   }
 
   .command-deck {
-    border-bottom: 1px solid hsl(var(--border) / 0.8);
-    background: hsl(var(--background) / 0.82);
-    backdrop-filter: blur(20px) saturate(1.2);
+    border-bottom: 1px solid hsl(var(--border) / 0.55);
+    background: hsl(var(--background) / 0.72);
+    backdrop-filter: blur(18px) saturate(1.25);
   }
 
   .command-deck__frame {
@@ -519,10 +519,10 @@
     align-items: center;
     gap: 12px;
     padding: 6px 10px;
-    border: 1px solid hsl(var(--border) / 0.7);
-    border-radius: calc(var(--radius) + 2px);
-    background: hsl(var(--card) / 0.72);
-    box-shadow: 0 1px 0 hsl(var(--foreground) / 0.03), 0 8px 24px -18px hsl(0 0% 0% / 0.45);
+    border: 1px solid hsl(var(--border) / 0.55);
+    border-radius: calc(var(--radius) + 4px);
+    background: linear-gradient(180deg, hsl(var(--card) / 0.78), hsl(var(--card) / 0.55));
+    box-shadow: 0 1px 0 hsl(var(--foreground) / 0.04), 0 12px 32px -22px hsl(0 0% 0% / 0.55);
   }
 
   .command-deck__mark {

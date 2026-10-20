@@ -9,6 +9,7 @@ import { VersionUpdateBanner } from '@/components/layout/version-update-banner'
 import DonationPopup from '@/components/common/donation-popup'
 import { Language } from '@/components/common/language'
 import { ThemeToggle } from '@/components/common/theme-toggle'
+import { HeaderUserMenu } from '@/components/layout/header-user-menu'
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar'
 import { getCurrentAdmin } from '@/service/api'
 import { Outlet, useLocation } from 'react-router'
@@ -72,12 +73,13 @@ export default function DashboardLayout() {
                   <Language variant="header" />
                   <ThemeToggle variant="header" />
                   <span
-                    className="ms-0.5 inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-semibold tracking-wide text-emerald-400 uppercase"
+                    className="ms-0.5 hidden items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-semibold tracking-wide text-emerald-400 uppercase md:inline-flex"
                     title="Live uplink"
                   >
                     <span className="online-beacon" />
                     Live
                   </span>
+                  <HeaderUserMenu className="ms-0.5" />
                 </div>
               </div>
             </header>

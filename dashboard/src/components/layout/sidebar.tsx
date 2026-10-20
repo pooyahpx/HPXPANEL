@@ -519,7 +519,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         items={data.navMain}
         footerItems={dualTierFooterItems}
         header={<BrandMark />}
-        footer={<NavUser admin={admin} username={data.user} />}
         featureCard={
           canReadSystem ? (
             <DualTierFeatureCard title={t('statistics.activeUsers')} description={t('monitorUsers')} progress={activeUsersPercent} confirmLabel={t('users')} onConfirm={() => navigate('/users')} />

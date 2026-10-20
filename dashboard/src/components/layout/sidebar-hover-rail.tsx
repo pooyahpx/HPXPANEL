@@ -49,7 +49,7 @@ function sectionOpenByRoute(pathname: string, item: HoverRailNavItem) {
   return item.items.some(sub => isActive(pathname, sub, sub.matchPrefix ?? true)) || isActive(pathname, item, true)
 }
 
-/** Always-expanded Nexora-style ops rail (labels always visible). */
+/** Always-expanded ops rail (labels always visible). */
 export function SidebarHoverRail({ items, footerItems = [], header, footer, featureCard, side = 'left', className }: SidebarHoverRailProps) {
   const { t } = useTranslation()
   const location = useLocation()

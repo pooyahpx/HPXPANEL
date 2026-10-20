@@ -258,7 +258,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             },
           ]
         : []),
-      // Settings mid-nav (Nexora-style) — not buried under the footer / theme toggles
+      // Settings mid-nav — not buried under the footer / theme toggles
       {
         title: 'settings.title',
         url: '/settings',

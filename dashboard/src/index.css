@@ -514,10 +514,8 @@
   }
 
   .command-deck__frame {
-    display: flex;
+    width: 100%;
     min-height: 56px;
-    align-items: center;
-    gap: 12px;
     padding: 6px 10px;
     border: 1px solid hsl(var(--border) / 0.55);
     border-radius: calc(var(--radius) + 4px);

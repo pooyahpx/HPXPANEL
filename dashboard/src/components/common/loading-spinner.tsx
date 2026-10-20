@@ -1,4 +1,4 @@
-import { GradientLoader } from '@/components/ui/gradient-loader'
+import { GooeyLoader } from '@/components/ui/loader-10'
 import { cn } from '@/lib/utils'
 
 interface LoadingSpinnerProps {
@@ -7,15 +7,25 @@ interface LoadingSpinnerProps {
   className?: string
 }
 
+const GOOEY_THEME = {
+  primaryColor: '#38bdf8',
+  secondaryColor: '#1e3a8a',
+  borderColor: '#e2e8f0',
+} as const
+
 /**
- * Route / hydrate fallback — uses the branded gradient orb (not the old bar).
+ * Route / hydrate fallback — centered gooey loader.
  * First dashboard mount still uses PageLoadOverlay for the full splash.
  */
 export function LoadingSpinner({ size = 'medium', className = '' }: LoadingSpinnerProps) {
-  const orb = size === 'small' ? 48 : size === 'large' ? 96 : 72
+  const scale = size === 'small' ? 'scale-75' : size === 'large' ? 'scale-125' : 'scale-100'
   return (
-    <div className={cn('flex min-h-[40vh] flex-1 flex-col items-center justify-center gap-4 px-4 py-10', className)} role="status" aria-busy="true">
-      <GradientLoader size={orb} />
+    <div
+      className={cn('flex min-h-[50vh] w-full flex-1 flex-col items-center justify-center gap-6 px-4 py-12', className)}
+      role="status"
+      aria-busy="true"
+    >
+      <GooeyLoader {...GOOEY_THEME} className={scale} />
       <span className="sr-only">Loading</span>
     </div>
   )

@@ -4,6 +4,7 @@ import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useSidebar } from '@/components/ui/sidebar'
+import { useHoverRailExpanded } from '@/components/layout/sidebar-hover-rail'
 import { type AdminDetails } from '@/service/api'
 import { ChevronsUpDown, LogOut, UserRoundKey, UsersIcon, UserCircle, ChartPie, ChartNoAxesColumn, UserRound } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -55,6 +56,7 @@ export function NavUser({
 }) {
   const { t } = useTranslation()
   const { state, isMobile } = useSidebar()
+  const railExpanded = useHoverRailExpanded()
   const navigate = useNavigate()
   const RoleIcon = isOwner(admin) ? UserRoundKey : UserRound
   const { dataLimit, maxUsers } = getEffectiveLimits(admin)
@@ -63,6 +65,8 @@ export function NavUser({
   const usedTraffic = admin?.used_traffic ?? 0
   const totalUsers = admin?.total_users ?? 0
   const sliderColor = statusColors[admin?.status ?? 'active']?.sliderColor
+  // Prefer hover-rail width; fall back to SidebarProvider collapsed cookie outside the rail
+  const showCollapsed = railExpanded === null ? state === 'collapsed' && !isMobile : !railExpanded
 
   const handleLogout = (e: React.MouseEvent) => {
     e.preventDefault()
@@ -78,7 +82,7 @@ export function NavUser({
 
   // Collapsed state (desktop only) - admin icon with popover
   // On mobile, always use expanded UI since there's no collapsed sidebar concept
-  if (state === 'collapsed' && !isMobile) {
+  if (showCollapsed) {
     return (
       <SidebarMenu>
         <SidebarMenuItem>

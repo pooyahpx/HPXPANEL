@@ -89,11 +89,16 @@ const DashboardStatistics = ({ resourceData, usersData }: { resourceData: System
     sparkValues: number[]
     sparkClass: string
   }) => (
-    <Card dir={dir} className="border-border/50 bg-card/40 group relative overflow-hidden rounded-xl transition-[border-color,box-shadow] duration-200 hover:border-primary/25 hover:shadow-sm">
-      <CardContent className="flex h-full flex-col gap-3 p-4">
+    <Card
+      dir={dir}
+      className="border-border/40 bg-card/70 group relative overflow-hidden rounded-2xl shadow-[0_12px_32px_-24px_hsl(0_0%_0%/0.55)] transition-[border-color,box-shadow,transform] duration-200 hover:border-primary/30 hover:-translate-y-0.5 hover:shadow-[0_16px_36px_-22px_hsl(var(--primary)/0.35)]"
+    >
+      <CardContent className="flex h-full flex-col gap-3 p-4 sm:p-5">
         <div className="flex items-start justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2">
-            <Icon className="text-muted-foreground h-3.5 w-3.5 shrink-0" />
+            <span className="bg-primary/10 text-primary inline-flex h-7 w-7 items-center justify-center rounded-lg">
+              <Icon className="h-3.5 w-3.5 shrink-0" />
+            </span>
             <span className="text-muted-foreground truncate text-[11px] font-medium tracking-wide uppercase">{label}</span>
           </div>
           {percent != null && (
@@ -107,8 +112,16 @@ const DashboardStatistics = ({ resourceData, usersData }: { resourceData: System
             {value}
           </p>
           {detail && <p className="text-muted-foreground mt-1 text-[11px] leading-snug">{detail}</p>}
+          {percent != null && (
+            <div className="bg-muted/80 mt-3 h-1.5 w-full overflow-hidden rounded-full">
+              <div
+                className="bg-primary h-full rounded-full transition-[width] duration-500 ease-out"
+                style={{ width: `${Math.min(100, Math.max(0, percent))}%` }}
+              />
+            </div>
+          )}
         </div>
-        <div className="text-sky-500/80 mt-auto pt-1">
+        <div className="text-primary/80 mt-auto pt-1">
           <MiniSparkline values={sparkValues} strokeClassName={sparkClass} />
         </div>
       </CardContent>

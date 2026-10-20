@@ -236,12 +236,19 @@ const Dashboard = () => {
   return (
     <div className="flex w-full flex-col items-start gap-2">
       <div className="w-full">
-        <PageHeader title="dashboard" description="dashboardDescription" buttonIcon={Bookmark} buttonText="quickActions.title" onButtonClick={handleOpenQuickActions} />
-        <Separator />
+        <PageHeader
+          title="dashboard"
+          description="dashboardDescription"
+          sectorLabel="Dashboard"
+          buttonIcon={Bookmark}
+          buttonText="quickActions.title"
+          onButtonClick={handleOpenQuickActions}
+        />
+        <Separator className="opacity-60" />
       </div>
 
-      <div className="w-full px-3 pt-2 sm:px-4">
-        <div className="flex flex-col gap-4 sm:gap-5">
+      <div className="w-full px-3 pt-2 pb-4 sm:px-5 sm:pb-6 md:px-6">
+        <div className="flex flex-col gap-4 sm:gap-5 lg:gap-6">
           <SetupChecklistCard
               onCreateNode={handleCreateNode}
               onCreateCore={handleCreateCore}

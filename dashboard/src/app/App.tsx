@@ -11,7 +11,7 @@ hydrateUiAppearancePrefs()
 
 export default function App() {
   return (
-    <ThemeProvider defaultTheme="system" defaultRadius="0" storageKey="theme" radiusStorageKey="radius-pixel">
+    <ThemeProvider defaultTheme="system" defaultRadius="0.75rem" storageKey="theme" radiusStorageKey="radius-ops">
       <QueryClientProvider client={queryClient}>
         <main>
           <Toaster />

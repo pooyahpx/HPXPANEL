@@ -295,9 +295,9 @@ const ServerTopologyCard = ({ resourceData, usersData, canReadNodes = false, can
 
   return (
     <section className="w-full" dir={dir} aria-label={t('serverTopology.title', { defaultValue: 'Server topology' })}>
-      <div className="mb-4 flex items-end justify-between gap-3">
+      <div className="mb-5 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-muted-foreground text-[11px] font-semibold tracking-[0.18em] uppercase">
+          <p className="text-primary/80 text-[11px] font-semibold tracking-[0.16em] uppercase">
             {t('serverTopology.eyebrow', { defaultValue: 'Infrastructure' })}
           </p>
           <h2 className="text-foreground mt-1 text-lg font-semibold tracking-tight sm:text-xl">
@@ -317,8 +317,9 @@ const ServerTopologyCard = ({ resourceData, usersData, canReadNodes = false, can
       <div className="relative flex flex-col items-center">
         <Card
           className={cn(
-            'border-border/70 relative w-full max-w-3xl overflow-hidden shadow-[0_24px_80px_-40px_rgba(0,0,0,0.65)]',
-            'bg-gradient-to-br from-card via-card to-card/80',
+            'border-border/50 relative w-full max-w-4xl overflow-hidden rounded-2xl',
+            'bg-card/90 shadow-[0_20px_60px_-36px_hsl(0_0%_0%/0.75)]',
+            'ring-1 ring-primary/10',
           )}
         >
           <div

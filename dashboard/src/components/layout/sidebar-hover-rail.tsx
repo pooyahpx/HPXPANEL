@@ -6,7 +6,6 @@ import { NavLink, useLocation, useNavigate } from 'react-router'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 
 export type HoverRailSubItem = {
@@ -50,11 +49,11 @@ function sectionOpenByRoute(pathname: string, item: HoverRailNavItem) {
   return item.items.some(sub => isActive(pathname, sub, sub.matchPrefix ?? true)) || isActive(pathname, item, true)
 }
 
+/** Always-expanded Nexora-style ops rail (labels always visible). */
 export function SidebarHoverRail({ items, footerItems = [], header, footer, featureCard, side = 'left', className }: SidebarHoverRailProps) {
   const { t } = useTranslation()
   const location = useLocation()
   const navigate = useNavigate()
-  const [hovered, setHovered] = useState(false)
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
@@ -66,8 +65,6 @@ export function SidebarHoverRail({ items, footerItems = [], header, footer, feat
     }
     setOpenSections(prev => ({ ...prev, ...next }))
   }, [location.pathname, items])
-
-  const expanded = hovered
 
   const toggleSection = (title: string) => {
     setOpenSections(prev => ({ ...prev, [title]: !prev[title] }))
@@ -81,23 +78,16 @@ export function SidebarHoverRail({ items, footerItems = [], header, footer, feat
     const inner = (
       <span
         className={cn(
-          'flex h-9 w-full cursor-pointer items-center gap-2.5 rounded-xl px-2.5 text-[13px] font-medium transition-[background-color,color,box-shadow,transform] duration-150 ease-out',
+          'flex h-9 w-full cursor-pointer items-center gap-2.5 rounded-xl px-2.5 text-[13px] font-medium transition-[background-color,color,box-shadow] duration-150 ease-out',
           nested && 'h-8 rounded-lg ps-9 text-[12px]',
           active
-            ? 'bg-sidebar-primary text-sidebar-primary-foreground shadow-[0_8px_20px_-12px_hsl(var(--sidebar-primary))]'
+            ? 'bg-sidebar-primary text-sidebar-primary-foreground shadow-[0_10px_24px_-14px_hsl(var(--sidebar-primary))]'
             : 'text-sidebar-foreground/75 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground',
         )}
       >
         <Icon className={cn('shrink-0', nested ? 'h-3.5 w-3.5' : 'h-4 w-4')} />
-        <span
-          className={cn(
-            'truncate whitespace-nowrap transition-[opacity,width] duration-200 ease-out',
-            expanded ? 'w-auto opacity-100' : 'pointer-events-none w-0 opacity-0',
-          )}
-        >
-          {label}
-        </span>
-        {'badge' in item && item.badge != null && expanded && (
+        <span className="truncate">{label}</span>
+        {'badge' in item && item.badge != null && (
           <Badge variant="secondary" className="ms-auto h-5 min-w-5 justify-center px-1.5 text-[10px]">
             {item.badge}
           </Badge>
@@ -127,40 +117,7 @@ export function SidebarHoverRail({ items, footerItems = [], header, footer, feat
       isActive(location.pathname, item, !!hasChildren) || !!item.items?.some(sub => isActive(location.pathname, sub, sub.matchPrefix ?? true))
     const sectionOpen = openSections[item.title] ?? false
 
-    const iconButton = (
-      <span
-        className={cn(
-          'flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-xl transition-colors duration-150',
-          active
-            ? 'bg-sidebar-primary text-sidebar-primary-foreground shadow-[0_8px_18px_-10px_hsl(var(--sidebar-primary))]'
-            : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
-        )}
-      >
-        <Icon className="h-4 w-4" />
-      </span>
-    )
-
     if (!hasChildren) {
-      if (!expanded) {
-        return (
-          <TooltipProvider delayDuration={120}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div className="flex justify-center px-1.5">
-                  {item.target === '_blank' || item.url.startsWith('http') ? (
-                    <a href={item.url} target={item.target || '_blank'} rel="noopener noreferrer">
-                      {iconButton}
-                    </a>
-                  ) : (
-                    <NavLink to={item.url}>{iconButton}</NavLink>
-                  )}
-                </div>
-              </TooltipTrigger>
-              <TooltipContent side={side === 'left' ? 'right' : 'left'}>{t(item.title)}</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        )
-      }
       return (
         <div className="px-2">
           <NavRow item={item} />
@@ -168,47 +125,28 @@ export function SidebarHoverRail({ items, footerItems = [], header, footer, feat
       )
     }
 
-    if (!expanded) {
-      return (
-        <TooltipProvider delayDuration={120}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                className="mx-auto flex justify-center px-1.5 outline-none"
-                onClick={() => {
-                  navigate(item.url)
-                }}
-              >
-                {iconButton}
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side={side === 'left' ? 'right' : 'left'}>{t(item.title)}</TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      )
-    }
-
     return (
       <Collapsible open={sectionOpen} onOpenChange={() => toggleSection(item.title)} className="px-2">
-        <div className="flex items-center gap-0.5">
-          <CollapsibleTrigger asChild>
-            <button type="button" className="flex min-w-0 flex-1 items-center outline-none" onClick={() => !sectionOpen && navigate(item.url)}>
-              <span
-                className={cn(
-                  'flex h-9 w-full cursor-pointer items-center gap-2.5 rounded-xl px-2.5 text-[13px] font-medium transition-colors duration-150',
-                  active
-                    ? 'bg-sidebar-primary/90 text-sidebar-primary-foreground shadow-[0_8px_20px_-12px_hsl(var(--sidebar-primary))]'
-                    : 'text-sidebar-foreground/75 hover:bg-sidebar-accent/60',
-                )}
-              >
-                <Icon className="h-4 w-4 shrink-0" />
-                <span className="truncate">{t(item.title)}</span>
-                <ChevronDown className={cn('ms-auto h-3.5 w-3.5 opacity-70 transition-transform duration-200', sectionOpen && 'rotate-180')} />
-              </span>
-            </button>
-          </CollapsibleTrigger>
-        </div>
+        <CollapsibleTrigger asChild>
+          <button
+            type="button"
+            className="flex w-full min-w-0 items-center outline-none"
+            onClick={() => !sectionOpen && navigate(item.url)}
+          >
+            <span
+              className={cn(
+                'flex h-9 w-full cursor-pointer items-center gap-2.5 rounded-xl px-2.5 text-[13px] font-medium transition-colors duration-150',
+                active
+                  ? 'bg-sidebar-primary/90 text-sidebar-primary-foreground shadow-[0_10px_24px_-14px_hsl(var(--sidebar-primary))]'
+                  : 'text-sidebar-foreground/75 hover:bg-sidebar-accent/60',
+              )}
+            >
+              <Icon className="h-4 w-4 shrink-0" />
+              <span className="truncate">{t(item.title)}</span>
+              <ChevronDown className={cn('ms-auto h-3.5 w-3.5 opacity-70 transition-transform duration-200', sectionOpen && 'rotate-180')} />
+            </span>
+          </button>
+        </CollapsibleTrigger>
         <CollapsibleContent className="data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 space-y-0.5 pt-1 pb-1">
           {item.items!.map(sub => (
             <div key={sub.title}>
@@ -220,35 +158,32 @@ export function SidebarHoverRail({ items, footerItems = [], header, footer, feat
     )
   }
 
-  const widthClass = expanded ? 'w-[16rem]' : 'w-[4rem]'
-
   return (
     <aside
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
       className={cn(
-        'bg-sidebar text-sidebar-foreground border-sidebar-border sticky top-0 z-20 flex h-svh shrink-0 flex-col overflow-hidden border-r transition-[width] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] will-change-[width]',
+        'bg-sidebar text-sidebar-foreground border-sidebar-border sticky top-0 z-30 h-svh w-[16.5rem] shrink-0 flex-col overflow-hidden border-r',
         side === 'right' && 'border-r-0 border-l',
-        widthClass,
         className,
       )}
     >
-      {header && <div className={cn('flex shrink-0 border-b border-sidebar-border/60 py-3.5', expanded ? 'px-3' : 'justify-center px-2')}>{header}</div>}
+      {header && <div className="border-sidebar-border/60 flex shrink-0 border-b px-3 py-3.5">{header}</div>}
 
       <ScrollArea className="min-h-0 flex-1">
-        <nav className="flex flex-col gap-0.5 px-0.5 py-2">{items.map(item => <PrimaryItem key={item.title} item={item} />)}</nav>
+        <nav className="flex flex-col gap-0.5 py-2">{items.map(item => <PrimaryItem key={item.title} item={item} />)}</nav>
       </ScrollArea>
 
       {footerItems.length > 0 && (
-        <div className="border-sidebar-border/80 flex flex-col gap-1 border-t py-2">
+        <div className="border-sidebar-border/80 flex flex-col gap-0.5 border-t py-2">
           {footerItems.map(item => (
             <PrimaryItem key={item.title} item={item} />
           ))}
         </div>
       )}
 
-      {expanded && featureCard && <div className="hidden p-3 lg:block">{featureCard}</div>}
-      {footer && <div className={cn('mt-auto shrink-0 pb-3', expanded ? 'px-3' : 'flex justify-center px-2')}>{footer}</div>}
+      {featureCard && <div className="shrink-0 px-3 pt-1 pb-2">{featureCard}</div>}
+      {footer && (
+        <div className="border-sidebar-border/80 mt-auto shrink-0 border-t px-2 py-2.5">{footer}</div>
+      )}
     </aside>
   )
 }

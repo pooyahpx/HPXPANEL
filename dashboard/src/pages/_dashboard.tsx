@@ -10,7 +10,7 @@ import DonationPopup from '@/components/common/donation-popup'
 import { Language } from '@/components/common/language'
 import { ThemeToggle } from '@/components/common/theme-toggle'
 import { HeaderUserMenu } from '@/components/layout/header-user-menu'
-import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar'
+import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
 import { getCurrentAdmin } from '@/service/api'
 import { Outlet, useLocation } from 'react-router'
 import TopbarAd from '@/components/common/topbar-ad'
@@ -58,27 +58,33 @@ export default function DashboardLayout() {
             <TopbarAd />
             <VersionUpdateBanner />
             <header className="command-deck sticky top-0 z-20 px-2 py-2 sm:px-4 sm:py-2.5">
-              <div className="command-deck__frame flex w-full items-center gap-2 sm:gap-3">
-                <div className="flex min-w-0 items-center gap-2">
-                  <SidebarTrigger className="lg:hidden" />
-                  <div className="min-w-0">
+              {/* Mobile sticky brand bar already has the menu trigger — no second hamburger here */}
+              <div className="command-deck__frame relative flex w-full items-center gap-1.5 sm:gap-3">
+                <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:gap-2">
+                  <div className="min-w-0 flex-1">
                     <TopbarTitle />
                     <p className="text-muted-foreground hidden truncate text-[11px] tracking-wide sm:block">Operations console</p>
                   </div>
-                  <QuestSearch compact className="ms-1 sm:ms-2" />
+                  <QuestSearch compact className="shrink-0" />
                 </div>
-                <div className="ms-auto flex shrink-0 items-center justify-end gap-1 sm:gap-1.5">
-                  <CopilotLauncher />
-                  <div className="bg-border/70 mx-0.5 hidden h-5 w-px sm:block" aria-hidden="true" />
-                  <Language variant="header" />
-                  <ThemeToggle variant="header" />
-                  <span
-                    className="ms-0.5 hidden items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-semibold tracking-wide text-emerald-400 uppercase md:inline-flex"
-                    title="Live uplink"
-                  >
-                    <span className="online-beacon" />
-                    Live
-                  </span>
+                <div className="flex shrink-0 items-center justify-end gap-1">
+                  <div className="hidden sm:contents">
+                    <CopilotLauncher />
+                    <div className="bg-border/70 mx-0.5 hidden h-5 w-px md:block" aria-hidden="true" />
+                    <Language variant="header" />
+                    <ThemeToggle variant="header" />
+                    <span
+                      className="ms-0.5 hidden items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-semibold tracking-wide text-emerald-400 uppercase md:inline-flex"
+                      title="Live uplink"
+                    >
+                      <span className="online-beacon" />
+                      Live
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1 sm:hidden">
+                    <CopilotLauncher />
+                    <ThemeToggle variant="header" />
+                  </div>
                   <HeaderUserMenu className="ms-0.5" />
                 </div>
               </div>

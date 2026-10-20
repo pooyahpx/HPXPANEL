@@ -112,6 +112,7 @@ export function QuestSearch({ className, compact }: { className?: string; compac
   const [open, setOpen] = useState(false)
   const [expanded, setExpanded] = useState(!compact)
   const [activeIndex, setActiveIndex] = useState(0)
+  const [mobileTop, setMobileTop] = useState<number | null>(null)
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -220,6 +221,24 @@ export function QuestSearch({ className, compact }: { className?: string; compac
     }
   }, [expanded, compact])
 
+  useEffect(() => {
+    if (!compact || !expanded || !rootRef.current) {
+      setMobileTop(null)
+      return
+    }
+    const sync = () => {
+      const rect = rootRef.current?.getBoundingClientRect()
+      if (rect) setMobileTop(rect.top)
+    }
+    sync()
+    window.addEventListener('resize', sync)
+    window.addEventListener('scroll', sync, true)
+    return () => {
+      window.removeEventListener('resize', sync)
+      window.removeEventListener('scroll', sync, true)
+    }
+  }, [compact, expanded])
+
   const results = open && (
     <div className="bg-popover/95 absolute top-[calc(100%+8px)] start-0 z-50 max-h-80 w-[min(100vw-1.5rem,22rem)] overflow-auto rounded-xl border border-border/70 shadow-[0_16px_40px_-20px_hsl(0_0%_0%/0.65)] backdrop-blur-xl sm:w-[24rem]">
       <div className="bg-muted/50 text-muted-foreground sticky top-0 z-10 flex items-center justify-between border-b border-border/50 px-3 py-2 text-[10px] font-semibold tracking-[0.14em] uppercase">
@@ -263,94 +282,80 @@ export function QuestSearch({ className, compact }: { className?: string; compac
   if (compact) {
     return (
       <div ref={rootRef} className={cn('relative flex items-center', className)}>
-        <div
-          className={cn(
-            'border-border/60 bg-card/55 relative flex h-9 items-center overflow-hidden rounded-xl border backdrop-blur-md',
-            'will-change-[width,box-shadow] transition-[width,box-shadow,background-color,border-color] duration-[220ms] ease-[cubic-bezier(0.22,1,0.36,1)]',
-            'motion-reduce:transition-none',
-            expanded
-              ? 'bg-card/70 shadow-[0_10px_28px_-16px_hsl(0_0%_0%/0.55)]'
-              : 'hover:bg-card/70 cursor-pointer shadow-none',
-          )}
-          style={{
-            width: expanded ? 'min(22rem, calc(100vw - 8rem))' : '2.25rem',
-          }}
-          onClick={() => {
-            if (!expanded) expandAndFocus()
-          }}
-        >
+        {/* Collapsed: dark icon chip (never white) */}
+        {!expanded && (
           <button
             type="button"
-            className="text-foreground/85 hover:text-foreground flex h-full w-9 shrink-0 cursor-pointer items-center justify-center outline-none"
             aria-label={t('search', { defaultValue: 'Search' })}
-            aria-expanded={expanded}
-            onClick={e => {
-              e.stopPropagation()
-              if (expanded) {
-                inputRef.current?.focus()
-                setOpen(true)
-              } else {
-                expandAndFocus()
-              }
-            }}
+            aria-expanded={false}
+            className={cn(
+              'border-border/50 bg-background/80 text-foreground hover:bg-accent/60 inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-xl border shadow-none backdrop-blur-md',
+              'transition-[transform,background-color,border-color] duration-200 ease-out hover:scale-[1.03] active:scale-[0.98]',
+              'focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none',
+            )}
+            onClick={expandAndFocus}
           >
             <Search className="h-4 w-4" />
           </button>
-          <input
-            id="quest-search-input"
-            ref={inputRef}
+        )}
+
+        {/* Expanded: overlay on mobile so the header never crushes */}
+        {expanded && (
+          <div
             className={cn(
-              'text-foreground placeholder:text-muted-foreground min-w-0 flex-1 border-0 bg-transparent py-0 text-sm outline-none transition-[opacity,transform] duration-[180ms] ease-out',
-              expanded ? 'opacity-100 translate-x-0' : 'pointer-events-none w-0 opacity-0 -translate-x-1',
+              'border-border/50 bg-background/95 z-[60] flex h-9 items-center overflow-hidden rounded-xl border shadow-[0_12px_32px_-18px_hsl(0_0%_0%/0.65)] backdrop-blur-xl',
+              'origin-left will-change-[width,opacity,transform]',
+              'animate-in fade-in-0 zoom-in-95 slide-in-from-left-2 duration-200 motion-reduce:animate-none',
+              // Mobile: fixed full-bleed under brand bar so chrome never crushes
+              'fixed inset-x-2 sm:static sm:inset-auto sm:z-40',
+              'sm:w-[min(22rem,calc(100vw-8rem))]',
             )}
-            type="text"
-            value={query}
-            placeholder="Locate a sector, module, or route..."
-            tabIndex={expanded ? 0 : -1}
-            onChange={e => {
-              setQuery(e.target.value)
-              setOpen(true)
-            }}
-            onFocus={() => {
-              if (expanded) setOpen(true)
-            }}
-            autoComplete="off"
-            spellCheck={false}
-            role="combobox"
-            aria-label="Search HPXPANEL modules"
-            aria-autocomplete="list"
-            aria-expanded={open}
-            aria-controls="command-index-results"
-            aria-activedescendant={open && filtered[activeIndex] ? `command-index-${filtered[activeIndex].id}` : undefined}
-          />
-          <kbd
-            className={cn(
-              'text-muted-foreground me-1 h-6 min-w-6 shrink-0 items-center justify-center rounded-md border border-border/50 px-1.5 font-mono text-[10px] transition-opacity duration-150',
-              expanded ? 'hidden opacity-100 sm:inline-flex' : 'hidden opacity-0',
-            )}
+            style={mobileTop != null ? { top: mobileTop } : undefined}
           >
-            /
-          </kbd>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            tabIndex={expanded ? 0 : -1}
-            className={cn(
-              'text-muted-foreground hover:text-foreground me-0.5 h-7 w-7 cursor-pointer rounded-lg transition-[opacity,transform] duration-150',
-              expanded ? 'opacity-100 scale-100' : 'pointer-events-none w-0 scale-90 opacity-0',
-            )}
-            aria-label={t('close', { defaultValue: 'Close' })}
-            onClick={e => {
-              e.stopPropagation()
-              setQuery('')
-              setOpen(false)
-              setExpanded(false)
-            }}
-          >
-            <X className="h-3.5 w-3.5" />
-          </Button>
-        </div>
+            <span className="text-muted-foreground flex h-full w-9 shrink-0 items-center justify-center">
+              <Search className="h-4 w-4" />
+            </span>
+            <input
+              id="quest-search-input"
+              ref={inputRef}
+              className="text-foreground placeholder:text-muted-foreground min-w-0 flex-1 border-0 bg-transparent py-0 text-sm outline-none"
+              type="text"
+              value={query}
+              placeholder="Locate a sector, module, or route..."
+              onChange={e => {
+                setQuery(e.target.value)
+                setOpen(true)
+              }}
+              onFocus={() => setOpen(true)}
+              autoComplete="off"
+              spellCheck={false}
+              role="combobox"
+              aria-label="Search HPXPANEL modules"
+              aria-autocomplete="list"
+              aria-expanded={open}
+              aria-controls="command-index-results"
+              aria-activedescendant={open && filtered[activeIndex] ? `command-index-${filtered[activeIndex].id}` : undefined}
+            />
+            <kbd className="text-muted-foreground me-1 hidden h-6 min-w-6 shrink-0 items-center justify-center rounded-md border border-border/50 px-1.5 font-mono text-[10px] sm:inline-flex">
+              /
+            </kbd>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="text-muted-foreground hover:text-foreground me-0.5 h-7 w-7 cursor-pointer rounded-lg"
+              aria-label={t('close', { defaultValue: 'Close' })}
+              onClick={e => {
+                e.stopPropagation()
+                setQuery('')
+                setOpen(false)
+                setExpanded(false)
+              }}
+            >
+              <X className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        )}
         {expanded && results}
       </div>
     )

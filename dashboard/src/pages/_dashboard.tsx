@@ -58,18 +58,16 @@ export default function DashboardLayout() {
             <TopbarAd />
             <VersionUpdateBanner />
             <header className="command-deck sticky top-0 z-20 px-2 py-2 sm:px-4 sm:py-2.5">
-              <div className="command-deck__frame grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 sm:gap-3">
+              <div className="command-deck__frame flex w-full items-center gap-2 sm:gap-3">
                 <div className="flex min-w-0 items-center gap-2">
                   <SidebarTrigger className="lg:hidden" />
                   <div className="min-w-0">
                     <TopbarTitle />
                     <p className="text-muted-foreground hidden truncate text-[11px] tracking-wide sm:block">Operations console</p>
                   </div>
+                  <QuestSearch compact className="ms-1 sm:ms-2" />
                 </div>
-                <div className="flex min-w-0 justify-center px-1">
-                  <QuestSearch compact className="w-full max-w-xl" />
-                </div>
-                <div className="flex shrink-0 items-center justify-end gap-1 sm:gap-1.5">
+                <div className="ms-auto flex shrink-0 items-center justify-end gap-1 sm:gap-1.5">
                   <CopilotLauncher />
                   <div className="bg-border/70 mx-0.5 hidden h-5 w-px sm:block" aria-hidden="true" />
                   <Language variant="header" />

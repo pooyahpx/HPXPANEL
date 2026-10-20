@@ -2,7 +2,6 @@
 import { ThemeToggle } from '@/components/common/theme-toggle'
 import { GithubStar } from '@/components/layout/github-star'
 import { GoalProgress } from '@/components/layout/goal-progress'
-import { DualTierFeatureCard } from '@/components/layout/dual-tier-feature-card'
 import { SidebarHoverRail, useHoverRailExpanded } from '@/components/layout/sidebar-hover-rail'
 import { NavMain } from '@/components/layout/nav-main'
 import { NavSecondary } from '@/components/layout/nav-secondary'
@@ -17,7 +16,6 @@ import useDirDetection from '@/hooks/use-dir-detection'
 import { useSystemVersion } from '@/hooks/use-system-version'
 import { useVersionCheck } from '@/hooks/use-version-check'
 import { cn } from '@/lib/utils'
-import { useGetSystemUsersStats } from '@/service/api'
 import { canReadResourcePage, hasPermission, hasScopeAll, isOwner } from '@/utils/rbac'
 import {
   ArrowUpDown,
@@ -144,10 +142,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const navigate = useNavigate()
   const displayVersion = canReadSystem && systemVersion ? `(v${systemVersion})` : ''
   const { hasUpdate } = useVersionCheck(systemVersion ?? null, { enabled: canReadSystem })
-  const { data: usersStats } = useGetSystemUsersStats(undefined, {
-    query: { enabled: canReadSystem, refetchInterval: 30_000, staleTime: 15_000 },
-  })
-  const activeUsersPercent = usersStats?.total_user && usersStats.total_user > 0 ? Math.round((usersStats.active_users / usersStats.total_user) * 100) : 0
   const touchStartX = useRef<number | null>(null)
   const touchEndX = useRef<number | null>(null)
   const minSwipeDistance = 50
@@ -519,11 +513,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         items={data.navMain}
         footerItems={dualTierFooterItems}
         header={<BrandMark />}
-        featureCard={
-          canReadSystem ? (
-            <DualTierFeatureCard title={t('statistics.activeUsers')} description={t('monitorUsers')} progress={activeUsersPercent} confirmLabel={t('users')} onConfirm={() => navigate('/users')} />
-          ) : undefined
-        }
       />
     )
   }

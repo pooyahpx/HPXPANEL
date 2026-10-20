@@ -1,16 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
-import { GooeyLoader } from '@/components/ui/loader-10'
+import { HpxRecLoader } from '@/components/ui/loader-6'
 import { cn } from '@/lib/utils'
 import { useTranslation } from 'react-i18next'
 
-const SPLASH_KEY = 'hpx.splash.shown.v1'
-const MIN_VISIBLE_MS = 1400
+const SPLASH_KEY = 'hpx.splash.shown.v2'
+const MIN_VISIBLE_MS = 3000
 
-/** Electric blue / ink — premium ops splash. */
-const GOOEY_THEME = {
-  primaryColor: '#38bdf8',
-  secondaryColor: '#1e3a8a',
-  borderColor: '#94a3b8',
+/** Deep blue + navy ink for the HPX splash. */
+const HPX_LOADER_THEME = {
+  accentColor: '#2563eb',
+  inkColor: '#020617',
+  label: 'HPX',
 } as const
 
 function splashAlreadyShown() {
@@ -30,8 +30,8 @@ function markSplashShown() {
 }
 
 /**
- * Full-screen gooey splash — once per browser tab session only.
- * Route transitions use TopLoadingBar / lightweight LoadingSpinner (no second gooey).
+ * Full-screen HPX morph splash — once per browser tab session.
+ * Route transitions keep the lightweight LoadingSpinner.
  */
 export function PageLoadOverlay({ minDurationMs = MIN_VISIBLE_MS }: { minDurationMs?: number }) {
   const { t } = useTranslation()
@@ -64,15 +64,15 @@ export function PageLoadOverlay({ minDurationMs = MIN_VISIBLE_MS }: { minDuratio
   return (
     <div
       className={cn(
-        'fixed inset-0 z-[100] flex flex-col items-center justify-center bg-[#05070c]/94 backdrop-blur-md transition-opacity duration-300',
+        'fixed inset-0 z-[100] flex flex-col items-center justify-center bg-[#020617]/96 backdrop-blur-md transition-opacity duration-300',
         fading ? 'opacity-0' : 'opacity-100',
       )}
       role="status"
       aria-live="polite"
       aria-busy="true"
     >
-      <GooeyLoader {...GOOEY_THEME} className="scale-100 sm:scale-110" />
-      <p className="mt-7 text-xs font-medium tracking-[0.2em] text-slate-400 uppercase sm:text-sm">{t('loading')}</p>
+      <HpxRecLoader {...HPX_LOADER_THEME} className="scale-90 sm:scale-100" />
+      <p className="mt-4 text-xs font-medium tracking-[0.22em] text-slate-400 uppercase sm:text-sm">{t('loading')}</p>
     </div>
   )
 }

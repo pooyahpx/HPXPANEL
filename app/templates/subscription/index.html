@@ -1,9 +1,10 @@
-{%- set skin = sub_theme if sub_theme in ['terminal', 'aurora', 'nova', 'atlas', 'pulse', 'ember', 'folio', 'harbor', 'lumen', 'rift'] else 'terminal' -%}
+{%- set skin = sub_theme if sub_theme in ['terminal', 'aurora', 'nova', 'atlas', 'pulse', 'ember', 'folio', 'harbor', 'lumen', 'rift', 'clay', 'cipher'] else 'terminal' -%}
 {%- set sub_mode = 'light' if sub_theme_mode == 'light' else 'dark' -%}
 {%- set allow_toggle = sub_allow_mode_toggle is defined and sub_allow_mode_toggle -%}
 {%- set show_guide = sub_show_install_guide is not defined or sub_show_install_guide -%}
 {%- set show_apps = sub_show_apps is not defined or sub_show_apps -%}
 {%- set show_usage = sub_show_usage_chart is not defined or sub_show_usage_chart -%}
+{%- set has_openvpn = has_openvpn if has_openvpn is defined else false -%}
 <!DOCTYPE html>
 <html lang="en" data-skin="{{ skin }}">
 <head>
@@ -12,7 +13,7 @@
 <title>{{ user.username }} — HPXPANEL Subscription</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,500;1,600&family=DM+Sans:wght@400;500;600;700&family=Syne:wght@600;700;800&family=Manrope:wght@400;500;600;700;800&family=Outfit:wght@400;500;600;700&family=Source+Sans+3:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=Sora:wght@500;600;700;800&family=Bebas+Neue&family=Oswald:wght@500;600;700&family=Vazirmatn:wght@400;500;700&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,500;1,600&family=DM+Sans:wght@400;500;600;700&family=Syne:wght@600;700;800&family=Manrope:wght@400;500;600;700;800&family=Outfit:wght@400;500;600;700&family=Source+Sans+3:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=Sora:wght@500;600;700;800&family=Bebas+Neue&family=Oswald:wght@500;600;700&family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;500;600;700;800&family=Vazirmatn:wght@400;500;700&display=swap" rel="stylesheet" />
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 /* ===== Skin: terminal (default) ===== */
@@ -102,6 +103,13 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid hsl(v
 .rail-card .v{font-family:var(--font-display);font-size:1.35rem;font-weight:700;line-height:1.2;word-break:break-word}
 .rail-card .sub{margin-top:4px;font-size:.8rem;color:hsl(var(--muted-fg))}
 .links-body,.chart-body,.apps-body{padding:14px}
+.link-group{margin-bottom:18px;padding-bottom:14px;border-bottom:1px solid hsl(var(--border)/.55)}
+.link-group:last-child{margin-bottom:0;padding-bottom:0;border-bottom:0}
+.link-group-hd{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:10px}
+.link-group-hd h3{font-family:var(--font-display);font-size:.95rem;font-weight:700;letter-spacing:.02em}
+.link-group-hd .count{font-family:var(--font-label);font-size:.68rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:hsl(var(--muted-fg))}
+.link-group-note{margin:-2px 0 10px;color:hsl(var(--muted-fg));font-size:.82rem}
+.download-row{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:4px}
 .link-row{display:flex;align-items:center;gap:8px;min-height:52px;margin-bottom:8px;padding:7px;border:2px solid hsl(var(--pixel));background:hsl(var(--muted)/.4)}
 .link-row:last-of-type{margin-bottom:0}
 .proto{flex-shrink:0;min-width:64px;padding:4px 8px;border:2px solid hsl(var(--pixel));background:hsl(var(--primary)/.18);color:hsl(var(--primary));font-family:var(--font-label);font-size:.68rem;font-weight:700;letter-spacing:.06em;text-align:center;text-transform:uppercase}
@@ -1464,13 +1472,165 @@ html[lang="fa"] *{letter-spacing:0 !important;text-transform:none !important}
 [data-skin="rift"] .qr-popup{border:1px solid hsl(var(--primary));box-shadow:0 0 0 100vmax hsl(12 30% 2%/.82)}
 [data-skin="rift"] .qr-close button{border:0}
 
-/* ---- lumen / rift responsive: <=900 collapse to one column, <=600 compact + touch-friendly ---- */
+/* =====================================================================
+   Skin: CLAY — claymorphism (ui-ux-pro-max). Fredoka/Nunito, soft 3D,
+   warm apricot + trust blue CTA, chunky borders.
+   ===================================================================== */
+[data-skin="clay"]{
+  --bg:24 30% 9%;--fg:32 100% 92%;--muted:24 22% 14%;--muted-fg:28 30% 72%;
+  --card:24 26% 13%;--border:24 40% 28%;--primary:27 96% 61%;--primary-fg:24 30% 9%;
+  --accent:217 91% 60%;
+  --success:142 70% 45%;--warning:38 92% 55%;--danger:0 72% 55%;--hold:217 80% 65%;
+  --pixel:24 40% 28%;--shadow:0 10px 0 hsl(var(--border)),0 14px 28px -16px hsl(var(--fg)/.35);
+  --font-display:"Fredoka","Nunito",system-ui,sans-serif;
+  --font-body:"Nunito",Vazirmatn,system-ui,sans-serif;
+  --font-label:"Nunito",Vazirmatn,system-ui,sans-serif;
+}
+[data-skin="clay"] body.light{
+  --bg:32 100% 96%;--fg:17 88% 32%;--muted:32 100% 90%;--muted-fg:17 40% 40%;
+  --card:0 0% 100%;--border:32 97% 80%;--primary:27 96% 53%;--primary-fg:222 47% 11%;
+  --accent:221 83% 53%;
+  --success:142 76% 36%;--warning:32 95% 40%;--danger:0 72% 48%;--hold:221 70% 48%;
+  --pixel:32 97% 80%;--shadow:inset 0 2px 4px hsl(var(--border)/.55),0 10px 0 hsl(var(--border)),0 16px 28px -18px hsl(var(--fg)/.25);
+}
+[data-skin="clay"] body{
+  --r:22px;--r-btn:18px;--bw:3px;--edge:hsl(var(--border));--lift:0 4px 0 hsl(var(--border));
+  background-image:radial-gradient(48rem 28rem at 8% -10%,hsl(var(--primary)/.28),transparent 60%),radial-gradient(36rem 24rem at 100% 110%,hsl(var(--accent)/.18),transparent 65%);
+  background-size:auto;padding:28px 16px 72px;
+}
+[data-skin="clay"] .shell{max-width:880px}
+[data-skin="clay"] .topbar{margin-bottom:28px}
+[data-skin="clay"] .brand{font-family:var(--font-display);font-size:1.05rem;font-weight:600;letter-spacing:0;text-transform:none}
+[data-skin="clay"] .brand-mark{width:32px;height:32px;border:3px solid hsl(var(--border));border-radius:14px;background:linear-gradient(145deg,hsl(var(--primary)),hsl(var(--accent)));box-shadow:0 4px 0 hsl(var(--border))}
+[data-skin="clay"] .panel-index{padding:4px 12px;border:3px solid hsl(var(--border));border-radius:999px;background:hsl(var(--accent)/.12);color:hsl(var(--accent));font-weight:700;letter-spacing:.04em;text-transform:none}
+[data-skin="clay"] .mode-btn,[data-skin="clay"] .lang-btn{border-width:3px;border-radius:14px;box-shadow:0 3px 0 hsl(var(--border));text-transform:none;letter-spacing:0;font-weight:700}
+[data-skin="clay"] .hero{margin-bottom:28px;text-align:center}
+[data-skin="clay"] .kicker{font-size:.72rem;letter-spacing:.12em}
+[data-skin="clay"] .hero h1{font-weight:600;font-size:clamp(2.1rem,6vw,3.2rem);letter-spacing:-.02em;line-height:1.08}
+[data-skin="clay"] .hero-meta{justify-content:center;margin-top:12px}
+[data-skin="clay"] .uname,[data-skin="clay"] .online{padding:4px 12px;border:3px solid hsl(var(--border));border-radius:999px;background:hsl(var(--card));font-weight:700;letter-spacing:0;text-transform:none}
+[data-skin="clay"] .urlbar{max-width:560px;margin:22px auto 0;padding:8px;border:3px solid hsl(var(--border));border-radius:22px;box-shadow:var(--shadow)}
+[data-skin="clay"] .urlbar-lbl{display:none}
+[data-skin="clay"] .announce{margin-bottom:22px;padding:16px 20px;border:3px solid hsl(var(--border));border-radius:20px;background:hsl(var(--primary)/.1);box-shadow:0 6px 0 hsl(var(--border))}
+[data-skin="clay"] .announce a{border:3px solid hsl(var(--border));border-radius:14px;background:hsl(var(--accent));color:#fff;box-shadow:0 3px 0 hsl(var(--border))}
+[data-skin="clay"] .grid-top,[data-skin="clay"] .grid-mid{grid-template-columns:minmax(0,1fr);gap:18px;margin-bottom:18px}
+[data-skin="clay"] .panel-wide{margin-bottom:18px}
+[data-skin="clay"] .panel,[data-skin="clay"] .rail-card,[data-skin="clay"] .app-card,[data-skin="clay"] .step{border:3px solid hsl(var(--border));border-radius:22px;background:hsl(var(--card));box-shadow:var(--shadow)}
+[data-skin="clay"] .panel-hd{padding:16px 20px;border-bottom:3px solid hsl(var(--border))}
+[data-skin="clay"] .panel-hd h2{font-size:1.15rem;font-weight:600;letter-spacing:-.01em}
+[data-skin="clay"] .links-body,[data-skin="clay"] .chart-body,[data-skin="clay"] .apps-body,[data-skin="clay"] .guide-body{padding:18px 20px}
+[data-skin="clay"] .status-hero{padding:30px 24px;text-align:center}
+[data-skin="clay"] .status-row{flex-direction:column;align-items:center;gap:10px;margin-bottom:20px}
+[data-skin="clay"] .status-title{font-weight:600;font-size:clamp(1.8rem,5vw,2.6rem);letter-spacing:-.02em;text-transform:none}
+[data-skin="clay"] .status-title .dot{width:12px;height:12px;border-radius:50%;box-shadow:0 0 0 5px hsl(var(--status)/.2)}
+[data-skin="clay"] .expire-chip .lbl,[data-skin="clay"] .metric .k,[data-skin="clay"] .rail-card .k{font-weight:700;letter-spacing:.08em}
+[data-skin="clay"] .gauge-wrap{justify-content:center}
+[data-skin="clay"] .gauge{width:168px;height:168px}
+[data-skin="clay"] .metrics{width:100%;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px}
+[data-skin="clay"] .metric{flex-direction:column;align-items:center;padding:14px;border:3px solid hsl(var(--border));border-radius:18px;background:hsl(var(--muted));text-align:center;box-shadow:0 4px 0 hsl(var(--border))}
+[data-skin="clay"] .link-row{padding:10px;border:3px solid hsl(var(--border));border-radius:18px;background:hsl(var(--muted));box-shadow:0 4px 0 hsl(var(--border))}
+[data-skin="clay"] .proto{border:0;border-radius:12px;background:hsl(var(--primary));color:hsl(var(--primary-fg));letter-spacing:.04em}
+[data-skin="clay"] .icon-btn{border:3px solid hsl(var(--border));border-radius:14px;background:hsl(var(--card));color:hsl(var(--primary));box-shadow:0 3px 0 hsl(var(--border));font-weight:700;text-transform:none}
+[data-skin="clay"] .icon-btn:hover{background:hsl(var(--primary));color:hsl(var(--primary-fg))}
+[data-skin="clay"] .copy-all,[data-skin="clay"] .support-cta,[data-skin="clay"] .cta:not(.ghost){border:3px solid hsl(var(--border));border-radius:18px;background:hsl(var(--accent));color:#fff;box-shadow:0 4px 0 hsl(var(--border));font-weight:800;letter-spacing:0;text-transform:none}
+[data-skin="clay"] .cta.ghost{border:3px solid hsl(var(--border));border-radius:18px;background:hsl(var(--card));box-shadow:0 3px 0 hsl(var(--border));text-transform:none}
+[data-skin="clay"] .copy-all{min-height:48px}
+[data-skin="clay"] .step-n{border:3px solid hsl(var(--border));border-radius:50%;background:hsl(var(--primary));color:hsl(var(--primary-fg));box-shadow:0 3px 0 hsl(var(--border))}
+[data-skin="clay"] .empty{border:3px dashed hsl(var(--border));border-radius:18px}
+[data-skin="clay"] .range-btn{min-height:36px;border:3px solid hsl(var(--border));border-radius:999px;background:hsl(var(--card));font-weight:700;box-shadow:0 2px 0 hsl(var(--border))}
+[data-skin="clay"] .range-btn.active{background:hsl(var(--primary));color:hsl(var(--primary-fg))}
+[data-skin="clay"] .chart-canvas-wrap{height:230px;border:3px solid hsl(var(--border));border-radius:18px;box-shadow:0 6px 0 hsl(var(--border))}
+[data-skin="clay"] .app-card{padding:18px}
+[data-skin="clay"] .app-avatar{border:3px solid hsl(var(--border));border-radius:16px}
+[data-skin="clay"] .platform{border:0;border-radius:999px;background:hsl(var(--accent)/.15);color:hsl(var(--accent))}
+[data-skin="clay"] .device-row,[data-skin="clay"] .group-quota-item{border:3px solid hsl(var(--border));border-radius:16px;box-shadow:0 3px 0 hsl(var(--border))}
+[data-skin="clay"] .qr-popup{border:3px solid hsl(var(--border));border-radius:24px;box-shadow:0 16px 0 hsl(var(--border)),0 0 0 100vmax hsl(24 30% 6%/.65)}
+
+/* =====================================================================
+   Skin: CIPHER — Swiss trust (ui-ux-pro-max). Space Grotesk / DM Sans,
+   navy + connected green, geometric grid, sharp 4px radius.
+   ===================================================================== */
+[data-skin="cipher"]{
+  --bg:222 47% 11%;--fg:0 0% 100%;--muted:222 40% 12%;--muted-fg:215 16% 65%;
+  --card:222 35% 15%;--border:0 0% 100% / .08;--primary:142 71% 45%;--primary-fg:222 47% 11%;
+  --accent:213 45% 24%;
+  --success:142 71% 45%;--warning:38 92% 55%;--danger:0 72% 55%;--hold:213 70% 60%;
+  --pixel:213 45% 24%;--shadow:0 12px 28px -22px hsl(213 45% 10% / .9);
+  --font-display:"Space Grotesk",system-ui,sans-serif;
+  --font-body:"DM Sans",Vazirmatn,system-ui,sans-serif;
+  --font-label:"Space Grotesk",system-ui,sans-serif;
+}
+[data-skin="cipher"] body.light{
+  --bg:210 40% 98%;--fg:222 47% 11%;--muted:214 20% 92%;--muted-fg:215 16% 40%;
+  --card:0 0% 100%;--border:214 20% 88%;--primary:142 72% 29%;--primary-fg:0 0% 100%;
+  --accent:213 45% 24%;
+  --success:142 72% 29%;--warning:32 95% 38%;--danger:0 72% 48%;--hold:213 60% 40%;
+  --pixel:214 20% 80%;--shadow:0 12px 28px -22px hsl(213 40% 30% / .25);
+}
+[data-skin="cipher"] body{
+  --r:4px;--r-btn:4px;--bw:1px;--edge:hsl(var(--border));--lift:none;
+  background-image:linear-gradient(hsl(var(--fg)/.035) 1px,transparent 1px),linear-gradient(90deg,hsl(var(--fg)/.035) 1px,transparent 1px);
+  background-size:48px 48px;padding:28px 18px 64px;
+}
+[data-skin="cipher"] .shell{max-width:1040px}
+[data-skin="cipher"] .topbar{margin-bottom:28px;padding-bottom:14px;border-bottom:1px solid hsl(var(--border))}
+[data-skin="cipher"] .brand{font-family:var(--font-display);font-size:.95rem;font-weight:700;letter-spacing:-.02em;text-transform:none;color:hsl(var(--primary))}
+[data-skin="cipher"] .brand-mark{width:22px;height:22px;border:0;border-radius:4px;background:hsl(var(--primary));color:hsl(var(--primary-fg));box-shadow:none}
+[data-skin="cipher"] .panel-index{font-family:var(--font-label);font-weight:600;letter-spacing:.14em;color:hsl(var(--muted-fg));text-transform:uppercase}
+[data-skin="cipher"] .mode-btn,[data-skin="cipher"] .lang-btn{border-radius:4px;box-shadow:none;text-transform:uppercase;letter-spacing:.1em;font-weight:600}
+[data-skin="cipher"] .hero{margin-bottom:28px;max-width:720px}
+[data-skin="cipher"] .kicker{font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:hsl(var(--muted-fg))}
+[data-skin="cipher"] .hero h1{font-weight:700;font-size:clamp(2.2rem,5.5vw,3.4rem);letter-spacing:-.035em;line-height:1.05}
+[data-skin="cipher"] .uname{font-family:var(--font-body);font-weight:600;padding:2px 0;border:0;background:transparent}
+[data-skin="cipher"] .online{font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:hsl(var(--primary))}
+[data-skin="cipher"] .urlbar{margin-top:18px;padding:6px 6px 6px 16px;border:1px solid hsl(var(--border));border-radius:4px;box-shadow:none;background:hsl(var(--card))}
+[data-skin="cipher"] .urlbar-lbl{display:none}
+[data-skin="cipher"] .announce{margin-bottom:22px;padding:14px 18px;border:1px solid hsl(var(--primary)/.35);border-radius:4px;border-inline-start:3px solid hsl(var(--primary));background:hsl(var(--primary)/.08);box-shadow:none}
+[data-skin="cipher"] .announce a{border:0;border-radius:4px;background:hsl(var(--primary));color:hsl(var(--primary-fg))}
+[data-skin="cipher"] .grid-top{grid-template-columns:minmax(0,1.25fr) minmax(240px,.75fr);gap:18px;margin-bottom:18px}
+[data-skin="cipher"] .grid-mid{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px;margin-bottom:18px}
+[data-skin="cipher"] .panel-wide{margin-bottom:18px}
+[data-skin="cipher"] .panel,[data-skin="cipher"] .rail-card,[data-skin="cipher"] .app-card,[data-skin="cipher"] .step{border:1px solid hsl(var(--border));border-radius:4px;background:hsl(var(--card));box-shadow:var(--shadow)}
+[data-skin="cipher"] .panel-hd{padding:14px 18px;border-bottom:1px solid hsl(var(--border))}
+[data-skin="cipher"] .panel-hd h2{font-size:1.05rem;font-weight:700;letter-spacing:-.02em}
+[data-skin="cipher"] .links-body,[data-skin="cipher"] .chart-body,[data-skin="cipher"] .apps-body,[data-skin="cipher"] .guide-body{padding:16px 18px}
+[data-skin="cipher"] .status-hero{padding:24px 22px;border-top:3px solid hsl(var(--primary))}
+[data-skin="cipher"] .status-title{font-weight:700;font-size:clamp(1.6rem,3.5vw,2.2rem);letter-spacing:-.03em;text-transform:none}
+[data-skin="cipher"] .status-title .dot{width:8px;height:8px;border-radius:1px}
+[data-skin="cipher"] .expire-chip .lbl,[data-skin="cipher"] .metric .k,[data-skin="cipher"] .rail-card .k{font-weight:600;letter-spacing:.12em;text-transform:uppercase;font-size:.68rem}
+[data-skin="cipher"] .gauge{width:140px;height:140px}
+[data-skin="cipher"] .metrics{gap:8px}
+[data-skin="cipher"] .metric{padding:12px 14px;border:0;border-inline-start:2px solid hsl(var(--primary));background:hsl(var(--muted));border-radius:0}
+[data-skin="cipher"] .rail{gap:12px}
+[data-skin="cipher"] .rail-card{padding:16px;border-inline-start:3px solid hsl(var(--primary))}
+[data-skin="cipher"] .link-row{padding:8px;border:0;border-bottom:1px solid hsl(var(--border));background:transparent;border-radius:0}
+[data-skin="cipher"] .proto{border:0;border-radius:2px;background:hsl(var(--primary));color:hsl(var(--primary-fg));letter-spacing:.08em}
+[data-skin="cipher"] .icon-btn{border:1px solid hsl(var(--primary)/.5);border-radius:4px;background:transparent;color:hsl(var(--primary));box-shadow:none;font-weight:700;text-transform:uppercase;letter-spacing:.08em}
+[data-skin="cipher"] .icon-btn:hover{background:hsl(var(--primary));color:hsl(var(--primary-fg))}
+[data-skin="cipher"] .copy-all,[data-skin="cipher"] .support-cta,[data-skin="cipher"] .cta:not(.ghost){border:0;border-radius:4px;background:hsl(var(--primary));color:hsl(var(--primary-fg));box-shadow:none;font-weight:700;letter-spacing:.04em;text-transform:none}
+[data-skin="cipher"] .cta.ghost{border:1px solid hsl(var(--border));border-radius:4px;background:transparent;text-transform:none}
+[data-skin="cipher"] .copy-all{min-height:44px}
+[data-skin="cipher"] .step-n{border:0;border-radius:4px;background:hsl(var(--accent));color:#fff}
+[data-skin="cipher"] .empty{border:1px dashed hsl(var(--border));border-radius:4px}
+[data-skin="cipher"] .range-btn{min-height:34px;border:1px solid hsl(var(--border));border-radius:4px;background:transparent;font-weight:600;letter-spacing:.08em;text-transform:uppercase}
+[data-skin="cipher"] .range-btn.active{border-color:hsl(var(--primary));background:hsl(var(--primary));color:hsl(var(--primary-fg))}
+[data-skin="cipher"] .chart-total{font-family:var(--font-display);font-weight:700;color:hsl(var(--primary))}
+[data-skin="cipher"] .chart-canvas-wrap{height:220px;border:1px solid hsl(var(--border));border-radius:4px}
+[data-skin="cipher"] .app-card{padding:16px}
+[data-skin="cipher"] .app-avatar{border:0;border-radius:4px;background:hsl(var(--primary)/.15)}
+[data-skin="cipher"] .platform{border:0;border-radius:2px;background:hsl(var(--accent));color:#fff;letter-spacing:.1em}
+[data-skin="cipher"] .device-row,[data-skin="cipher"] .group-quota-item{border:0;border-inline-start:2px solid hsl(var(--primary));background:hsl(var(--muted));border-radius:0}
+[data-skin="cipher"] .footer a{font-family:var(--font-label);letter-spacing:.16em}
+[data-skin="cipher"] .qr-popup{border:1px solid hsl(var(--primary));border-radius:4px;box-shadow:0 0 0 100vmax hsl(222 47% 6%/.72)}
+
+/* ---- lumen / rift / clay / cipher responsive ---- */
 @media (max-width:900px){
   [data-skin="rift"] .grid-top,[data-skin="rift"] .grid-mid{grid-template-columns:minmax(0,1fr)}
   [data-skin="rift"] .rail{padding-top:0}
   [data-skin="rift"] .rail-card:nth-child(even){margin-inline-start:0}
   [data-skin="rift"] .gauge-wrap{flex-wrap:wrap}
   [data-skin="rift"] .hero::before{width:46%;inset-inline-end:-18%}
+  [data-skin="cipher"] .grid-top,[data-skin="cipher"] .grid-mid{grid-template-columns:minmax(0,1fr)}
 }
 @media (max-width:600px){
   [data-skin="lumen"] body{padding:18px 12px 52px}
@@ -1495,6 +1655,12 @@ html[lang="fa"] *{letter-spacing:0 !important;text-transform:none !important}
   [data-skin="rift"] .links-body,[data-skin="rift"] .chart-body,[data-skin="rift"] .apps-body,[data-skin="rift"] .guide-body{padding:14px}
   [data-skin="rift"] .icon-btn,[data-skin="rift"] .range-btn{min-height:44px}
   [data-skin="rift"] .urlbar .cta{flex:1 1 calc(50% - 8px)}
+  [data-skin="clay"] body{padding:18px 12px 52px}
+  [data-skin="clay"] .urlbar .cta{flex:1 1 calc(50% - 8px)}
+  [data-skin="clay"] .icon-btn,[data-skin="clay"] .range-btn{min-height:44px}
+  [data-skin="cipher"] body{padding:18px 12px 52px}
+  [data-skin="cipher"] .urlbar .cta{flex:1 1 calc(50% - 8px)}
+  [data-skin="cipher"] .icon-btn,[data-skin="cipher"] .range-btn{min-height:44px}
 }
 </style>
 <script>
@@ -1716,39 +1882,113 @@ var QRCode;!function(){function a(a){this.mode=c.MODE_8BIT_BYTE,this.data=a,this
     </div>
     <div class="links-body">
       {% if user.status.value in ('active', 'on_hold') %}
+        {% set ns = namespace(proxy=[], wg=[], ovpn=[], source=[]) %}
         {% if link_entries %}
-          {% for entry in link_entries %}
-          {% set proto = (entry.link.split('://')[0] if '://' in entry.link else entry.protocol or 'LINK') | upper %}
-          <div class="link-row">
-            <span class="proto">{{ proto[:8] }}</span>
-            <input class="link-input" type="text" value="{{ entry.link }}" readonly />
-            <button class="icon-btn" type="button" onclick="copyLink(this)" data-link="{{ entry.link }}" data-i18n="copy">Copy</button>
-            <button class="icon-btn" type="button" onclick="showQr(this)" data-link="{{ entry.link }}" data-i18n="qr">QR</button>
-            {% if entry.group_quotas %}
-            <div class="link-quota">
-              {% for gq in entry.group_quotas %}
-              <span class="quota-chip{% if gq.is_limited %} limited{% endif %}">
-                {{ gq.group_name }}:
-                <span class="remain">{{ gq.remaining | bytesformat }} <span data-i18n="left">left</span></span>
-                / {{ gq.data_limit | bytesformat }}
-              </span>
-              {% endfor %}
-            </div>
-            {% endif %}
-          </div>
-          {% endfor %}
-          <button class="copy-all" type="button" onclick="copyAllLinks(this)" data-i18n="copy_all">Copy all links</button>
+          {% for entry in link_entries %}{% set _ = ns.source.append(entry) %}{% endfor %}
         {% elif links %}
-          {% for link in links %}
-          {% set proto = (link.split('://')[0] if '://' in link else 'LINK') | upper %}
-          <div class="link-row">
-            <span class="proto">{{ proto[:8] }}</span>
-            <input class="link-input" type="text" value="{{ link }}" readonly />
-            <button class="icon-btn" type="button" onclick="copyLink(this)" data-link="{{ link }}" data-i18n="copy">Copy</button>
-            <button class="icon-btn" type="button" onclick="showQr(this)" data-link="{{ link }}" data-i18n="qr">QR</button>
+          {% for link in links %}{% set _ = ns.source.append({"link": link, "remark": "", "protocol": "", "group_quotas": []}) %}{% endfor %}
+        {% endif %}
+        {% for entry in ns.source %}
+          {% set scheme = (entry.link.split('://')[0] if entry.link and '://' in entry.link else '') | lower %}
+          {% set proto = (entry.protocol or scheme) | lower %}
+          {% if proto in ['wireguard', 'wg_c', 'amneziawg'] or scheme in ['wireguard', 'awg', 'amneziawg'] %}
+            {% set _ = ns.wg.append(entry) %}
+          {% elif proto == 'openvpn' or scheme in ['openvpn', 'ovpn'] %}
+            {% set _ = ns.ovpn.append(entry) %}
+          {% else %}
+            {% set _ = ns.proxy.append(entry) %}
+          {% endif %}
+        {% endfor %}
+        {% set show_openvpn = has_openvpn or (ns.ovpn | length) > 0 %}
+        {% if ns.proxy or ns.wg or show_openvpn %}
+          {% if ns.proxy %}
+          <div class="link-group" data-group="proxy">
+            <div class="link-group-hd">
+              <h3 data-i18n="cat_proxy">Proxy configs</h3>
+              <span class="count">{{ ns.proxy | length }}</span>
+            </div>
+            {% for entry in ns.proxy %}
+            {% set proto = (entry.link.split('://')[0] if '://' in entry.link else entry.protocol or 'LINK') | upper %}
+            <div class="link-row">
+              <span class="proto">{{ proto[:8] }}</span>
+              <input class="link-input" type="text" value="{{ entry.link }}" readonly />
+              <button class="icon-btn" type="button" onclick="copyLink(this)" data-link="{{ entry.link }}" data-i18n="copy">Copy</button>
+              <button class="icon-btn" type="button" onclick="showQr(this)" data-link="{{ entry.link }}" data-i18n="qr">QR</button>
+              {% if entry.group_quotas %}
+              <div class="link-quota">
+                {% for gq in entry.group_quotas %}
+                <span class="quota-chip{% if gq.is_limited %} limited{% endif %}">
+                  {{ gq.group_name }}:
+                  <span class="remain">{{ gq.remaining | bytesformat }} <span data-i18n="left">left</span></span>
+                  / {{ gq.data_limit | bytesformat }}
+                </span>
+                {% endfor %}
+              </div>
+              {% endif %}
+            </div>
+            {% endfor %}
+            <button class="copy-all" type="button" onclick="copyAllLinks(this)" data-i18n="copy_all_proxy">Copy proxy links</button>
           </div>
-          {% endfor %}
-          <button class="copy-all" type="button" onclick="copyAllLinks(this)" data-i18n="copy_all">Copy all links</button>
+          {% endif %}
+
+          {% if ns.wg %}
+          <div class="link-group" data-group="wireguard">
+            <div class="link-group-hd">
+              <h3 data-i18n="cat_wireguard">WireGuard</h3>
+              <span class="count">{{ ns.wg | length }}</span>
+            </div>
+            <p class="link-group-note" data-i18n="cat_wireguard_note">Copy button pastes the WireGuard URI only.</p>
+            {% for entry in ns.wg %}
+            {% set proto = (entry.link.split('://')[0] if '://' in entry.link else entry.protocol or 'WG') | upper %}
+            <div class="link-row">
+              <span class="proto">{{ proto[:8] }}</span>
+              <input class="link-input" type="text" value="{{ entry.link }}" readonly />
+              <button class="icon-btn" type="button" onclick="copyLink(this)" data-link="{{ entry.link }}" data-i18n="copy">Copy</button>
+              <button class="icon-btn" type="button" onclick="showQr(this)" data-link="{{ entry.link }}" data-i18n="qr">QR</button>
+              {% if entry.group_quotas %}
+              <div class="link-quota">
+                {% for gq in entry.group_quotas %}
+                <span class="quota-chip{% if gq.is_limited %} limited{% endif %}">
+                  {{ gq.group_name }}:
+                  <span class="remain">{{ gq.remaining | bytesformat }} <span data-i18n="left">left</span></span>
+                  / {{ gq.data_limit | bytesformat }}
+                </span>
+                {% endfor %}
+              </div>
+              {% endif %}
+            </div>
+            {% endfor %}
+            <div class="download-row">
+              <button class="copy-all" type="button" onclick="copyAllLinks(this)" data-i18n="copy_all_wg">Copy WireGuard links</button>
+              <a class="cta ghost" href="" id="wgZipBtn" data-i18n="dl_wg_zip">Download .conf zip</a>
+            </div>
+          </div>
+          {% endif %}
+
+          {% if show_openvpn %}
+          <div class="link-group" data-group="openvpn">
+            <div class="link-group-hd">
+              <h3 data-i18n="cat_openvpn">OpenVPN</h3>
+              <span class="count">{% if ns.ovpn %}{{ ns.ovpn | length }}{% else %}1{% endif %}</span>
+            </div>
+            <p class="link-group-note" data-i18n="cat_openvpn_note">Download the .ovpn profile for OpenVPN Connect.</p>
+            {% for entry in ns.ovpn %}
+            {% set proto = (entry.link.split('://')[0] if '://' in entry.link else entry.protocol or 'OVPN') | upper %}
+            <div class="link-row">
+              <span class="proto">{{ proto[:8] }}</span>
+              <input class="link-input" type="text" value="{{ entry.link }}" readonly />
+              <button class="icon-btn" type="button" onclick="copyLink(this)" data-link="{{ entry.link }}" data-i18n="copy">Copy</button>
+              <button class="icon-btn" type="button" onclick="showQr(this)" data-link="{{ entry.link }}" data-i18n="qr">QR</button>
+            </div>
+            {% endfor %}
+            <div class="download-row">
+              {% if ns.ovpn %}
+              <button class="copy-all" type="button" onclick="copyAllLinks(this)" data-i18n="copy_all_ovpn">Copy OpenVPN links</button>
+              {% endif %}
+              <a class="cta" href="" id="ovpnDlBtn" data-i18n="dl_ovpn">Download .ovpn</a>
+            </div>
+          </div>
+          {% endif %}
         {% else %}
           <p class="empty" data-i18n="empty_hidden">Direct browser links are hidden for this subscription. Open the subscription URL in a supported client.</p>
         {% endif %}
@@ -1910,6 +2150,11 @@ var QRCode;!function(){function a(a){this.mode=c.MODE_8BIT_BYTE,this.data=a,this
       step2_t: 'Add your subscription', step2_d: 'Copy your subscription URL and paste it into the app, or tap Import config.',
       step3_t: 'Connect', step3_d: 'Refresh the subscription inside the app, pick a server and press connect.', guide_note: 'Profile:',
       links_title: 'Configuration links', links_idx: '03 / Connect', copy: 'Copy', copy_all: 'Copy all links', copied_all: 'Copied all',
+      cat_proxy: 'Proxy configs', cat_wireguard: 'WireGuard', cat_openvpn: 'OpenVPN',
+      cat_wireguard_note: 'Copy pastes the WireGuard link only.',
+      cat_openvpn_note: 'Download the .ovpn profile for OpenVPN Connect.',
+      copy_all_proxy: 'Copy proxy links', copy_all_wg: 'Copy WireGuard links', copy_all_ovpn: 'Copy OpenVPN links',
+      dl_wg_zip: 'Download .conf zip', dl_ovpn: 'Download .ovpn',
       empty_hidden: 'Direct browser links are hidden for this subscription. Open the subscription URL in a supported client.',
       empty_unavailable: 'Links unavailable while account is',
       apps_title: 'Recommended applications', apps_idx: '04 / Clients', apps_hint: 'Pick your device, install a client, then tap Add subscription - or paste your subscription link.',
@@ -1943,6 +2188,11 @@ var QRCode;!function(){function a(a){this.mode=c.MODE_8BIT_BYTE,this.data=a,this
       step2_t: 'افزودن اشتراک', step2_d: 'لینک اشتراک را کپی و در برنامه وارد کنید یا روی «افزودن خودکار» بزنید.',
       step3_t: 'اتصال', step3_d: 'اشتراک را در برنامه به‌روزرسانی کنید، سرور را انتخاب و وصل شوید.', guide_note: 'پروفایل:',
       links_title: 'لینک‌های پیکربندی', links_idx: '۰۳ / اتصال', copy: 'کپی', copy_all: 'کپی همه لینک‌ها', copied_all: 'همه کپی شد',
+      cat_proxy: 'کانفیگ‌های پروکسی', cat_wireguard: 'وایرگارد', cat_openvpn: 'اوپن‌وی‌پی‌ان',
+      cat_wireguard_note: 'با کپی فقط لینک وایرگارد کپی می‌شود.',
+      cat_openvpn_note: 'پروفایل .ovpn را برای OpenVPN Connect دانلود کنید.',
+      copy_all_proxy: 'کپی لینک‌های پروکسی', copy_all_wg: 'کپی لینک‌های وایرگارد', copy_all_ovpn: 'کپی لینک‌های اوپن‌وی‌پی‌ان',
+      dl_wg_zip: 'دانلود zip کانفیگ', dl_ovpn: 'دانلود .ovpn',
       empty_hidden: 'لینک‌های مستقیم برای این اشتراک پنهان است. لینک اشتراک را در برنامه‌ی پشتیبانی‌شده باز کنید.',
       empty_unavailable: 'لینک‌ها در دسترس نیستند، وضعیت حساب:',
       apps_title: 'برنامه‌های پیشنهادی', apps_idx: '۰۴ / برنامه‌ها', apps_hint: 'دستگاه خود را انتخاب کنید، یک برنامه نصب کنید و روی «افزودن اشتراک» بزنید - یا لینک اشتراک را وارد کنید.',
@@ -2120,6 +2370,12 @@ var QRCode;!function(){function a(a){this.mode=c.MODE_8BIT_BYTE,this.data=a,this
     const qrBtn = document.getElementById('subQrBtn');
     if (qrBtn) qrBtn.dataset.link = subUrl();
 
+    const base = subUrl().replace(/\/$/, '');
+    const wgZip = document.getElementById('wgZipBtn');
+    if (wgZip && base) wgZip.href = base + '/wireguard';
+    const ovpnDl = document.getElementById('ovpnDlBtn');
+    if (ovpnDl && base) ovpnDl.href = base + '/openvpn';
+
     const savedLang = safeGet('subLang');
     const initialLang = savedLang === 'fa' || savedLang === 'en'
       ? savedLang
@@ -2247,9 +2503,13 @@ var QRCode;!function(){function a(a){this.mode=c.MODE_8BIT_BYTE,this.data=a,this
   }
 
   window.copyAllLinks = function (button) {
-    const links = Array.from(document.querySelectorAll('.link-input')).map(function (i) { return i.value; }).join('\n');
+    const scope = button.closest('.link-group') || document.getElementById('linksPanel') || document;
+    const links = Array.from(scope.querySelectorAll('.link-input')).map(function (i) { return String(i.value || '').trim(); }).filter(Boolean).join('\n');
     if (!links) return;
-    const finish = function () { flash(button, 'copied_all', 'copy_all'); };
+    const finish = function () {
+      const prev = button.getAttribute('data-i18n') || 'copy_all';
+      flash(button, 'copied_all', prev);
+    };
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(links).then(finish).catch(function () { fallbackCopy(links); finish(); });
     } else {

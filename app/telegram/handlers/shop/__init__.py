@@ -50,6 +50,7 @@ from app.telegram.utils.shop_helpers import (
     notify_admins_user_joined,
     notify_all_admins_order,
     notify_all_admins_support,
+    notify_owner_test_claimed,
     safe_error_text,
     shop_home_text,
     start_checkout,
@@ -857,6 +858,20 @@ async def claim_test_config(
             source_type="test",
             source_id=None,
             panel_username=user.username,
+        )
+        buyer = event.from_user
+        buyer_name = (buyer.full_name or "").strip() if buyer else ""
+        buyer_uname = f"@{buyer.username}" if buyer and buyer.username else ""
+        buyer_label = " · ".join(part for part in (buyer_name, buyer_uname) if part) or str(event.from_user.id)
+        await notify_owner_test_claimed(
+            db=db,
+            bot=bot,
+            buyer_telegram_id=event.from_user.id,
+            buyer_label=buyer_label,
+            username=user.username,
+            subscription_url=user.subscription_url or "",
+            data_limit=user.data_limit,
+            expire=user.expire,
         )
 
 

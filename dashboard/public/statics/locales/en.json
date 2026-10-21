@@ -4701,6 +4701,16 @@
         "name": "Rift",
         "tag": "Cinematic",
         "description": "Near-black with a coral-orange accent: asymmetric hero, sharp edges, condensed display type and a bold status band."
+      },
+      "clay": {
+        "name": "Clay",
+        "tag": "Soft 3D",
+        "description": "Claymorphism: chunky soft cards, warm apricot ground, playful Fredoka type and a trust-blue CTA."
+      },
+      "cipher": {
+        "name": "Cipher",
+        "tag": "Trust shield",
+        "description": "Swiss minimal VPN ops: deep navy, connected green accent, Space Grotesk headlines and crisp geometric spacing."
       }
     },
     "mode": {

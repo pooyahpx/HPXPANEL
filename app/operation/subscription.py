@@ -516,6 +516,10 @@ class SubscriptionOperation(BaseOperation):
             format_variables = await self.get_format_variables(user)
             formatted_announce = self._format_announce(sub_settings, format_variables)
 
+            from app.utils.openvpn import user_has_openvpn_access
+
+            has_openvpn = await user_has_openvpn_access(db, db_user.groups or [])
+
             return HTMLResponse(
                 render_template(
                     template,
@@ -527,6 +531,7 @@ class SubscriptionOperation(BaseOperation):
                         format_variables,
                         is_hwid_enabled,
                         link_entries=link_entries,
+                        has_openvpn=has_openvpn,
                     ),
                 )
             )
@@ -660,6 +665,8 @@ class SubscriptionOperation(BaseOperation):
         format_variables: dict,
         is_hwid_enabled: bool,
         link_entries: list[dict[str, Any]] | None = None,
+        *,
+        has_openvpn: bool = False,
     ) -> dict[str, Any]:
         group_quota_rows = []
         for quota in user.group_quotas or []:
@@ -704,6 +711,7 @@ class SubscriptionOperation(BaseOperation):
             "sub_show_usage_chart": bool(getattr(sub_settings, "sub_show_usage_chart", True)),
             "sub_show_config_share": bool(getattr(sub_settings, "sub_show_config_share", True)),
             "sub_allow_mode_toggle": bool(getattr(sub_settings, "sub_allow_mode_toggle", False)),
+            "has_openvpn": bool(has_openvpn),
         }
 
     def _build_raw_subscription_payload(

@@ -4363,6 +4363,16 @@
         "name": "Rift",
         "tag": "电影感",
         "description": "近黑底色搭配珊瑚橙点缀：不对称主视觉、锐利边角、窄体标题和醒目的状态条。"
+      },
+      "clay": {
+        "name": "Clay",
+        "tag": "软 3D",
+        "description": "黏土拟态：厚实柔和卡片、暖杏色背景、活泼的 Fredoka 字体与信任蓝 CTA。"
+      },
+      "cipher": {
+        "name": "Cipher",
+        "tag": "信任盾",
+        "description": "瑞士极简 VPN 风格：深蓝海军色、连通绿点缀、Space Grotesk 标题与清晰几何留白。"
       }
     },
     "mode": {

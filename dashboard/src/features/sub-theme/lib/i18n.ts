@@ -21,6 +21,8 @@ export const THEME_DEFAULTS: Record<string, { name: string; tag: string; descrip
   harbor: { name: 'Harbor', tag: 'Calm ops', description: 'Deep slate and sky blue: a horizontal KPI strip, a soft status card and a very mobile-friendly layout.' },
   lumen: { name: 'Lumen', tag: 'Bright ops', description: 'Airy white and slate with an electric-blue accent: a single clean column, soft 16px cards and a strong mobile layout.' },
   rift: { name: 'Rift', tag: 'Cinematic', description: 'Near-black with a coral-orange accent: asymmetric hero, sharp edges, condensed display type and a bold status band.' },
+  clay: { name: 'Clay', tag: 'Soft 3D', description: 'Claymorphism: chunky soft cards, warm apricot ground, playful Fredoka type and a trust-blue CTA.' },
+  cipher: { name: 'Cipher', tag: 'Trust shield', description: 'Swiss minimal VPN ops: deep navy, connected green accent, Space Grotesk headlines and crisp geometric spacing.' },
 }
 
 export const themeText = (t: TFunction, theme: string, field: 'name' | 'tag' | 'description'): string =>

@@ -1565,7 +1565,7 @@ export interface Subscription {
   sub_allow_mode_toggle?: boolean
 }
 
-export type SubTheme = 'terminal' | 'aurora' | 'nova' | 'atlas' | 'pulse' | 'ember' | 'folio' | 'harbor' | 'lumen' | 'rift'
+export type SubTheme = 'terminal' | 'aurora' | 'nova' | 'atlas' | 'pulse' | 'ember' | 'folio' | 'harbor' | 'lumen' | 'rift' | 'clay' | 'cipher'
 
 export type SubThemeMode = 'dark' | 'light'
 

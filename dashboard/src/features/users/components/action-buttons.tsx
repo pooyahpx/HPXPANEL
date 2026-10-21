@@ -24,7 +24,7 @@ import UserAllIPsModal from '@/features/users/dialogs/user-all-ips-modal'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { invalidateUserMetricsQueries, removeUserFromUsersCache, upsertUserInUsersCache } from '@/utils/usersCache'
-import { buildSubscriptionFormatUrl, fetchSubscriptionBlobFromUrl, fetchUserSubscriptionContent, resolveSubscriptionPublicUrl, type SubscriptionContentFormat } from '@/utils/subscription-config'
+import { buildSubscriptionFormatUrl, fetchSubscriptionBlobFromUrl, fetchUserSubscriptionContent, filterWireGuardLinks, resolveSubscriptionPublicUrl, type SubscriptionContentFormat } from '@/utils/subscription-config'
 import { useRenewOpenVPNCertificate, useRevokeOpenVPNCertificate, userHasOpenVPNProfile } from '@/service/api/openvpn-user'
 import { hasPermission, hasScopeAll } from '@/utils/rbac'
 
@@ -40,7 +40,8 @@ export interface SubscribeLink {
   icon: React.ComponentType<{ className?: string }>
 }
 
-const DOWNLOAD_ONLY_PROTOCOLS = ['clash', 'clash-meta', 'sing-box', 'wireguard', 'openvpn']
+const DOWNLOAD_ONLY_PROTOCOLS = ['clash', 'clash-meta', 'sing-box', 'openvpn']
+const WIREGUARD_COPY_PROTOCOLS = new Set(['wireguard'])
 
 type ActionButtonsModalState = {
   subscribeUrl: string
@@ -557,11 +558,29 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user, isModalHost = true, rende
     })
   }
 
+  const resolveCopyPayload = async (format: SubscriptionContentFormat, type: string) => {
+    const raw = await fetchAndCacheContent(WIREGUARD_COPY_PROTOCOLS.has(type) ? 'links' : format)
+    if (WIREGUARD_COPY_PROTOCOLS.has(type)) {
+      const onlyWg = filterWireGuardLinks(raw)
+      if (!onlyWg) {
+        throw new Error('No WireGuard links')
+      }
+      return onlyWg
+    }
+    return raw
+  }
+
   const handleLinksCopy = async (format: SubscriptionContentFormat, type: string) => {
     try {
-      const cachedContent = configContentCacheRef.current[format]
+      const cacheKey = WIREGUARD_COPY_PROTOCOLS.has(type) ? 'links' : format
+      const cachedContent = configContentCacheRef.current[cacheKey]
       if (cachedContent !== undefined) {
-        const copiedSuccessfully = await copy(cachedContent)
+        const payload = WIREGUARD_COPY_PROTOCOLS.has(type) ? filterWireGuardLinks(cachedContent) : cachedContent
+        if (!payload) {
+          toast.error(t('copyFailed', { defaultValue: 'Failed to copy content' }))
+          return
+        }
+        const copiedSuccessfully = await copy(payload)
         if (copiedSuccessfully) {
           toast.success(`${type} ${t('usersTable.copied', { defaultValue: 'Copied to clipboard' })}`)
         } else {
@@ -571,14 +590,14 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user, isModalHost = true, rende
       }
 
       if (requiresSynchronousClipboard()) {
-        void fetchAndCacheContent(format).catch(error => {
+        void fetchAndCacheContent(cacheKey).catch(error => {
           console.error('Failed to fetch config content:', error)
         })
         toast.info(t('copyPrepareRetry', { defaultValue: 'Preparing configuration. Tap again to copy.' }))
         return
       }
 
-      const content = await fetchAndCacheContent(format)
+      const content = await resolveCopyPayload(format, type)
       const copiedSuccessfully = await copy(content)
       if (copiedSuccessfully) {
         toast.success(`${type} ${t('usersTable.copied', { defaultValue: 'Copied to clipboard' })}`)

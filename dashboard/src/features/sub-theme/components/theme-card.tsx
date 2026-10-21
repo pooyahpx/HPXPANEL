@@ -17,6 +17,8 @@ const FONT_PAIRS: Record<SubTheme, string> = {
   harbor: 'Manrope',
   lumen: 'Sora · Source Sans 3',
   rift: 'Bebas Neue · Oswald · IBM Plex Sans',
+  clay: 'Fredoka · Nunito',
+  cipher: 'Space Grotesk · DM Sans',
 }
 
 interface ThemeCardProps {

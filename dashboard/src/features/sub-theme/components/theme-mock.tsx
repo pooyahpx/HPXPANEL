@@ -427,6 +427,80 @@ function RiftMock({ p, skin, surface, button }: MockCtx) {
   )
 }
 
+/** Clay: soft chunky claymorphism cards on warm apricot. */
+function ClayMock({ p, skin, surface, button }: MockCtx) {
+  return (
+    <>
+      <div className="flex items-center justify-between">
+        <span className="text-[8px] font-bold" style={skin.titleStyle}>
+          HPXPANEL
+        </span>
+        <span className="rounded-md px-1.5 py-0.5 text-[6px] font-bold" style={{ background: `${p.accent}33`, color: p.accent }}>
+          Soft
+        </span>
+      </div>
+      <div className="mt-1.5 p-2 text-center" style={surface}>
+        <div className="text-[12px]" style={skin.titleStyle}>
+          Your Signal
+        </div>
+        <Bar w="70%" h={4} color={p.muted} radius={8} className="mx-auto mt-1.5" />
+      </div>
+      <div className="mt-1.5 grid grid-cols-3 gap-1">
+        {[0, 1, 2].map(i => (
+          <div key={i} className="p-1.5 text-center" style={surface}>
+            <Bar w={10} h={2} color={p.muted} className="mx-auto" />
+            <Bar w={14} h={4} color={p.primary} className="mx-auto mt-1" />
+          </div>
+        ))}
+      </div>
+      <div className="mt-1.5 flex items-center gap-1 px-2 py-1.5" style={surface}>
+        <Bar w="100%" h={3} color={p.muted} radius={8} className="flex-1" />
+        <span className="px-1.5 py-0.5 text-[6px] font-bold" style={button}>
+          COPY
+        </span>
+      </div>
+    </>
+  )
+}
+
+/** Cipher: Swiss trust grid — navy + green signal strip. */
+function CipherMock({ p, skin, surface, button }: MockCtx) {
+  return (
+    <>
+      <div className="flex items-end justify-between border-b pb-1" style={{ borderColor: p.border }}>
+        <div>
+          <Bar w={20} h={2} color={p.muted} />
+          <div className="mt-0.5 text-[11px]" style={skin.titleStyle}>
+            Cipher
+          </div>
+        </div>
+        <span className="text-[7px] font-bold" style={{ color: p.primary }}>
+          HPX
+        </span>
+      </div>
+      <div className="mt-1.5 grid grid-cols-[1.4fr_1fr] gap-1.5">
+        <div className="space-y-1 p-1.5" style={surface}>
+          <Bar w="100%" h={3} color={p.muted} radius={2} />
+          <Bar w="80%" h={3} color={p.muted} radius={2} />
+          <Bar w="90%" h={3} color={p.muted} radius={2} />
+        </div>
+        <div className="p-1.5" style={{ ...surface, borderTop: `2px solid ${p.primary}` }}>
+          <span className="text-[7px] font-bold" style={{ color: p.ok }}>
+            ACTIVE
+          </span>
+          <Bar w="100%" h={3} color={p.muted} radius={2} className="mt-1" />
+        </div>
+      </div>
+      <div className="mt-1.5 flex items-center gap-1 px-2 py-1" style={surface}>
+        <Bar w="100%" h={3} color={p.muted} radius={2} className="flex-1" />
+        <span className="px-1.5 py-0.5 text-[6px] font-bold" style={button}>
+          COPY
+        </span>
+      </div>
+    </>
+  )
+}
+
 const MOCKS: Record<SubTheme, ComponentType<MockCtx>> = {
   terminal: TerminalMock,
   aurora: AuroraMock,
@@ -438,6 +512,8 @@ const MOCKS: Record<SubTheme, ComponentType<MockCtx>> = {
   harbor: HarborMock,
   lumen: LumenMock,
   rift: RiftMock,
+  clay: ClayMock,
+  cipher: CipherMock,
 }
 
 /** CSS-only miniature of the public subscription page; every skin has a different composition. */

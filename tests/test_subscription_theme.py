@@ -29,7 +29,20 @@ def test_subscription_theme_defaults_are_backward_compatible():
 
 
 def test_subscription_accepts_every_known_theme():
-    assert set(SUB_THEMES) == {"terminal", "aurora", "nova", "atlas", "pulse", "ember", "folio", "harbor", "lumen", "rift"}
+    assert set(SUB_THEMES) == {
+        "terminal",
+        "aurora",
+        "nova",
+        "atlas",
+        "pulse",
+        "ember",
+        "folio",
+        "harbor",
+        "lumen",
+        "rift",
+        "clay",
+        "cipher",
+    }
     for theme in SUB_THEMES:
         assert _subscription(sub_theme=theme).sub_theme == theme
 
@@ -187,7 +200,13 @@ def test_new_themes_lumen_and_rift_are_allowed():
     assert _subscription(sub_theme="rift").sub_theme == "rift"
 
 
-@pytest.mark.parametrize("theme", ["ember", "folio", "harbor", "lumen", "rift"])
+def test_new_themes_clay_and_cipher_are_allowed():
+    assert {"clay", "cipher"} <= set(SUB_THEMES)
+    assert _subscription(sub_theme="CLAY").sub_theme == "clay"
+    assert _subscription(sub_theme="cipher").sub_theme == "cipher"
+
+
+@pytest.mark.parametrize("theme", ["ember", "folio", "harbor", "lumen", "rift", "clay", "cipher"])
 def test_new_themes_have_css_and_distinct_layouts(theme):
     html = render_template(TEMPLATE, _context(sub_theme=theme))
     assert f'<html lang="en" data-skin="{theme}">' in html

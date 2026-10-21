@@ -1254,6 +1254,132 @@ function RiftLayout({ ctx }: { ctx: Ctx }) {
   )
 }
 
+/* ------------------------------ CLAY ------------------------------ */
+function ClayLayout({ ctx }: { ctx: Ctx }) {
+  const { p, tx, surface, button } = ctx
+  const card: CSSProperties = { ...surface, borderRadius: 22 }
+  const title: CSSProperties = { fontFamily: '"Fredoka", "Nunito", system-ui, sans-serif', fontWeight: 600 }
+  return (
+    <div className="mx-auto max-w-3xl space-y-4 p-4 md:p-6" style={{ fontFamily: '"Nunito", system-ui, sans-serif' }}>
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-bold" style={title}>
+          {tx.brand}
+        </span>
+        <span className="rounded-2xl px-3 py-1 text-[10px] font-bold" style={{ background: `${p.accent}22`, color: p.accent, border: `3px solid ${p.border}` }}>
+          {tx.kicker}
+        </span>
+      </div>
+      <div className="p-5 text-center" style={card}>
+        <h3 className="text-3xl md:text-4xl" style={title}>
+          {tx.heroTitle}
+        </h3>
+        <div className="mt-1 text-xs opacity-60">@{tx.heroSubtitle}</div>
+        <div className="mx-auto mt-4 flex max-w-md flex-wrap items-center gap-2 p-2" style={{ ...card, background: p.muted }}>
+          <span className="min-w-0 flex-1 truncate text-start text-[10px] opacity-70" style={{ fontFamily: MONO }}>
+            https://sub.example.com/sub/aB3dE9
+          </span>
+          <Btn ctx={ctx}>{tx.copy}</Btn>
+        </div>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-3">
+        {[
+          [tx.status, tx.status],
+          [tx.used, '41.2 GB'],
+          [tx.expires, tx.expiresValue],
+        ].map(([k, v]) => (
+          <div key={k} className="p-4 text-center" style={card}>
+            <div className="text-[10px] font-bold uppercase tracking-wider opacity-60">{k}</div>
+            <div className="mt-1 text-lg font-bold" style={{ ...title, color: p.primary }}>
+              {v}
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="space-y-2 p-4" style={card}>
+        <SectionTitle style={title}>{tx.links}</SectionTitle>
+        {LINKS.map(l => (
+          <div key={l.proto} className="flex flex-wrap items-center gap-2 p-2" style={{ border: `3px solid ${p.border}`, borderRadius: 16, background: p.muted }}>
+            <span className="rounded-xl px-2 py-0.5 text-[9px] font-bold" style={{ ...button }}>
+              {l.proto}
+            </span>
+            <span className="min-w-0 flex-1 truncate text-[10px] opacity-75" style={{ fontFamily: MONO }}>
+              {l.url}
+            </span>
+            <Btn ctx={ctx}>{tx.copy}</Btn>
+          </div>
+        ))}
+      </div>
+      <div className="p-4" style={card}>
+        <SectionTitle style={title}>{tx.apps}</SectionTitle>
+        <AppRow ctx={ctx} cardStyle={{ border: `3px solid ${p.border}`, borderRadius: 18, background: p.muted }} grid="grid-cols-1 sm:grid-cols-3" compact />
+      </div>
+      <Support ctx={ctx} style={{ borderTop: hairline(p), paddingTop: 12 }} />
+    </div>
+  )
+}
+
+/* ------------------------------ CIPHER ------------------------------ */
+function CipherLayout({ ctx }: { ctx: Ctx }) {
+  const { p, tx, surface } = ctx
+  const card: CSSProperties = { ...surface, borderRadius: 4 }
+  const title: CSSProperties = { fontFamily: '"Space Grotesk", system-ui, sans-serif', fontWeight: 700, letterSpacing: '-0.03em' }
+  return (
+    <div className="mx-auto max-w-5xl space-y-4 p-4 md:p-6" style={{ fontFamily: '"DM Sans", system-ui, sans-serif' }}>
+      <div className="flex items-end justify-between gap-4 border-b pb-3" style={{ borderColor: p.border }}>
+        <div>
+          <div className="text-[10px] font-semibold uppercase tracking-[0.2em] opacity-60">{tx.kicker}</div>
+          <h3 className="text-3xl md:text-4xl" style={title}>
+            {tx.heroTitle}
+          </h3>
+        </div>
+        <span className="text-sm font-bold tracking-wide" style={{ color: p.primary }}>
+          {tx.brand}
+        </span>
+      </div>
+      <div className="grid gap-4 md:grid-cols-[1.2fr_0.8fr]">
+        <div className="space-y-3 p-4" style={card}>
+          <div className="text-xs opacity-60">@{tx.heroSubtitle}</div>
+          <div className="flex flex-wrap items-center gap-2 border p-2" style={{ borderColor: p.border, borderRadius: 4 }}>
+            <span className="min-w-0 flex-1 truncate text-[10px] opacity-70" style={{ fontFamily: MONO }}>
+              https://sub.example.com/sub/aB3dE9
+            </span>
+            <Btn ctx={ctx}>{tx.copy}</Btn>
+            <Btn ctx={ctx} ghost>
+              {tx.qr}
+            </Btn>
+          </div>
+          <SectionTitle style={title}>{tx.links}</SectionTitle>
+          {LINKS.map(l => (
+            <div key={l.proto} className="flex flex-wrap items-center gap-2 border-b py-2" style={{ borderColor: p.border }}>
+              <span className="px-2 py-0.5 text-[9px] font-bold uppercase" style={{ background: p.primary, color: p.onPrimary }}>
+                {l.proto}
+              </span>
+              <span className="min-w-0 flex-1 truncate text-[10px] opacity-75" style={{ fontFamily: MONO }}>
+                {l.url}
+              </span>
+              <Btn ctx={ctx}>{tx.copy}</Btn>
+            </div>
+          ))}
+        </div>
+        <div className="space-y-3">
+          <div className="p-4" style={{ ...card, borderTop: `3px solid ${p.primary}` }}>
+            <div className="text-[10px] font-bold uppercase tracking-widest opacity-60">{tx.status}</div>
+            <div className="mt-2 text-4xl" style={{ ...title, color: p.ok }}>
+              Active
+            </div>
+            <Gauge ctx={ctx} size={100} thick={8} label />
+          </div>
+          <div className="p-4" style={card}>
+            <SectionTitle style={title}>{tx.apps}</SectionTitle>
+            <AppRow ctx={ctx} cardStyle={{ border: hairline(p), borderRadius: 4, background: p.muted }} grid="grid-cols-1" compact />
+          </div>
+        </div>
+      </div>
+      <Support ctx={ctx} style={{ borderTop: hairline(p), paddingTop: 12 }} />
+    </div>
+  )
+}
+
 const LAYOUTS: Record<SubTheme, (props: { ctx: Ctx }) => ReactNode> = {
   terminal: TerminalLayout,
   aurora: AuroraLayout,
@@ -1265,6 +1391,8 @@ const LAYOUTS: Record<SubTheme, (props: { ctx: Ctx }) => ReactNode> = {
   harbor: HarborLayout,
   lumen: LumenLayout,
   rift: RiftLayout,
+  clay: ClayLayout,
+  cipher: CipherLayout,
 }
 
 const MODES: { value: SubThemeMode; icon: typeof Sun }[] = [

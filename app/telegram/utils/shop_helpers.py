@@ -535,6 +535,49 @@ async def notify_owner_user_created(
         pass
 
 
+async def notify_owner_test_claimed(
+    *,
+    db: AsyncSession,
+    bot: Bot | None,
+    buyer_telegram_id: int,
+    buyer_label: str,
+    username: str,
+    subscription_url: str,
+    data_limit: int | None,
+    expire,
+) -> None:
+    """Notify panel owner when a buyer claims a free test config."""
+    if bot is None:
+        return
+    owner = await get_owner_admin(db)
+    if owner is None or not owner.telegram_id:
+        return
+    if int(owner.telegram_id) == int(buyer_telegram_id):
+        return
+    from app.telegram.utils.i18n import format_bytes, t
+
+    owner_lang = (await get_telegram_lang(db, owner.telegram_id)) or "fa"
+    data_str = format_bytes(data_limit) if data_limit else t(owner_lang, "limit_unlimited")
+    if expire:
+        expire_str = expire.strftime("%Y-%m-%d %H:%M")
+    else:
+        expire_str = t(owner_lang, "days_unlimited")
+    text = rich(
+        owner_lang,
+        "owner_log_test_claimed",
+        buyer=buyer_label or str(buyer_telegram_id),
+        telegram_id=buyer_telegram_id,
+        username=username,
+        data=data_str,
+        expire=expire_str,
+        url=subscription_url,
+    )
+    try:
+        await bot.send_message(owner.telegram_id, text)
+    except Exception:
+        pass
+
+
 async def notify_admin_create_budget_charged(
     *,
     db: AsyncSession,

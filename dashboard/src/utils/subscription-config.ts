@@ -354,6 +354,7 @@ export const encodeSubscriptionContentToBase64 = (content: string) => {
   return btoa(binary)
 }
 
+/** Keep WireGuard clipboard payload as URI(s) only — never expand to .conf (download handles that). */
 export const prepareSubscriptionContentForCopy = (content: string) => {
   const configLines = content
     .split(/\r?\n/)
@@ -368,22 +369,23 @@ export const prepareSubscriptionContentForCopy = (content: string) => {
     }
   }
 
-  const convertedConfigs = configLines.map(convertWireGuardUrlToConfig).filter((value): value is string => Boolean(value))
-
-  if (convertedConfigs.length !== configLines.length) {
-    return {
-      content,
-      downloadFileName: null,
-      isWireGuard: false,
-    }
-  }
-
   return {
-    content: convertedConfigs.join('\n\n'),
+    content: configLines.join('\n'),
     downloadFileName: configLines.length === 1 ? buildWireGuardDownloadFileName(configLines[0]) : 'wireguard.conf',
     isWireGuard: true,
   }
 }
+
+/** Extract only WireGuard / AmneziaWG URIs from a multi-format links blob. */
+export const filterWireGuardLinks = (content: string) =>
+  content
+    .split(/\r?\n/)
+    .map(line => line.trim())
+    .filter(line => {
+      const lower = line.toLowerCase()
+      return lower.startsWith('wireguard://') || lower.startsWith('awg://') || lower.startsWith('amneziawg://')
+    })
+    .join('\n')
 
 export const downloadTextFile = (content: string, fileName: string, mimeType = TEXT_FILE_MIME_TYPE) => {
   const blob = new Blob([content], { type: mimeType })

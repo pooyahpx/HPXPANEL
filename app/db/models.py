@@ -640,17 +640,21 @@ class NodeStatus(str, Enum):
     limited = "limited"
 
 
+NODE_VERSION_MAX_LENGTH = 128
+
+
 class Node(Base, CreatedAtUTCMixin):
     __tablename__ = "nodes"
     name: Mapped[str] = mapped_column(CaseSensitiveString(256), unique=True)
     address: Mapped[str] = mapped_column(String(256), unique=False, nullable=False)
     port: Mapped[int] = mapped_column(unique=False, nullable=False)
     api_port: Mapped[int] = mapped_column(unique=False, nullable=False, server_default="62051")
-    xray_version: Mapped[str | None] = mapped_column(String(32), nullable=True, init=False)
+    # Nodes running several cores report one version per core ("v1.0.20210914, v1.0.20210914, 26.3.27").
+    xray_version: Mapped[str | None] = mapped_column(String(NODE_VERSION_MAX_LENGTH), nullable=True, init=False)
     message: Mapped[str | None] = mapped_column(String(1024), nullable=True, init=False)
     server_ca: Mapped[str] = mapped_column(String(2048), nullable=False)
     api_key: Mapped[str | None] = mapped_column(String(36))
-    node_version: Mapped[str | None] = mapped_column(String(32), nullable=True, init=False)
+    node_version: Mapped[str | None] = mapped_column(String(NODE_VERSION_MAX_LENGTH), nullable=True, init=False)
     core_config_id: Mapped[int | None] = fk_id_column("core_configs.id", ondelete="SET NULL", nullable=True)
     user_usages: Mapped[list[NodeUserUsage]] = relationship(
         back_populates="node", cascade="all, delete-orphan", init=False

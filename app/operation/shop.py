@@ -27,7 +27,7 @@ from app.db.crud.shop import (
     update_shop_plan,
     upsert_shop_config,
 )
-from app.db.crud.user import get_user_by_id
+from app.db.crud.user import get_existing_usernames, get_user_by_id
 from app.db.models import ShopOrder, ShopOrderStatus, ShopPlan, UserStatus
 from app.models.admin import AdminDetails
 from app.models.shop import (
@@ -52,6 +52,35 @@ from app.operation import BaseOperation, OperatorType
 from app.operation.user import UserOperation
 
 logger = logging.getLogger(__name__)
+
+_USERNAME_MAX_LEN = 128
+
+
+def append_random_username_digits(base: str, *, digits: int = 4) -> str:
+    """Append a random numeric suffix so a taken shop username stays unique."""
+    cleaned = (base or "").strip() or "user"
+    width = max(3, min(digits, 8))
+    suffix = f"{secrets.randbelow(10**width - 10 ** (width - 1)) + 10 ** (width - 1)}"
+    room = _USERNAME_MAX_LEN - len(suffix)
+    if room < 3:
+        return suffix[:_USERNAME_MAX_LEN]
+    trimmed = cleaned[:room].rstrip("-_.@")
+    if len(trimmed) < 3:
+        trimmed = (cleaned + "usr")[:room]
+    return f"{trimmed}{suffix}"
+
+
+async def allocate_unique_shop_username(db: AsyncSession, preferred: str, *, attempts: int = 16) -> str:
+    """Pick preferred username, or preferred+random digits if it already exists."""
+    preferred = (preferred or "").strip() or f"user{secrets.token_hex(3)}"
+    candidates = [preferred]
+    for _ in range(max(1, attempts - 1)):
+        candidates.append(append_random_username_digits(preferred))
+    existing = await get_existing_usernames(db, candidates)
+    for name in candidates:
+        if name not in existing:
+            return name
+    return append_random_username_digits(f"{preferred}{secrets.token_hex(2)}")
 
 
 def _normalize_cards(cards: list[ShopCard] | list[dict] | None) -> list[dict[str, str]]:
@@ -435,7 +464,8 @@ class ShopOperation(BaseOperation):
         self, db: AsyncSession, shop_admin: AdminDetails, order: ShopOrder, plan: ShopPlan | None
     ) -> ShopApproveResponse:
         requested = (getattr(order, "requested_username", None) or "").strip() or None
-        username = requested or f"tg{order.buyer_telegram_id}_{secrets.token_hex(2)}"
+        preferred = requested or f"tg{order.buyer_telegram_id}_{secrets.token_hex(2)}"
+        username = await allocate_unique_shop_username(db, preferred)
 
         is_custom = bool(getattr(order, "is_custom", False))
         if is_custom:
@@ -459,20 +489,34 @@ class ShopOperation(BaseOperation):
             ip_limit = plan.ip_limit
             hwid_limit = plan.hwid_limit
 
-        try:
-            new_user = UserCreate(
-                username=username,
-                status=UserStatus.active,
-                data_limit=data_limit,
-                expire=expire,
-                group_ids=group_ids,
-                ip_limit=ip_limit,
-                hwid_limit=hwid_limit,
-                note=f"shop order #{order.id}",
-            )
-            user = await self.user_operator.create_user(db, new_user, shop_admin, skip_role_limits=True)
-        except Exception as exc:
-            await self.raise_error(str(exc)[:180], 400, db)
+        user = None
+        last_error = "User already exists"
+        # Pre-check covers most conflicts; a short retry covers rare races.
+        for attempt in range(8):
+            attempt_name = username if attempt == 0 else append_random_username_digits(preferred)
+            try:
+                new_user = UserCreate(
+                    username=attempt_name,
+                    status=UserStatus.active,
+                    data_limit=data_limit,
+                    expire=expire,
+                    group_ids=group_ids,
+                    ip_limit=ip_limit,
+                    hwid_limit=hwid_limit,
+                    note=f"shop order #{order.id}",
+                )
+                user = await self.user_operator.create_user(db, new_user, shop_admin, skip_role_limits=True)
+                break
+            except Exception as exc:
+                detail = getattr(exc, "detail", None) or str(exc)
+                detail_text = str(detail)
+                if "already exists" in detail_text.lower():
+                    last_error = detail_text
+                    continue
+                await self.raise_error(detail_text[:180], 400, db)
+
+        if user is None:
+            await self.raise_error(last_error[:180], 409, db)
 
         order = await update_order_status(db, order, ShopOrderStatus.approved, created_user_id=user.id)
         await self._record_shop_sale(db, order, user.username)

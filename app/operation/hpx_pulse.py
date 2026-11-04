@@ -249,7 +249,7 @@ def _to_response(db_pulse: HpxPulse) -> HpxPulseResponse:
         "domain": db_pulse.domain,
         "sni_hint": db_pulse.sni_hint,
         "note": db_pulse.note,
-        "spoof_config": db_pulse.spoof_config,
+        "spoof_config": getattr(db_pulse, "spoof_config", None),
         "advice": advice,
         "iran_claimed": bool(db_pulse.iran_agent_key_hash),
         "abroad_claimed": bool(db_pulse.abroad_agent_key_hash),

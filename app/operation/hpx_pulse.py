@@ -38,9 +38,15 @@ from app.models.hpx_pulse import (
     HpxPulseUpdate,
     PulseAdviseRequest,
     PulseAdviseResponse,
+    PulseSpoofConfig,
 )
 from app.operation import BaseOperation
-from app.services.hpx_pulse.advisor import advise, profile_meta
+from app.services.hpx_pulse.advisor import (
+    advise,
+    assert_spoof_direct_only,
+    default_spoof_config,
+    profile_meta,
+)
 from app.services.hpx_pulse.config_linker import (
     forward_listen_ports,
     host_belongs_to_other_pulse,
@@ -116,6 +122,7 @@ HARD_UPDATE_KEYS = frozenset(
         "sni_hint",
         "carrier",
         "preset",
+        "spoof_config",
     }
 )
 _NON_NULLABLE_UPDATE_KEYS = frozenset(
@@ -242,6 +249,7 @@ def _to_response(db_pulse: HpxPulse) -> HpxPulseResponse:
         "domain": db_pulse.domain,
         "sni_hint": db_pulse.sni_hint,
         "note": db_pulse.note,
+        "spoof_config": db_pulse.spoof_config,
         "advice": advice,
         "iran_claimed": bool(db_pulse.iran_agent_key_hash),
         "abroad_claimed": bool(db_pulse.abroad_agent_key_hash),
@@ -525,6 +533,17 @@ class HpxPulseOperation(BaseOperation):
         )
         meta = profile_meta(advice.recommended_profile_id)
         chosen = next((p for p in advice.profiles if p.profile_id == advice.recommended_profile_id), advice.profiles[0])
+        try:
+            assert_spoof_direct_only(tunnel_mode=chosen.tunnel_mode, carrier=chosen.carrier)
+        except ValueError as exc:
+            await self.raise_error(message=str(exc), code=422)
+
+        spoof_cfg = None
+        if (chosen.carrier or "").lower() == "spoof":
+            if model.spoof_config is not None:
+                spoof_cfg = model.spoof_config.model_dump(mode="json")
+            else:
+                spoof_cfg = default_spoof_config(meta["profile_id"])
 
         tunnel_token = mint_tunnel_token()
         token_encrypted = await self._encrypt_token(db, tunnel_token)
@@ -539,6 +558,7 @@ class HpxPulseOperation(BaseOperation):
                 carrier=chosen.carrier,
                 preset=chosen.preset,
                 advice_json=advice.model_dump(mode="json"),
+                spoof_config=spoof_cfg,
             )
             resolved_panel = await self._panel_url(panel_url)
             iran_t, iran_c, iran_c_alt, abroad_t, abroad_c, abroad_c_alt, exp = await self._issue_join_tokens(
@@ -964,6 +984,21 @@ class HpxPulseOperation(BaseOperation):
             update_data["tunnel_mode"] = meta["tunnel_mode"]
             update_data["carrier"] = meta.get("carrier")
             update_data["preset"] = meta["preset"]
+            if (meta.get("carrier") or "").lower() == "spoof" and "spoof_config" not in update_data:
+                if not db_pulse.spoof_config:
+                    update_data["spoof_config"] = default_spoof_config(meta["profile_id"])
+            elif (meta.get("carrier") or "").lower() != "spoof":
+                update_data["spoof_config"] = None
+
+        if "spoof_config" in update_data and isinstance(update_data["spoof_config"], PulseSpoofConfig):
+            update_data["spoof_config"] = update_data["spoof_config"].model_dump(mode="json")
+
+        final_mode = update_data.get("tunnel_mode", db_pulse.tunnel_mode)
+        final_carrier = update_data.get("carrier", db_pulse.carrier)
+        try:
+            assert_spoof_direct_only(tunnel_mode=str(final_mode or ""), carrier=final_carrier)
+        except ValueError as exc:
+            await self.raise_error(message=str(exc), code=422)
 
         if model.goal is not None:
             advise_req = PulseAdviseRequest(goal=model.goal, cpu_cores=1, ram_mb=1024)

@@ -1,7 +1,20 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { fetcher } from '@/service/http'
 
-export type PulseGoal = 'stealth' | 'balanced' | 'speed' | 'mobile' | 'hard' | 'fast'
+export type PulseGoal = 'stealth' | 'balanced' | 'speed' | 'mobile' | 'hard' | 'fast' | 'spoof'
+export type PulseSpoofProfile = 'udp' | 'icmp' | 'tcp' | 'icmpv6' | 'proto58' | 'ipip' | 'gre'
+
+export interface PulseSpoofConfig {
+  profile?: PulseSpoofProfile
+  stealth?: boolean
+  src_ip?: string
+  src_pool?: string[]
+  iran_src_ip?: string
+  abroad_src_ip?: string
+  mtu?: number
+  sockbuf?: number
+  icmp_reply?: boolean
+}
 
 export type PulseStatus =
   | 'pending_claim'
@@ -60,6 +73,7 @@ export interface HpxPulseResponse {
   domain: string | null
   sni_hint: string | null
   note: string | null
+  spoof_config?: PulseSpoofConfig | null
   advice: PulseAdviseResponse | null
   iran_claimed: boolean
   abroad_claimed: boolean
@@ -160,6 +174,7 @@ export interface HpxPulseCreate {
   domain?: string | null
   sni_hint?: string | null
   note?: string | null
+  spoof_config?: PulseSpoofConfig | null
   auto_restart_interval_minutes?: number | null
   auto_heal_enabled?: boolean
   backup_pulse_id?: number | null
@@ -179,6 +194,7 @@ export interface HpxPulseUpdate {
   domain?: string | null
   sni_hint?: string | null
   note?: string | null
+  spoof_config?: PulseSpoofConfig | null
   enabled?: boolean
   auto_restart_interval_minutes?: number | null
   auto_heal_enabled?: boolean

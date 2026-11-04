@@ -756,7 +756,7 @@ ensure_engine() {
   if [ -z "$pinned_ver" ]; then
     pinned_ver="$(hp_curl "https://raw.githubusercontent.com/pooyahpx/HPXPANEL/main/scripts/hpx-tunnel-engine.version" 2>/dev/null | tr -d '[:space:]' || true)"
   fi
-  [ -n "$pinned_ver" ] || pinned_ver="1.8.5"
+  [ -n "$pinned_ver" ] || pinned_ver="1.9.0"
   pinned_ver="${pinned_ver#v}"
   log "engine pin · v${pinned_ver}"
   if hp_curl "$ENGINE_INSTALL_URL" -o "$installer"; then

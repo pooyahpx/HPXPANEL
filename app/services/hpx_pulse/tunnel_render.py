@@ -131,6 +131,80 @@ mux_streambuffer = 65536
 """
 
 
+_VALID_SPOOF_PROFILES = frozenset(
+    {"udp", "icmp", "tcp", "icmpv6", "proto58", "ipip", "gre"}
+)
+
+
+def _spoof_config_dict(pulse: Any) -> dict:
+    raw = getattr(pulse, "spoof_config", None)
+    return raw if isinstance(raw, dict) else {}
+
+
+def _spoof_toml_block(
+    *,
+    side: str,
+    pulse: Any,
+    carrier: str,
+) -> str:
+    """Emit spoof_* keys for [l3] when carrier=spoof. Empty string otherwise."""
+    if (carrier or "").lower() != "spoof":
+        return ""
+    cfg = _spoof_config_dict(pulse)
+    profile = str(cfg.get("profile") or "udp").strip().lower()
+    if profile not in _VALID_SPOOF_PROFILES:
+        profile = "udp"
+    stealth = bool(cfg.get("stealth"))
+    lines = [f'spoof_profile = "{profile}"']
+
+    # Iran (dial) must know Abroad's REAL public IPv4 — forged replies cannot be learned from the wire.
+    if side == "iran":
+        peer_real = (getattr(pulse, "abroad_public_ip", None) or "").strip()
+        if peer_real:
+            lines.append(f'spoof_peer_ip = "{peer_real}"')
+    else:
+        # Optional on abroad; default comes from dial addr host. Still emit Iran real IP when known.
+        iran_real = (getattr(pulse, "iran_public_ip", None) or "").strip()
+        if iran_real:
+            lines.append(f'spoof_peer_ip = "{iran_real}"')
+
+    # Per-side forged source overrides a shared src_ip.
+    side_key = "iran_src_ip" if side == "iran" else "abroad_src_ip"
+    src = str(cfg.get(side_key) or cfg.get("src_ip") or "").strip()
+    if src:
+        lines.append(f'spoof_src_ip = "{src}"')
+
+    pool = cfg.get("src_pool") or []
+    if isinstance(pool, str):
+        pool = [p.strip() for p in pool.split(",") if p.strip()]
+    if isinstance(pool, list) and pool:
+        quoted = ", ".join(f'"{str(p).strip()}"' for p in pool if str(p).strip())
+        if quoted:
+            lines.append(f"spoof_src_pool = [{quoted}]")
+
+    mtu = cfg.get("mtu")
+    if isinstance(mtu, int) and mtu > 0:
+        lines.append(f"spoof_mtu = {mtu}")
+    sockbuf = cfg.get("sockbuf")
+    if isinstance(sockbuf, int) and sockbuf > 0:
+        lines.append(f"spoof_sockbuf = {sockbuf}")
+
+    if cfg.get("icmp_reply"):
+        lines.append("spoof_icmp_reply = true")
+
+    # Stealth is one switch in the panel — expands to the wire-changing + local fingerprint group.
+    if stealth:
+        lines.append("spoof_padding = true")
+        lines.append("spoof_padding_max = 32")
+        lines.append("spoof_ttl_jitter = true")
+        lines.append("spoof_random_dscp = true")
+        lines.append("spoof_shuffle_port = true")
+        if profile == "tcp":
+            lines.append("spoof_fake_tls = true")
+
+    return "\n".join(lines) + "\n"
+
+
 def render_iran_l3(
     *,
     abroad_ip: str,
@@ -143,6 +217,7 @@ def render_iran_l3(
     port_forwards: list[str] | None = None,
     mtu: int = 1380,
     mss_clamp: int = DEFAULT_MSS,
+    spoof_block: str = "",
 ) -> str:
     ports = _ports_block(port_forwards or [])
     return f"""[l3]
@@ -157,7 +232,7 @@ mtu = {mtu}
 auto_mtu = true
 mss_clamp = {mss_clamp}
 iface = "bp0"
-{ports}"""
+{spoof_block}{ports}"""
 
 
 def render_abroad_l3(
@@ -171,6 +246,7 @@ def render_abroad_l3(
     port_forwards: list[str] | None = None,
     mtu: int = 1380,
     mss_clamp: int = DEFAULT_MSS,
+    spoof_block: str = "",
 ) -> str:
     ports = _ports_block(port_forwards or [])
     return f"""[l3]
@@ -185,7 +261,7 @@ mtu = {mtu}
 auto_mtu = true
 mss_clamp = {mss_clamp}
 iface = "bp0"
-{ports}"""
+{spoof_block}{ports}"""
 
 
 def render_iran_server(
@@ -255,6 +331,10 @@ def render_for_side(
     domain = getattr(pulse, "domain", None) or None
     mss = resolve_mss(pulse)
 
+    carrier = pulse.carrier or "udp"
+    if (carrier or "").lower() == "spoof" and mode.startswith("reverse_"):
+        raise ValueError("carrier=spoof is Direct L3 only — refuse reverse rendering")
+
     if mode.startswith("reverse_"):
         transport = _reverse_transport(pulse)
         if side == "iran":
@@ -276,7 +356,7 @@ def render_for_side(
             mss=mss,
         )
 
-    carrier = pulse.carrier or "udp"
+    spoof_block = _spoof_toml_block(side=side, pulse=pulse, carrier=carrier)
     common = {
         "control_port": pulse.control_port,
         "token": token,
@@ -284,6 +364,7 @@ def render_for_side(
         "preset": preset,
         "port_forwards": port_forwards,
         "mss_clamp": mss,
+        "spoof_block": spoof_block,
     }
     if side == "iran":
         return render_iran_l3(abroad_ip=pulse.abroad_public_ip, **common)

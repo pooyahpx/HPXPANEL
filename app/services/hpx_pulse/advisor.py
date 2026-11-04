@@ -8,6 +8,7 @@ from app.models.hpx_pulse import (
 )
 
 # Operator intents map onto classic goals for scoring.
+# "spoof" stays its own family — never aliased into reverse stealth/speed.
 _GOAL_ALIAS = {
     "mobile": "stealth",
     "hard": "stealth",
@@ -15,7 +16,16 @@ _GOAL_ALIAS = {
     "stealth": "stealth",
     "balanced": "balanced",
     "speed": "speed",
+    "spoof": "spoof",
 }
+
+_SPOOF_PROFILE_IDS = frozenset(
+    {
+        "pulse-direct-spoof-udp",
+        "pulse-direct-spoof-icmp",
+        "pulse-direct-spoof-stealth",
+    }
+)
 
 _PROFILES: dict[str, dict] = {
     "pulse-reverse-tcp-stealth": {
@@ -199,6 +209,37 @@ _PROFILES: dict[str, dict] = {
         "carrier": "udp",
         "preset": "turbo",
         "base_score": 55,
+    },
+    # Direct Spoof only — never reverse. Separate intent family (like ICMP/xDi).
+    "pulse-direct-spoof-udp": {
+        "title": "Direct Spoof (UDP)",
+        "title_fa": "دایرکت اسپوف (UDP)",
+        "tunnel_mode": "direct_l3",
+        "carrier": "spoof",
+        "preset": "balance",
+        "spoof_profile": "udp",
+        "spoof_stealth": False,
+        "base_score": 90,
+    },
+    "pulse-direct-spoof-icmp": {
+        "title": "Direct Spoof (ICMP)",
+        "title_fa": "دایرکت اسپوف (ICMP)",
+        "tunnel_mode": "direct_l3",
+        "carrier": "spoof",
+        "preset": "balance",
+        "spoof_profile": "icmp",
+        "spoof_stealth": False,
+        "base_score": 84,
+    },
+    "pulse-direct-spoof-stealth": {
+        "title": "Direct Spoof Stealth (UDP)",
+        "title_fa": "دایرکت اسپوف Stealth (UDP)",
+        "tunnel_mode": "direct_l3",
+        "carrier": "spoof",
+        "preset": "balance",
+        "spoof_profile": "udp",
+        "spoof_stealth": True,
+        "base_score": 88,
     },
 }
 
@@ -483,6 +524,36 @@ def advise(
             reasons.append("Lowest CPU overhead on clean routes")
             reasons_fa.append("کمترین مصرف CPU روی مسیر تمیز")
 
+        elif pid in _SPOOF_PROFILE_IDS:
+            reasons.append(
+                "Direct L3 IP spoof — forged source packets; reverse tunnels cannot use this carrier"
+            )
+            reasons_fa.append(
+                "دایرکت L3 اسپوف — مبدأ جعلی؛ تونل Reverse این carrier را نمی‌پذیرد"
+            )
+            opt_warnings.append("Linux + CAP_NET_RAW on both ends; engine ≥ 1.9.0")
+            opt_warnings.append("Iran side requires peer real IPv4 (auto-filled from Abroad IP)")
+            if intent == "spoof":
+                score += 40
+                if pid == "pulse-direct-spoof-udp":
+                    score += 8
+                    reasons.append("UDP spoof profile — recommended first run (empty forged source)")
+                    reasons_fa.append("پروفایل UDP — بهترین شروع (مبدأ جعلی خالی)")
+                if pid == "pulse-direct-spoof-stealth":
+                    score += 4
+                    reasons.append("Stealth bundle — padding/TTL/DSCP/port shuffle (both ends must match)")
+                    reasons_fa.append("بسته Stealth — padding/TTL/DSCP/جابه‌جایی پورت (دو طرف یکی)")
+                if pid == "pulse-direct-spoof-icmp":
+                    reasons.append("ICMP dress — when the path filters UDP specifically")
+                    reasons_fa.append("لباس ICMP — وقتی مسیر فقط UDP را فیلتر می‌کند")
+            else:
+                # Keep spoof out of reverse/mobile/fast rankings unless operator picks the intent.
+                score = min(score, 12)
+
+        # Non-spoof intents: bury reverse/direct non-spoof when operator asked for spoof only.
+        if intent == "spoof" and pid not in _SPOOF_PROFILE_IDS:
+            score = min(score, 8)
+
         if req.ram_mb < 768:
             score -= 10
             opt_warnings.append("Low RAM — use Balance preset only")
@@ -554,6 +625,13 @@ def advise(
         warnings.append(
             "If Diagnose shows stall_after_connect: TCP Extreme (mss=1000) → Save → Sync both sides"
         )
+    if intent == "spoof":
+        warnings.append(
+            "Direct Spoof only — leave forged source empty on first run; Iran auto-gets Abroad real IP as spoof_peer_ip"
+        )
+        warnings.append(
+            "Both ends must share spoof_profile / stealth wire settings; reverse modes cannot carry spoof"
+        )
 
     return PulseAdviseResponse(
         recommended_profile_id=recommended,
@@ -567,3 +645,30 @@ def profile_meta(profile_id: str) -> dict:
     if profile_id not in _PROFILES:
         profile_id = "pulse-reverse-tcp-stealth"
     return {"profile_id": profile_id, **_PROFILES[profile_id]}
+
+
+def default_spoof_config(profile_id: str) -> dict | None:
+    """Build initial spoof_config JSON from a Direct Spoof profile, or None."""
+    meta = _PROFILES.get(profile_id)
+    if not meta or meta.get("carrier") != "spoof":
+        return None
+    return {
+        "profile": meta.get("spoof_profile") or "udp",
+        "stealth": bool(meta.get("spoof_stealth")),
+        "src_ip": "",
+        "src_pool": [],
+        "mtu": 0,
+        "sockbuf": 0,
+        "icmp_reply": False,
+    }
+
+
+def assert_spoof_direct_only(*, tunnel_mode: str, carrier: str | None) -> None:
+    """Raise ValueError if spoof is paired with a reverse tunnel mode."""
+    mode = (tunnel_mode or "").strip()
+    car = (carrier or "").strip().lower()
+    if car == "spoof" and mode.startswith("reverse_"):
+        raise ValueError(
+            "IP Spoof is Direct L3 only — reverse tunnels cannot use carrier=spoof "
+            "(session demux collapses). Use intent Direct Spoof instead."
+        )

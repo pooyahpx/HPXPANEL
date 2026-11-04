@@ -3,7 +3,22 @@ from typing import Literal
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
-PulseGoal = Literal["stealth", "balanced", "speed", "mobile", "hard", "fast"]
+PulseGoal = Literal["stealth", "balanced", "speed", "mobile", "hard", "fast", "spoof"]
+PulseSpoofProfile = Literal["udp", "icmp", "tcp", "icmpv6", "proto58", "ipip", "gre"]
+
+
+class PulseSpoofConfig(BaseModel):
+    """Direct Spoof carrier settings stored on the pulse (both agents share the pair)."""
+
+    profile: PulseSpoofProfile = "udp"
+    stealth: bool = False
+    src_ip: str = ""
+    src_pool: list[str] = Field(default_factory=list)
+    iran_src_ip: str = ""
+    abroad_src_ip: str = ""
+    mtu: int = Field(default=0, ge=0, le=9000)
+    sockbuf: int = Field(default=0, ge=0, le=268435456)
+    icmp_reply: bool = False
 PulseSide = Literal["iran", "abroad"]
 PulseEngine = Literal["hpx", "native"]
 PulseStatus = Literal[
@@ -70,6 +85,7 @@ class HpxPulseCreate(BaseModel):
     domain: str | None = Field(default=None, max_length=255)
     sni_hint: str | None = Field(default=None, max_length=255)
     note: str | None = Field(default=None, max_length=512)
+    spoof_config: PulseSpoofConfig | None = None
     auto_restart_interval_minutes: int | None = Field(default=None, ge=0, le=10080)
     auto_heal_enabled: bool = True
     backup_pulse_id: int | None = Field(default=None, ge=1)
@@ -89,6 +105,7 @@ class HpxPulseUpdate(BaseModel):
     domain: str | None = Field(default=None, max_length=255)
     sni_hint: str | None = Field(default=None, max_length=255)
     note: str | None = Field(default=None, max_length=512)
+    spoof_config: PulseSpoofConfig | None = None
     enabled: bool | None = None
     auto_restart_interval_minutes: int | None = Field(default=None, ge=0, le=10080)
     auto_heal_enabled: bool | None = None
@@ -118,6 +135,7 @@ class HpxPulseResponse(BaseModel):
     domain: str | None
     sni_hint: str | None
     note: str | None
+    spoof_config: PulseSpoofConfig | None = None
     advice: PulseAdviseResponse | None = None
     iran_claimed: bool = False
     abroad_claimed: bool = False

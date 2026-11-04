@@ -17,6 +17,7 @@ const carrierMeta = (carrier?: string | null) => {
   if (c.includes('stealth')) return { icon: Shield, tone: 'text-emerald-400', ring: 'from-emerald-500/25' }
   if (c.includes('wss') || c.includes('ws')) return { icon: Waves, tone: 'text-sky-400', ring: 'from-sky-500/25' }
   if (c.includes('kcp')) return { icon: Radio, tone: 'text-amber-400', ring: 'from-amber-500/25' }
+  if (c.includes('spoof')) return { icon: Shield, tone: 'text-teal-400', ring: 'from-teal-500/25' }
   if (c.includes('quic') || c.includes('udp')) return { icon: Zap, tone: 'text-violet-400', ring: 'from-violet-500/25' }
   return { icon: Gauge, tone: 'text-primary', ring: 'from-primary/25' }
 }

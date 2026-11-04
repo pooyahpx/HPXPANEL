@@ -53,7 +53,8 @@ jobs:
           set -eux
           upstream="${{ steps.meta.outputs.upstream }}"
           engine="${{ steps.meta.outputs.engine }}"
-          dist="dist"
+          # Absolute path — source-build cds into a temp clone and must not lose dist/.
+          dist="$(pwd)/dist"
           mkdir -p "$dist"
           src="$(mktemp -d)"
           built=0
@@ -80,18 +81,20 @@ jobs:
           done
 
           if [ "$built" -lt 2 ]; then
-            rm -f "$dist"/*.tar.gz
+            rm -f "$dist"/*.tar.gz || true
             git clone --depth 1 --branch "$upstream" https://github.com/AminMGMT/BackPack.git "$src/backpack"
-            cd "$src/backpack"
-            export GOTOOLCHAIN=auto
-            export CGO_ENABLED=0
-            for arch in amd64 arm64; do
-              pkg="$(mktemp -d)"
-              GOOS=linux GOARCH="$arch" go build -trimpath -ldflags="-s -w" -o "$pkg/hpx-tunnel-engine" .
-              tar -czf "$dist/hpx-tunnel-engine_linux_${arch}.tar.gz" -C "$pkg" hpx-tunnel-engine
-              rm -rf "$pkg"
-            done
-            cd -
+            (
+              cd "$src/backpack"
+              export GOTOOLCHAIN=auto
+              export CGO_ENABLED=0
+              for arch in amd64 arm64; do
+                pkg="$(mktemp -d)"
+                GOOS=linux GOARCH="$arch" go build -trimpath -ldflags="-s -w" -o "$pkg/hpx-tunnel-engine" .
+                test -x "$pkg/hpx-tunnel-engine"
+                tar -czf "$dist/hpx-tunnel-engine_linux_${arch}.tar.gz" -C "$pkg" hpx-tunnel-engine
+                rm -rf "$pkg"
+              done
+            )
           fi
 
           sha256sum "$dist"/*.tar.gz | tee "$dist/SHA256SUMS"

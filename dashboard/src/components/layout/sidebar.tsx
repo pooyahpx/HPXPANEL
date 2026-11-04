@@ -252,6 +252,15 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             },
           ]
         : []),
+      ...(hasPermission(admin, 'settings', 'read') && hasPermission(admin, 'settings', 'update')
+        ? [
+            {
+              title: 'telegramBot.title',
+              url: '/telegram',
+              icon: Send,
+            },
+          ]
+        : []),
       // Settings mid-nav — not buried under the footer / theme toggles
       {
         title: 'settings.title',
@@ -283,11 +292,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   title: 'settings.hwid.title',
                   url: '/settings/hwid',
                   icon: Fingerprint,
-                },
-                {
-                  title: 'settings.telegram.title',
-                  url: '/settings/telegram',
-                  icon: Send,
                 },
                 {
                   title: 'settings.webhook.title',

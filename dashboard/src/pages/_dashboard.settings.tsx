@@ -3,7 +3,7 @@ import { SectorTabBar, type SectorTab } from '@/components/layout/sector-tab-bar
 import { useAdmin } from '@/hooks/use-admin'
 import { getGetGeneralSettingsQueryKey, getGetSettingsQueryKey, useGetSettings, useModifySettings } from '@/service/api'
 import { useQueryClient } from '@tanstack/react-query'
-import { Bell, Database, Fingerprint, HardDriveDownload, ListTodo, Palette, Send, Settings as SettingsIcon, ShieldCheck, Webhook } from 'lucide-react'
+import { Bell, Database, Fingerprint, HardDriveDownload, ListTodo, Palette, Settings as SettingsIcon, ShieldCheck, Webhook } from 'lucide-react'
 import { createContext, useCallback, useContext, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Outlet, useLocation, useNavigate } from 'react-router'
@@ -34,7 +34,6 @@ const allTabs: SectorTab[] = [
   { id: 'notifications', label: 'settings.notifications.title', icon: Bell, url: '/settings/notifications' },
   { id: 'subscriptions', label: 'settings.subscriptions.title', icon: ListTodo, url: '/settings/subscriptions' },
   { id: 'hwid', label: 'settings.hwid.title', icon: Fingerprint, url: '/settings/hwid' },
-  { id: 'telegram', label: 'settings.telegram.title', icon: Send, url: '/settings/telegram' },
   { id: 'webhook', label: 'settings.webhook.title', icon: Webhook, url: '/settings/webhook' },
   { id: 'cleanup', label: 'settings.cleanup.title', icon: Database, url: '/settings/cleanup' },
   { id: 'backup', label: 'settings.backup.title', icon: HardDriveDownload, url: '/settings/backup' },
@@ -175,10 +174,6 @@ export default function Settings() {
           break
         case 'hwid':
           filteredData = data.hwid ? { data: { hwid: data.hwid } } : data
-          break
-        case 'telegram':
-          // Add telegram specific filtering if needed
-          filteredData = { data: data }
           break
         case 'webhook':
           // Add webhook specific filtering if needed

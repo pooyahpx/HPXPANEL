@@ -43,7 +43,7 @@ const GeneralSettings = lazyWithChunkRecovery(() => import('../pages/_dashboard.
 const HwidSettings = lazyWithChunkRecovery(() => import('../pages/_dashboard.settings.hwid'))
 const NotificationSettings = lazyWithChunkRecovery(() => import('../pages/_dashboard.settings.notifications'))
 const SubscriptionSettings = lazyWithChunkRecovery(() => import('../pages/_dashboard.settings.subscriptions'))
-const TelegramSettings = lazyWithChunkRecovery(() => import('../pages/_dashboard.settings.telegram'))
+const TelegramBotPage = lazyWithChunkRecovery(() => import('../pages/_dashboard.telegram'))
 const WebhookSettings = lazyWithChunkRecovery(() => import('../pages/_dashboard.settings.webhook'))
 const Statistics = lazyWithChunkRecovery(() => import('../pages/_dashboard.statistics'))
 const ObservabilityPage = lazyWithChunkRecovery(() => import('../pages/_dashboard.observability'))
@@ -161,6 +161,14 @@ export const router = createHashRouter([
         element: (
           <Suspense fallback={<LoadingSpinner />}>
             <HpxPulsePage />
+          </Suspense>
+        ),
+      },
+      {
+        path: '/telegram',
+        element: (
+          <Suspense fallback={<LoadingSpinner />}>
+            <TelegramBotPage />
           </Suspense>
         ),
       },
@@ -357,11 +365,7 @@ export const router = createHashRouter([
           },
           {
             path: '/settings/telegram',
-            element: (
-              <Suspense fallback={<LoadingSpinner />}>
-                <TelegramSettings />
-              </Suspense>
-            ),
+            element: <Navigate to="/telegram" replace />,
           },
           {
             path: '/settings/webhook',

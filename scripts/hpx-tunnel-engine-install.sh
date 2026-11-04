@@ -116,7 +116,7 @@ if [ -z "$engine_version" ]; then
   engine_version="$("${CURL[@]}" "https://raw.githubusercontent.com/${ENGINE_REPO}/main/scripts/hpx-tunnel-engine.version" 2>/dev/null | tr -d '[:space:]' || true)"
 fi
 # Last resort — keep in sync with scripts/hpx-tunnel-engine.version
-[ -n "$engine_version" ] || engine_version="1.8.5"
+[ -n "$engine_version" ] || engine_version="1.9.0"
 engine_version="${engine_version#v}"
 release_tag="hpx-tunnel-engine-v${engine_version}"
 

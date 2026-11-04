@@ -1401,6 +1401,7 @@ class HpxPulse(Base, CreatedAtUTCMixin):
     priority: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     last_failover_at: Mapped[dt | None] = mapped_column(DateTime(timezone=True), default=None)
     diag_report: Mapped[dict | None] = mapped_column(PostgresJSONB, default=None)
+    spoof_config: Mapped[dict | None] = mapped_column(PostgresJSONB, default=None)
 
 
 class TelegramSubDelivery(Base):

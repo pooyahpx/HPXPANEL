@@ -1,17 +1,18 @@
 name: Publish HPX tunnel engine binaries
 
 # Builds and publishes HPX tunnel engine binaries for HPX Pulse agents.
+# Prefers upstream BackPack release assets when present; otherwise builds from the git tag.
 on:
   workflow_dispatch:
     inputs:
       upstream_tag:
-        description: "Source engine tag to build from (e.g. v1.8.5)"
+        description: "Source engine tag to build from (e.g. v1.9.0)"
         required: true
-        default: "v1.8.5"
+        default: "v1.9.0"
       engine_version:
-        description: "HPX tunnel engine version label (e.g. 1.8.5)"
+        description: "HPX tunnel engine version label (e.g. 1.9.0)"
         required: true
-        default: "1.8.5"
+        default: "1.9.0"
 
 permissions:
   contents: write
@@ -32,7 +33,7 @@ jobs:
             if [ -f scripts/hpx-tunnel-engine.version ]; then
               engine="$(tr -d '[:space:]' < scripts/hpx-tunnel-engine.version)"
             else
-              engine="1.8.5"
+              engine="1.9.0"
             fi
             upstream="v${engine}"
           fi
@@ -42,6 +43,11 @@ jobs:
           echo "engine=${engine}" >> "$GITHUB_OUTPUT"
           echo "tag=hpx-tunnel-engine-v${engine}" >> "$GITHUB_OUTPUT"
 
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "stable"
+          check-latest: true
+
       - name: Build engine archives
         run: |
           set -eux
@@ -49,20 +55,45 @@ jobs:
           engine="${{ steps.meta.outputs.engine }}"
           dist="dist"
           mkdir -p "$dist"
+          src="$(mktemp -d)"
+          built=0
+
+          # Prefer official release tarballs when AminMGMT/BackPack published them.
           for pair in amd64:backpack_linux_amd64.tar.gz arm64:backpack_linux_arm64.tar.gz; do
             arch="${pair%%:*}"
             upstream_asset="${pair##*:}"
             url="https://github.com/AminMGMT/BackPack/releases/download/${upstream}/${upstream_asset}"
             work="$(mktemp -d)"
-            curl -fsSL "$url" -o "$work/upstream.tgz"
-            tar -xzf "$work/upstream.tgz" -C "$work"
-            bin="$(find "$work" -maxdepth 2 -type f -name backpack -perm -111 | head -1)"
-            [ -n "$bin" ] || { echo "backpack binary missing in ${upstream_asset}" >&2; exit 1; }
-            pkg="$(mktemp -d)"
-            install -m 755 "$bin" "$pkg/hpx-tunnel-engine"
-            tar -czf "$dist/hpx-tunnel-engine_linux_${arch}.tar.gz" -C "$pkg" hpx-tunnel-engine
-            rm -rf "$work" "$pkg"
+            if curl -fsSL "$url" -o "$work/upstream.tgz"; then
+              tar -xzf "$work/upstream.tgz" -C "$work"
+              bin="$(find "$work" -maxdepth 2 -type f -name backpack -perm -111 | head -1)"
+              [ -n "$bin" ] || { echo "backpack binary missing in ${upstream_asset}" >&2; exit 1; }
+              pkg="$(mktemp -d)"
+              install -m 755 "$bin" "$pkg/hpx-tunnel-engine"
+              tar -czf "$dist/hpx-tunnel-engine_linux_${arch}.tar.gz" -C "$pkg" hpx-tunnel-engine
+              rm -rf "$work" "$pkg"
+              built=$((built + 1))
+            else
+              echo "No release asset for ${upstream}/${upstream_asset} — will build from source"
+              rm -rf "$work"
+            fi
           done
+
+          if [ "$built" -lt 2 ]; then
+            rm -f "$dist"/*.tar.gz
+            git clone --depth 1 --branch "$upstream" https://github.com/AminMGMT/BackPack.git "$src/backpack"
+            cd "$src/backpack"
+            export GOTOOLCHAIN=auto
+            export CGO_ENABLED=0
+            for arch in amd64 arm64; do
+              pkg="$(mktemp -d)"
+              GOOS=linux GOARCH="$arch" go build -trimpath -ldflags="-s -w" -o "$pkg/hpx-tunnel-engine" .
+              tar -czf "$dist/hpx-tunnel-engine_linux_${arch}.tar.gz" -C "$pkg" hpx-tunnel-engine
+              rm -rf "$pkg"
+            done
+            cd -
+          fi
+
           sha256sum "$dist"/*.tar.gz | tee "$dist/SHA256SUMS"
           echo "${engine}" > scripts/hpx-tunnel-engine.version
 
@@ -76,6 +107,8 @@ jobs:
           notes_file="$(mktemp)"
           printf '%s\n' \
             'HPX tunnel engine binaries for **HPX Pulse** (Direct L3 / reverse tunnel agents).' \
+            '' \
+            "Built from BackPack \`${{ steps.meta.outputs.upstream }}\` (release assets or source build)." \
             '' \
             '### Assets' \
             '- `hpx-tunnel-engine_linux_amd64.tar.gz`' \

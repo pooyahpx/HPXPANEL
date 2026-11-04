@@ -136,6 +136,7 @@ function carrierLabel(carrier: string | null, t: (k: string, o?: { defaultValue:
   if (carrier === 'wss') return t('hpxPulse.carrierWss', { defaultValue: 'WSS' })
   if (carrier === 'wssmux') return t('hpxPulse.carrierWssMux', { defaultValue: 'WSS MUX' })
   if (carrier === 'xdi') return t('hpxPulse.carrierIcmp', { defaultValue: 'ICMP' })
+  if (carrier === 'spoof') return t('hpxPulse.carrierSpoof', { defaultValue: 'SPOOF' })
   return carrier?.toUpperCase() || '—'
 }
 

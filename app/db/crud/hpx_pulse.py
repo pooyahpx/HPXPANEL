@@ -18,6 +18,7 @@ async def create_hpx_pulse(
     carrier: str | None,
     preset: str,
     advice_json: dict | None,
+    spoof_config: dict | None = None,
 ) -> HpxPulse:
     db_pulse = HpxPulse(
         name=model.name,
@@ -37,6 +38,7 @@ async def create_hpx_pulse(
         domain=model.domain,
         sni_hint=model.sni_hint,
         advice_json=advice_json,
+        spoof_config=spoof_config,
         note=model.note,
         auto_restart_interval_minutes=(
             model.auto_restart_interval_minutes

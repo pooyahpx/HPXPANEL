@@ -4,9 +4,11 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input'
 import { LoaderButton } from '@/components/ui/loader-button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Switch } from '@/components/ui/switch'
 import useDirDetection from '@/hooks/use-dir-detection'
 import useDynamicErrorHandler from '@/hooks/use-dynamic-errors'
 import { cn } from '@/lib/utils'
+import { DirectSpoofGuide } from '@/features/hpx-pulse/components/direct-spoof-guide'
 import { toTunnelPortString, fromTunnelPortString } from '@/features/hpx-pulse/utils/port-forwards'
 import { RankedTunnelPresets } from '@/features/hpx-pulse/wizard/ranked-tunnel-presets'
 import {
@@ -16,10 +18,12 @@ import {
   type HpxPulseActionResponse,
   type HpxPulseResponse,
   type PulseAdviseResponse,
+  type PulseSpoofConfig,
+  type PulseSpoofProfile,
 } from '@/service/api/hpx-pulse'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Dices, Sparkles, Trash2 } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -31,11 +35,13 @@ const portForwardSchema = z.object({
   internal_port: z.coerce.number().int().min(1).max(65535),
 })
 
+const spoofProfileSchema = z.enum(['udp', 'icmp', 'tcp', 'icmpv6', 'proto58', 'ipip', 'gre'])
+
 const schema = z.object({
   name: z.string().min(1, 'Name required').max(40),
   iran_public_ip: z.string().min(7, 'Iran IP required'),
   abroad_public_ip: z.string().min(7, 'Abroad IP required'),
-  goal: z.enum(['mobile', 'hard', 'fast', 'stealth', 'balanced', 'speed']),
+  goal: z.enum(['mobile', 'hard', 'fast', 'stealth', 'balanced', 'speed', 'spoof']),
   control_port: z.coerce.number().int().min(1024).max(65535),
   port_forwards: z.array(portForwardSchema).default([]),
   auto_restart_interval_minutes: z.coerce.number().int().min(0).max(10080),
@@ -44,7 +50,30 @@ const schema = z.object({
   auto_failover: z.boolean().default(false),
   auto_failback: z.boolean().default(true),
   priority: z.coerce.number().int().min(0).max(100).default(0),
+  spoof_profile: spoofProfileSchema.default('udp'),
+  spoof_stealth: z.boolean().default(false),
+  spoof_src_ip: z.string().max(45).optional().default(''),
+  spoof_mtu: z.coerce.number().int().min(0).max(9000).default(0),
+  spoof_sockbuf: z.coerce.number().int().min(0).max(268435456).default(0),
 })
+
+function isSpoofProfileId(profileId: string | null | undefined) {
+  return !!profileId && profileId.startsWith('pulse-direct-spoof')
+}
+
+function spoofConfigFromForm(values: FormValues): PulseSpoofConfig {
+  return {
+    profile: values.spoof_profile as PulseSpoofProfile,
+    stealth: values.spoof_stealth,
+    src_ip: (values.spoof_src_ip || '').trim(),
+    src_pool: [],
+    iran_src_ip: '',
+    abroad_src_ip: '',
+    mtu: values.spoof_mtu || 0,
+    sockbuf: values.spoof_sockbuf || 0,
+    icmp_reply: false,
+  }
+}
 
 type FormValues = z.infer<typeof schema>
 
@@ -81,11 +110,12 @@ function pulseToFormValues(pulse: HpxPulseResponse): FormValues {
   const portForwards = (pulse.port_forwards ?? [])
     .map(fromTunnelPortString)
     .filter((row): row is NonNullable<typeof row> => row != null)
+  const spoof = pulse.spoof_config
   return {
     name: pulse.name,
     iran_public_ip: pulse.iran_public_ip,
     abroad_public_ip: pulse.abroad_public_ip,
-    goal: pulse.goal,
+    goal: pulse.goal === 'spoof' || pulse.carrier === 'spoof' ? 'spoof' : pulse.goal,
     control_port: pulse.control_port,
     port_forwards: portForwards.length ? portForwards : [{ external_port: 443, internal_ip: '', internal_port: 443 }],
     auto_restart_interval_minutes: pulse.auto_restart_interval_minutes ?? 0,
@@ -94,6 +124,11 @@ function pulseToFormValues(pulse: HpxPulseResponse): FormValues {
     auto_failover: pulse.auto_failover ?? false,
     auto_failback: pulse.auto_failback ?? true,
     priority: pulse.priority ?? 0,
+    spoof_profile: (spoof?.profile as PulseSpoofProfile) || 'udp',
+    spoof_stealth: spoof?.stealth ?? false,
+    spoof_src_ip: spoof?.src_ip || '',
+    spoof_mtu: spoof?.mtu ?? 0,
+    spoof_sockbuf: spoof?.sockbuf ?? 0,
   }
 }
 
@@ -124,6 +159,11 @@ export default function HpxPulseWizard({ open, onOpenChange, onCreated, onUpdate
       auto_failover: false,
       auto_failback: true,
       priority: 0,
+      spoof_profile: 'udp',
+      spoof_stealth: false,
+      spoof_src_ip: '',
+      spoof_mtu: 0,
+      spoof_sockbuf: 0,
     },
   })
 
@@ -156,10 +196,21 @@ export default function HpxPulseWizard({ open, onOpenChange, onCreated, onUpdate
       auto_failover: false,
       auto_failback: true,
       priority: 0,
+      spoof_profile: 'udp',
+      spoof_stealth: false,
+      spoof_src_ip: '',
+      spoof_mtu: 0,
+      spoof_sockbuf: 0,
     })
     setAdvice(null)
     setSelectedProfile(null)
   }, [open, editingId, form])
+
+  const watchedGoal = form.watch('goal')
+  const showSpoofPanel = useMemo(
+    () => watchedGoal === 'spoof' || isSpoofProfileId(selectedProfile),
+    [watchedGoal, selectedProfile],
+  )
 
   const runAdvise = async (values?: FormValues) => {
     const v = values ?? form.getValues()
@@ -186,6 +237,9 @@ export default function HpxPulseWizard({ open, onOpenChange, onCreated, onUpdate
       const portForwards = (values.port_forwards ?? []).map(toTunnelPortString)
       const autoRestart = values.auto_restart_interval_minutes > 0 ? values.auto_restart_interval_minutes : 0
 
+      const includeSpoof = values.goal === 'spoof' || isSpoofProfileId(profileId)
+      const spoofPayload = includeSpoof ? spoofConfigFromForm(values) : undefined
+
       if (isEditing && editingPulse) {
         const updated = await updateMutation.mutateAsync({
           id: editingPulse.id,
@@ -203,6 +257,11 @@ export default function HpxPulseWizard({ open, onOpenChange, onCreated, onUpdate
             auto_failover: values.auto_failover,
             auto_failback: values.auto_failback,
             priority: values.priority,
+            ...(includeSpoof
+              ? { spoof_config: spoofPayload }
+              : editingPulse.carrier === 'spoof'
+                ? { spoof_config: null }
+                : {}),
           },
         })
         const mustRejoin = Boolean(updated?.iran_join_command || updated?.abroad_join_command)
@@ -240,6 +299,7 @@ export default function HpxPulseWizard({ open, onOpenChange, onCreated, onUpdate
         auto_failover: values.auto_failover,
         auto_failback: values.auto_failback,
         priority: values.priority,
+        ...(includeSpoof ? { spoof_config: spoofPayload } : {}),
       })
       toast.success(t('hpxPulse.createSuccess', { defaultValue: 'Pulse created — copy install commands below' }))
       onCreated?.(res)
@@ -296,16 +356,22 @@ export default function HpxPulseWizard({ open, onOpenChange, onCreated, onUpdate
                       <SelectItem value="mobile">{t('hpxPulse.intentMobile', { defaultValue: 'Mobile — stealth + balance' })}</SelectItem>
                       <SelectItem value="hard">{t('hpxPulse.intentHard', { defaultValue: 'Hard — aggressive stealth' })}</SelectItem>
                       <SelectItem value="fast">{t('hpxPulse.intentFast', { defaultValue: 'Fast — turbo / KCP / QUIC' })}</SelectItem>
+                      <SelectItem value="spoof">{t('hpxPulse.intentSpoof', { defaultValue: 'Direct Spoof — forged source L3' })}</SelectItem>
                       <SelectItem value="stealth">stealth</SelectItem>
                       <SelectItem value="balanced">balanced</SelectItem>
                       <SelectItem value="speed">speed</SelectItem>
                     </SelectContent>
                   </Select>
                   <p className="text-muted-foreground text-xs">
-                    {t('hpxPulse.intentHint', {
-                      defaultValue:
-                        'Hard/Mobile rank TCP Stealth & WSS. Fast ranks KCP / QUIC / UDP turbo tunnels — then preview again.',
-                    })}
+                    {watchedGoal === 'spoof'
+                      ? t('hpxPulse.intentSpoofHint', {
+                          defaultValue:
+                            'Direct Spoof only — ranks UDP/ICMP/Stealth spoof profiles. Reverse cannot use this carrier.',
+                        })
+                      : t('hpxPulse.intentHint', {
+                          defaultValue:
+                            'Hard/Mobile rank TCP Stealth & WSS. Fast ranks KCP / QUIC / UDP turbo tunnels — then preview again.',
+                        })}
                   </p>
                 </FormItem>
               )} />
@@ -507,12 +573,122 @@ export default function HpxPulseWizard({ open, onOpenChange, onCreated, onUpdate
               )} />
             </div>
 
+            {showSpoofPanel && (
+              <>
+                <div className="space-y-3 rounded-lg border border-emerald-500/25 bg-emerald-500/5 p-3">
+                  <div>
+                    <p className="text-sm font-medium">
+                      {t('hpxPulse.spoofSection', { defaultValue: 'Direct Spoof settings' })}
+                    </p>
+                    <p className="text-muted-foreground mt-0.5 text-xs">
+                      {t('hpxPulse.spoofSectionHint', {
+                        defaultValue:
+                          'Direct L3 only — Reverse cannot carry spoof. Leave forged source empty on first run.',
+                      })}
+                    </p>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <FormField
+                      control={form.control}
+                      name="spoof_profile"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{t('hpxPulse.spoofProfile', { defaultValue: 'Packet profile' })}</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value}>
+                            <FormControl>
+                              <SelectTrigger className="cursor-pointer">
+                                <SelectValue />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="udp">udp (recommended)</SelectItem>
+                              <SelectItem value="icmp">icmp</SelectItem>
+                              <SelectItem value="tcp">tcp</SelectItem>
+                              <SelectItem value="icmpv6">icmpv6</SelectItem>
+                              <SelectItem value="proto58">proto58</SelectItem>
+                              <SelectItem value="ipip">ipip</SelectItem>
+                              <SelectItem value="gre">gre</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="spoof_stealth"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-col justify-end gap-2 space-y-0">
+                          <FormLabel>{t('hpxPulse.spoofStealth', { defaultValue: 'Stealth bundle' })}</FormLabel>
+                          <div className="flex h-9 items-center gap-2">
+                            <FormControl>
+                              <Switch
+                                checked={field.value}
+                                onCheckedChange={field.onChange}
+                                className="cursor-pointer"
+                              />
+                            </FormControl>
+                            <span className="text-muted-foreground text-xs">
+                              {t('hpxPulse.spoofStealthHint', {
+                                defaultValue: 'Padding + TTL/DSCP + port shuffle (both ends)',
+                              })}
+                            </span>
+                          </div>
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="spoof_src_ip"
+                      render={({ field }) => (
+                        <FormItem className="sm:col-span-2">
+                          <FormLabel>{t('hpxPulse.spoofSrcIp', { defaultValue: 'Forged source IP (optional)' })}</FormLabel>
+                          <FormControl>
+                            <Input {...field} dir="ltr" placeholder={fa ? 'خالی = بدون جعل (اولین اجرا)' : 'empty = no forge (first run)'} />
+                          </FormControl>
+                          <p className="text-muted-foreground text-xs">
+                            {t('hpxPulse.spoofSrcIpHint', {
+                              defaultValue: 'Only set an address the path actually delivers. Iran spoof_peer_ip is autofilled from Abroad IP.',
+                            })}
+                          </p>
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="spoof_mtu"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{t('hpxPulse.spoofMtu', { defaultValue: 'spoof_mtu (0=default)' })}</FormLabel>
+                          <FormControl>
+                            <Input type="number" {...field} dir="ltr" />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="spoof_sockbuf"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{t('hpxPulse.spoofSockbuf', { defaultValue: 'spoof_sockbuf (0=4MiB)' })}</FormLabel>
+                          <FormControl>
+                            <Input type="number" {...field} dir="ltr" />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </div>
+                <DirectSpoofGuide fa={fa} />
+              </>
+            )}
+
             <Button
               type="button"
               variant="secondary"
               onClick={previewAdvise}
               disabled={adviseMutation.isPending}
-              className="border-primary/20 bg-primary/10 hover:bg-primary/15 text-foreground"
+              className="border-primary/20 bg-primary/10 hover:bg-primary/15 text-foreground cursor-pointer"
             >
               <Sparkles className="size-4 text-primary" />
               {t('hpxPulse.advise', { defaultValue: 'Preview ranked tunnels' })}
@@ -523,7 +699,19 @@ export default function HpxPulseWizard({ open, onOpenChange, onCreated, onUpdate
                 profiles={advice.profiles}
                 recommendedId={advice.recommended_profile_id}
                 selectedId={selectedProfile}
-                onSelect={setSelectedProfile}
+                onSelect={id => {
+                  setSelectedProfile(id)
+                  if (id === 'pulse-direct-spoof-udp') {
+                    form.setValue('spoof_profile', 'udp')
+                    form.setValue('spoof_stealth', false)
+                  } else if (id === 'pulse-direct-spoof-icmp') {
+                    form.setValue('spoof_profile', 'icmp')
+                    form.setValue('spoof_stealth', false)
+                  } else if (id === 'pulse-direct-spoof-stealth') {
+                    form.setValue('spoof_profile', 'udp')
+                    form.setValue('spoof_stealth', true)
+                  }
+                }}
                 fa={fa}
               />
             )}

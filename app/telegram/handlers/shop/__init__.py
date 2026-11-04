@@ -73,7 +73,13 @@ def _shop_home_text(lang: str, config) -> str:
 
 
 async def _home_markup(db: AsyncSession, lang: str, telegram_id: int, config):
+    from app.settings import telegram_settings
+
     show_test = await buyer_show_test_button(db, telegram_id, config)
+    settings = await telegram_settings()
+    mini_url = None
+    if settings.mini_app_login and (settings.mini_app_web_url or "").startswith("https://"):
+        mini_url = settings.mini_app_web_url
     return ShopHomeKeyboard(
         lang,
         show_test=show_test,
@@ -83,6 +89,7 @@ async def _home_markup(db: AsyncSession, lang: str, telegram_id: int, config):
         show_server_status=bool(
             getattr(config, "server_status_enabled", False) and getattr(config, "server_status_group_id", None)
         ),
+        mini_app_url=mini_url,
     ).as_markup()
 
 

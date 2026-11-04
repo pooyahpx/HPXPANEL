@@ -50,7 +50,14 @@
     "saveSuccess": "Telegram bot settings saved",
     "saveFailed": "Failed to save Telegram bot settings",
     "cancelSuccess": "Changes discarded",
-    "loadError": "Could not load Telegram bot settings"
+    "loadError": "Could not load Telegram bot settings",
+    "useBuiltInMiniApp": "Use built-in Mini App URL",
+    "miniAppUrlHint": "Must be HTTPS. Built-in shop Mini App is served at /miniapp/. Also set BotFather Menu Button to the same URL.",
+    "miniAppSetupTitle": "Activate Mini App",
+    "miniAppSetup1": "Enable Mini App Login and paste the /miniapp/ URL (HTTPS).",
+    "miniAppSetup2": "In @BotFather → Bot Settings → Menu Button → Configure menu button → use the same URL.",
+    "miniAppSetup3": "Turn off “Admins only” if buyers should open the shop Mini App.",
+    "miniAppSetup4": "Save — shop home shows “Mini App” and the Menu Button opens the hub."
   },
   "observability": {
     "title": "Observability",
@@ -1091,10 +1098,10 @@
         "title": "Advanced Settings",
         "description": "Advanced Telegram bot features and configurations",
         "miniAppLogin": "Enable Mini App Login",
-        "miniAppLoginDescription": "Allow users to log in through Telegram mini apps",
+        "miniAppLoginDescription": "Allow Telegram WebApp initData auth for the shop Mini App and panel login",
         "miniAppUrl": "Mini App URL",
-        "miniAppUrlPlaceholder": "Enter the Mini App URL (optional)",
-        "miniAppUrlDescription": "The URL for your Telegram Mini App. Leave empty if not used.",
+        "miniAppUrlPlaceholder": "https://your-panel.example/miniapp/",
+        "miniAppUrlDescription": "HTTPS URL of the Mini App (built-in: /miniapp/). Used for Menu Button and shop keyboard.",
         "forAdminsOnly": "For Admins Only",
         "forAdminsOnlyDescription": "Restrict bot access to administrators only"
       }

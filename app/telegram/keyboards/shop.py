@@ -2,7 +2,7 @@ from enum import Enum
 
 from aiogram.enums import ButtonStyle
 from aiogram.filters.callback_data import CallbackData
-from aiogram.utils.keyboard import InlineKeyboardBuilder
+from aiogram.utils.keyboard import InlineKeyboardBuilder, WebAppInfo
 
 from app.db.models import ShopOrder, ShopPlan
 from app.telegram.utils.i18n import buyer_plan_label, format_price, t
@@ -73,11 +73,16 @@ class ShopHomeKeyboard(InlineKeyboardBuilder):
         show_referral: bool = False,
         show_tutorial: bool = False,
         show_server_status: bool = False,
+        mini_app_url: str | None = None,
         *args,
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
         cb = ShopKeyboardCallback
+        rows: list[int] = []
+        if mini_app_url and str(mini_app_url).startswith("https://"):
+            self.button(text=t(lang, "btn_mini_app"), web_app=WebAppInfo(url=str(mini_app_url)))
+            rows.append(1)
         # Colored buttons (Bot API style: danger=red, success=green, primary=blue)
         self.button(
             text=t(lang, "btn_buy_new"),
@@ -98,7 +103,7 @@ class ShopHomeKeyboard(InlineKeyboardBuilder):
             callback_data=cb(action=ShopAction.renew),
             style=ButtonStyle.SUCCESS,
         )
-        rows: list[int] = [1, 1, 2]
+        rows.extend([1, 1, 2])
         if show_test:
             self.button(
                 text=t(lang, "btn_test"),

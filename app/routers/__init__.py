@@ -27,6 +27,7 @@ from . import (
     shop,
     subscription,
     system,
+    telegram_miniapp,
     user,
     user_template,
 )
@@ -57,6 +58,8 @@ routers = [
     hpx_pulse.router,
     openvpn.router,
     shop.router,
+    telegram_miniapp.router,
+    telegram_miniapp.public_router,
     user.router,
     subscription.router,
     user_template.router,

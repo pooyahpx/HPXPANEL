@@ -50,7 +50,14 @@
     "saveSuccess": "تنظیمات بات تلگرام ذخیره شد",
     "saveFailed": "ذخیره تنظیمات بات تلگرام ناموفق بود",
     "cancelSuccess": "تغییرات لغو شد",
-    "loadError": "بارگذاری تنظیمات بات تلگرام ناموفق بود"
+    "loadError": "بارگذاری تنظیمات بات تلگرام ناموفق بود",
+    "useBuiltInMiniApp": "استفاده از آدرس مینی‌اپ داخلی",
+    "miniAppUrlHint": "باید HTTPS باشد. مینی‌اپ فروشگاه روی /miniapp/ سرو می‌شود. دکمه Menu در BotFather را هم روی همین URL بگذارید.",
+    "miniAppSetupTitle": "فعال‌سازی مینی‌اپ",
+    "miniAppSetup1": "ورود Mini App را روشن کنید و URL مسیر /miniapp/ را با HTTPS وارد کنید.",
+    "miniAppSetup2": "در @BotFather → Bot Settings → Menu Button → Configure menu button → همان URL را بگذارید.",
+    "miniAppSetup3": "اگر خریدار باید مینی‌اپ فروشگاه را ببیند، «فقط ادمین» را خاموش کنید.",
+    "miniAppSetup4": "ذخیره کنید — در خانه فروشگاه دکمه «اپلیکیشن» می‌آید و Menu Button همان هاب را باز می‌کند."
   },
   "observability": {
     "title": "مانیتورینگ",
@@ -624,10 +631,10 @@
         "title": "تنظیمات پیشرفته",
         "description": "ویژگی‌ها و پیکربندی‌های پیشرفته ربات تلگرام",
         "miniAppLogin": "فعال‌سازی ورود Mini App",
-        "miniAppLoginDescription": "اجازه ورود کاربران از طریق Mini App تلگرام",
+        "miniAppLoginDescription": "اجازه احراز هویت initData برای مینی‌اپ فروشگاه و ورود پنل",
         "miniAppUrl": "آدرس Mini App تلگرام",
-        "miniAppUrlPlaceholder": "آدرس Mini App را وارد کنید (اختیاری)",
-        "miniAppUrlDescription": "آدرس Mini App تلگرام خود را وارد کنید. در صورت عدم استفاده، خالی بگذارید.",
+        "miniAppUrlPlaceholder": "https://your-panel.example/miniapp/",
+        "miniAppUrlDescription": "آدرس HTTPS مینی‌اپ (داخلی: /miniapp/). برای Menu Button و کیبورد فروشگاه استفاده می‌شود.",
         "forAdminsOnly": "فقط برای مدیران",
         "forAdminsOnlyDescription": "دسترسی ربات فقط به مدیران محدود میشود."
       }

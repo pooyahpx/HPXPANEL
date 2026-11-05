@@ -14,21 +14,18 @@
       orders: "سفارش‌ها",
       wallet: "کیف پول",
       more: "بیشتر",
-      heroTitle: "مرکز کنترل سرویس",
-      heroNote: "خرید، تمدید، سفارش‌ها و وضعیت سرور — همه از همین‌جا.",
       welcomeFallback: "به فروشگاه HPXPANEL خوش آمدید.",
       buy: "خرید سرویس",
       renew: "تمدید در بات",
       myOrders: "سفارش‌های من",
       walletTile: "کیف پول",
-      status: "وضعیت سرور",
+      status: "وضعیت سرورها",
       tutorial: "آموزش",
       referral: "دعوت دوستان",
       support: "پشتیبانی",
       test: "تست رایگان",
       adminPanel: "پنل ادمین",
       openBot: "ادامه در بات",
-      continueBuy: "ادامه خرید در بات",
       copy: "کپی",
       copied: "کپی شد",
       emptyPlans: "پلنی فعال نیست.",
@@ -40,8 +37,6 @@
       unlimited: "نامحدود",
       price: "{n} تومان",
       balance: "موجودی",
-      hosts: "هاست‌ها",
-      pulses: "پالس‌ها",
       cards: "کارت‌های پرداخت",
       refCode: "کد دعوت",
       refLink: "لینک دعوت",
@@ -55,6 +50,30 @@
       adminHint: "دسترسی ادمین فعال است",
       noTelegram: "این صفحه فقط داخل تلگرام کار می‌کند.",
       retry: "تلاش دوباره",
+      checkout: "خرید",
+      username: "یوزرنیم دلخواه (اختیاری)",
+      usernameHint: "خالی بگذارید تا تصادفی ساخته شود",
+      uploadReceipt: "ارسال عکس رسید",
+      pickReceipt: "انتخاب عکس رسید",
+      receiptPicked: "رسید انتخاب شد",
+      submitOrder: "ثبت سفارش",
+      submitting: "در حال ثبت…",
+      needReceipt: "لطفاً عکس رسید را انتخاب کنید",
+      orderOk: "سفارش ثبت شد",
+      supportPrompt: "پیام خود را برای پشتیبانی بنویسید",
+      supportPlaceholder: "سوال یا مشکل خود را بنویسید…",
+      supportSend: "ارسال به پشتیبانی",
+      supportOk: "پیام ارسال شد",
+      claimTest: "دریافت کانفیگ تست",
+      claiming: "در حال ساخت…",
+      testOk: "تست آماده شد",
+      subLink: "لینک سابسکریپشن",
+      back: "بازگشت",
+      online: "آنلاین",
+      offline: "آفلاین",
+      connecting: "در حال اتصال",
+      unknown: "نامشخص",
+      updated: "به‌روز شد",
     },
     en: {
       boot: "Preparing…",
@@ -65,8 +84,6 @@
       orders: "Orders",
       wallet: "Wallet",
       more: "More",
-      heroTitle: "Service control hub",
-      heroNote: "Buy, renew, track orders, and check server health — all here.",
       welcomeFallback: "Welcome to the HPXPANEL shop.",
       buy: "Buy service",
       renew: "Renew in bot",
@@ -79,7 +96,6 @@
       test: "Free test",
       adminPanel: "Admin panel",
       openBot: "Continue in bot",
-      continueBuy: "Continue purchase in bot",
       copy: "Copy",
       copied: "Copied",
       emptyPlans: "No active plans.",
@@ -91,8 +107,6 @@
       unlimited: "Unlimited",
       price: "{n} Toman",
       balance: "Balance",
-      hosts: "Hosts",
-      pulses: "Pulses",
       cards: "Payment cards",
       refCode: "Referral code",
       refLink: "Invite link",
@@ -106,6 +120,30 @@
       adminHint: "Admin access enabled",
       noTelegram: "This page only works inside Telegram.",
       retry: "Retry",
+      checkout: "Checkout",
+      username: "Custom username (optional)",
+      usernameHint: "Leave empty for a random username",
+      uploadReceipt: "Upload receipt photo",
+      pickReceipt: "Choose receipt photo",
+      receiptPicked: "Receipt selected",
+      submitOrder: "Submit order",
+      submitting: "Submitting…",
+      needReceipt: "Please choose a receipt photo",
+      orderOk: "Order submitted",
+      supportPrompt: "Write your message for support",
+      supportPlaceholder: "Describe your question or issue…",
+      supportSend: "Send to support",
+      supportOk: "Message sent",
+      claimTest: "Claim free test",
+      claiming: "Creating…",
+      testOk: "Test ready",
+      subLink: "Subscription link",
+      back: "Back",
+      online: "Online",
+      offline: "Offline",
+      connecting: "Connecting",
+      unknown: "Unknown",
+      updated: "Updated",
     },
   };
 
@@ -114,6 +152,8 @@
     lang: "fa",
     route: "home",
     cache: {},
+    buy: null,
+    receiptFile: null,
   };
 
   const el = {
@@ -141,8 +181,7 @@
   }
 
   function fmtPrice(n) {
-    const num = Number(n || 0);
-    const formatted = num.toLocaleString(state.lang === "fa" ? "fa-IR" : "en-US");
+    const formatted = Number(n || 0).toLocaleString(state.lang === "fa" ? "fa-IR" : "en-US");
     return t("price", { n: formatted });
   }
 
@@ -164,29 +203,40 @@
     el.toast.textContent = msg;
     el.toast.classList.add("is-on");
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => {
-      el.toast.classList.remove("is-on");
-    }, 2200);
+    toastTimer = setTimeout(() => el.toast.classList.remove("is-on"), 2200);
   }
 
   function initData() {
-    if (!tg) return "";
-    return tg.initData || "";
+    return (tg && tg.initData) || "";
   }
 
-  async function api(path, options) {
-    const headers = Object.assign(
-      { Accept: "application/json" },
-      (options && options.headers) || {},
-    );
+  function authHeaders(extra) {
+    const headers = Object.assign({ Accept: "application/json" }, extra || {});
     const raw = initData();
     if (raw) {
       headers["X-Telegram-Init-Data"] = raw;
       headers.Authorization = `tma ${raw}`;
     }
+    return headers;
+  }
+
+  async function api(path, options) {
     const res = await fetch(`${API}${path}`, {
       ...options,
-      headers,
+      headers: authHeaders(options && options.headers),
+    });
+    if (!res.ok) {
+      const detail = await res.json().catch(() => ({}));
+      throw new Error(detail.detail || `HTTP ${res.status}`);
+    }
+    return res.json();
+  }
+
+  async function apiForm(path, formData) {
+    const res = await fetch(`${API}${path}`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: formData,
     });
     if (!res.ok) {
       const detail = await res.json().catch(() => ({}));
@@ -204,18 +254,16 @@
   function icon(name) {
     const paths = {
       home: '<path d="M3 11.5 12 4l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1v-8.5z" stroke-linejoin="round"/>',
-      plans:
-        '<rect x="4" y="5" width="16" height="14" rx="2"/><path d="M8 9h8M8 13h5"/>',
-      orders:
-        '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
-      wallet:
-        '<rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18M16 14h2"/>',
+      plans: '<rect x="4" y="5" width="16" height="14" rx="2"/><path d="M8 9h8M8 13h5"/>',
+      orders: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
+      wallet: '<rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18M16 14h2"/>',
       more: '<circle cx="6" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="18" cy="12" r="1.5"/>',
       buy: '<path d="M12 5v14M5 12h14"/>',
       renew: '<path d="M4 12a8 8 0 1 0 2.3-5.6"/><path d="M4 4v5h5"/>',
       status: '<path d="M4 19V5M10 19V9M16 19v-6M22 19V7"/>',
       tutorial: '<path d="M4 19V6a2 2 0 0 1 2-2h12v15H6a2 2 0 0 0-2 2z"/><path d="M18 4v15"/>',
-      referral: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
+      referral:
+        '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
       support: '<path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/>',
       test: '<path d="M9 3h6M10 3v6l-4 8a2 2 0 0 0 1.8 3h8.4A2 2 0 0 0 18 17l-4-8V3"/>',
       admin: '<rect x="3" y="4" width="18" height="14" rx="2"/><path d="M3 10h18"/>',
@@ -252,18 +300,21 @@
     }
   }
 
+  function statusLabel(status) {
+    const s = String(status || "").toLowerCase();
+    if (s === "online") return t("online");
+    if (s === "offline") return t("offline");
+    if (s === "connecting") return t("connecting");
+    return t("unknown");
+  }
+
   function statusBadge(status) {
     const s = String(status || "").toLowerCase();
-    if (["online", "ok", "healthy", "up", "active", "approved"].includes(s)) {
-      return `<span class="badge ok">${escapeHtml(status)}</span>`;
-    }
-    if (["pending", "warn", "warning", "degraded", "unknown"].includes(s)) {
-      return `<span class="badge warn">${escapeHtml(status)}</span>`;
-    }
-    if (["offline", "down", "error", "rejected", "bad"].includes(s)) {
-      return `<span class="badge bad">${escapeHtml(status)}</span>`;
-    }
-    return `<span class="badge">${escapeHtml(status || "—")}</span>`;
+    const label = statusLabel(status);
+    if (s === "online") return `<span class="badge ok">${escapeHtml(label)}</span>`;
+    if (s === "connecting") return `<span class="badge warn">${escapeHtml(label)}</span>`;
+    if (s === "offline") return `<span class="badge bad">${escapeHtml(label)}</span>`;
+    return `<span class="badge">${escapeHtml(label)}</span>`;
   }
 
   function orderLabel(status) {
@@ -329,9 +380,7 @@
     const user = (state.session && state.session.user) || {};
     const name = user.first_name || user.username || "User";
     el.hello.textContent = t("hello", { name });
-    if (user.photo_url) {
-      el.avatar.style.backgroundImage = `url("${user.photo_url}")`;
-    }
+    if (user.photo_url) el.avatar.style.backgroundImage = `url("${user.photo_url}")`;
   }
 
   function tile(opts) {
@@ -363,16 +412,38 @@
 
     el.view.innerHTML = `
       <section class="hero">
-        <p class="hero-kicker">HPXPANEL Mini App</p>
-        <h2 class="hero-title">${escapeHtml(t("heroTitle"))}</h2>
-        <p class="hero-note">${escapeHtml(note || t("heroNote"))}</p>
+        <p class="hero-note">${escapeHtml(note)}</p>
         ${state.session && state.session.is_admin ? `<p class="muted" style="margin-top:10px">${escapeHtml(t("adminHint"))}</p>` : ""}
       </section>
       ${f.shop || f.admin ? `<div class="grid">${tiles.join("")}</div>` : `<div class="empty">${escapeHtml(t("shopOff"))}</div>`}
     `;
-
     el.view.querySelectorAll("[data-action]").forEach((btn) => {
       btn.addEventListener("click", () => onAction(btn.getAttribute("data-action")));
+    });
+  }
+
+  function renderCardsBlock() {
+    const cards = (shop() && shop().cards) || [];
+    if (!cards.length) return "";
+    return `
+      <p class="section-title" style="margin-top:18px">${escapeHtml(t("cards"))}</p>
+      <div class="stack">
+        ${cards
+          .map(
+            (c) => `
+          <div class="card">
+            <p class="mono">${escapeHtml(c.number || "")}</p>
+            <p class="muted">${escapeHtml(c.holder || "")}</p>
+            <button type="button" class="cta ghost" style="margin-top:10px;min-height:40px" data-copy="${escapeHtml(c.number || "")}">${escapeHtml(t("copy"))}</button>
+          </div>`,
+          )
+          .join("")}
+      </div>`;
+  }
+
+  function wireCopyButtons() {
+    el.view.querySelectorAll("[data-copy]").forEach((btn) => {
+      btn.addEventListener("click", () => copyText(btn.getAttribute("data-copy") || ""));
     });
   }
 
@@ -402,47 +473,90 @@
               </button>`;
             })
             .join("")}
-        </div>
-        ${renderCardsBlock()}
-        <div style="margin-top:14px">
-          <button type="button" class="cta" id="buy-bot">${escapeHtml(t("continueBuy"))}</button>
         </div>`;
       el.view.querySelectorAll("[data-plan]").forEach((btn) => {
         btn.addEventListener("click", () => {
+          const id = Number(btn.getAttribute("data-plan"));
+          const plan = plans.find((p) => p.id === id);
+          if (!plan) return;
           haptic("light");
-          openBot("shop");
+          state.buy = plan;
+          state.receiptFile = null;
+          setRoute("buy");
         });
       });
-      const buy = document.getElementById("buy-bot");
-      if (buy) buy.addEventListener("click", () => openBot("shop"));
-      wireCopyButtons();
     } catch (err) {
       el.view.innerHTML = errorBlock(err);
     }
   }
 
-  function renderCardsBlock() {
-    const cards = (shop() && shop().cards) || [];
-    if (!cards.length) return "";
-    return `
-      <p class="section-title" style="margin-top:18px">${escapeHtml(t("cards"))}</p>
-      <div class="stack">
-        ${cards
-          .map(
-            (c) => `
-          <div class="card">
-            <p class="mono">${escapeHtml(c.number || "")}</p>
-            <p class="muted">${escapeHtml(c.holder || "")}</p>
-            <button type="button" class="cta ghost" style="margin-top:10px;min-height:40px" data-copy="${escapeHtml(c.number || "")}">${escapeHtml(t("copy"))}</button>
-          </div>`,
-          )
-          .join("")}
+  function renderBuy() {
+    const plan = state.buy;
+    if (!plan) {
+      setRoute("plans");
+      return;
+    }
+    const days = plan.expire_days ? t("days", { n: plan.expire_days }) : t("unlimited");
+    el.view.innerHTML = `
+      <button type="button" class="cta ghost" id="back-plans" style="margin-bottom:12px;min-height:40px">${escapeHtml(t("back"))}</button>
+      <section class="hero">
+        <p class="hero-kicker">${escapeHtml(t("checkout"))}</p>
+        <h2 class="hero-title" style="font-size:20px">${escapeHtml(plan.name)}</h2>
+        <p class="hero-note">${escapeHtml(plan.data_label || "—")} · ${escapeHtml(days)} · ${escapeHtml(fmtPrice(plan.price_toman))}</p>
+      </section>
+      ${renderCardsBlock()}
+      <div class="stack" style="margin-top:16px">
+        <label class="card" style="display:grid;gap:8px">
+          <span class="muted">${escapeHtml(t("username"))}</span>
+          <input id="buy-username" class="mono" type="text" maxlength="32" placeholder="${escapeHtml(t("usernameHint"))}" style="width:100%;border:1px solid var(--color-border);border-radius:12px;background:#0b1220;color:inherit;padding:12px;font:inherit" />
+        </label>
+        <div class="card">
+          <p class="muted" style="margin:0 0 10px">${escapeHtml(t("uploadReceipt"))}</p>
+          <input id="receipt-input" type="file" accept="image/*" hidden />
+          <button type="button" class="cta secondary" id="pick-receipt">${escapeHtml(t("pickReceipt"))}</button>
+          <p class="muted" id="receipt-name" style="margin:10px 0 0"></p>
+        </div>
+        <button type="button" class="cta" id="submit-order">${escapeHtml(t("submitOrder"))}</button>
       </div>`;
-  }
-
-  function wireCopyButtons() {
-    el.view.querySelectorAll("[data-copy]").forEach((btn) => {
-      btn.addEventListener("click", () => copyText(btn.getAttribute("data-copy") || ""));
+    wireCopyButtons();
+    document.getElementById("back-plans").addEventListener("click", () => setRoute("plans"));
+    const pick = document.getElementById("pick-receipt");
+    const input = document.getElementById("receipt-input");
+    const nameEl = document.getElementById("receipt-name");
+    pick.addEventListener("click", () => input.click());
+    input.addEventListener("change", () => {
+      const file = input.files && input.files[0];
+      state.receiptFile = file || null;
+      nameEl.textContent = file ? `${t("receiptPicked")}: ${file.name}` : "";
+    });
+    document.getElementById("submit-order").addEventListener("click", async () => {
+      if (!state.receiptFile) {
+        toast(t("needReceipt"));
+        haptic("error");
+        return;
+      }
+      const btn = document.getElementById("submit-order");
+      btn.disabled = true;
+      btn.textContent = t("submitting");
+      try {
+        const fd = new FormData();
+        fd.append("plan_id", String(plan.id));
+        const uname = (document.getElementById("buy-username").value || "").trim();
+        if (uname) fd.append("requested_username", uname);
+        fd.append("receipt", state.receiptFile, state.receiptFile.name || "receipt.jpg");
+        const res = await apiForm("/orders", fd);
+        haptic("success");
+        toast(res.message || t("orderOk"));
+        state.cache.orders = null;
+        state.buy = null;
+        state.receiptFile = null;
+        setRoute("orders");
+      } catch (err) {
+        haptic("error");
+        toast((err && err.message) || t("error"));
+        btn.disabled = false;
+        btn.textContent = t("submitOrder");
+      }
     });
   }
 
@@ -494,9 +608,7 @@
           <p class="hero-kicker">${escapeHtml(t("balance"))}</p>
           <p class="balance">${escapeHtml(Number(data.balance_toman || 0).toLocaleString(state.lang === "fa" ? "fa-IR" : "en-US"))}</p>
           <p class="muted" style="margin-top:8px">Toman</p>
-        </section>
-        <button type="button" class="cta secondary" id="wallet-bot">${escapeHtml(t("openBot"))}</button>`;
-      document.getElementById("wallet-bot").addEventListener("click", () => openBot("shop"));
+        </section>`;
     } catch (err) {
       el.view.innerHTML = errorBlock(err);
     }
@@ -508,40 +620,23 @@
       const data = state.cache.status || (await api("/server-status"));
       state.cache.status = data;
       const hosts = data.hosts || [];
-      const pulses = data.pulses || [];
-      if (!hosts.length && !pulses.length) {
+      if (!hosts.length) {
         el.view.innerHTML = `<div class="empty">${escapeHtml(t("emptyStatus"))}</div>`;
         return;
       }
       el.view.innerHTML = `
-        ${
-          hosts.length
-            ? `<p class="section-title">${escapeHtml(t("hosts"))}</p>
-               <div class="stack">${hosts
-                 .map(
-                   (h) => `
-                 <div class="status-row">
-                   <p class="status-name">${escapeHtml(h.name)}</p>
-                   ${statusBadge(h.status)}
-                 </div>`,
-                 )
-                 .join("")}</div>`
-            : ""
-        }
-        ${
-          pulses.length
-            ? `<p class="section-title" style="margin-top:16px">${escapeHtml(t("pulses"))}</p>
-               <div class="stack">${pulses
-                 .map(
-                   (p) => `
-                 <div class="status-row">
-                   <p class="status-name">${escapeHtml(p.name)}</p>
-                   ${statusBadge(p.status)}
-                 </div>`,
-                 )
-                 .join("")}</div>`
-            : ""
-        }`;
+        <p class="section-title">${escapeHtml(t("status"))}</p>
+        <div class="stack">
+          ${hosts
+            .map(
+              (h) => `
+            <div class="status-row">
+              <p class="status-name">${escapeHtml(h.name)}</p>
+              ${statusBadge(h.status)}
+            </div>`,
+            )
+            .join("")}
+        </div>`;
     } catch (err) {
       el.view.innerHTML = errorBlock(err);
     }
@@ -600,6 +695,83 @@
     if (btn && s.tutorial_url) btn.addEventListener("click", () => openExternal(s.tutorial_url));
   }
 
+  function renderSupport() {
+    el.view.innerHTML = `
+      <p class="section-title">${escapeHtml(t("support"))}</p>
+      <div class="stack">
+        <div class="card">
+          <p class="muted" style="margin:0 0 10px">${escapeHtml(t("supportPrompt"))}</p>
+          <textarea id="support-text" rows="5" placeholder="${escapeHtml(t("supportPlaceholder"))}" style="width:100%;border:1px solid var(--color-border);border-radius:12px;background:#0b1220;color:inherit;padding:12px;font:inherit;resize:vertical"></textarea>
+        </div>
+        <button type="button" class="cta" id="support-send">${escapeHtml(t("supportSend"))}</button>
+      </div>`;
+    document.getElementById("support-send").addEventListener("click", async () => {
+      const text = (document.getElementById("support-text").value || "").trim();
+      if (!text) {
+        toast(t("supportPlaceholder"));
+        return;
+      }
+      const btn = document.getElementById("support-send");
+      btn.disabled = true;
+      try {
+        const res = await api("/support", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text }),
+        });
+        haptic("success");
+        toast(res.message || t("supportOk"));
+        document.getElementById("support-text").value = "";
+        setRoute("home");
+      } catch (err) {
+        haptic("error");
+        toast((err && err.message) || t("error"));
+        btn.disabled = false;
+      }
+    });
+  }
+
+  function renderTest() {
+    el.view.innerHTML = `
+      <p class="section-title">${escapeHtml(t("test"))}</p>
+      <div class="stack">
+        <div class="card">
+          <p class="muted" style="margin:0">${escapeHtml(t("claimTest"))}</p>
+        </div>
+        <button type="button" class="cta" id="claim-test">${escapeHtml(t("claimTest"))}</button>
+        <div id="test-result"></div>
+      </div>`;
+    document.getElementById("claim-test").addEventListener("click", async () => {
+      const btn = document.getElementById("claim-test");
+      btn.disabled = true;
+      btn.textContent = t("claiming");
+      try {
+        const res = await api("/test", { method: "POST" });
+        haptic("success");
+        toast(t("testOk"));
+        if (state.session && state.session.features) state.session.features.test = false;
+        document.getElementById("test-result").innerHTML = `
+          <div class="card" style="margin-top:10px">
+            <p class="plan-name">${escapeHtml(res.username || "")}</p>
+            <p class="muted" style="margin:8px 0">${escapeHtml(t("subLink"))}</p>
+            <p class="mono" style="word-break:break-all">${escapeHtml(res.subscription_url || "")}</p>
+            ${
+              res.subscription_url
+                ? `<button type="button" class="cta ghost" style="margin-top:10px;min-height:40px" data-copy="${escapeHtml(res.subscription_url)}">${escapeHtml(t("copy"))}</button>`
+                : ""
+            }
+          </div>`;
+        wireCopyButtons();
+        btn.remove();
+      } catch (err) {
+        haptic("error");
+        toast((err && err.message) || t("error"));
+        btn.disabled = false;
+        btn.textContent = t("claimTest");
+      }
+    });
+  }
+
   function renderMore() {
     const f = features();
     const rows = [];
@@ -636,9 +808,9 @@
     if (action === "status") return setRoute("status");
     if (action === "referral") return setRoute("referral");
     if (action === "tutorial") return setRoute("tutorial");
-    if (action === "renew" || action === "test" || action === "support" || action === "bot") {
-      return openBot("shop");
-    }
+    if (action === "support") return setRoute("support");
+    if (action === "test") return setRoute("test");
+    if (action === "renew" || action === "bot") return openBot("shop");
     if (action === "admin") {
       const url = state.session && state.session.panel_url;
       if (url) return openExternal(url);
@@ -651,11 +823,14 @@
     const route = state.route;
     if (route === "home") return renderHome();
     if (route === "plans") return renderPlans();
+    if (route === "buy") return renderBuy();
     if (route === "orders") return renderOrders();
     if (route === "wallet") return renderWallet();
     if (route === "status") return renderStatus();
     if (route === "referral") return renderReferral();
     if (route === "tutorial") return renderTutorial();
+    if (route === "support") return renderSupport();
+    if (route === "test") return renderTest();
     return renderMore();
   }
 
@@ -671,12 +846,10 @@
         /* ignore */
       }
     }
-
     if (!initData()) {
       el.bootSub.textContent = t("noTelegram");
       return;
     }
-
     try {
       const session = await api("/session", { method: "POST" });
       state.session = session;
@@ -719,7 +892,7 @@
       applyDir();
       renderDock();
       render();
-      toast(state.lang === "fa" ? "به‌روز شد" : "Updated");
+      toast(t("updated"));
     } catch (err) {
       toast((err && err.message) || t("error"));
     }

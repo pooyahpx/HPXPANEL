@@ -252,17 +252,13 @@ def _inherit_sibling_status(states: dict[str, str]) -> None:
 
 def _fill_unknown_from_healthy_pulses(states: dict[str, str], pulses: list[PulseInfo]) -> None:
     """
-    When every Pulse is Online and at least one host already matched Online, treat
-    remaining Unknown hosts as Online.
+    When every Pulse is Online, treat remaining Unknown hosts as Online.
 
     Buyer UI no longer lists Pulse tunnel names. Hosts like ``FL - STUN`` often use a
     domain/remark that never matches ``andishe`` / ``pulse_…`` — without this fill they
-    stay Unknown even though every tunnel is up. Requiring one proven Online host avoids
-    inventing status when nothing matched.
+    stay Unknown even though every tunnel is up.
     """
     if not pulses or not states:
-        return
-    if not any(state == ONLINE for state in states.values()):
         return
     if not any(state == UNKNOWN for state in states.values()):
         return

@@ -209,7 +209,8 @@ def test_fuzzy_remark_matches_pulse_name_even_with_domain_address():
 
 
 def test_fuzzy_too_short_does_not_match():
-    rows = _rows([("DE", ["x.example.com"])], _FakePulse(name="de"))
+    # Pulse not Online so healthy-fill does not apply — short fuzzy still must not match.
+    rows = _rows([("DE", ["x.example.com"])], _FakePulse(name="de", status="error"))
     assert rows == [("DE", UNKNOWN)]
 
 
@@ -307,6 +308,13 @@ def test_all_pulses_online_fills_unmatched_when_sibling_is_up():
         ("🇮🇷 DE-TUN 🇩🇪", ONLINE),
         ("🇫🇮 FL - STUN 🇫🇮", ONLINE),
     ]
+
+
+def test_all_pulses_online_fills_even_without_matched_host():
+    """All hosts Unknown by address/name still become Online when every Pulse is up."""
+    pulse = _FakePulse(name="andishe", iran="185.10.20.30")
+    rows = _rows([("🇫🇮 FL - STUN 🇫🇮", ["stun.example.com"])], pulse)
+    assert rows == [("🇫🇮 FL - STUN 🇫🇮", ONLINE)]
 
 
 def test_offline_pulse_blocks_unknown_fill():

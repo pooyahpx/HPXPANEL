@@ -209,7 +209,8 @@ def test_fuzzy_remark_matches_pulse_name_even_with_domain_address():
 
 
 def test_fuzzy_too_short_does_not_match():
-    rows = _rows([("DE", ["x.example.com"])], _FakePulse(name="de"))
+    # Pulse not Online so healthy-fill does not apply — short fuzzy still must not match.
+    rows = _rows([("DE", ["x.example.com"])], _FakePulse(name="de", status="error"))
     assert rows == [("DE", UNKNOWN)]
 
 

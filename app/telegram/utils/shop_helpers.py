@@ -301,13 +301,16 @@ async def notify_all_admins_support(
     bot: Bot,
     buyer_telegram_id: int,
     buyer_label: str,
-    message: Message,
+    message: Message | None = None,
+    text: str | None = None,
 ) -> None:
     """Forward a buyer support message to every panel admin linked to Telegram."""
     from app.db.crud.shop import get_support_ticket
+    from app.telegram.keyboards.shop import SupportReplyKeyboard
 
     ticket = await get_support_ticket(db, buyer_telegram_id)
     allow_reply = ticket is not None and ticket.status == "open" and ticket.handler_admin_id is None
+    body = (text or "").strip()
     notified_ids: set[int] = set()
     for panel_admin in await list_admins_with_telegram(db):
         chat_id = panel_admin.telegram_id
@@ -315,15 +318,26 @@ async def notify_all_admins_support(
             continue
         admin_lang = (await get_telegram_lang(db, chat_id)) or "fa"
         try:
-            await notify_shop_admin_support(
-                bot=bot,
-                admin_telegram_id=chat_id,
-                admin_lang=admin_lang,
-                buyer_telegram_id=buyer_telegram_id,
-                buyer_label=buyer_label,
-                message=message,
-                allow_reply=allow_reply,
-            )
+            if message is not None:
+                await notify_shop_admin_support(
+                    bot=bot,
+                    admin_telegram_id=chat_id,
+                    admin_lang=admin_lang,
+                    buyer_telegram_id=buyer_telegram_id,
+                    buyer_label=buyer_label,
+                    message=message,
+                    allow_reply=allow_reply,
+                )
+            else:
+                header = rich(
+                    admin_lang,
+                    "support_from_user",
+                    buyer=buyer_label,
+                    id=buyer_telegram_id,
+                )
+                markup = SupportReplyKeyboard(admin_lang, buyer_telegram_id).as_markup() if allow_reply else None
+                payload = f"{header}\n\n{body}" if body else header
+                await bot.send_message(chat_id=chat_id, text=payload, reply_markup=markup)
             notified_ids.add(chat_id)
         except Exception:
             pass

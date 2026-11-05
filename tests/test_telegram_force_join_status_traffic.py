@@ -309,6 +309,13 @@ def test_all_pulses_online_fills_unmatched_when_sibling_is_up():
     ]
 
 
+def test_all_pulses_online_fills_even_without_matched_host():
+    """All hosts Unknown by address/name still become Online when every Pulse is up."""
+    pulse = _FakePulse(name="andishe", iran="185.10.20.30")
+    rows = _rows([("🇫🇮 FL - STUN 🇫🇮", ["stun.example.com"])], pulse)
+    assert rows == [("🇫🇮 FL - STUN 🇫🇮", ONLINE)]
+
+
 def test_offline_pulse_blocks_unknown_fill():
     up = _FakePulse(name="andishe", iran="185.10.20.30")
     down = _FakePulse(name="broken", iran="9.9.9.9", status="error")

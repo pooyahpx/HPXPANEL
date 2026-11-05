@@ -37,7 +37,9 @@ class DeckPanel(InlineKeyboardBuilder):
         rows: list[int] = []
 
         if panel_url and panel_url.startswith("https://"):
-            self.button(text=Texts.open_panel, web_app=WebAppInfo(url=panel_url))
+            # mini_app_web_url may point at /miniapp/ (shop hub) or the dashboard.
+            label = t(lang, "btn_mini_app") if "/miniapp" in panel_url.rstrip("/").lower() else Texts.open_panel
+            self.button(text=label, web_app=WebAppInfo(url=panel_url))
             rows.append(1)
 
         can_read_users = _has_permission(admin, "users", "read")

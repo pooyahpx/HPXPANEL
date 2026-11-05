@@ -44,6 +44,10 @@ function currentPanelUrl() {
   return `${window.location.protocol}//${window.location.host}`
 }
 
+function suggestedMiniAppUrl() {
+  return `${currentPanelUrl().replace(/\/$/, '')}/miniapp/`
+}
+
 function mapPayload(data: FormInput) {
   const mapped = {
     ...data,
@@ -512,19 +516,52 @@ export function TelegramBotHub() {
                         <FormControl>
                           <Input
                             type="url"
-                            placeholder={t('settings.telegram.advanced.miniAppUrlPlaceholder')}
+                            placeholder={suggestedMiniAppUrl()}
                             {...field}
                             className="font-mono text-xs sm:text-sm"
                             dir="ltr"
                           />
                         </FormControl>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="cursor-pointer"
+                            onClick={() => field.onChange(suggestedMiniAppUrl())}
+                          >
+                            {t('telegramBot.useBuiltInMiniApp', {
+                              defaultValue: 'Use built-in Mini App URL',
+                            })}
+                          </Button>
+                          <span className="text-muted-foreground font-mono text-[11px]" dir="ltr">
+                            {suggestedMiniAppUrl()}
+                          </span>
+                        </div>
                         <FormDescription className="text-xs">
-                          {t('settings.telegram.advanced.miniAppUrlDescription')}
+                          {t('telegramBot.miniAppUrlHint', {
+                            defaultValue:
+                              'Must be HTTPS. Built-in shop Mini App is served at /miniapp/. Also set BotFather Menu Button to the same URL.',
+                          })}
                         </FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
+                )}
+
+                {miniAppLogin && (
+                  <div className="lg:col-span-2 rounded-xl border border-sky-500/20 bg-sky-500/5 px-3 py-3 text-xs leading-relaxed text-muted-foreground">
+                    <p className="text-foreground mb-1.5 text-sm font-medium">
+                      {t('telegramBot.miniAppSetupTitle', { defaultValue: 'Activate Mini App' })}
+                    </p>
+                    <ol className="list-decimal space-y-1 ps-4">
+                      <li>{t('telegramBot.miniAppSetup1', { defaultValue: 'Enable Mini App Login and paste the /miniapp/ URL (HTTPS).' })}</li>
+                      <li>{t('telegramBot.miniAppSetup2', { defaultValue: 'In @BotFather → Bot Settings → Menu Button → Configure menu button → use the same URL.' })}</li>
+                      <li>{t('telegramBot.miniAppSetup3', { defaultValue: 'Turn off “Admins only” if buyers should open the shop Mini App.' })}</li>
+                      <li>{t('telegramBot.miniAppSetup4', { defaultValue: 'Save — shop home shows “Mini App” and the Menu Button opens the hub.' })}</li>
+                    </ol>
+                  </div>
                 )}
               </div>
             ) : (

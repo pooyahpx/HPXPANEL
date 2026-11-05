@@ -371,11 +371,11 @@ async def miniapp_server_status(
 
 @router.post("/orders")
 async def miniapp_create_order(
+    plan_id: Annotated[int, Form()],
+    receipt: Annotated[UploadFile, File()],
+    requested_username: Annotated[str | None, Form()] = None,
     init: WebAppInitData = Depends(require_miniapp_user),
     db: AsyncSession = Depends(get_db),
-    plan_id: Annotated[int, Form()],
-    requested_username: Annotated[str | None, Form()] = None,
-    receipt: Annotated[UploadFile, File()],
 ):
     """Card/receipt checkout from Mini App (when online gateways are not used)."""
     telegram_id = int(init.user.id)

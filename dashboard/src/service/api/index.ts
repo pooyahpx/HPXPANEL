@@ -1053,6 +1053,8 @@ export interface UserResponse {
   expire?: UserResponseExpire
   /** data_limit can be 0 or greater */
   data_limit?: UserResponseDataLimit
+  /** Traffic usage multiplier. Example: 20GB × 10 ≈ 2GB real traffic. */
+  usage_coefficient?: number | null
   data_limit_reset_strategy?: UserResponseDataLimitResetStrategy
   note?: UserResponseNote
   /** on_hold_expire_duration can be 0 or greater in seconds */
@@ -1125,10 +1127,13 @@ export type UserModifyExpire = string | number | null
 export type UserModifyProxySettings = ProxyTable | null
 
 export interface UserModify {
+  username?: string | null
   proxy_settings?: UserModifyProxySettings
   expire?: UserModifyExpire
   /** data_limit can be 0 or greater */
   data_limit?: UserModifyDataLimit
+  /** Traffic usage multiplier. Example: 20GB × 10 ≈ 2GB real traffic. */
+  usage_coefficient?: number | null
   data_limit_reset_strategy?: UserModifyDataLimitResetStrategy
   note?: UserModifyNote
   /** on_hold_expire_duration can be 0 or greater in seconds */
@@ -1242,6 +1247,8 @@ export interface UserCreate {
   expire?: UserCreateExpire
   /** data_limit can be 0 or greater */
   data_limit?: UserCreateDataLimit
+  /** Traffic usage multiplier. Example: 20GB × 10 ≈ 2GB real traffic. */
+  usage_coefficient?: number | null
   data_limit_reset_strategy?: UserCreateDataLimitResetStrategy
   note?: UserCreateNote
   /** on_hold_expire_duration can be 0 or greater in seconds */

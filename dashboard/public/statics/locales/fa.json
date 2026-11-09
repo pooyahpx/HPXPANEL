@@ -2537,6 +2537,12 @@
       "noTags": "بدون تگ اینترفیس",
       "refresh": "بازنشانی"
     },
+    "outbounds": {
+      "title": "اوتباند",
+      "description": "مدیریت اوتباندهای Xray (تگ، پروتکل، شبکه، امنیت، آدرس، تست تأخیر) شبیه 3x-ui",
+      "emptyTitle": "هنوز هسته Xray ندارید",
+      "emptyHint": "اول یک هسته Xray بسازید، بعد از اینجا اوتباندها را مثل 3x-ui مدیریت کنید."
+    },
     "reconnectinfo": "به‌روزرسانی همه اتصالات گره‌ها برای رفع مشکلات اتصال",
     "reconnectAll": "اتصال مجدد همه گره‌ها",
     "reconnectingAll": "در حال اتصال مجدد...",
@@ -3429,7 +3435,10 @@
     "col": {
       "tag": "برچسب",
       "protocol": "پروتکل",
-      "port": "پورت"
+      "port": "پورت",
+      "network": "شبکه",
+      "security": "امنیت",
+      "address": "آدرس"
     },
     "sockopt": {
       "section": "گزینه‌های سوکت (sockopt)",
@@ -3659,6 +3668,7 @@
     "outbound": {
       "add": "افزودن خروجی",
       "addToList": "افزودن به فهرست",
+      "moveFirst": "انتقال به اول",
       "dialogTitleAdd": "افزودن خروجی",
       "dialogTitleEdit": "ویرایش خروجی",
       "dialogDescAdd": "پیش‌نویس خروجی را تنظیم کنید، سپس آن را به فهرست اضافه کنید. تا تأیید شما تغییرات روی پیش‌نویس اعمال می‌شود.",
@@ -4123,6 +4133,13 @@
     "proxySettings.ipsecPassword": "گذرواژه IPsec",
     "proxySettings.ipsecPasswordPlaceholder": "گذرواژه مشترک دو پروتکل",
     "proxySettings.generateIpsecPassword": "تولید گذرواژه IPsec",
+    "accountEnabled": "اکانت فعال",
+    "accountEnabledHint": "خاموش کنید تا کل این کاربر غیرفعال شود. روشن کنید تا دوباره فعال شود.",
+    "userDisabled": "کاربر «{{username}}» غیرفعال شد",
+    "userEnabled": "کاربر «{{username}}» فعال شد",
+    "toggleFailed": "به‌روزرسانی وضعیت کاربر ناموفق بود",
+    "usageCoefficient": "ضریب مصرف",
+    "usageCoefficientHint": "ترافیک محاسبه‌شده = واقعی × ضریب. مثلاً ۲۰ گیگ ÷ ۱۰ ≈ ۲ گیگ واقعی.",
     "revokeSubscription": "بازنشانی اشتراک",
     "usage": "مصرف",
     "hwidLimit": "محدودیت شناسه سخت‌افزار",

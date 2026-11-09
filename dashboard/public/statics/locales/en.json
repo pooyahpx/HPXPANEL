@@ -423,6 +423,12 @@
       "noTags": "No interface tags",
       "refresh": "Refresh"
     },
+    "outbounds": {
+      "title": "Outbounds",
+      "description": "Manage Xray outbounds (tag, protocol, network, security, address, latency) like 3x-ui",
+      "emptyTitle": "No Xray cores yet",
+      "emptyHint": "Create an Xray core first, then manage outbounds like 3x-ui from here."
+    },
     "reconnectinfo": "Refresh all nodes connections to resolve connectivity issues",
     "reconnectAll": "Reconnect All Nodes",
     "reconnectingAll": "Reconnecting...",
@@ -2648,6 +2654,13 @@
     "userAlreadyExists": "User already exists",
     "userCreated": "User {{username}} created.",
     "userEdited": "User {{username}} Modified.",
+    "accountEnabled": "Account enabled",
+    "accountEnabledHint": "Turn off to disable this user entirely. Turn on to enable again.",
+    "userDisabled": "User «{{username}}» disabled",
+    "userEnabled": "User «{{username}}» enabled",
+    "toggleFailed": "Failed to update user status",
+    "usageCoefficient": "Usage coefficient",
+    "usageCoefficientHint": "Counted traffic = real × coefficient. 20GB ÷ 10 ≈ 2GB real.",
     "vlessDesc": "Lightweight, fast and secure",
     "vmessDesc": "Fast and secure",
     "warningNoProtocol": "Please select at least one protocol",
@@ -3575,7 +3588,10 @@
     "col": {
       "tag": "Tag",
       "protocol": "Protocol",
-      "port": "Port"
+      "port": "Port",
+      "network": "Network",
+      "security": "Security",
+      "address": "Address"
     },
     "sockopt": {
       "section": "Socket options (sockopt)",
@@ -3807,6 +3823,7 @@
       "keepAtLeastOne": "At least one outbound is required.",
       "add": "Add outbound",
       "addToList": "Add to list",
+      "moveFirst": "Move to first",
       "dialogTitleAdd": "Add outbound",
       "dialogTitleEdit": "Edit outbound",
       "dialogDescAdd": "Adjust the draft outbound, then add it to the list. Changes apply to the draft until you confirm.",

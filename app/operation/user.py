@@ -1370,8 +1370,14 @@ class UserOperation(BaseOperation):
         self._apply_explicit_null_ip_limit(db_user, modified_user)
         try:
             db_user = await crud_modify_user(db, db_user, modified_user, groups=validated_groups)
-        except ValueError as exc:  # WireGuard subnet exhausted
-            await self.raise_error(message=str(exc), code=400, db=db)
+        except ValueError as exc:
+            message = str(exc)
+            if message == "User already exists":
+                await self.raise_error(message=message, code=409, db=db)
+            # WireGuard subnet exhausted / other validation
+            await self.raise_error(message=message, code=400, db=db)
+        except IntegrityError:
+            await self.raise_error(message="User already exists", code=409, db=db)
         user = await self.update_user(db_user)
 
         logger.info(f'User "{user.username}" with id "{db_user.id}" modified by admin "{admin.username}"')

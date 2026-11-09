@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.db.models import Group, Node, ProxyInbound, UserGroupQuota, inbounds_groups_association
+from app.db.models import Group, Node, ProxyInbound, User, UserGroupQuota, inbounds_groups_association
 from app.models.user import UserGroupQuotaInput
 
 
@@ -121,6 +121,15 @@ async def record_group_quota_usage(
     group_tags = await get_group_inbound_tags(db)
     node_tags = await get_node_inbound_tags(db, list(node_params.keys()))
 
+    user_coeffs: dict[int, float] = {}
+    coeff_stmt = select(User.id, User.usage_coefficient).where(User.id.in_(valid_user_ids))
+    for uid, user_coeff in (await db.execute(coeff_stmt)).all():
+        try:
+            value = float(user_coeff) if user_coeff is not None else 1.0
+        except (TypeError, ValueError):
+            value = 1.0
+        user_coeffs[int(uid)] = value if value > 0 else 1.0
+
     deltas: dict[tuple[int, int], int] = defaultdict(int)
     for node_id, params in node_params.items():
         tags = node_tags.get(node_id) or set()
@@ -131,7 +140,7 @@ async def record_group_quota_usage(
             uid = int(param["uid"])
             if uid not in valid_user_ids:
                 continue
-            value = int(param["value"] * coeff)
+            value = int(param["value"] * coeff * user_coeffs.get(uid, 1.0))
             if value <= 0:
                 continue
             user_quotas = quotas_by_user.get(uid)

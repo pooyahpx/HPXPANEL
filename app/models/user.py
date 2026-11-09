@@ -43,6 +43,14 @@ class User(BaseModel):
     proxy_settings: ProxyTable = Field(default_factory=ProxyTable)
     expire: dt | int | None = Field(default=None)
     data_limit: int | None = Field(ge=0, default=None, description="data_limit can be 0 or greater")
+    usage_coefficient: float | None = Field(
+        default=1.0,
+        gt=0,
+        description=(
+            "Traffic usage multiplier. Example: data_limit=20GB and usage_coefficient=10 "
+            "means ~2GB real traffic before the account is limited."
+        ),
+    )
     data_limit_reset_strategy: DataLimitResetStrategy | None = Field(default=None)
     note: str | None = Field(max_length=500, default=None)
     on_hold_expire_duration: int | None = Field(
@@ -106,10 +114,19 @@ class UserCreate(UserWithValidator):
 
 
 class UserModify(UserWithValidator):
+    username: str | None = Field(default=None)
+    usage_coefficient: float | None = Field(default=None, gt=0)
     status: UserStatus | None = Field(default=None)
     proxy_settings: ProxyTable | None = Field(default=None)
     group_ids: list[int] | None = Field(default=None)
     group_quotas: list[UserGroupQuotaInput] | None = Field(default=None)
+
+    @field_validator("username", check_fields=False)
+    @classmethod
+    def validate_username(cls, v):
+        if v is None:
+            return v
+        return UserValidator.validate_username(v)
 
     @field_validator("status", mode="before", check_fields=False)
     def validate_status(cls, status, values):

@@ -19,6 +19,7 @@ import { cn } from '@/lib/utils'
 import { canReadResourcePage, hasPermission, hasScopeAll, isOwner } from '@/utils/rbac'
 import {
   ArrowUpDown,
+  ArrowUpFromLine,
   Bell,
   BookOpen,
   Calendar,
@@ -99,6 +100,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             url: '/nodes/cores',
             icon: Cpu,
             matchPrefix: true,
+          },
+          {
+            title: 'nodes.outbounds.title',
+            url: '/nodes/outbounds',
+            icon: ArrowUpFromLine,
           },
           {
             title: 'nodes.wireguard.title',

@@ -3,9 +3,9 @@ import { Button } from '@/components/ui/button'
 import { useClipboard } from '@/hooks/use-clipboard'
 import useDirDetection from '@/hooks/use-dir-detection'
 import { type UseEditFormValues } from '@/features/users/forms/user-form'
-import { getUserById, useActiveNextPlanById, useGetCurrentAdmin, useRemoveUserById, useResetUserDataUsageById, useRevokeUserSubscriptionById, UserResponse, UsersResponse } from '@/service/api'
-import { useQueryClient } from '@tanstack/react-query'
-import { Cat, Check, Copy, Download, EllipsisVertical, Fingerprint, GlobeLock, Hash, KeyRound, Link2Off, ListStart, ListTree, Network, Pencil, PieChart, QrCode, RefreshCcw, ShieldOff, Trash2, UserCog, Users } from 'lucide-react'
+import { getUserById, setUserDisabledById, useActiveNextPlanById, useGetCurrentAdmin, useRemoveUserById, useResetUserDataUsageById, useRevokeUserSubscriptionById, UserResponse, UsersResponse } from '@/service/api'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { Cat, Check, Copy, Download, EllipsisVertical, Fingerprint, GlobeLock, Hash, KeyRound, Link2Off, ListStart, ListTree, Network, Pencil, PieChart, Power, PowerOff, QrCode, RefreshCcw, ShieldOff, Trash2, UserCog, Users } from 'lucide-react'
 import { WireguardIcon, XrayIcon, SingboxIcon, MihomoIcon } from '@/components/icons/format-icons'
 import { Code } from 'lucide-react'
 import { FC, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
@@ -297,7 +297,16 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user, isModalHost = true, rende
   })
   const renewOpenVPNMutation = useRenewOpenVPNCertificate()
   const revokeOpenVPNMutation = useRevokeOpenVPNCertificate()
+  const setUserDisabledMutation = useMutation({
+    mutationFn: (disabled: boolean) => setUserDisabledById(user.id, { disabled }),
+    onSuccess: updatedUser => {
+      if (updatedUser) {
+        updateUserInCache(updatedUser)
+      }
+    },
+  })
   const hasOpenVPNProfile = userHasOpenVPNProfile(user)
+  const isUserDisabled = user.status === 'disabled'
   const { data: currentAdmin } = useGetCurrentAdmin({
     query: {
       staleTime: 5 * 60 * 1000,
@@ -309,9 +318,23 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user, isModalHost = true, rende
   const canUpdateAllUsers = hasScopeAll(currentAdmin, 'users', 'update')
   const canReadAllUsers = hasScopeAll(currentAdmin, 'users', 'read')
   const canDeleteUsers = hasPermission(currentAdmin, 'users', 'delete')
-  const topDropdownActionCount = (canUpdateUsers ? 1 : 0) + (canUpdateAllUsers ? 1 : 0) + (canReadAllUsers ? 1 : 0)
+  const topDropdownActionCount = (canUpdateUsers ? 2 : 0) + (canUpdateAllUsers ? 1 : 0) + (canReadAllUsers ? 1 : 0)
   const middleDropdownActionCount = (canUpdateUsers ? 2 : 0) + 3 + (canUpdateUsers && user.next_plan ? 1 : 0) + (canReadAllUsers ? 1 : 0)
   const destructiveDropdownActionCount = canDeleteUsers ? 1 : 0
+
+  const confirmToggleUserDisabled = async () => {
+    const disable = !isUserDisabled
+    try {
+      await setUserDisabledMutation.mutateAsync(disable)
+      toast.success(
+        disable
+          ? t('userDialog.userDisabled', { username: user.username, defaultValue: 'User «{{username}}» disabled' })
+          : t('userDialog.userEnabled', { username: user.username, defaultValue: 'User «{{username}}» enabled' }),
+      )
+    } catch (error: any) {
+      toast.error(error?.data?.detail || error?.message || t('userDialog.toggleFailed', { defaultValue: 'Failed to update user status' }))
+    }
+  }
 
   // Create form for user editing
   const userForm = useForm<UseEditFormValues>({
@@ -753,6 +776,22 @@ const ActionButtons: FC<ActionButtonsProps> = ({ user, isModalHost = true, rende
                 <DropdownMenuItem className="hidden md:flex" onSelect={handleEdit}>
                   <Pencil className="mr-2 h-4 w-4" />
                   <span>{t('edit')}</span>
+                </DropdownMenuItem>
+              )}
+
+              {canUpdateUsers && (
+                <DropdownMenuItem
+                  onSelect={() => {
+                    void confirmToggleUserDisabled()
+                  }}
+                  disabled={setUserDisabledMutation.isPending}
+                >
+                  {isUserDisabled ? <Power className="mr-2 h-4 w-4" /> : <PowerOff className="mr-2 h-4 w-4" />}
+                  <span>
+                    {isUserDisabled
+                      ? t('enable', { defaultValue: 'Enable' })
+                      : t('disable', { defaultValue: 'Disable' })}
+                  </span>
                 </DropdownMenuItem>
               )}
 

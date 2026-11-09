@@ -1123,6 +1123,17 @@ async def modify_user(
     remove_usage_reminder = False
     remove_expiration_reminder = False
 
+    if modify.username is not None:
+        new_username = modify.username.strip()
+        if new_username and new_username != db_user.username:
+            existing = await get_user(db, new_username, load_admin=False, load_next_plan=False, load_usage_logs=False, load_groups=False)
+            if existing is not None and existing.id != db_user.id:
+                raise ValueError("User already exists")
+            db_user.username = new_username
+
+    if modify.usage_coefficient is not None:
+        db_user.usage_coefficient = float(modify.usage_coefficient)
+
     if modify.proxy_settings is not None:
         db_user.proxy_settings = modify.proxy_settings.dict()
     if modify.group_ids is not None:

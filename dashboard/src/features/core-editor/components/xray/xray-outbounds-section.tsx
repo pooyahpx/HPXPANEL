@@ -49,7 +49,7 @@ import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import useDirDetection from '@/hooks/use-dir-detection'
 import { cn } from '@/lib/utils'
-import { ArrowDownToLine, Cable, Gauge, KeyRound, Pencil, Plus, RefreshCw, Shield, SlidersHorizontal } from 'lucide-react'
+import { ArrowDownToLine, Cable, Gauge, KeyRound, ListStart, Pencil, Plus, RefreshCw, Shield, SlidersHorizontal } from 'lucide-react'
 import { toast } from 'sonner'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -281,8 +281,34 @@ function updateOutbounds(profile: Profile, mutator: (outbounds: Outbound[]) => O
   return syncAutoManagedObservationSubjectSelectors({ ...profile, outbounds: mutator(currentOutbounds) }, currentOutbounds)
 }
 
+function outboundEndpointAddress(ob: Outbound): string {
+  const flat = flattenOutboundSettings(ob)
+  const address = String(flat.address ?? '').trim()
+  const portRaw = flat.port
+  const port = typeof portRaw === 'number' ? portRaw : Number(portRaw)
+  if (address && Number.isFinite(port) && port > 0) return `${address}:${port}`
+  if (address) return address
+  if (ob.protocol === 'freedom') return 'direct'
+  if (ob.protocol === 'blackhole') return 'block'
+  if (ob.protocol === 'dns') return 'dns'
+  if (ob.protocol === 'loopback') return String(flat.inboundTag ?? '').trim() || '—'
+  return '—'
+}
+
+function outboundStreamNetwork(ob: Outbound): string {
+  const stream = getOutboundStreamSettingsRecord(ob)
+  const network = String(stream?.network ?? '').trim()
+  return network || '—'
+}
+
+function outboundStreamSecurity(ob: Outbound): string {
+  const stream = getOutboundStreamSettingsRecord(ob)
+  const security = String(stream?.security ?? '').trim()
+  return security || 'none'
+}
+
 function outboundSearchHaystack(ob: Outbound): string {
-  return [ob.tag, ob.protocol, 'sendThrough' in ob ? String(ob.sendThrough ?? '') : ''].join(' ')
+  return [ob.tag, ob.protocol, outboundEndpointAddress(ob), outboundStreamNetwork(ob), outboundStreamSecurity(ob), 'sendThrough' in ob ? String(ob.sendThrough ?? '') : ''].join(' ')
 }
 
 function cloneOutbound(ob: Outbound): Outbound {
@@ -642,12 +668,31 @@ export function XrayOutboundsSection({ headerAddPulse, headerAddEpoch }: XrayOut
       {
         accessorKey: 'tag',
         header: () => t('coreEditor.col.tag', { defaultValue: 'Tag' }),
-        cell: ({ row }) => <span className="text-xs">{row.original.tag}</span>,
+        cell: ({ row }) => <span className="text-xs font-medium">{row.original.tag}</span>,
       },
       {
         accessorKey: 'protocol',
         header: () => t('coreEditor.col.protocol', { defaultValue: 'Protocol' }),
-        cell: ({ row }) => row.original.protocol,
+        cell: ({ row }) => <span className="text-muted-foreground text-xs">{row.original.protocol}</span>,
+      },
+      {
+        id: 'network',
+        header: () => t('coreEditor.col.network', { defaultValue: 'Network' }),
+        cell: ({ row }) => <span className="text-muted-foreground text-xs">{outboundStreamNetwork(row.original)}</span>,
+      },
+      {
+        id: 'security',
+        header: () => t('coreEditor.col.security', { defaultValue: 'Security' }),
+        cell: ({ row }) => <span className="text-muted-foreground text-xs">{outboundStreamSecurity(row.original)}</span>,
+      },
+      {
+        id: 'address',
+        header: () => t('coreEditor.col.address', { defaultValue: 'Address' }),
+        cell: ({ row }) => (
+          <span className="text-muted-foreground max-w-[14rem] truncate font-mono text-xs" dir="ltr" title={outboundEndpointAddress(row.original)}>
+            {outboundEndpointAddress(row.original)}
+          </span>
+        ),
       },
     ],
     [t],
@@ -907,7 +952,18 @@ export function XrayOutboundsSection({ headerAddPulse, headerAddEpoch }: XrayOut
           updateXrayProfile(p => ({ ...p, outbounds: arrayMove(p.outbounds ?? [], from, to) }))
           setSelected(sel => remapIndexAfterArrayMove(sel, from, to))
         }}
-        getRowActions={row => [
+        getRowActions={(row, rowIndex) => [
+          {
+            key: 'move-first',
+            label: t('coreEditor.outbound.moveFirst', { defaultValue: 'Move to first' }),
+            icon: <ListStart className="size-4 shrink-0" />,
+            disabled: rowIndex === 0,
+            onSelect: () => {
+              if (rowIndex <= 0) return
+              updateXrayProfile(p => ({ ...p, outbounds: arrayMove(p.outbounds ?? [], rowIndex, 0) }))
+              setSelected(sel => remapIndexAfterArrayMove(sel, rowIndex, 0))
+            },
+          },
           {
             key: 'latency-test',
             label: t('coreEditor.outbound.latency.menu', { defaultValue: 'Test latency' }),

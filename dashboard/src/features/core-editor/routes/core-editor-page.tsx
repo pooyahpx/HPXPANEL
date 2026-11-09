@@ -271,6 +271,22 @@ export default function CoreEditorPage() {
     }
   }, [isNew, validId, coreData, serverConfigJson, initFromCore])
 
+  // Deep-link: /nodes/cores/:id?section=outbounds (and other xray sections)
+  useEffect(() => {
+    if (!hydrated || kind !== 'xray') return
+    const requested = searchParams.get('section')
+    if (!requested) return
+    const allowed = new Set(['bindings', 'inbounds', 'outbounds', 'routing', 'balancers', 'dns', 'advanced'])
+    if (!allowed.has(requested)) return
+    const current = useCoreEditorStore.getState().activeSection
+    if (current !== requested) {
+      useCoreEditorStore.getState().setActiveSection(requested as XrayCoreSection)
+    }
+    const next = new URLSearchParams(searchParams)
+    next.delete('section')
+    setSearchParams(next, { replace: true })
+  }, [hydrated, kind, searchParams, setSearchParams])
+
   const xrayPersistValidationItems = useXrayPersistValidationItems()
 
   useEffect(() => {

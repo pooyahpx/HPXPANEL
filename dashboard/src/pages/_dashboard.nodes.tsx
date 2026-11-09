@@ -4,13 +4,14 @@ import { SectorTabBar, type SectorTab } from '@/components/layout/sector-tab-bar
 import { useAdmin } from '@/hooks/use-admin'
 import { getDocsUrl } from '@/utils/docs-url'
 import { hasPermission } from '@/utils/rbac'
-import { Cpu, Share2, Plus, Logs, Network } from 'lucide-react'
+import { ArrowUpFromLine, Cpu, Share2, Plus, Logs, Network } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router'
 
 const tabs: SectorTab[] = [
   { id: 'nodes.title', label: 'nodes.title', icon: Share2, url: '/nodes' },
   { id: 'core', label: 'core', mobileLabel: 'settings.cores.title', icon: Cpu, url: '/nodes/cores' },
+  { id: 'nodes.outbounds.title', label: 'nodes.outbounds.title', mobileLabel: 'nodes.outbounds.title', icon: ArrowUpFromLine, url: '/nodes/outbounds' },
   { id: 'nodes.wireguard.title', label: 'nodes.wireguard.title', icon: Network, url: '/nodes/wireguard' },
   { id: 'nodes.logs.title', label: 'nodes.logs.title', icon: Logs, url: '/nodes/logs' },
 ]
@@ -27,6 +28,7 @@ const Settings = () => {
   const visibleTabs = tabs.filter(tab => {
     if (tab.url === '/nodes') return canReadNodes
     if (tab.url === '/nodes/cores') return canReadCores
+    if (tab.url === '/nodes/outbounds') return canReadCores
     if (tab.url === '/nodes/wireguard') return canReadCores
     if (tab.url === '/nodes/logs') return canReadNodeLogs
     return false
@@ -37,6 +39,10 @@ const Settings = () => {
   useEffect(() => {
     if (location.pathname.startsWith('/nodes/cores')) {
       setActiveTab('core')
+      return
+    }
+    if (location.pathname.startsWith('/nodes/outbounds')) {
+      setActiveTab('nodes.outbounds.title')
       return
     }
     const currentTab = tabs.find(tab => location.pathname === tab.url)
@@ -65,6 +71,15 @@ const Settings = () => {
               navigate('/nodes/cores/new')
             }
           : undefined,
+      }
+    }
+    if (location.pathname === '/nodes/outbounds') {
+      return {
+        title: 'nodes.outbounds.title',
+        description: 'nodes.outbounds.description',
+        buttonIcon: undefined,
+        buttonText: undefined,
+        onButtonClick: undefined,
       }
     }
     if (location.pathname === '/nodes/wireguard') {

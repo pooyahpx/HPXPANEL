@@ -1069,6 +1069,8 @@ function UserModal({ isDialogOpen, onOpenChange, form, editingUser, editingUserI
         const preparedValues = {
           ...valuesWithoutNextPlan,
           data_limit: typeof values.data_limit === 'string' ? parseFloat(values.data_limit) : values.data_limit,
+          usage_coefficient:
+            typeof values.usage_coefficient === 'string' ? parseFloat(values.usage_coefficient) : values.usage_coefficient,
           hwid_limit: typeof values.hwid_limit === 'string' ? parseFloat(values.hwid_limit) : values.hwid_limit,
           ip_limit: typeof values.ip_limit === 'string' ? parseFloat(values.ip_limit) : values.ip_limit,
           on_hold_expire_duration:
@@ -1096,6 +1098,10 @@ function UserModal({ isDialogOpen, onOpenChange, form, editingUser, editingUserI
         const sendValues: any = {
           ...preparedValues,
           data_limit: gbToBytes(normalizedDataLimitGb as any),
+          usage_coefficient:
+            preparedValues.usage_coefficient == null || !Number.isFinite(Number(preparedValues.usage_coefficient)) || Number(preparedValues.usage_coefficient) <= 0
+              ? 1
+              : Number(preparedValues.usage_coefficient),
           hwid_limit: preparedValues.hwid_limit == null ? null : Number.isFinite(Number(preparedValues.hwid_limit)) ? Math.round(Number(preparedValues.hwid_limit)) : null,
           ip_limit: preparedValues.ip_limit == null ? null : Number.isFinite(Number(preparedValues.ip_limit)) ? Math.round(Number(preparedValues.ip_limit)) : null,
           data_limit_reset_strategy: canUseResetStrategy && hasDataLimit ? preparedValues.data_limit_reset_strategy : 'no_reset',
@@ -1213,7 +1219,7 @@ function UserModal({ isDialogOpen, onOpenChange, form, editingUser, editingUserI
         setActiveTab('groups')
         setSelectedTemplateId(null)
       } catch (error: any) {
-        const fields = ['username', 'data_limit', 'hwid_limit', 'ip_limit', 'expire', 'note', 'data_limit_reset_strategy', 'on_hold_expire_duration', 'on_hold_timeout', 'group_ids']
+        const fields = ['username', 'data_limit', 'usage_coefficient', 'hwid_limit', 'ip_limit', 'expire', 'note', 'data_limit_reset_strategy', 'on_hold_expire_duration', 'on_hold_timeout', 'group_ids']
         handleError({ error, fields, form, contextKey: 'users' })
       } finally {
         setLoading(false)
@@ -1623,7 +1629,6 @@ function UserModal({ isDialogOpen, onOpenChange, form, editingUser, editingUserI
                                         placeholder={t('admins.enterUsername', { defaultValue: 'Enter username' })}
                                         {...field}
                                         value={field.value ?? ''}
-                                        disabled={editingUser}
                                         isError={hasError}
                                         onChange={e => {
                                           field.onChange(e)
@@ -1701,7 +1706,6 @@ function UserModal({ isDialogOpen, onOpenChange, form, editingUser, editingUserI
                                       placeholder={t('admins.enterUsername', { defaultValue: 'Enter username' })}
                                       {...field}
                                       value={field.value ?? ''}
-                                      disabled={editingUser}
                                       isError={hasError}
                                       onChange={e => {
                                         field.onChange(e)
@@ -1735,6 +1739,36 @@ function UserModal({ isDialogOpen, onOpenChange, form, editingUser, editingUserI
                         }}
                       />
                     )}
+                    {editingUser && (
+                      <FormField
+                        control={form.control}
+                        name="status"
+                        render={({ field }) => {
+                          const isEnabled = field.value !== 'disabled'
+                          return (
+                            <div className="border-border bg-background/40 flex items-center justify-between gap-3 rounded-md border px-3 py-2.5">
+                              <div className="min-w-0">
+                                <p className="text-sm font-medium">{t('userDialog.accountEnabled', { defaultValue: 'Account enabled' })}</p>
+                                <p className="text-muted-foreground text-xs">
+                                  {t('userDialog.accountEnabledHint', {
+                                    defaultValue: 'Turn off to disable this user entirely. Turn on to enable again.',
+                                  })}
+                                </p>
+                              </div>
+                              <Switch
+                                checked={isEnabled}
+                                onCheckedChange={checked => {
+                                  const next = checked ? (field.value === 'on_hold' || editingUserData?.status === 'on_hold' ? 'on_hold' : 'active') : 'disabled'
+                                  field.onChange(next)
+                                  handleFieldChange('status', next)
+                                }}
+                                aria-label={t('userDialog.accountEnabled', { defaultValue: 'Account enabled' })}
+                              />
+                            </div>
+                          )
+                        }}
+                      />
+                    )}
                   </div>
                   </div>
                 </div>
@@ -1746,7 +1780,10 @@ function UserModal({ isDialogOpen, onOpenChange, form, editingUser, editingUserI
                     <div className="flex w-full flex-col gap-4">
                       {(() => {
                         const dataLimitValue = form.watch('data_limit')
+                        const usageCoefficientValue = form.watch('usage_coefficient')
                         const showResetStrategy = canUseResetStrategy && !selectedTemplateId && dataLimitValue !== undefined && dataLimitValue !== null && Number(dataLimitValue) > 0
+                        const effectiveGb =
+                          Number(dataLimitValue) > 0 && Number(usageCoefficientValue) > 0 ? Number(dataLimitValue) / Number(usageCoefficientValue) : null
                         return (
                           <div className={cn('flex w-full flex-col gap-4 lg:flex-row lg:items-start')}>
                             {!selectedTemplateId && (
@@ -1779,6 +1816,39 @@ function UserModal({ isDialogOpen, onOpenChange, form, editingUser, editingUserI
                                 )}
                               />
                             )}
+                            <FormField
+                              control={form.control}
+                              name="usage_coefficient"
+                              render={({ field }) => (
+                                <FormItem className="relative h-full min-w-0 flex-1">
+                                  <FormLabel>{t('userDialog.usageCoefficient', { defaultValue: 'Usage coefficient' })}</FormLabel>
+                                  <FormControl>
+                                    <DecimalInput
+                                      placeholder="1"
+                                      value={field.value ?? 1}
+                                      emptyValue={1}
+                                      zeroValue={1}
+                                      onValueChange={value => {
+                                        const nextValue = value && value > 0 ? value : 1
+                                        field.onChange(nextValue)
+                                        handleFieldChange('usage_coefficient', nextValue)
+                                      }}
+                                    />
+                                  </FormControl>
+                                  <p className="text-muted-foreground mt-1 text-xs">
+                                    {t('userDialog.usageCoefficientHint', {
+                                      defaultValue: 'Counted traffic = real × coefficient. 20GB ÷ 10 ≈ 2GB real.',
+                                    })}
+                                    {effectiveGb != null && Number.isFinite(effectiveGb) ? (
+                                      <span dir="ltr" className="ms-1 font-mono">
+                                        (~{effectiveGb % 1 === 0 ? effectiveGb : effectiveGb.toFixed(2)} GB real)
+                                      </span>
+                                    ) : null}
+                                  </p>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
                             {showResetStrategy && (
                               <FormField
                                 control={form.control}

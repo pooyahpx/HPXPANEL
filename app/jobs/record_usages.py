@@ -578,6 +578,39 @@ async def get_outbounds_stats(node: PasarGuardNode):
         return []
 
 
+async def _load_user_usage_coefficients(uids: set[int]) -> dict[int, float]:
+    """Load per-user traffic multipliers (default 1.0)."""
+    if not uids:
+        return {}
+    coeffs: dict[int, float] = {}
+    async with GetDB() as db:
+        for uid_batch in _chunked(list(uids), USER_ADMIN_LOOKUP_BATCH_SIZE):
+            stmt = select(User.id, User.usage_coefficient).where(User.id.in_(uid_batch))
+            result = await db.execute(stmt)
+            for uid, coeff in result.fetchall():
+                try:
+                    value = float(coeff) if coeff is not None else 1.0
+                except (TypeError, ValueError):
+                    value = 1.0
+                coeffs[int(uid)] = value if value > 0 else 1.0
+    return coeffs
+
+
+async def apply_user_usage_coefficients(users_usage: list) -> list:
+    """Multiply aggregated usage by each user's usage_coefficient."""
+    if not users_usage:
+        return []
+    uids = {int(item["uid"]) for item in users_usage}
+    coeffs = await _load_user_usage_coefficients(uids)
+    return [
+        {
+            "uid": int(item["uid"]),
+            "value": int(item["value"] * coeffs.get(int(item["uid"]), 1.0)),
+        }
+        for item in users_usage
+    ]
+
+
 async def calculate_admin_usage(users_usage: list) -> tuple[dict, set[int]]:
     if not users_usage:
         return {}, set()
@@ -710,6 +743,9 @@ async def _record_user_usages_impl():
         if not users_usage:
             logger.debug("No user usage to record")
             return
+
+        # Per-user traffic coefficient (e.g. 20GB plan × coeff 10 ≈ 2GB real traffic)
+        users_usage = await apply_user_usage_coefficients(users_usage)
 
         admin_usage, valid_user_ids = await calculate_admin_usage(users_usage)
         if not valid_user_ids:

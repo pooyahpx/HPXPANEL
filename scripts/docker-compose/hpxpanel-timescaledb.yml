@@ -85,6 +85,9 @@ services:
       PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD}
       PGADMIN_LISTEN_ADDRESS: 127.0.0.1
       PGADMIN_LISTEN_PORT: 8010
+      # pgAdmin runs with network_mode: host, so its bundled Postfix would bind
+      # public port 25 on the panel host. The panel never needs it (#27).
+      PGADMIN_DISABLE_POSTFIX: "true"
     volumes:
       - pgadmin:/var/lib/pgadmin
     depends_on:

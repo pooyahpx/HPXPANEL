@@ -97,6 +97,8 @@ export interface HpxPulseResponse {
   last_failover_at?: string | null
   created_at: string
   path_ping?: HpxPulsePathPingResult | null
+  bytes_up?: number
+  bytes_down?: number
 }
 
 export type PathPingProto = 'tcp' | 'udp'
@@ -149,6 +151,31 @@ export interface HpxPulsePathPingResponse {
 export interface HpxPulsesResponse {
   pulses: HpxPulseResponse[]
   total: number
+}
+
+export interface PulseUsageShareItem {
+  pulse_id: number
+  name: string
+  bytes: number
+  percent: number
+}
+
+export interface PulseUsageShareResponse {
+  total_bytes: number
+  items: PulseUsageShareItem[]
+  start?: string | null
+  end?: string | null
+}
+
+export async function getPulseUsageShare(
+  params: { start?: string; end?: string },
+  signal?: AbortSignal,
+): Promise<PulseUsageShareResponse> {
+  const q = new URLSearchParams()
+  if (params.start) q.set('start', params.start)
+  if (params.end) q.set('end', params.end)
+  const qs = q.toString()
+  return fetcher<PulseUsageShareResponse>(`/api/hpx_pulses/usage/share${qs ? `?${qs}` : ''}`, { signal })
 }
 
 export interface PulseAdviseRequest {

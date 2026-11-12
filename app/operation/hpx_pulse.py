@@ -15,10 +15,12 @@ from app.db.crud.hpx_pulse import (
     get_hpx_pulse_by_agent_key_hash,
     get_hpx_pulse_by_id,
     get_hpx_pulse_by_join_token_hash,
+    get_hpx_pulse_usage_by_pulse,
     get_hpx_pulses,
     list_pending_delete_hpx_pulses,
     set_join_token,
     update_hpx_pulse,
+    upsert_hpx_pulse_usage_sample,
 )
 from app.db.models import HpxPulse, HpxPulseStatus
 from app.models.admin import AdminDetails
@@ -39,6 +41,8 @@ from app.models.hpx_pulse import (
     PulseAdviseRequest,
     PulseAdviseResponse,
     PulseSpoofConfig,
+    PulseUsageShareQuery,
+    PulseUsageShareResponse,
 )
 from app.operation import BaseOperation
 from app.services.hpx_pulse.advisor import (
@@ -62,6 +66,13 @@ from app.services.hpx_pulse.diagnose import (
 )
 from app.services.hpx_pulse.engine_mirror import agent_assets_base, engine_version
 from app.services.hpx_pulse.tcp_autofix import extreme_profile_update, should_autofix_tcp_extreme
+from app.services.hpx_pulse.traffic import (
+    build_pulse_usage_share,
+    compute_counter_delta,
+    default_usage_window,
+    floor_sample_bucket,
+    should_accept_traffic_side,
+)
 from app.utils.logger import get_logger
 
 logger = get_logger("hpx-pulse")
@@ -278,6 +289,8 @@ def _to_response(db_pulse: HpxPulse) -> HpxPulseResponse:
         "path_ping": (
             (db_pulse.diag_report or {}).get("path_ping") if isinstance(db_pulse.diag_report, dict) else None
         ),
+        "bytes_up": int(getattr(db_pulse, "bytes_up", 0) or 0),
+        "bytes_down": int(getattr(db_pulse, "bytes_down", 0) or 0),
     }
     return HpxPulseResponse.model_validate(data)
 
@@ -1227,14 +1240,23 @@ class HpxPulseOperation(BaseOperation):
         await db.commit()
         return self._agent_config(db_pulse, side, token)
 
+    async def get_usage_share(
+        self, db: AsyncSession, *, admin: AdminDetails, query: PulseUsageShareQuery
+    ) -> PulseUsageShareResponse:
+        del admin  # permission gated at router; all pulses are panel-scoped
+        start, end = default_usage_window(start=query.start, end=query.end)
+        rows = await get_hpx_pulse_usage_by_pulse(db, start, end)
+        return build_pulse_usage_share(rows, start=start, end=end)
+
     async def agent_heartbeat(
         self, db: AsyncSession, *, agent_key: str, side: str, model: HpxPulseAgentHeartbeatRequest
     ) -> HpxPulseAgentConfigResponse:
         db_pulse = await self._pulse_from_agent_key(db, agent_key, side)
         token = await self._decrypt_token(db, db_pulse)
+        now = dt.now(UTC)
         prefix = "iran" if side == "iran" else "abroad"
         update_data = {
-            f"{prefix}_agent_last_seen": dt.now(UTC),
+            f"{prefix}_agent_last_seen": now,
             f"{prefix}_agent_host": model.host or getattr(db_pulse, f"{prefix}_agent_host"),
         }
         if model.message is not None:
@@ -1244,6 +1266,35 @@ class HpxPulseOperation(BaseOperation):
             update_data["latency_ms"] = model.latency_ms
         if model.packet_loss_pct is not None:
             update_data["packet_loss_pct"] = model.packet_loss_pct
+        if (
+            model.iface_rx_bytes is not None
+            and model.iface_tx_bytes is not None
+            and should_accept_traffic_side(
+                side=side,
+                abroad_last_seen=db_pulse.abroad_agent_last_seen,
+                now=now,
+            )
+        ):
+            delta = compute_counter_delta(
+                current_rx=model.iface_rx_bytes,
+                current_tx=model.iface_tx_bytes,
+                last_rx=db_pulse.last_iface_rx,
+                last_tx=db_pulse.last_iface_tx,
+                same_side=(db_pulse.last_traffic_side == side),
+            )
+            if delta.uplink or delta.downlink:
+                update_data["bytes_up"] = int(db_pulse.bytes_up or 0) + delta.uplink
+                update_data["bytes_down"] = int(db_pulse.bytes_down or 0) + delta.downlink
+                await upsert_hpx_pulse_usage_sample(
+                    db,
+                    pulse_id=db_pulse.id,
+                    bucket_at=floor_sample_bucket(now),
+                    uplink=delta.uplink,
+                    downlink=delta.downlink,
+                )
+            update_data["last_iface_rx"] = int(model.iface_rx_bytes)
+            update_data["last_iface_tx"] = int(model.iface_tx_bytes)
+            update_data["last_traffic_side"] = side
         if model.diag is not None:
             incoming = dict(model.diag)
             incoming.setdefault("side", side)

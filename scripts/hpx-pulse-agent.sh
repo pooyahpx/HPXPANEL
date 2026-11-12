@@ -2055,6 +2055,41 @@ first_forward_listen_port() {
   echo "${PORT_FORWARDS:-}" | tr -d '[]"' | cut -d',' -f1 | cut -d'=' -f1 | tr -d ' '
 }
 
+# Absolute traffic counters for the panel (diffed server-side into lifetime + samples).
+# Prefer bp0 (Direct L3 / spoof). Reverse TCP falls back to ss socket byte totals.
+read_pulse_iface_bytes() {
+  local rx=0 tx=0
+  if [ -r /sys/class/net/bp0/statistics/rx_bytes ] && [ -r /sys/class/net/bp0/statistics/tx_bytes ]; then
+    rx="$(cat /sys/class/net/bp0/statistics/rx_bytes 2>/dev/null || echo 0)"
+    tx="$(cat /sys/class/net/bp0/statistics/tx_bytes 2>/dev/null || echo 0)"
+    printf '%s %s' "${rx:-0}" "${tx:-0}"
+    return 0
+  fi
+  if has ss && [ -n "${CONTROL_PORT:-}" ]; then
+    # Sum bytes_sent/bytes_received on sockets that mention this pulse control port.
+    # Resets on reconnect are handled by the panel (negative delta → new baseline).
+    local parsed
+    parsed="$(ss -Hti 2>/dev/null | awk -v p=":${CONTROL_PORT}" '
+      $0 ~ p { grab=1; next }
+      grab {
+        if (match($0, /bytes_sent:[0-9]+/)) {
+          split(substr($0, RSTART, RLENGTH), a, ":"); tx += a[2] + 0
+        }
+        if (match($0, /bytes_received:[0-9]+/)) {
+          split(substr($0, RSTART, RLENGTH), a, ":"); rx += a[2] + 0
+        }
+        if ($0 ~ /^[^ \t]/ || $0 ~ /bytes_sent/ || $0 ~ /bytes_acked/) grab=0
+      }
+      END { printf "%d %d", rx+0, tx+0 }
+    ')"
+    if [ -n "$parsed" ]; then
+      printf '%s' "$parsed"
+      return 0
+    fi
+  fi
+  printf '0 0'
+}
+
 send_heartbeat() {
   local running="false"
   local link="false"
@@ -2063,8 +2098,14 @@ send_heartbeat() {
   local fwd_json="null"
   local control_lat="" forward_lat="" fwd_port=""
   local hb_ok=0
+  local iface_rx=0 iface_tx=0
   tunnel_service_active && running="true"
   tunnel_link_up && link="true"
+  read -r iface_rx iface_tx <<EOF
+$(read_pulse_iface_bytes)
+EOF
+  iface_rx="${iface_rx:-0}"
+  iface_tx="${iface_tx:-0}"
 
   case "${TUNNEL_MODE:-direct_l3}" in
     direct_l3)
@@ -2109,7 +2150,9 @@ send_heartbeat() {
         --arg h "$(hostname -f 2>/dev/null || hostname)" \
         --argjson tr "$running" \
         --argjson iu "$link" \
-        '{status:$s, host:$h, tunnel_running:$tr, iface_up:$iu}')" \
+        --argjson rx "$iface_rx" \
+        --argjson tx "$iface_tx" \
+        '{status:$s, host:$h, tunnel_running:$tr, iface_up:$iu, iface_rx_bytes:$rx, iface_tx_bytes:$tx}')" \
       >/dev/null && hb_ok=1
   else
     api_request POST "/api/hpx_pulse/agent/heartbeat" \
@@ -2121,7 +2164,9 @@ send_heartbeat() {
         --argjson iu "$link" \
         --argjson lm "$lat_json" \
         --argjson fo "$fwd_json" \
-        '{status:$s, host:$h, tunnel_running:$tr, iface_up:$iu, latency_ms:($lm|tonumber? // null), forward_ok:$fo, message:$m}')" \
+        --argjson rx "$iface_rx" \
+        --argjson tx "$iface_tx" \
+        '{status:$s, host:$h, tunnel_running:$tr, iface_up:$iu, latency_ms:($lm|tonumber? // null), forward_ok:$fo, message:$m, iface_rx_bytes:$rx, iface_tx_bytes:$tx}')" \
       >/dev/null && hb_ok=1
   fi
   if [ "$hb_ok" != 1 ]; then

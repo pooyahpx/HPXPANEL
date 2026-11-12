@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from fastapi.responses import FileResponse, PlainTextResponse
 
 from app.db import AsyncSession, get_db
@@ -19,10 +21,13 @@ from app.models.hpx_pulse import (
     HpxPulseUpdate,
     PulseAdviseRequest,
     PulseAdviseResponse,
+    PulseUsageShareQuery,
+    PulseUsageShareResponse,
 )
 from app.operation import OperatorType
 from app.operation.hpx_pulse import HpxPulseOperation
 from app.rate_limit import rate_limiter
+from app.routers.dependencies._common import make_query_dependency
 from app.services.hpx_pulse import engine_mirror
 from app.utils import responses
 from app.utils.helpers import public_base_url_from_request
@@ -37,6 +42,14 @@ router = APIRouter(
 )
 
 pulse_operator = HpxPulseOperation(operator_type=OperatorType.API)
+
+get_pulse_usage_share_query = make_query_dependency(
+    PulseUsageShareQuery,
+    field_overrides={
+        "start": Query(None, examples=["2024-01-01T00:00:00+03:30"]),
+        "end": Query(None, examples=["2024-01-31T23:59:59+03:30"]),
+    },
+)
 
 
 def _request_base_url(request: Request) -> str:
@@ -102,6 +115,20 @@ async def list_hpx_pulses(
     admin: AdminDetails = Depends(require_permission("hpx_pulse", "read")),
 ):
     return await pulse_operator.list_pulses(db, admin=admin, offset=offset, limit=limit, name=name)
+
+
+@router.get(
+    "s/usage/share",
+    response_model=PulseUsageShareResponse,
+    responses={403: responses._403},
+)
+async def get_hpx_pulses_usage_share(
+    query: Annotated[PulseUsageShareQuery, Depends(get_pulse_usage_share_query)],
+    db: AsyncSession = Depends(get_db),
+    admin: AdminDetails = Depends(require_permission("hpx_pulse", "read")),
+):
+    """Most used HPX Pulses ranked by traffic share for the selected time range."""
+    return await pulse_operator.get_usage_share(db, admin=admin, query=query)
 
 
 # Agent routes MUST be registered before /{pulse_id} so path segments like

@@ -34,8 +34,11 @@ import PathPingPanel from '@/features/hpx-pulse/components/path-ping-panel'
 import { useAdmin } from '@/hooks/use-admin'
 import { hasPermission } from '@/utils/rbac'
 import { cn } from '@/lib/utils'
+import { formatBytes } from '@/utils/formatByte'
 import {
   Activity,
+  ArrowDownToLine,
+  ArrowUpFromLine,
   Copy,
   KeyRound,
   Pencil,
@@ -578,6 +581,17 @@ function PulseCard({
               </span>
             </span>
           ) : null}
+          <span className="text-muted-foreground inline-flex items-center gap-2" dir="ltr" title={t('hpxPulse.trafficHint', { defaultValue: 'Lifetime lifetime usage from Pulse agents' })}>
+            <span className="inline-flex items-center gap-1">
+              <ArrowUpFromLine className="size-3 opacity-70" />
+              <span className="text-foreground font-mono font-medium">{formatBytes(Number(pulse.bytes_up ?? 0))}</span>
+            </span>
+            <span className="text-border">·</span>
+            <span className="inline-flex items-center gap-1">
+              <ArrowDownToLine className="size-3 opacity-70" />
+              <span className="text-foreground font-mono font-medium">{formatBytes(Number(pulse.bytes_down ?? 0))}</span>
+            </span>
+          </span>
         </div>
 
         {(top || pulse.message) && (

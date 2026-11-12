@@ -1,7 +1,9 @@
 from datetime import datetime as dt
 from typing import Literal
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
+
+from app.utils.helpers import fix_datetime_timezone
 
 PulseGoal = Literal["stealth", "balanced", "speed", "mobile", "hard", "fast", "spoof"]
 PulseSpoofProfile = Literal["udp", "icmp", "tcp", "icmpv6", "proto58", "ipip", "gre"]
@@ -162,6 +164,8 @@ class HpxPulseResponse(BaseModel):
     last_failover_at: dt | None = None
     created_at: dt
     path_ping: dict | None = None
+    bytes_up: int = 0
+    bytes_down: int = 0
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -231,6 +235,9 @@ class HpxPulseAgentHeartbeatRequest(BaseModel):
     iface_up: bool = False
     forward_ok: bool | None = None
     diag: dict | None = None
+    # Absolute counters from the agent (bp0 or TCP socket estimate). Panel diffs them.
+    iface_rx_bytes: int | None = Field(default=None, ge=0)
+    iface_tx_bytes: int | None = Field(default=None, ge=0)
 
 
 class HpxPulseAgentAckRequest(BaseModel):
@@ -293,3 +300,31 @@ class HpxPulsePathPingResponse(BaseModel):
     port: int | None = None
     hint: str | None = None
     path_ping: dict | None = None
+
+
+class PulseUsageShareQuery(BaseModel):
+    """Time range for ranking pulses by traffic share. Defaults to the last 7 days."""
+
+    start: dt | None = Field(default=None, examples=["2024-01-01T00:00:00+03:30"])
+    end: dt | None = Field(default=None, examples=["2024-01-31T23:59:59+03:30"])
+
+    @field_validator("start", "end", mode="before")
+    @classmethod
+    def validate_datetimes(cls, value):
+        if not value:
+            return value
+        return fix_datetime_timezone(value)
+
+
+class PulseUsageShareItem(BaseModel):
+    pulse_id: int
+    name: str
+    bytes: int = 0
+    percent: float = 0.0
+
+
+class PulseUsageShareResponse(BaseModel):
+    total_bytes: int = 0
+    items: list[PulseUsageShareItem] = Field(default_factory=list)
+    start: dt | None = None
+    end: dt | None = None

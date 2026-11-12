@@ -3,7 +3,7 @@ from datetime import datetime as dt
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import HpxPulse, HpxPulseStatus
+from app.db.models import HpxPulse, HpxPulseStatus, HpxPulseUsage
 from app.models.hpx_pulse import HpxPulseCreate
 from app.utils.crypto import hash_api_key
 
@@ -126,3 +126,51 @@ def set_join_token(db_pulse: HpxPulse, *, side: str, token: str, expires_at: dt)
     else:
         db_pulse.abroad_join_token_hash = token_hash
         db_pulse.abroad_join_token_expires_at = expires_at
+
+
+async def upsert_hpx_pulse_usage_sample(
+    db: AsyncSession,
+    *,
+    pulse_id: int,
+    bucket_at: dt,
+    uplink: int,
+    downlink: int,
+) -> None:
+    """Add uplink/downlink deltas into the 10-minute sample bucket for a pulse."""
+    if uplink <= 0 and downlink <= 0:
+        return
+    stmt = select(HpxPulseUsage).where(
+        HpxPulseUsage.pulse_id == pulse_id,
+        HpxPulseUsage.created_at == bucket_at,
+    )
+    sample = (await db.execute(stmt)).scalar_one_or_none()
+    if sample is None:
+        db.add(
+            HpxPulseUsage(
+                created_at=bucket_at,
+                pulse_id=pulse_id,
+                uplink=max(0, int(uplink)),
+                downlink=max(0, int(downlink)),
+            )
+        )
+        return
+    sample.uplink = int(sample.uplink or 0) + max(0, int(uplink))
+    sample.downlink = int(sample.downlink or 0) + max(0, int(downlink))
+
+
+async def get_hpx_pulse_usage_by_pulse(
+    db: AsyncSession,
+    start: dt,
+    end: dt,
+) -> list[tuple[int, str, int]]:
+    """Return (pulse_id, name, total_bytes) rows for pulses with traffic in [start, end)."""
+    total_expr = func.coalesce(func.sum(HpxPulseUsage.uplink + HpxPulseUsage.downlink), 0)
+    stmt = (
+        select(HpxPulse.id, HpxPulse.name, total_expr)
+        .join(HpxPulseUsage, HpxPulseUsage.pulse_id == HpxPulse.id)
+        .where(HpxPulseUsage.created_at >= start, HpxPulseUsage.created_at < end)
+        .group_by(HpxPulse.id, HpxPulse.name)
+        .having(total_expr > 0)
+        .order_by(total_expr.desc())
+    )
+    return [(int(r[0]), str(r[1]), int(r[2] or 0)) for r in (await db.execute(stmt)).all()]

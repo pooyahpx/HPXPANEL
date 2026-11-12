@@ -1403,6 +1403,27 @@ class HpxPulse(Base, CreatedAtUTCMixin):
     last_failover_at: Mapped[dt | None] = mapped_column(DateTime(timezone=True), default=None)
     diag_report: Mapped[dict | None] = mapped_column(PostgresJSONB, default=None)
     spoof_config: Mapped[dict | None] = mapped_column(PostgresJSONB, default=None)
+    bytes_up: Mapped[int] = mapped_column(BigInteger, default=0, server_default="0")
+    bytes_down: Mapped[int] = mapped_column(BigInteger, default=0, server_default="0")
+    last_iface_rx: Mapped[int | None] = mapped_column(BigInteger, default=None)
+    last_iface_tx: Mapped[int | None] = mapped_column(BigInteger, default=None)
+    last_traffic_side: Mapped[str | None] = mapped_column(String(8), default=None)
+
+
+class HpxPulseUsage(Base, IdMixin):
+    """10-minute uplink/downlink deltas reported by Pulse agents."""
+
+    __tablename__ = "hpx_pulse_usages"
+    __table_args__ = (
+        UniqueConstraint("created_at", "pulse_id"),
+        Index("ix_hpx_pulse_usages_created_at", "created_at"),
+        Index("ix_hpx_pulse_usages_pulse_id_created_at", "pulse_id", "created_at"),
+    )
+
+    created_at: Mapped[dt] = mapped_column(DateTime(timezone=True), unique=False)
+    pulse_id: Mapped[int] = fk_id_column("hpx_pulses.id", ondelete="CASCADE")
+    uplink: Mapped[int] = mapped_column(BigInteger, default=0, server_default="0")
+    downlink: Mapped[int] = mapped_column(BigInteger, default=0, server_default="0")
 
 
 class TelegramSubDelivery(Base):

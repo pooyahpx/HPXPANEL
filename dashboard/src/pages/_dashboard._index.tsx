@@ -3,6 +3,7 @@ import DashboardStatistics from '@/features/dashboard/components/dashboard-stati
 import ServerTopologyCard from '@/features/dashboard/components/server-topology-card'
 import SetupChecklistCard from '@/features/dashboard/components/setup-checklist-card'
 import TopConfigsCard from '@/features/dashboard/components/top-configs-card'
+import TopPulsesCard from '@/features/dashboard/components/top-pulses-card'
 import WorkersHealthCard from '@/features/dashboard/components/workers-health-card'
 import AdminFilterCombobox from '@/components/common/admin-filter-combobox'
 import AdminModal from '@/features/admins/dialogs/admin-modal'
@@ -66,6 +67,7 @@ const Dashboard = () => {
   const canCreateCores = hasPermission(currentAdmin, 'cores', 'create')
   const canReadNodeStats = hasPermission(currentAdmin, 'nodes', 'stats')
   const canReadNodes = hasPermission(currentAdmin, 'nodes', 'read')
+  const canReadHpxPulse = hasPermission(currentAdmin, 'hpx_pulse', 'read')
   const { t } = useTranslation()
 
   const [selectedAdmin, setSelectedAdmin] = useState<DashboardAdmin | undefined>(totalAdmin)
@@ -292,6 +294,7 @@ const Dashboard = () => {
                   className="relative mb-3 w-full max-w-xs sm:mb-4 sm:max-w-sm lg:max-w-md"
                 />
                 {canReadUsers && <TopConfigsCard adminUsername={selectedAdmin && selectedAdmin.username !== 'Total' ? selectedAdmin.username : undefined} canReadNodeStats={canReadNodeStats} className="mb-3 sm:mb-4" />}
+                {canReadHpxPulse && <TopPulsesCard canReadPulse={canReadHpxPulse} className="mb-3 sm:mb-4" />}
                 {/* Show only the selected admin's card */}
                 <div className="flex flex-col gap-3 sm:gap-4">
                   {selectedAdmin && <AdminStatisticsCard key={selectedAdmin.username} admin={selectedAdmin} systemStats={systemUsersStatsData} currentAdmin={currentAdmin} skipStatsFetch />}
@@ -300,6 +303,7 @@ const Dashboard = () => {
             ) : (
               <>
                 {canReadUsers && <TopConfigsCard canReadNodeStats={canReadNodeStats} className="mb-3 sm:mb-4" />}
+                {canReadHpxPulse && <TopPulsesCard canReadPulse={canReadHpxPulse} className="mb-3 sm:mb-4" />}
                 <AdminStatisticsCard showAdminInfo={false} admin={currentAdmin} systemStats={systemUsersStatsData} currentAdmin={currentAdmin} skipStatsFetch />
               </>
             )}

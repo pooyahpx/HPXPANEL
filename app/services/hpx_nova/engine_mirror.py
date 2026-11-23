@@ -63,16 +63,21 @@ def github_asset_url(arch: str) -> str:
     return f"https://github.com/{repo}/releases/download/{release_tag()}/{asset}"
 
 
-def cache_dir() -> Path:
+def cache_root() -> Path:
+    return _CACHE_DIR
+
+
+def cache_dir(*, create: bool = True) -> Path:
     path = _CACHE_DIR / release_tag()
-    path.mkdir(parents=True, exist_ok=True)
+    if create:
+        path.mkdir(parents=True, exist_ok=True)
     return path
 
 
 async def ensure_checksums_cached() -> Path:
     import httpx
 
-    dest = cache_dir() / "SHA256SUMS"
+    dest = cache_dir(create=True) / "SHA256SUMS"
     if dest.is_file():
         return dest
     bundled = _BUNDLED_DIR / release_tag() / "SHA256SUMS"

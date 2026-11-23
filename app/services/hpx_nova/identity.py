@@ -48,5 +48,5 @@ def identity_to_json(identity: dict[str, str]) -> str:
 def identity_from_json(raw: str) -> dict[str, str]:
     data = json.loads(raw)
     if not isinstance(data, dict):
-        raise ValueError("invalid nova identity")
+        raise TypeError("invalid nova identity")
     return {str(k): str(v) for k, v in data.items()}

@@ -321,9 +321,10 @@ class HpxNovaOperation(BaseOperation):
             "last_status_change": dt.now(UTC),
             "message": f"{side} agent claimed",
         }
-        if row.iran_agent_key_hash or side == "iran":
-            if row.abroad_agent_key_hash or side == "abroad":
-                fields["status"] = HpxNovaStatus.starting
+        iran_ready = bool(row.iran_agent_key_hash) or side == "iran"
+        abroad_ready = bool(row.abroad_agent_key_hash) or side == "abroad"
+        if iran_ready and abroad_ready:
+            fields["status"] = HpxNovaStatus.starting
         row = await update_hpx_nova(db, row, fields)
         return HpxNovaAgentBootstrap(
             nova_id=row.id,

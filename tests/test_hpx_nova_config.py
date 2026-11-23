@@ -63,9 +63,11 @@ def test_render_iran_entry_and_abroad_exit():
 
 def test_nova_engine_pin_isolated_from_pulse():
     assert engine_mirror.release_tag().startswith("hpx-nova-tunnel-engine-v")
-    assert "hpx-tunnel-engine-v" not in engine_mirror.release_tag().replace("hpx-nova-tunnel-engine-v", "")
     assert engine_mirror.agent_script_path().name == "hpx-nova-agent.sh"
-    assert "nova-tunnel-engine" in str(engine_mirror.cache_dir())
-    # Pulse paths must not be used
-    assert "tunnel-engine" not in str(engine_mirror.cache_dir()).split("nova-")[-1] or True
+    assert engine_mirror.install_script_path().name == "hpx-nova-tunnel-engine-install.sh"
+    root = str(engine_mirror.cache_root())
+    assert "nova-tunnel-engine" in root
+    # Must not share Pulse backpack engine cache path
+    assert root.rstrip("/").endswith("nova-tunnel-engine")
     assert "hpx-pulse-agent" not in str(engine_mirror.agent_script_path())
+    assert engine_mirror.agent_assets_base("https://panel.example").endswith("/api/hpx_nova/agent")

@@ -22,6 +22,8 @@ SUB_PAGE_FIELDS = (
     "sub_show_config_share",
     "sub_allow_mode_toggle",
 )
+# Kept even when dashboard clients omit them from the PATCH body.
+SUB_INTERNAL_FIELDS = ("last_notified_sub_origin",)
 
 
 class SettingsOperation(BaseOperation):
@@ -45,13 +47,17 @@ class SettingsOperation(BaseOperation):
         # fields; keep the stored values instead of silently resetting them to defaults.
         if modify.subscription and db_settings.subscription:
             stored_subscription = Subscription.model_validate(db_settings.subscription)
+            # Always keep internal notify fingerprint; clients never send it.
             preserved = {
                 field: getattr(stored_subscription, field)
-                for field in SUB_PAGE_FIELDS
-                if field not in modify.subscription.model_fields_set
+                for field in (*SUB_PAGE_FIELDS, *SUB_INTERNAL_FIELDS)
+                if field not in modify.subscription.model_fields_set or field in SUB_INTERNAL_FIELDS
             }
             if preserved:
                 modify.subscription = modify.subscription.model_copy(update=preserved)
+
+        old_url_prefix = ((old_settings.subscription.url_prefix if old_settings.subscription else None) or "").strip()
+        old_panel_url = ((old_settings.telegram.panel_url if old_settings.telegram else None) or "").strip()
 
         if modify.general and modify.general.custom_variables is not None:
             subscription = modify.subscription or Subscription.model_validate(db_settings.subscription)
@@ -68,6 +74,11 @@ class SettingsOperation(BaseOperation):
         await router.publish(MessageTopic.SETTING, {"action": "refresh"})
         asyncio.create_task(self.reset_services(old_settings, new_settings))
 
+        new_url_prefix = ((new_settings.subscription.url_prefix if new_settings.subscription else None) or "").strip()
+        new_panel_url = ((new_settings.telegram.panel_url if new_settings.telegram else None) or "").strip()
+        if old_url_prefix != new_url_prefix or old_panel_url != new_panel_url:
+            asyncio.create_task(_notify_buyers_domain_changed())
+
         return new_settings
 
     async def get_general_settings(self, db: AsyncSession):
@@ -75,3 +86,18 @@ class SettingsOperation(BaseOperation):
         general = General.model_validate(settings.general)
         subscription = Subscription.model_validate(settings.subscription)
         return general.model_copy(update={"custom_variables": subscription.custom_variables})
+
+
+async def _notify_buyers_domain_changed() -> None:
+    try:
+        from app.telegram.utils.sub_delivery import notify_buyers_subscription_domain_change
+
+        notified = await notify_buyers_subscription_domain_change(force=True)
+        if notified:
+            from app.utils.logger import get_logger
+
+            get_logger("settings").info("Notified %s telegram buyers after subscription domain change", notified)
+    except Exception:
+        from app.utils.logger import get_logger
+
+        get_logger("settings").exception("Failed to notify telegram buyers after domain change")

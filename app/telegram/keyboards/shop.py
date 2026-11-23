@@ -367,6 +367,8 @@ class ShopAdminAction(str, Enum):
     toggle_tutorial = "ttut"
     set_tutorial = "stut"
     broadcast = "bcast"
+    resend_subs_domain = "rsdom"
+    resend_subs_domain_confirm = "rsdomc"
     stats = "stats"
     accounting = "acct"
     discounts = "discs"
@@ -428,6 +430,10 @@ class ShopAdminKeyboard(InlineKeyboardBuilder):
         )
         self.button(text=t(lang, "btn_set_tutorial"), callback_data=self.Callback(action=ShopAdminAction.set_tutorial))
         self.button(text=t(lang, "btn_broadcast"), callback_data=self.Callback(action=ShopAdminAction.broadcast))
+        self.button(
+            text=t(lang, "btn_resend_subs_domain"),
+            callback_data=self.Callback(action=ShopAdminAction.resend_subs_domain),
+        )
         self.button(text=t(lang, "btn_force_join_menu"), callback_data=self.Callback(action=ShopAdminAction.force_join))
         self.button(
             text=t(lang, "btn_server_status_menu"), callback_data=self.Callback(action=ShopAdminAction.server_status)
@@ -438,7 +444,7 @@ class ShopAdminKeyboard(InlineKeyboardBuilder):
         self.button(text=t(lang, "btn_discounts"), callback_data=self.Callback(action=ShopAdminAction.discounts))
         self.button(text=t(lang, "btn_pending"), callback_data=self.Callback(action=ShopAdminAction.pending))
         self.button(text=t(lang, "btn_back"), callback_data=self.Callback(action=ShopAdminAction.home, id=-1))
-        self.adjust(2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 2, 1, 2, 2, 1)
+        self.adjust(2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 2, 1, 2, 2, 1)
 
 
 class ShopAdminForceJoinKeyboard(InlineKeyboardBuilder):

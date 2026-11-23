@@ -865,6 +865,30 @@
         "empty": "No thresholds configured"
       }
     },
+    "motherConfigs": {
+      "title": "Mother configs",
+      "description": "Foreign share links from another panel/IP. Users only receive them while they still have remaining volume on this panel.",
+      "saveSuccess": "Mother configs saved successfully",
+      "saveFailed": "Failed to save mother configs",
+      "add": "Add mother config",
+      "empty": "No mother configs yet. Add a vless:// link from another panel.",
+      "badge": "Mother config",
+      "unnamed": "Untitled config",
+      "cardHint": "Shown in user subs only while that user still has remaining volume on this panel.",
+      "enabled": "On in subs",
+      "name": "Display name",
+      "namePlaceholder": "Mother · Reality",
+      "link": "Share link",
+      "respectQuota": "Respect user volume",
+      "respectQuotaHint": "Off = every active user gets it. On = only users with remaining traffic.",
+      "livePing": "Live ping",
+      "speedTest": "Speed test",
+      "runPing": "Ping",
+      "runSpeed": "Speed",
+      "runBoth": "Ping + Speed",
+      "open": "Open mother configs",
+      "movedHint": "Custom / foreign share links live in their own settings category — with live ping & speed test."
+    },
     "subscriptions": {
       "title": "Subscriptions",
       "description": "Configure subscription URLs, update intervals, and client-specific rules",

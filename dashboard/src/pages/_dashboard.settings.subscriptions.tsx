@@ -3,22 +3,24 @@ import { SubscriptionApplicationSheet } from '@/features/subscriptions/component
 import { SubscriptionApplicationsSection } from '@/features/subscriptions/components/subscription-applications-section'
 import { SubscriptionCustomVariablesSection } from '@/features/subscriptions/components/subscription-custom-variables-section'
 import { SubscriptionFormActions } from '@/features/subscriptions/components/subscription-form-actions'
-import { SubscriptionExternalConfigsSection } from '@/features/subscriptions/components/subscription-external-configs-section'
 import { SubscriptionGeneralSettingsSection } from '@/features/subscriptions/components/subscription-general-settings-section'
 import { SubscriptionManualFormatsSection } from '@/features/subscriptions/components/subscription-manual-formats-section'
 import { SubscriptionResponseHeadersSection } from '@/features/subscriptions/components/subscription-response-headers-section'
 import { SubscriptionRulesSection } from '@/features/subscriptions/components/subscription-rules-section'
 import { SubscriptionSettingsSkeleton } from '@/features/subscriptions/components/subscription-settings-skeleton'
 import { subscriptionSchema, type SubscriptionApplicationFormData, type SubscriptionFormData, defaultSubscriptionRules, normalizeCustomVariablesForPayload } from '@/features/subscriptions/components/subscription-settings-schema'
+import { Button } from '@/components/ui/button'
 import { Form } from '@/components/ui/form'
 import { Separator } from '@/components/ui/separator'
 import { type SubRule as ApiSubRule } from '@/service/api'
 import { DragEndEvent, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable'
 import { zodResolver } from '@hookform/resolvers/zod'
+import { Link2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { FieldErrors, useFieldArray, useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
+import { Link } from 'react-router'
 import { toast } from 'sonner'
 import { useSettingsContext } from './_dashboard.settings'
 
@@ -130,6 +132,7 @@ export default function SubscriptionSettings() {
           name: item.name || '',
           link: item.link || '',
           enabled: item.enabled ?? true,
+          respect_user_quota: item.respect_user_quota ?? true,
         })),
         response_headers: Object.fromEntries(Object.entries(subscriptionData.response_headers || {}).map(([key, value]) => [key, typeof value === 'string' ? value : JSON.stringify(value)])),
         rules:
@@ -210,6 +213,7 @@ export default function SubscriptionSettings() {
           name: item.name?.trim() || '',
           link: item.link?.trim() || '',
           enabled: item.enabled ?? true,
+          respect_user_quota: item.respect_user_quota ?? true,
         }))
         .filter(item => item.link)
 
@@ -304,6 +308,7 @@ export default function SubscriptionSettings() {
           name: item.name || '',
           link: item.link || '',
           enabled: item.enabled ?? true,
+          respect_user_quota: item.respect_user_quota ?? true,
         })),
         response_headers: Object.fromEntries(Object.entries(subscriptionData.response_headers || {}).map(([key, value]) => [key, typeof value === 'string' ? value : JSON.stringify(value)])),
         rules:
@@ -385,7 +390,24 @@ export default function SubscriptionSettings() {
 
           <Separator className="my-3" />
 
-          <SubscriptionExternalConfigsSection form={form} />
+          <div className="border-emerald-500/20 bg-emerald-500/5 flex flex-col gap-3 rounded-2xl border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="space-y-1">
+              <p className="flex items-center gap-2 text-sm font-semibold">
+                <Link2 className="size-4 text-emerald-600 dark:text-emerald-400" />
+                {t('settings.motherConfigs.title', { defaultValue: 'Mother configs' })}
+              </p>
+              <p className="text-muted-foreground text-xs leading-relaxed">
+                {t('settings.motherConfigs.movedHint', {
+                  defaultValue: 'Custom / foreign share links live in their own settings category — with live ping & speed test.',
+                })}
+              </p>
+            </div>
+            <Button asChild type="button" size="sm" variant="outline" className="cursor-pointer shrink-0">
+              <Link to="/settings/mother-configs">
+                {t('settings.motherConfigs.open', { defaultValue: 'Open mother configs' })}
+              </Link>
+            </Button>
+          </div>
 
           <Separator className="my-3" />
 

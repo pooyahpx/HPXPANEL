@@ -99,7 +99,9 @@ async def generate_subscription(
     sub_settings = await subscription_settings()
     custom_variables = get_effective_custom_variables(user, sub_settings.custom_variables)
     format_variables = setup_format_variables(user, sub_settings.custom_variables)
-    extra_links = collect_external_config_links(sub_settings) if isinstance(conf, StandardLinks) else []
+    extra_links = (
+        collect_external_config_links(sub_settings, user=user) if isinstance(conf, StandardLinks) else []
+    )
 
     config = await process_inbounds_and_tags(
         user,
@@ -602,7 +604,7 @@ async def generate_subscription_link_entries(
             }
         )
 
-    for link in collect_external_config_links(sub_settings):
+    for link in collect_external_config_links(sub_settings, user=user):
         remark = link.rsplit("#", 1)[-1] if "#" in link else "external"
         try:
             from urllib.parse import unquote

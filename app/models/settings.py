@@ -335,6 +335,8 @@ class ExternalConfig(BaseModel):
     name: str = Field(default="", max_length=64)
     link: str = Field(min_length=8, max_length=8192)
     enabled: bool = Field(default=True)
+    # When True (default), only users with remaining volume on THIS panel get the link.
+    respect_user_quota: bool = Field(default=True)
 
     @field_validator("name", mode="before")
     @classmethod

@@ -96,6 +96,39 @@ export const subscriptionApplicationSchema = z.object({
 
 export type SubscriptionApplicationFormData = z.infer<typeof subscriptionApplicationSchema>
 
+export const externalConfigSchema = z.object({
+  name: z.string().max(64, 'Name must be 64 characters or less').default(''),
+  link: z
+    .string()
+    .min(8, 'Share link is required')
+    .max(8192, 'Share link is too long')
+    .refine(
+      value => {
+        const lowered = value.trim().toLowerCase()
+        return (
+          lowered.startsWith('vless://') ||
+          lowered.startsWith('vmess://') ||
+          lowered.startsWith('trojan://') ||
+          lowered.startsWith('ss://') ||
+          lowered.startsWith('ssr://') ||
+          lowered.startsWith('hysteria://') ||
+          lowered.startsWith('hysteria2://') ||
+          lowered.startsWith('hy2://') ||
+          lowered.startsWith('tuic://') ||
+          lowered.startsWith('wireguard://') ||
+          lowered.startsWith('wg://') ||
+          lowered.startsWith('anytls://') ||
+          lowered.startsWith('socks://') ||
+          lowered.startsWith('socks5://') ||
+          lowered.startsWith('http://') ||
+          lowered.startsWith('https://')
+        )
+      },
+      { message: 'Must be a share link (vless://, vmess://, trojan://, …)' },
+    ),
+  enabled: z.boolean().default(true),
+})
+
 export const subscriptionSchema = z.object({
   url_prefix: z.string().optional(),
   update_interval: z.number().min(1, 'Update interval must be at least 1 hour').max(168, 'Update interval cannot exceed 168 hours (1 week)').optional(),
@@ -107,6 +140,7 @@ export const subscriptionSchema = z.object({
   disable_sub_template: z.boolean().optional(),
   randomize_order: z.boolean().optional(),
   custom_variables: customVariablesSchema,
+  external_configs: z.array(externalConfigSchema).max(50).default([]),
   response_headers: z.record(z.string()).optional(),
   rules: z.array(
     z.object({

@@ -88,6 +88,8 @@ async def generate_subscription(
     as_base64: bool,
     randomize_order: bool = False,
 ) -> str | bytes:
+    from app.subscription.external_configs import collect_external_config_links
+
     client_templates = await subscription_client_templates()
     xray_template_overrides = await subscription_xray_templates() if config_format == "xray" else None
     conf = _build_subscription_config(config_format, client_templates)
@@ -97,6 +99,7 @@ async def generate_subscription(
     sub_settings = await subscription_settings()
     custom_variables = get_effective_custom_variables(user, sub_settings.custom_variables)
     format_variables = setup_format_variables(user, sub_settings.custom_variables)
+    extra_links = collect_external_config_links(sub_settings) if isinstance(conf, StandardLinks) else []
 
     config = await process_inbounds_and_tags(
         user,
@@ -106,6 +109,7 @@ async def generate_subscription(
         xray_template_overrides=xray_template_overrides,
         randomize_order=randomize_order,
         custom_variables=custom_variables,
+        extra_links=extra_links,
     )
 
     if as_base64 and not isinstance(config, bytes):
@@ -435,6 +439,7 @@ async def process_inbounds_and_tags(
     xray_template_overrides: dict[int, str] | None = None,
     randomize_order: bool = False,
     custom_variables: list | tuple | None = None,
+    extra_links: list[str] | None = None,
 ) -> str | bytes:
     proxy_settings = user.proxy_settings.dict()
     proxy_settings["_user_id"] = user.id
@@ -498,6 +503,11 @@ async def process_inbounds_and_tags(
                 settings=settings,
             )
 
+    if isinstance(conf, StandardLinks) and extra_links:
+        for link in extra_links:
+            if link:
+                conf.add_link(link)
+
     return conf.render()
 
 
@@ -539,6 +549,8 @@ async def generate_subscription_link_entries(
     randomize_order: bool = False,
 ) -> list[dict[str, Any]]:
     """Build subscription links with optional per-group quota metadata for the web template."""
+    from app.subscription.external_configs import collect_external_config_links
+
     client_templates = await subscription_client_templates()
     sub_settings = await subscription_settings()
     custom_variables = get_effective_custom_variables(user, sub_settings.custom_variables)
@@ -587,6 +599,26 @@ async def generate_subscription_link_entries(
                 "protocol": inbound_copy.protocol,
                 "inbound_tag": inbound_copy.inbound_tag,
                 "group_quotas": quota_map.get(inbound_copy.inbound_tag, []),
+            }
+        )
+
+    for link in collect_external_config_links(sub_settings):
+        remark = link.rsplit("#", 1)[-1] if "#" in link else "external"
+        try:
+            from urllib.parse import unquote
+
+            remark = unquote(remark)
+        except Exception:
+            pass
+        scheme = link.split("://", 1)[0].lower() if "://" in link else "external"
+        entries.append(
+            {
+                "link": link,
+                "remark": remark,
+                "protocol": scheme,
+                "inbound_tag": "external",
+                "group_quotas": [],
+                "external": True,
             }
         )
 

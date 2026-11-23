@@ -162,39 +162,67 @@ function formatAutoRestart(minutes: number | null | undefined, t: (k: string, o?
   return t('hpxPulse.autoRestartEveryMinutes', { defaultValue: 'Every {{n}} min', n: minutes })
 }
 
+type AgentPresence = 'online' | 'silent' | 'waiting'
+
+function agentPresence(claimed: boolean, online?: boolean, lastSeen?: string | null): AgentPresence {
+  if (!claimed) return 'waiting'
+  if (online) return 'online'
+  if (lastSeen) {
+    const ageMs = Date.now() - new Date(lastSeen).getTime()
+    if (Number.isFinite(ageMs) && ageMs <= 180_000) return 'online'
+  }
+  return 'silent'
+}
+
 function AgentCell({
   label,
-  connected,
+  presence,
   host,
   t,
 }: {
   label: string
-  connected: boolean
+  presence: AgentPresence
   host?: string | null
   t: (k: string, o?: { defaultValue: string }) => string
 }) {
+  const online = presence === 'online'
+  const silent = presence === 'silent'
   return (
     <div
       className={cn(
         'relative overflow-hidden rounded-xl border px-3 py-2.5',
-        connected
+        online
           ? 'border-emerald-500/30 bg-gradient-to-br from-emerald-500/10 to-transparent'
-          : 'border-border/70 bg-muted/30',
+          : silent
+            ? 'border-amber-500/35 bg-gradient-to-br from-amber-500/10 to-transparent'
+            : 'border-border/70 bg-muted/30',
       )}
     >
       <div className="flex items-center gap-2">
         <span
           className={cn(
             'size-2 shrink-0 rounded-full',
-            connected ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.7)]' : 'bg-muted-foreground/40',
+            online
+              ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.7)]'
+              : silent
+                ? 'bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.55)]'
+                : 'bg-muted-foreground/40',
           )}
         />
         <span className="text-muted-foreground text-[11px] font-medium tracking-wide uppercase">{label}</span>
       </div>
-      <p className={cn('mt-1 text-sm font-medium', connected && 'text-emerald-700 dark:text-emerald-400')}>
-        {connected
+      <p
+        className={cn(
+          'mt-1 text-sm font-medium',
+          online && 'text-emerald-700 dark:text-emerald-400',
+          silent && 'text-amber-700 dark:text-amber-400',
+        )}
+      >
+        {online
           ? t('hpxPulse.agentConnected', { defaultValue: 'connected' })
-          : t('hpxPulse.agentWaiting', { defaultValue: 'waiting' })}
+          : silent
+            ? t('hpxPulse.agentSilent', { defaultValue: 'silent (old panel URL?)' })
+            : t('hpxPulse.agentWaiting', { defaultValue: 'waiting' })}
       </p>
       {host ? (
         <p className="text-muted-foreground mt-0.5 truncate font-mono text-[10px]" dir="ltr" title={host}>
@@ -519,7 +547,7 @@ function PulseCard({
         <div className="relative grid gap-2 sm:grid-cols-[1fr_auto_1fr_auto] sm:items-center">
           <AgentCell
             label={t('hpxPulse.iranAgent', { defaultValue: 'Iran agent' })}
-            connected={pulse.iran_claimed}
+            presence={agentPresence(pulse.iran_claimed, pulse.iran_agent_online, pulse.iran_agent_last_seen)}
             host={pulse.iran_agent_host}
             t={t}
           />
@@ -530,7 +558,7 @@ function PulseCard({
           </div>
           <AgentCell
             label={t('hpxPulse.abroadAgent', { defaultValue: 'Abroad agent' })}
-            connected={pulse.abroad_claimed}
+            presence={agentPresence(pulse.abroad_claimed, pulse.abroad_agent_online, pulse.abroad_agent_last_seen)}
             host={pulse.abroad_agent_host}
             t={t}
           />
@@ -674,6 +702,14 @@ export default function HpxPulseList() {
     toast.success(t('copied', { defaultValue: 'Copied' }))
   }
 
+  const panelOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://YOUR_DOMAIN'
+  const setPanelUrlCmd = `sudo hpx-pulse-agent set-panel-url ${panelOrigin}`
+  const silentAgents = (data?.pulses ?? []).some(pulse => {
+    const iran = agentPresence(pulse.iran_claimed, pulse.iran_agent_online, pulse.iran_agent_last_seen)
+    const abroad = agentPresence(pulse.abroad_claimed, pulse.abroad_agent_online, pulse.abroad_agent_last_seen)
+    return iran === 'silent' || abroad === 'silent' || pulse.status === 'unhealthy'
+  })
+
   return (
     <div className="space-y-5 pt-1">
       {isError && (
@@ -689,6 +725,29 @@ export default function HpxPulseList() {
           {(error as Error)?.message && (
             <p className="text-muted-foreground font-mono text-[11px]">{(error as Error).message}</p>
           )}
+        </Card>
+      )}
+
+      {silentAgents && (
+        <Card className="space-y-2 border-amber-500/35 bg-amber-500/10 p-4 text-sm">
+          <p className="font-medium text-amber-800 dark:text-amber-300">
+            {t('hpxPulse.stalePanelUrlTitle', {
+              defaultValue: 'Agents claimed but silent — usually an old panel domain',
+            })}
+          </p>
+          <p className="text-muted-foreground text-xs leading-relaxed">
+            {t('hpxPulse.stalePanelUrlHint', {
+              defaultValue:
+                'Tunnel may still be up. On each Iran/Abroad VPS run this once (no :8000 if panel is on 443), then wait ~10s:',
+            })}
+          </p>
+          <pre className="bg-background/70 overflow-x-auto rounded-lg border border-dashed p-3 font-mono text-[11px] leading-relaxed" dir="ltr">
+            {setPanelUrlCmd}
+          </pre>
+          <Button size="sm" variant="secondary" className="h-8 cursor-pointer gap-1.5" onClick={() => copy(setPanelUrlCmd)}>
+            <Copy className="size-3" />
+            {t('copy', { defaultValue: 'Copy' })}
+          </Button>
         </Card>
       )}
 

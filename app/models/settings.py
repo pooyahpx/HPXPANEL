@@ -329,6 +329,53 @@ DEFAULT_SUB_THEME = "terminal"
 DEFAULT_SUB_THEME_MODE = "dark"
 
 
+class ExternalConfig(BaseModel):
+    """Raw share-link injected into user subscriptions (hosted on another panel/IP)."""
+
+    name: str = Field(default="", max_length=64)
+    link: str = Field(min_length=8, max_length=8192)
+    enabled: bool = Field(default=True)
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def _strip_name(cls, value: Any) -> str:
+        return str(value or "").strip()
+
+    @field_validator("link", mode="before")
+    @classmethod
+    def _strip_link(cls, value: Any) -> str:
+        return str(value or "").strip()
+
+    @field_validator("link")
+    @classmethod
+    def _validate_link(cls, value: str) -> str:
+        lowered = value.lower()
+        allowed = (
+            "vless://",
+            "vmess://",
+            "trojan://",
+            "ss://",
+            "ssr://",
+            "hysteria://",
+            "hysteria2://",
+            "hy2://",
+            "tuic://",
+            "wireguard://",
+            "wg://",
+            "anytls://",
+            "socks://",
+            "socks5://",
+            "http://",
+            "https://",
+        )
+        if not any(lowered.startswith(prefix) for prefix in allowed):
+            raise ValueError(
+                "External config must be a share link "
+                "(vless://, vmess://, trojan://, ss://, hysteria2://, …)"
+            )
+        return value
+
+
 class Subscription(BaseModel):
     url_prefix: str = Field(default="")
     update_interval: int = Field(default=12)
@@ -346,6 +393,8 @@ class Subscription(BaseModel):
     disable_sub_template: bool = Field(default=False)
     randomize_order: bool = Field(default=False)
     custom_variables: list[CustomVariable] = Field(default_factory=list)
+    # Mother / external share links (not created on this panel)
+    external_configs: list[ExternalConfig] = Field(default_factory=list, max_length=50)
     # Admin-controlled subscription page appearance (users cannot change these)
     sub_theme: str = Field(default=DEFAULT_SUB_THEME)
     sub_theme_mode: str = Field(default=DEFAULT_SUB_THEME_MODE)

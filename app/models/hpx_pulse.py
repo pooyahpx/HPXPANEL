@@ -141,6 +141,8 @@ class HpxPulseResponse(BaseModel):
     advice: PulseAdviseResponse | None = None
     iran_claimed: bool = False
     abroad_claimed: bool = False
+    iran_agent_online: bool = False
+    abroad_agent_online: bool = False
     iran_agent_host: str | None = None
     abroad_agent_host: str | None = None
     iran_agent_last_seen: dt | None = None
@@ -207,6 +209,9 @@ class HpxPulseAgentBootstrap(BaseModel):
     tunnel_mode: str = "direct_l3"
     port_forwards: list[str] = Field(default_factory=list)
     agent_assets_base: str | None = None
+    # Current public panel origin + IP fallback so agents survive domain changes.
+    panel_url: str | None = None
+    panel_url_fallback: str | None = None
 
 
 class HpxPulseAgentConfigResponse(BaseModel):
@@ -223,6 +228,8 @@ class HpxPulseAgentConfigResponse(BaseModel):
     iran_public_ip: str | None = None
     abroad_public_ip: str | None = None
     port_forwards: list[str] = Field(default_factory=list)
+    panel_url: str | None = None
+    panel_url_fallback: str | None = None
 
 
 class HpxPulseAgentHeartbeatRequest(BaseModel):

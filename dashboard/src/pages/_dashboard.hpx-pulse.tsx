@@ -44,10 +44,19 @@ export default function HpxPulsePage() {
     const attention = pulses.filter(pulse =>
       ['error', 'unhealthy', 'partial'].includes(pulse.status),
     ).length
-    const connectedAgents = pulses.reduce(
-      (total, pulse) => total + Number(pulse.iran_claimed) + Number(pulse.abroad_claimed),
-      0,
-    )
+    const connectedAgents = pulses.reduce((total, pulse) => {
+      const iranOnline =
+        pulse.iran_agent_online ||
+        (pulse.iran_claimed &&
+          pulse.iran_agent_last_seen &&
+          Date.now() - new Date(pulse.iran_agent_last_seen).getTime() <= 180_000)
+      const abroadOnline =
+        pulse.abroad_agent_online ||
+        (pulse.abroad_claimed &&
+          pulse.abroad_agent_last_seen &&
+          Date.now() - new Date(pulse.abroad_agent_last_seen).getTime() <= 180_000)
+      return total + Number(Boolean(iranOnline)) + Number(Boolean(abroadOnline))
+    }, 0)
     const expectedAgents = pulses.length * 2
     const autoSync = pulses.filter(pulse => Boolean(pulse.auto_restart_interval_minutes)).length
     const latencies = pulses

@@ -3,6 +3,7 @@ import { SubscriptionApplicationSheet } from '@/features/subscriptions/component
 import { SubscriptionApplicationsSection } from '@/features/subscriptions/components/subscription-applications-section'
 import { SubscriptionCustomVariablesSection } from '@/features/subscriptions/components/subscription-custom-variables-section'
 import { SubscriptionFormActions } from '@/features/subscriptions/components/subscription-form-actions'
+import { SubscriptionExternalConfigsSection } from '@/features/subscriptions/components/subscription-external-configs-section'
 import { SubscriptionGeneralSettingsSection } from '@/features/subscriptions/components/subscription-general-settings-section'
 import { SubscriptionManualFormatsSection } from '@/features/subscriptions/components/subscription-manual-formats-section'
 import { SubscriptionResponseHeadersSection } from '@/features/subscriptions/components/subscription-response-headers-section'
@@ -39,6 +40,7 @@ export default function SubscriptionSettings() {
       disable_sub_template: false,
       randomize_order: false,
       custom_variables: [],
+      external_configs: [],
       response_headers: {},
       rules: [],
       applications: [],
@@ -124,6 +126,11 @@ export default function SubscriptionSettings() {
         disable_sub_template: subscriptionData.disable_sub_template ?? false,
         randomize_order: subscriptionData.randomize_order ?? false,
         custom_variables: subscriptionData.custom_variables || [],
+        external_configs: (subscriptionData.external_configs || []).map(item => ({
+          name: item.name || '',
+          link: item.link || '',
+          enabled: item.enabled ?? true,
+        })),
         response_headers: Object.fromEntries(Object.entries(subscriptionData.response_headers || {}).map(([key, value]) => [key, typeof value === 'string' ? value : JSON.stringify(value)])),
         rules:
           subscriptionData.rules?.map((rule: ApiSubRule) => ({
@@ -198,6 +205,14 @@ export default function SubscriptionSettings() {
         return app
       })
 
+      const processedExternalConfigs = (data.external_configs || [])
+        .map(item => ({
+          name: item.name?.trim() || '',
+          link: item.link?.trim() || '',
+          enabled: item.enabled ?? true,
+        }))
+        .filter(item => item.link)
+
       const filteredData = {
         subscription: {
           ...data,
@@ -207,6 +222,7 @@ export default function SubscriptionSettings() {
           announce: data.announce?.trim() || undefined,
           announce_url: data.announce_url?.trim() || undefined,
           custom_variables: processedCustomVariables,
+          external_configs: processedExternalConfigs,
           response_headers: processedResponseHeaders,
           rules: processedRules,
           applications: processedApplications,
@@ -284,6 +300,11 @@ export default function SubscriptionSettings() {
         disable_sub_template: subscriptionData.disable_sub_template ?? false,
         randomize_order: subscriptionData.randomize_order ?? false,
         custom_variables: subscriptionData.custom_variables || [],
+        external_configs: (subscriptionData.external_configs || []).map(item => ({
+          name: item.name || '',
+          link: item.link || '',
+          enabled: item.enabled ?? true,
+        })),
         response_headers: Object.fromEntries(Object.entries(subscriptionData.response_headers || {}).map(([key, value]) => [key, typeof value === 'string' ? value : JSON.stringify(value)])),
         rules:
           subscriptionData.rules?.map((rule: ApiSubRule) => ({
@@ -361,6 +382,10 @@ export default function SubscriptionSettings() {
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="space-y-6 p-4 sm:space-y-8 sm:py-6 lg:space-y-10 lg:py-8">
           <SubscriptionGeneralSettingsSection form={form} />
+
+          <Separator className="my-3" />
+
+          <SubscriptionExternalConfigsSection form={form} />
 
           <Separator className="my-3" />
 

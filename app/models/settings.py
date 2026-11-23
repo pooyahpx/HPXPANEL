@@ -380,6 +380,8 @@ class ExternalConfig(BaseModel):
 
 class Subscription(BaseModel):
     url_prefix: str = Field(default="")
+    # Internal: last subscription origin we already DM'd to Telegram buyers (domain-change notify).
+    last_notified_sub_origin: str = Field(default="")
     update_interval: int = Field(default=12)
     support_url: str = Field(default="https://t.me/")
     profile_title: str = Field(default="Subscription")

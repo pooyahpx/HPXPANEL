@@ -696,6 +696,45 @@ async def ask_broadcast(event: types.CallbackQuery, db: AsyncSession, state: FSM
     await event.answer()
 
 
+@router.callback_query(ShopAdminKeyboard.Callback.filter(ShopAdminAction.resend_subs_domain == F.action))
+async def ask_resend_subs_domain(event: types.CallbackQuery, db: AsyncSession):
+    lang = await _lang(db, event.from_user.id)
+    from aiogram.utils.keyboard import InlineKeyboardBuilder
+
+    kb = InlineKeyboardBuilder()
+    kb.button(
+        text=t(lang, "btn_resend_subs_confirm"),
+        callback_data=ShopAdminKeyboard.Callback(action=ShopAdminAction.resend_subs_domain_confirm),
+    )
+    kb.button(text=t(lang, "btn_back"), callback_data=ShopAdminKeyboard.Callback(action=ShopAdminAction.home))
+    kb.adjust(1)
+    await event.message.answer(rich(lang, "admin_resend_subs_confirm"), reply_markup=kb.as_markup())
+    await event.answer()
+
+
+@router.callback_query(ShopAdminKeyboard.Callback.filter(ShopAdminAction.resend_subs_domain_confirm == F.action))
+async def confirm_resend_subs_domain(event: types.CallbackQuery, db: AsyncSession, admin: AdminDetails):
+    lang = await _lang(db, event.from_user.id)
+    from app.telegram import get_bot
+    from app.telegram.utils.sub_delivery import notify_buyers_subscription_domain_change, resolve_current_sub_origin
+
+    bot = get_bot()
+    origin = await resolve_current_sub_origin()
+    if bot is None or not origin:
+        await event.answer(t(lang, "admin_resend_subs_failed"), show_alert=True)
+        return
+
+    progress = await event.message.answer(t(lang, "admin_resend_subs_sending"))
+    await event.answer()
+    ok = await notify_buyers_subscription_domain_change(force=True)
+    try:
+        await progress.delete()
+    except Exception:
+        pass
+    await event.message.answer(t(lang, "admin_resend_subs_done", ok=ok))
+    await _render_admin_shop(event, db, admin)
+
+
 @router.message(forms.ShopAdminBroadcast.waiting_message, F.text | F.photo)
 async def send_broadcast(event: types.Message, state: FSMContext, db: AsyncSession, admin: AdminDetails):
     data = await state.get_data()

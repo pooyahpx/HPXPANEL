@@ -252,13 +252,31 @@ STRINGS: dict[str, dict[str, str]] = {
         "sold_sub_row": "• #{order_id} · {c}{username}{/c} ← {buyer} · {plan}",
         "sold_sub_detail": "📡 {b}جزئیات ساب{/b}\n\n🧾 سفارش: #{order_id}\n🔑 یوزر: {c}{username}{/c}\n👤 خریدار: {buyer}\n📦 پلن: {plan}\n🕐 تاریخ: {created}\n\n🔗 ساب:\n{c}{url}{/c}",
         "sub_updated_buyer": "🔄 {b}اشتراک شما به‌روز شد{/b}\n\n👤 یوزر: {c}{username}{/c}\n🔗 لینک جدید:\n{url}",
+        "sub_domain_changed_buyer": (
+            "📢 {b}دامین اشتراک تغییر کرد{/b}\n\n"
+            "لطفاً لینک قبلی را حذف کنید و از لینک جدید استفاده کنید.\n\n"
+            "👤 یوزر: {c}{username}{/c}\n"
+            "🔗 لینک جدید اشتراک:\n{url}"
+        ),
         "owner_log_sub_updated": "🔄 {b}ساب تغییر کرد و ارسال شد{/b}\n\n🔑 یوزر: {c}{username}{/c}\n👤 خریدار: {buyer}\n📦 منبع: {source}\n📌 علت: {reason}",
+        "owner_log_domain_notify": "📢 {b}لینک ساب با دامین جدید ارسال شد{/b}\n\n✅ تعداد: {count}\n🌐 دامین: {c}{origin}{/c}",
         "sub_source_test": "تست رایگان",
         "sub_source_order": "سفارش #{id}",
         "sub_source_order_unknown": "سفارش",
         "sub_reason_revoke": "لغو/تغییر ساب (revoke)",
         "sub_reason_auto": "تشخیص خودکار پنل",
+        "sub_reason_domain": "تغییر دامین ساب",
         "sub_reason_change": "تغییر تنظیمات کاربر",
+        "btn_resend_subs_domain": "🔗 ارسال ساب با دامین جدید",
+        "btn_resend_subs_confirm": "✅ بله، برای همه بفرست",
+        "admin_resend_subs_confirm": (
+            "📢 {b}ارسال لینک ساب با دامین جدید{/b}\n\n"
+            "برای همه خریداران قبلی بات، پیام اطلاع‌رسانی + لینک جدید ارسال می‌شود.\n"
+            "ادامه می‌دهید؟"
+        ),
+        "admin_resend_subs_sending": "⏳ در حال ارسال لینک جدید به خریداران…",
+        "admin_resend_subs_done": "✅ ارسال شد\nموفق: {ok}\nکل خریداران بررسی‌شده با ساب فعال در صف ارسال بودند.",
+        "admin_resend_subs_failed": "❌ بات آماده نیست یا دامین ساب خالی است.",
         "admin_shop_home": "🛍 {b}مدیریت فروشگاه{/b}\nفعال: {enabled}\nکارت‌ها: {cards}\nپیام خوش‌آمد: {welcome}\nتوضیحات کارت: {card_note}\nعکس کارت: {card_photos}\nتست: {test}\nخرید دلخواه: {custom}\nپلن‌های فعال: {plans}\nسفارش‌های باز: {pending}\nعضویت اجباری: {force_join}\nوضعیت سرورها: {server_status}",
         "admin_cards_count": "{count} کارت",
         "admin_test_summary": "{data} · {days} روز · گروه {groups}",
@@ -715,13 +733,31 @@ STRINGS: dict[str, dict[str, str]] = {
         "sold_sub_row": "• #{order_id} · {c}{username}{/c} ← {buyer} · {plan}",
         "sold_sub_detail": "📡 {b}Subscription details{/b}\n\n🧾 Order: #{order_id}\n🔑 User: {c}{username}{/c}\n👤 Buyer: {buyer}\n📦 Plan: {plan}\n🕐 Date: {created}\n\n🔗 Sub:\n{c}{url}{/c}",
         "sub_updated_buyer": "🔄 {b}Your subscription was updated{/b}\n\n👤 User: {c}{username}{/c}\n🔗 New link:\n{url}",
+        "sub_domain_changed_buyer": (
+            "📢 {b}Subscription domain changed{/b}\n\n"
+            "Please replace your old link with the new one below.\n\n"
+            "👤 User: {c}{username}{/c}\n"
+            "🔗 New subscription link:\n{url}"
+        ),
         "owner_log_sub_updated": "🔄 {b}Sub changed and sent{/b}\n\n🔑 User: {c}{username}{/c}\n👤 Buyer: {buyer}\n📦 Source: {source}\n📌 Reason: {reason}",
+        "owner_log_domain_notify": "📢 {b}New-domain sub links sent{/b}\n\n✅ Count: {count}\n🌐 Origin: {c}{origin}{/c}",
         "sub_source_test": "Free test",
         "sub_source_order": "Order #{id}",
         "sub_source_order_unknown": "Order",
         "sub_reason_revoke": "Subscription revoke",
         "sub_reason_auto": "Automatic panel detection",
+        "sub_reason_domain": "Subscription domain change",
         "sub_reason_change": "User settings changed",
+        "btn_resend_subs_domain": "🔗 Resend subs (new domain)",
+        "btn_resend_subs_confirm": "✅ Yes, send to everyone",
+        "admin_resend_subs_confirm": (
+            "📢 {b}Resend subscription links (new domain){/b}\n\n"
+            "Every previous bot buyer will get a notice + their new subscription link.\n"
+            "Continue?"
+        ),
+        "admin_resend_subs_sending": "⏳ Sending new links to buyers…",
+        "admin_resend_subs_done": "✅ Done\nSent: {ok}",
+        "admin_resend_subs_failed": "❌ Bot is not ready or subscription domain is empty.",
         "admin_shop_home": "🛍 {b}Shop admin{/b}\nEnabled: {enabled}\nCards: {cards}\nWelcome: {welcome}\nCard note: {card_note}\nCard photos: {card_photos}\nTest: {test}\nCustom purchase: {custom}\nActive plans: {plans}\nPending orders: {pending}\nForce join: {force_join}\nServer status: {server_status}",
         "admin_cards_count": "{count} cards",
         "admin_test_summary": "{data} · {days} days · groups {groups}",

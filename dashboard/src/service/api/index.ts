@@ -1547,6 +1547,8 @@ export interface ExternalConfig {
   name?: string
   link: string
   enabled?: boolean
+  /** When true, only users with remaining volume on this panel receive the link */
+  respect_user_quota?: boolean
 }
 
 export interface Subscription {

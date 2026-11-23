@@ -44,6 +44,7 @@ const GeneralSettings = lazyWithChunkRecovery(() => import('../pages/_dashboard.
 const HwidSettings = lazyWithChunkRecovery(() => import('../pages/_dashboard.settings.hwid'))
 const NotificationSettings = lazyWithChunkRecovery(() => import('../pages/_dashboard.settings.notifications'))
 const SubscriptionSettings = lazyWithChunkRecovery(() => import('../pages/_dashboard.settings.subscriptions'))
+const MotherConfigsSettings = lazyWithChunkRecovery(() => import('../pages/_dashboard.settings.mother-configs'))
 const TelegramBotPage = lazyWithChunkRecovery(() => import('../pages/_dashboard.telegram'))
 const WebhookSettings = lazyWithChunkRecovery(() => import('../pages/_dashboard.settings.webhook'))
 const Statistics = lazyWithChunkRecovery(() => import('../pages/_dashboard.statistics'))
@@ -361,6 +362,14 @@ export const router = createHashRouter([
             element: (
               <Suspense fallback={<LoadingSpinner />}>
                 <SubscriptionSettings />
+              </Suspense>
+            ),
+          },
+          {
+            path: '/settings/mother-configs',
+            element: (
+              <Suspense fallback={<LoadingSpinner />}>
+                <MotherConfigsSettings />
               </Suspense>
             ),
           },

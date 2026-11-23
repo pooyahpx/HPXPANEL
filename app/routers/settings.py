@@ -4,6 +4,11 @@ from app.db import AsyncSession, get_db
 from app.models.settings import General, SettingsSchema
 from app.operation import OperatorType
 from app.operation.settings import SettingsOperation
+from app.services.external_config_probe import (
+    ExternalConfigProbeRequest,
+    ExternalConfigProbeResponse,
+    probe_external_config,
+)
 from app.utils import responses
 
 from .authentication import require_permission
@@ -29,3 +34,15 @@ async def modify_settings(
     modify: SettingsSchema, db: AsyncSession = Depends(get_db), _=Depends(require_permission("settings", "update"))
 ):
     return await settings_operator.modify_settings(db, modify)
+
+
+@router.post(
+    "/subscription/external-configs/probe",
+    response_model=ExternalConfigProbeResponse,
+)
+async def probe_subscription_external_config(
+    body: ExternalConfigProbeRequest,
+    _=Depends(require_permission("settings", "read")),
+):
+    """Live TCP ping + light speed probe for a mother/external share link."""
+    return await probe_external_config(body)

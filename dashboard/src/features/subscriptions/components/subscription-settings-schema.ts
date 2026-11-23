@@ -127,6 +127,7 @@ export const externalConfigSchema = z.object({
       { message: 'Must be a share link (vless://, vmess://, trojan://, …)' },
     ),
   enabled: z.boolean().default(true),
+  respect_user_quota: z.boolean().default(true),
 })
 
 export const subscriptionSchema = z.object({

@@ -185,6 +185,7 @@ write_env_file() {
   local dest="$1"
   cat >"$dest" <<EOF
 PANEL_URL=${PANEL_URL:-}
+PANEL_URL_FALLBACK=${PANEL_URL_FALLBACK:-}
 AGENT_KEY=${AGENT_KEY:-}
 PULSE_SIDE=${PULSE_SIDE:-}
 PULSE_ID=${PULSE_ID:-}
@@ -199,6 +200,48 @@ HPX_AGENT_ASSETS_BASE=${HPX_AGENT_ASSETS_BASE:-}
 HPX_INSECURE=${HPX_INSECURE:-0}
 EOF
   chmod 600 "$dest"
+}
+
+# Apply panel_url / panel_url_fallback from claim, config, or heartbeat JSON.
+# Survives panel domain changes when IP fallback still reaches the panel.
+apply_panel_urls_from_json() {
+  local json="${1:-}"
+  local next fallback changed=0
+  [ -n "$json" ] || return 0
+  next=$(echo "$json" | jq -r '.panel_url // empty' 2>/dev/null || true)
+  fallback=$(echo "$json" | jq -r '.panel_url_fallback // empty' 2>/dev/null || true)
+  if [ -n "$next" ] && [ "$next" != "null" ]; then
+    next="${next%/}"
+    if [ "$next" != "${PANEL_URL%/}" ]; then
+      log "panel pushed new PANEL_URL: ${next} (was ${PANEL_URL:-empty})"
+      PANEL_URL="$next"
+      changed=1
+    fi
+  fi
+  if [ -n "$fallback" ] && [ "$fallback" != "null" ]; then
+    fallback="${fallback%/}"
+    if [ "$fallback" != "${PANEL_URL_FALLBACK:-}" ]; then
+      PANEL_URL_FALLBACK="$fallback"
+      changed=1
+    fi
+  fi
+  if [ "$changed" = 1 ]; then
+    write_env
+    # Keep multi-pulse env files in sync on this host.
+    local env_file
+    if [ -d "$AGENTS_DIR" ]; then
+      for env_file in "$AGENTS_DIR"/*.env; do
+        [ -f "$env_file" ] || continue
+        grep -q '^PANEL_URL=' "$env_file" 2>/dev/null \
+          && sed -i "s|^PANEL_URL=.*|PANEL_URL=${PANEL_URL}|" "$env_file"
+        if grep -q '^PANEL_URL_FALLBACK=' "$env_file" 2>/dev/null; then
+          sed -i "s|^PANEL_URL_FALLBACK=.*|PANEL_URL_FALLBACK=${PANEL_URL_FALLBACK:-}|" "$env_file"
+        else
+          printf '\nPANEL_URL_FALLBACK=%s\n' "${PANEL_URL_FALLBACK:-}" >>"$env_file"
+        fi
+      done
+    fi
+  fi
 }
 
 write_env() {
@@ -527,6 +570,12 @@ api_request() {
         if [ "$base" != "${PANEL_URL%/}" ]; then
           log "panel API reachable at ${base} (was ${PANEL_URL}) — updating PANEL_URL"
           PANEL_URL="$base"
+          # Persist immediately so the next 5s heartbeat survives a domain cutover.
+          write_env 2>/dev/null || true
+        fi
+        # Learn current domain + IP fallback from panel payloads when present.
+        if [[ "$resp" == *'"panel_url"'* ]] || [[ "$resp" == *'"panel_url_fallback"'* ]]; then
+          apply_panel_urls_from_json "$resp"
         fi
         printf '%s' "$resp"
         return 0
@@ -2142,9 +2191,10 @@ EOF
     esac
 
   [ -n "$lat" ] && lat_json="$lat"
+  local hb_resp=""
   # Iran must not overwrite abroad's diagnostic message every 5s.
   if [ "${PULSE_SIDE:-}" = "iran" ] && [[ "${TUNNEL_MODE:-}" == reverse_* ]]; then
-    api_request POST "/api/hpx_pulse/agent/heartbeat" \
+    hb_resp=$(api_request POST "/api/hpx_pulse/agent/heartbeat" \
       "$(jq -nc \
         --arg s "running" \
         --arg h "$(hostname -f 2>/dev/null || hostname)" \
@@ -2153,9 +2203,9 @@ EOF
         --argjson rx "$iface_rx" \
         --argjson tx "$iface_tx" \
         '{status:$s, host:$h, tunnel_running:$tr, iface_up:$iu, iface_rx_bytes:$rx, iface_tx_bytes:$tx}')" \
-      >/dev/null && hb_ok=1
+      ) && hb_ok=1
   else
-    api_request POST "/api/hpx_pulse/agent/heartbeat" \
+    hb_resp=$(api_request POST "/api/hpx_pulse/agent/heartbeat" \
       "$(jq -nc \
         --arg s "running" \
         --arg h "$(hostname -f 2>/dev/null || hostname)" \
@@ -2167,7 +2217,7 @@ EOF
         --argjson rx "$iface_rx" \
         --argjson tx "$iface_tx" \
         '{status:$s, host:$h, tunnel_running:$tr, iface_up:$iu, latency_ms:($lm|tonumber? // null), forward_ok:$fo, message:$m, iface_rx_bytes:$rx, iface_tx_bytes:$tx}')" \
-      >/dev/null && hb_ok=1
+      ) && hb_ok=1
   fi
   if [ "$hb_ok" != 1 ]; then
     if panel_registration_revoked; then
@@ -2177,6 +2227,7 @@ EOF
     fi
     warn "heartbeat to panel failed (HTTP ${API_LAST_HTTP_CODE:-?}) — keeping tunnel; try: hpx-pulse-agent set-panel-url https://domain (no :8000)"
   else
+    apply_panel_urls_from_json "$hb_resp"
     _reset_revoke_streak "${PULSE_ID:-}"
     # Fast path: Diagnose UI queues "diagnose" — pick up on 5s ping, not only 30s sync.
     maybe_handle_diagnose_command || true
@@ -2267,6 +2318,7 @@ cmd_join() {
   ABROAD_PUBLIC_IP=$(echo "$claim" | jq -r '.abroad_public_ip // empty')
   PORT_FORWARDS=$(echo "$claim" | jq -c '.port_forwards // []')
   HPX_AGENT_ASSETS_BASE=$(echo "$claim" | jq -r '.agent_assets_base // empty')
+  apply_panel_urls_from_json "$claim"
   [ -n "$AGENT_KEY" ] && [ "$AGENT_KEY" != "null" ] || die "missing agent_key from panel"
   # Fresh claim must not inherit a leftover revoke streak from a previous attempt on this pulse id.
   _reset_revoke_streak "$PULSE_ID"
@@ -2353,7 +2405,11 @@ cmd_set_panel_url() {
   if [ -d "$AGENTS_DIR" ]; then
     for env_file in "$AGENTS_DIR"/*.env; do
       [ -f "$env_file" ] || continue
-      sed -i "s|^PANEL_URL=.*|PANEL_URL=${PANEL_URL}|" "$env_file"
+      if grep -q '^PANEL_URL=' "$env_file" 2>/dev/null; then
+        sed -i "s|^PANEL_URL=.*|PANEL_URL=${PANEL_URL}|" "$env_file"
+      else
+        printf '\nPANEL_URL=%s\n' "$PANEL_URL" >>"$env_file"
+      fi
     done
   fi
   log "PANEL_URL set to ${PANEL_URL}"

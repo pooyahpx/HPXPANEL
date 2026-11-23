@@ -180,7 +180,11 @@ def evaluate_and_repair(pulse: HpxPulse, *, auto: bool = True) -> PulseHealResul
             stale_parts.append("Abroad agent silent")
         if stale_parts and pulse.status != HpxPulseStatus.unhealthy:
             pulse.status = HpxPulseStatus.unhealthy
-            pulse.message = "; ".join(stale_parts)
+            pulse.message = (
+                "; ".join(stale_parts)
+                + " — tunnel may still be up; agents likely using an old PANEL_URL "
+                "(sudo hpx-pulse-agent set-panel-url https://YOUR_DOMAIN)"
+            )
             pulse.last_status_change = now
             result.marked_unhealthy = True
 

@@ -77,6 +77,8 @@ export interface HpxPulseResponse {
   advice: PulseAdviseResponse | null
   iran_claimed: boolean
   abroad_claimed: boolean
+  iran_agent_online?: boolean
+  abroad_agent_online?: boolean
   iran_agent_host: string | null
   abroad_agent_host: string | null
   iran_agent_last_seen: string | null

@@ -113,11 +113,35 @@ async def _reap_pending_deletes(db: AsyncSession) -> int:
     return removed
 
 
+from app.services.hpx_pulse.healer import AGENT_STALE_SECONDS, _agent_stale
 from app.services.hpx_pulse.tunnel_render import mint_tunnel_token, render_for_side
 from app.utils.crypto import decrypt_secret, encrypt_secret, hash_api_key
 from app.utils.helpers import resolve_panel_base_url
 
 JOIN_TOKEN_TTL_HOURS = 24
+
+
+async def _panel_urls_for_agents(panel_url: str | None) -> tuple[str | None, str | None]:
+    """Return (panel_url, panel_url_fallback_with_ip) for agent auto-recovery after domain changes."""
+    resolved = (panel_url or "").rstrip("/") or None
+    if not resolved:
+        return None, None
+    fallback = None
+    try:
+        from app.services.hpx_tunnel.manager import resolve_panel_public_ip
+
+        ip, _src = await resolve_panel_public_ip(resolved)
+        if ip:
+            fallback = _url_with_host(resolved, ip)
+            if fallback and fallback.rstrip("/") == resolved:
+                fallback = None
+    except Exception:
+        logger.debug("Could not resolve panel IP fallback", exc_info=True)
+    return resolved, fallback
+
+
+def _agent_online(last_seen: dt | None) -> bool:
+    return not _agent_stale(last_seen, threshold=AGENT_STALE_SECONDS)
 
 # Edits to any of these change what the tunnel agents must run (or where they connect), so the
 # running tunnel has to be torn down and agents rejoin with fresh tokens.
@@ -264,6 +288,10 @@ def _to_response(db_pulse: HpxPulse) -> HpxPulseResponse:
         "advice": advice,
         "iran_claimed": bool(db_pulse.iran_agent_key_hash),
         "abroad_claimed": bool(db_pulse.abroad_agent_key_hash),
+        "iran_agent_online": bool(db_pulse.iran_agent_key_hash)
+        and _agent_online(db_pulse.iran_agent_last_seen),
+        "abroad_agent_online": bool(db_pulse.abroad_agent_key_hash)
+        and _agent_online(db_pulse.abroad_agent_last_seen),
         "iran_agent_host": db_pulse.iran_agent_host,
         "abroad_agent_host": db_pulse.abroad_agent_host,
         "iran_agent_last_seen": db_pulse.iran_agent_last_seen,
@@ -1193,6 +1221,7 @@ class HpxPulseOperation(BaseOperation):
         await db.commit()
 
         resolved_panel = await self._panel_url(panel_url)
+        primary, fallback = await _panel_urls_for_agents(resolved_panel)
         return HpxPulseAgentBootstrap(
             pulse_id=db_pulse.id,
             name=db_pulse.name,
@@ -1206,6 +1235,8 @@ class HpxPulseOperation(BaseOperation):
             tunnel_mode=db_pulse.tunnel_mode,
             port_forwards=db_pulse.port_forwards or [],
             agent_assets_base=agent_assets_base(resolved_panel),
+            panel_url=primary,
+            panel_url_fallback=fallback,
         )
 
     async def _pulse_from_agent_key(self, db: AsyncSession, agent_key: str, side: str) -> HpxPulse:
@@ -1214,8 +1245,16 @@ class HpxPulseOperation(BaseOperation):
             await self.raise_error(message="Invalid agent key", code=401)
         return db_pulse
 
-    def _agent_config(self, db_pulse: HpxPulse, side: str, token: str) -> HpxPulseAgentConfigResponse:
+    async def _agent_config(
+        self,
+        db_pulse: HpxPulse,
+        side: str,
+        token: str,
+        *,
+        panel_url: str | None = None,
+    ) -> HpxPulseAgentConfigResponse:
         toml = render_for_side(side, db_pulse, token)
+        primary, fallback = await _panel_urls_for_agents(await self._panel_url(panel_url))
         return HpxPulseAgentConfigResponse(
             pulse_id=db_pulse.id,
             name=db_pulse.name,
@@ -1230,6 +1269,8 @@ class HpxPulseOperation(BaseOperation):
             iran_public_ip=db_pulse.iran_public_ip,
             abroad_public_ip=db_pulse.abroad_public_ip,
             port_forwards=db_pulse.port_forwards or [],
+            panel_url=primary,
+            panel_url_fallback=fallback,
         )
 
     async def get_agent_config(self, db: AsyncSession, *, agent_key: str, side: str) -> HpxPulseAgentConfigResponse:
@@ -1238,7 +1279,7 @@ class HpxPulseOperation(BaseOperation):
         seen_key = "iran_agent_last_seen" if side == "iran" else "abroad_agent_last_seen"
         await update_hpx_pulse(db, db_pulse, {seen_key: dt.now(UTC)})
         await db.commit()
-        return self._agent_config(db_pulse, side, token)
+        return await self._agent_config(db_pulse, side, token)
 
     async def get_usage_share(
         self, db: AsyncSession, *, admin: AdminDetails, query: PulseUsageShareQuery
@@ -1338,7 +1379,7 @@ class HpxPulseOperation(BaseOperation):
                 update_data["message"] = f"{side} agent online — waiting for tunnel link"
         db_pulse = await update_hpx_pulse(db, db_pulse, update_data)
         await db.commit()
-        return self._agent_config(db_pulse, side, token)
+        return await self._agent_config(db_pulse, side, token)
 
     async def agent_ack(self, db: AsyncSession, *, agent_key: str, side: str, model: HpxPulseAgentAckRequest) -> None:
         db_pulse = await self._pulse_from_agent_key(db, agent_key, side)

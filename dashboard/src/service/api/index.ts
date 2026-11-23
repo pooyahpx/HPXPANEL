@@ -1543,6 +1543,12 @@ export interface SubFormatEnable {
   outline?: boolean
 }
 
+export interface ExternalConfig {
+  name?: string
+  link: string
+  enabled?: boolean
+}
+
 export interface Subscription {
   url_prefix?: string
   update_interval?: number
@@ -1559,6 +1565,8 @@ export interface Subscription {
   disable_sub_template?: boolean
   randomize_order?: boolean
   custom_variables?: CustomVariable[]
+  /** Mother / external share links from another panel */
+  external_configs?: ExternalConfig[]
   /** Subscription page skin chosen by the admin (users cannot change it) */
   sub_theme?: SubTheme
   /** Forced appearance of the subscription page */

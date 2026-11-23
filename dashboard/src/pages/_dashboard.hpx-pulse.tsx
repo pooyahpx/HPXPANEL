@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import PageTransition from '@/components/layout/page-transition'
+import HpxNovaList from '@/features/hpx-nova/components/hpx-nova-list'
 import HpxPulseList from '@/features/hpx-pulse/components/hpx-pulse-list'
 import HpxTunnelsList from '@/features/hpx-tunnels/components/hpx-tunnels-list'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -12,11 +13,13 @@ import { cn } from '@/lib/utils'
 import { useGetHpxPulses } from '@/service/api/hpx-pulse'
 import { fetcher } from '@/service/http'
 import { canReadResourcePage, hasPermission } from '@/utils/rbac'
-import { Activity, CircleAlert, Gauge, Plus, Radar, RadioTower, RefreshCw, Timer, Zap } from 'lucide-react'
+import { Activity, CircleAlert, Gauge, Orbit, Plus, Radar, RadioTower, RefreshCw, Timer, Zap } from 'lucide-react'
 import { useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router'
+
+type TunnelTab = 'pulse' | 'nova' | 'icmp'
 
 export default function HpxPulsePage() {
   const { t } = useTranslation()
@@ -24,18 +27,43 @@ export default function HpxPulsePage() {
   const { admin } = useAdmin()
   const canCreate = hasPermission(admin, 'hpx_pulse', 'create')
   const canCreateIcmp = hasPermission(admin, 'hpx_tunnels', 'create')
+  const canCreateNova = hasPermission(admin, 'hpx_nova', 'create')
   const canReadPulse = canReadResourcePage(admin, 'hpx_pulse')
   const canReadIcmp = canReadResourcePage(admin, 'hpx_tunnels')
+  const canReadNova = canReadResourcePage(admin, 'hpx_nova')
   const showPulseTab = canReadPulse
   const showIcmpTab = canReadIcmp
+  const showNovaTab = canReadNova
+  const tabCount = Number(showPulseTab) + Number(showNovaTab) + Number(showIcmpTab)
   const [searchParams, setSearchParams] = useSearchParams()
   const tabParam = searchParams.get('tab')
-  const activeTab = tabParam === 'icmp' && showIcmpTab ? 'icmp' : showPulseTab ? 'pulse' : 'icmp'
-  const { data, isFetching, refetch } = useGetHpxPulses({ limit: 50, offset: 0 }, { enabled: showPulseTab })
+  const activeTab: TunnelTab =
+    tabParam === 'icmp' && showIcmpTab
+      ? 'icmp'
+      : tabParam === 'nova' && showNovaTab
+        ? 'nova'
+        : showPulseTab
+          ? 'pulse'
+          : showNovaTab
+            ? 'nova'
+            : 'icmp'
+  const { data, isFetching, refetch } = useGetHpxPulses({ limit: 50, offset: 0 }, { enabled: showPulseTab && activeTab === 'pulse' })
   const { data: engineInfo } = useQuery({
     queryKey: ['hpx-pulse-engine'],
     queryFn: () => fetcher('/api/hpx_pulse/engine', { method: 'GET' }) as Promise<{ engine_version: string; release_tag: string }>,
     staleTime: 60_000,
+    enabled: activeTab === 'pulse',
+  })
+  const { data: novaEngineInfo } = useQuery({
+    queryKey: ['hpx-nova-engine'],
+    queryFn: () =>
+      fetcher('/api/hpx_nova/engine', { method: 'GET' }) as Promise<{
+        engine_name?: string
+        engine_version: string
+        release_tag: string
+      }>,
+    staleTime: 60_000,
+    enabled: activeTab === 'nova' && showNovaTab,
   })
 
   const overview = useMemo(() => {
@@ -84,11 +112,17 @@ export default function HpxPulsePage() {
   useEffect(() => {
     if (tabParam === 'icmp' && !showIcmpTab) {
       setSearchParams({}, { replace: true })
+      return
     }
-    if (tabParam !== 'icmp' && !showPulseTab && showIcmpTab) {
-      setSearchParams({ tab: 'icmp' }, { replace: true })
+    if (tabParam === 'nova' && !showNovaTab) {
+      setSearchParams({}, { replace: true })
+      return
     }
-  }, [tabParam, showIcmpTab, showPulseTab, setSearchParams])
+    if (!tabParam && !showPulseTab) {
+      if (showNovaTab) setSearchParams({ tab: 'nova' }, { replace: true })
+      else if (showIcmpTab) setSearchParams({ tab: 'icmp' }, { replace: true })
+    }
+  }, [tabParam, showIcmpTab, showPulseTab, showNovaTab, setSearchParams])
 
   return (
     <div className="flex min-h-0 w-full flex-1 flex-col items-start gap-0">
@@ -140,12 +174,14 @@ export default function HpxPulsePage() {
                     </div>
                     <p className="text-muted-foreground mt-1.5 max-w-3xl text-sm leading-relaxed">
                       {t('hpxPulse.descriptionMerged', {
-                        defaultValue: 'HPX Pulse tunnels plus legacy ICMP (Narnia) — one place for Iran ↔ abroad paths.',
+                        defaultValue:
+                          'HPX Pulse, HPX Nova, and legacy ICMP — one place for Iran ↔ abroad paths.',
                       })}
                     </p>
                     <p className="text-muted-foreground mt-1 font-mono text-[11px]" dir="ltr">
-                      {t('hpxPulse.enginePin', { defaultValue: 'Engine pin' })}: v
-                      {engineInfo?.engine_version || '—'}
+                      {activeTab === 'nova'
+                        ? `${novaEngineInfo?.engine_name || 'HPX NOVA TUNNEL ENGINE'}: v${novaEngineInfo?.engine_version || '—'}`
+                        : `${t('hpxPulse.enginePin', { defaultValue: 'Engine pin' })}: v${engineInfo?.engine_version || '—'}`}
                     </p>
                   </div>
                 </div>
@@ -156,10 +192,10 @@ export default function HpxPulsePage() {
                   type="button"
                   size="sm"
                   variant="outline"
-                  className="h-10 w-10 rounded-xl p-0"
+                  className="h-10 w-10 rounded-xl p-0 cursor-pointer"
                   title={t('refresh', { defaultValue: 'Refresh' })}
                   onClick={() => void refetch()}
-                  disabled={isFetching}
+                  disabled={isFetching || activeTab !== 'pulse'}
                 >
                   <RefreshCw className={cn('size-3.5', isFetching && 'animate-spin')} />
                 </Button>
@@ -167,18 +203,29 @@ export default function HpxPulsePage() {
                   <Button
                     type="button"
                     size="sm"
-                    className="h-10 gap-1.5 rounded-xl"
+                    className="h-10 gap-1.5 rounded-xl cursor-pointer"
                     onClick={() => window.dispatchEvent(new CustomEvent('openHpxPulseDialog'))}
                   >
                     <Plus className="size-3.5" />
                     {t('hpxPulse.add')}
                   </Button>
                 )}
+                {activeTab === 'nova' && canCreateNova && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="h-10 gap-1.5 rounded-xl cursor-pointer"
+                    onClick={() => window.dispatchEvent(new CustomEvent('openHpxNovaDialog'))}
+                  >
+                    <Plus className="size-3.5" />
+                    {t('hpxNova.add', { defaultValue: 'Add Nova' })}
+                  </Button>
+                )}
                 {activeTab === 'icmp' && canCreateIcmp && (
                   <Button
                     type="button"
                     size="sm"
-                    className="h-10 gap-1.5 rounded-xl"
+                    className="h-10 gap-1.5 rounded-xl cursor-pointer"
                     onClick={() => window.dispatchEvent(new CustomEvent('openHpxTunnelDialog'))}
                   >
                     <Plus className="size-3.5" />
@@ -188,21 +235,40 @@ export default function HpxPulsePage() {
               </div>
             </div>
 
-            {showPulseTab && showIcmpTab && (
+            {tabCount > 1 && (
               <Tabs
                 value={activeTab}
-                onValueChange={value => setSearchParams(value === 'icmp' ? { tab: 'icmp' } : {}, { replace: true })}
-                className="w-full max-w-md"
+                onValueChange={value => {
+                  if (value === 'icmp') setSearchParams({ tab: 'icmp' }, { replace: true })
+                  else if (value === 'nova') setSearchParams({ tab: 'nova' }, { replace: true })
+                  else setSearchParams({}, { replace: true })
+                }}
+                className="w-full max-w-xl"
               >
-                <TabsList className="bg-card/50 grid h-11 w-full grid-cols-2 rounded-2xl border border-white/10 p-1 backdrop-blur-md">
-                  <TabsTrigger value="pulse" className="gap-1.5 rounded-xl text-xs data-[state=active]:shadow-md">
-                    <Zap className="size-3.5" />
-                    {t('hpxPulse.tabPulse', { defaultValue: 'Pulse' })}
-                  </TabsTrigger>
-                  <TabsTrigger value="icmp" className="gap-1.5 rounded-xl text-xs data-[state=active]:shadow-md">
-                    <Radar className="size-3.5" />
-                    {t('hpxPulse.tabIcmp', { defaultValue: 'ICMP (legacy)' })}
-                  </TabsTrigger>
+                <TabsList
+                  className={cn(
+                    'bg-card/50 grid h-11 w-full rounded-2xl border border-white/10 p-1 backdrop-blur-md',
+                    tabCount === 3 ? 'grid-cols-3' : 'grid-cols-2',
+                  )}
+                >
+                  {showPulseTab && (
+                    <TabsTrigger value="pulse" className="gap-1.5 rounded-xl text-xs data-[state=active]:shadow-md cursor-pointer">
+                      <Zap className="size-3.5" />
+                      {t('hpxPulse.tabPulse', { defaultValue: 'Pulse' })}
+                    </TabsTrigger>
+                  )}
+                  {showNovaTab && (
+                    <TabsTrigger value="nova" className="gap-1.5 rounded-xl text-xs data-[state=active]:shadow-md cursor-pointer">
+                      <Orbit className="size-3.5" />
+                      {t('hpxPulse.tabNova', { defaultValue: 'HPX Nova' })}
+                    </TabsTrigger>
+                  )}
+                  {showIcmpTab && (
+                    <TabsTrigger value="icmp" className="gap-1.5 rounded-xl text-xs data-[state=active]:shadow-md cursor-pointer">
+                      <Radar className="size-3.5" />
+                      {t('hpxPulse.tabIcmp', { defaultValue: 'ICMP (legacy)' })}
+                    </TabsTrigger>
+                  )}
                 </TabsList>
               </Tabs>
             )}
@@ -309,6 +375,8 @@ export default function HpxPulsePage() {
       <PageTransition isContentTransition className="flex min-h-0 flex-1 flex-col">
         {activeTab === 'icmp' && showIcmpTab ? (
           <HpxTunnelsList embedded />
+        ) : activeTab === 'nova' && showNovaTab ? (
+          <HpxNovaList />
         ) : showPulseTab ? (
           <HpxPulseList />
         ) : null}

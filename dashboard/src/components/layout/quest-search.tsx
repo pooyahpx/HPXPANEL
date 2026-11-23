@@ -69,13 +69,17 @@ function useQuestItems(): QuestItem[] {
     if (canReadResourcePage(admin, 'nodes')) {
       items.push({ id: 'nodes', title: 'nodes.title', url: '/nodes', icon: Share2Icon, keywords: 'servers' })
     }
-    if (canReadResourcePage(admin, 'hpx_pulse') || canReadResourcePage(admin, 'hpx_tunnels')) {
+    if (
+      canReadResourcePage(admin, 'hpx_pulse') ||
+      canReadResourcePage(admin, 'hpx_nova') ||
+      canReadResourcePage(admin, 'hpx_tunnels')
+    ) {
       items.push({
         id: 'hpx-pulse',
         title: 'hpxPulse.title',
         url: '/hpx-pulse',
         icon: Zap,
-        keywords: 'pulse icmp tunnel ping hpx',
+        keywords: 'pulse nova icmp tunnel ping hpx',
       })
     }
     if (canReadResourcePage(admin, 'cores')) {

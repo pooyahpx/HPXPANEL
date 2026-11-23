@@ -249,7 +249,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             },
           ]
         : []),
-      ...(canReadHpxPulse || canReadHpxTunnels
+      ...(canReadHpxPulse || canReadHpxTunnels || canReadResourcePage(admin, 'hpx_nova')
         ? [
             {
               title: 'hpxPulse.title',

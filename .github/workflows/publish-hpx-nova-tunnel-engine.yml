@@ -1,0 +1,107 @@
+name: Publish HPX NOVA TUNNEL ENGINE binaries
+
+# Publishes HPX NOVA TUNNEL ENGINE archives for Nova agents (isolated from Pulse engine).
+on:
+  workflow_dispatch:
+    inputs:
+      upstream_tag:
+        description: "Upstream engine release tag to rebrand (e.g. v0.1.0)"
+        required: true
+        default: "v0.1.0"
+      engine_version:
+        description: "HPX Nova tunnel engine version label (e.g. 0.1.0)"
+        required: true
+        default: "0.1.0"
+      upstream_repo:
+        description: "GitHub repo providing linux musl binaries"
+        required: true
+        default: "CluvexStudio/rakhsh"
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve versions
+        id: meta
+        run: |
+          set -eux
+          upstream="${{ github.event.inputs.upstream_tag }}"
+          engine="${{ github.event.inputs.engine_version }}"
+          upstream="${upstream#v}"
+          engine="${engine#v}"
+          echo "upstream=v${upstream}" >> "$GITHUB_OUTPUT"
+          echo "engine=${engine}" >> "$GITHUB_OUTPUT"
+          echo "tag=hpx-nova-tunnel-engine-v${engine}" >> "$GITHUB_OUTPUT"
+          echo "repo=${{ github.event.inputs.upstream_repo }}" >> "$GITHUB_OUTPUT"
+
+      - name: Build Nova engine archives
+        run: |
+          set -eux
+          upstream="${{ steps.meta.outputs.upstream }}"
+          engine="${{ steps.meta.outputs.engine }}"
+          repo="${{ steps.meta.outputs.repo }}"
+          dist="$(pwd)/dist"
+          mkdir -p "$dist"
+
+          # Map panel arch names → upstream musl asset names.
+          declare -A MAP=(
+            [amd64]="x86_64-unknown-linux-musl"
+            [arm64]="aarch64-unknown-linux-musl"
+          )
+
+          for arch in amd64 arm64; do
+            target="${MAP[$arch]}"
+            # Prefer prefix-stripped asset names if publisher uses generic names; try common patterns.
+            candidates=(
+              "rakhsh-${target}"
+              "hpx-nova-tunnel-engine-${target}"
+              "nova-${target}"
+            )
+            work="$(mktemp -d)"
+            got=""
+            for name in "${candidates[@]}"; do
+              url="https://github.com/${repo}/releases/download/${upstream}/${name}"
+              if curl -fsSL "$url" -o "$work/bin"; then
+                got="$name"
+                break
+              fi
+            done
+            [[ -n "$got" ]] || { echo "No upstream binary for ${arch} (${upstream})" >&2; exit 1; }
+            chmod +x "$work/bin"
+            pkg="$(mktemp -d)"
+            install -m 755 "$work/bin" "$pkg/hpx-nova-tunnel-engine"
+            tar -czf "$dist/hpx-nova-tunnel-engine_linux_${arch}.tar.gz" -C "$pkg" hpx-nova-tunnel-engine
+            rm -rf "$work" "$pkg"
+          done
+
+          (
+            cd "$dist"
+            sha256sum hpx-nova-tunnel-engine_linux_amd64.tar.gz hpx-nova-tunnel-engine_linux_arm64.tar.gz > SHA256SUMS
+          )
+          echo "${engine}" > scripts/hpx-nova-tunnel-engine.version
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: HPX NOVA TUNNEL ENGINE ${{ steps.meta.outputs.engine }}
+          body: |
+            HPX NOVA TUNNEL ENGINE v${{ steps.meta.outputs.engine }}
+
+            Assets:
+            - `hpx-nova-tunnel-engine_linux_amd64.tar.gz`
+            - `hpx-nova-tunnel-engine_linux_arm64.tar.gz`
+            - `SHA256SUMS`
+
+            Agents install via:
+            `curl --http1.1 -fsSL …/api/hpx_nova/agent/engine-install.sh | sudo bash`
+          files: |
+            dist/hpx-nova-tunnel-engine_linux_amd64.tar.gz
+            dist/hpx-nova-tunnel-engine_linux_arm64.tar.gz
+            dist/SHA256SUMS
+          fail_on_unmatched_files: true

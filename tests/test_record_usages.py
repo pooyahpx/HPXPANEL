@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from collections import defaultdict
 from typing import Any
 from unittest.mock import AsyncMock
@@ -16,7 +15,6 @@ from app.db.models import Admin, AdminRole, AdminStatus, Node, NodeUsage, NodeUs
 from app.jobs import record_usages
 from app.models.proxy import ProxyTable
 from app.operation import admin_sync
-from config import database_settings
 
 
 class DummyNode:
@@ -29,10 +27,12 @@ class DummyNode:
 
 
 def _get_test_database_url() -> str:
-    test_from = os.getenv("TEST_FROM", "local").lower()
-    if test_from == "local":
-        return "sqlite+aiosqlite:///:memory:"
-    return database_settings.url
+    # Always isolate from the shared CI Postgres/Timescale URL.
+    # Timescale/Postgres jobs also run background scheduler/node workers against
+    # SQLALCHEMY_DATABASE_URL; drop_all/create_all on that same DB races them
+    # (UndefinedTableError: relation "users" does not exist) and flakes
+    # admin-limit assertions. These tests mock node APIs — SQLite is enough.
+    return "sqlite+aiosqlite:///:memory:"
 
 
 @pytest.fixture
@@ -64,13 +64,41 @@ async def session_factory(monkeypatch: pytest.MonkeyPatch):
         await conn.run_sync(base.Base.metadata.drop_all)
         await conn.run_sync(base.Base.metadata.create_all)
 
-    # Seed the 3 default roles so FK constraints on admins.role_id are satisfied
+    # Seed the 3 default roles so FK constraints on admins.role_id are satisfied.
+    # Explicit disconnect flags — do not rely on dialect boolean server defaults.
     async with async_sessionmaker(bind=engine, expire_on_commit=False)() as seed_session:
         seed_session.add_all(
             [
-                AdminRole(name="owner", is_owner=True, permissions={}, limits={}, features={}, access={}),
-                AdminRole(name="administrator", is_owner=False, permissions={}, limits={}, features={}, access={}),
-                AdminRole(name="operator", is_owner=False, permissions={}, limits={}, features={}, access={}),
+                AdminRole(
+                    name="owner",
+                    is_owner=True,
+                    permissions={},
+                    limits={},
+                    features={},
+                    access={},
+                    disconnect_users_when_limited=True,
+                    disconnect_users_when_disabled=True,
+                ),
+                AdminRole(
+                    name="administrator",
+                    is_owner=False,
+                    permissions={},
+                    limits={},
+                    features={},
+                    access={},
+                    disconnect_users_when_limited=True,
+                    disconnect_users_when_disabled=True,
+                ),
+                AdminRole(
+                    name="operator",
+                    is_owner=False,
+                    permissions={},
+                    limits={},
+                    features={},
+                    access={},
+                    disconnect_users_when_limited=True,
+                    disconnect_users_when_disabled=True,
+                ),
             ]
         )
         await seed_session.commit()

@@ -102,6 +102,10 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       { resource: 'hpx_pulse', action: 'create' },
       { resource: 'hpx_pulse', action: 'update' },
       { resource: 'hpx_pulse', action: 'delete' },
+      { resource: 'hpx_nova', action: 'read' },
+      { resource: 'hpx_nova', action: 'create' },
+      { resource: 'hpx_nova', action: 'update' },
+      { resource: 'hpx_nova', action: 'delete' },
     ],
   },
   {

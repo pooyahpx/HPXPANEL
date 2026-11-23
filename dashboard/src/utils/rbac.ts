@@ -62,6 +62,7 @@ export const firstAllowedRoute = (admin: AdminDetails | null | undefined) => {
   if (hasPermission(admin, 'audit_logs', 'read')) return '/audit'
   if (canReadResourcePage(admin, 'nodes')) return '/nodes'
   if (canReadResourcePage(admin, 'hpx_tunnels')) return '/hpx-pulse?tab=icmp'
+  if (canReadResourcePage(admin, 'hpx_nova')) return '/hpx-pulse?tab=nova'
   if (canReadResourcePage(admin, 'hpx_pulse')) return '/hpx-pulse'
   if (canReadResourcePage(admin, 'cores')) return '/nodes/cores'
   if (hasPermission(admin, 'nodes', 'logs')) return '/nodes/logs'
@@ -95,7 +96,11 @@ export const canAccessRoute = (admin: AdminDetails | null | undefined, pathname:
   if (pathname.startsWith('/nodes/wireguard')) return canReadResourcePage(admin, 'cores')
   if (pathname.startsWith('/hpx-tunnel')) return canReadResourcePage(admin, 'hpx_tunnels')
   if (pathname.startsWith('/hpx-pulse')) {
-    return canReadResourcePage(admin, 'hpx_pulse') || canReadResourcePage(admin, 'hpx_tunnels')
+    return (
+      canReadResourcePage(admin, 'hpx_pulse') ||
+      canReadResourcePage(admin, 'hpx_nova') ||
+      canReadResourcePage(admin, 'hpx_tunnels')
+    )
   }
   if (pathname.startsWith('/nodes/hpx-tunnel')) return canReadResourcePage(admin, 'hpx_tunnels')
   if (pathname.startsWith('/nodes/logs')) return hasPermission(admin, 'nodes', 'logs')

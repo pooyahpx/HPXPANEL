@@ -8,7 +8,7 @@ from sqlalchemy import select
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.db import GetDB
-from app.db.models import Admin, AdminRole, APIKey, CoreConfig, HpxPulse, HpxTunnel, Node, User
+from app.db.models import Admin, AdminRole, APIKey, CoreConfig, HpxNova, HpxPulse, HpxTunnel, Node, User
 from app.services.audit import model_snapshot, record_audit_log, redact
 from app.utils.jwt import get_admin_payload
 
@@ -33,6 +33,7 @@ _TARGETS = (
     AuditTarget("/api/api_key", "api_key", APIKey),
     AuditTarget("/api/hpx_tunnels", "hpx_tunnel", HpxTunnel),
     AuditTarget("/api/hpx_pulse", "hpx_pulse", HpxPulse),
+    AuditTarget("/api/hpx_nova", "hpx_nova", HpxNova),
     AuditTarget("/api/hpx_tunnel", "hpx_tunnel", HpxTunnel),
     AuditTarget("/api/backup", "backup", object),
     AuditTarget("/api/user", "user", User, "username"),
@@ -100,7 +101,7 @@ def _match_target(path: str, method: str) -> AuditTarget | None:
         if path == target.prefix or path.startswith(f"{target.prefix}/"):
             if target.resource == "admin" and path in {"/api/admin/token", "/api/admin/miniapp/token"}:
                 return None
-            if target.resource in {"hpx_pulse", "hpx_tunnel"} and "/agent/" in path:
+            if target.resource in {"hpx_pulse", "hpx_nova", "hpx_tunnel"} and "/agent/" in path:
                 return None
             if target.resource == "backup" and not path.endswith("/restore"):
                 return None

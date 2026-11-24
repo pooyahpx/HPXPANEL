@@ -434,27 +434,65 @@ free_orphan_listen_port() {
   return 0
 }
 
+# True when another pulse's env lists this listen port.
+peer_env_claims_port() {
+  local want="$1" env_file existing_id port
+  for env_file in "$AGENTS_DIR"/*.env; do
+    [ -f "$env_file" ] || continue
+    existing_id="$(basename "$env_file" .env)"
+    [ "$existing_id" = "${PULSE_ID:-}" ] && continue
+    while IFS= read -r port; do
+      [ "$port" = "$want" ] || continue
+      echo "$existing_id"
+      return 0
+    done < <(collect_forward_listen_ports "$(grep '^PORT_FORWARDS=' "$env_file" | cut -d= -f2-)")
+  done
+  return 1
+}
+
 check_local_forward_conflicts() {
+  # Only block when the listen port is ACTUALLY bound. A sibling env that still
+  # lists 2053 while ss shows the port free is a stale registration — do not die.
   [ "${PULSE_SIDE:-}" = "iran" ] || return 0
   [ -d "$AGENTS_DIR" ] || return 0
   prune_stale_agent_registrations
-  local env_file existing_id port new_port
+  local new_port existing_id
   while IFS= read -r new_port; do
     [ -n "$new_port" ] || continue
-    for env_file in "$AGENTS_DIR"/*.env; do
-      [ -f "$env_file" ] || continue
-      existing_id="$(basename "$env_file" .env)"
-      [ "$existing_id" = "${PULSE_ID:-}" ] && continue
-      pulse_registration_active "$existing_id" || continue
-      while IFS= read -r port; do
-        [ -n "$port" ] || continue
-        if [ "$port" = "$new_port" ]; then
-          die "Iran listen port ${port} already used by active pulse ${existing_id} — stop it (sudo hpx-pulse-agent leave ${existing_id}) or use different external ports"
+    if ! is_port_listening "$new_port"; then
+      existing_id="$(peer_env_claims_port "$new_port" || true)"
+      if [ -n "$existing_id" ]; then
+        if pulse_registration_active "$existing_id"; then
+          warn "pulse ${existing_id} env still lists :${new_port} but nothing is listening — allowing join (stale forward claim)"
+        else
+          warn "inactive pulse ${existing_id} listed :${new_port} — port is free, continuing"
         fi
-      done < <(collect_forward_listen_ports "$(grep '^PORT_FORWARDS=' "$env_file" | cut -d= -f2-)")
-    done
-    free_orphan_listen_port "$new_port" || die "Iran listen port ${new_port} already in use — run: sudo hpx-pulse-agent leave ${existing_id:-ID}"
+      fi
+      continue
+    fi
+    existing_id="$(peer_env_claims_port "$new_port" || true)"
+    if [ -n "$existing_id" ] && pulse_registration_active "$existing_id"; then
+      echo "[HPX Pulse x] Iran listen port ${new_port} is in use by active pulse ${existing_id} — stop it (sudo hpx-pulse-agent leave ${existing_id}) or use different external ports" >&2
+      return 1
+    fi
+    if ! free_orphan_listen_port "$new_port"; then
+      echo "[HPX Pulse x] Iran listen port ${new_port} already in use — free it or pick another external port" >&2
+      return 1
+    fi
   done < <(collect_forward_listen_ports "${PORT_FORWARDS:-}")
+}
+
+# After a successful claim, local join can still fail (port conflict, engine, …).
+# Release the panel agent key so the pulse does not stay «Iran connected» with no tunnel.
+release_failed_join_claim() {
+  local reason="${1:-join failed after claim}"
+  [ -n "${AGENT_KEY:-}" ] || return 0
+  [ -n "${PULSE_ID:-}" ] || return 0
+  warn "releasing panel claim for pulse ${PULSE_ID} (${reason})"
+  api POST "/api/hpx_pulse/agent/ack" \
+    "$(jq -nc --arg m "$reason" '{command:"leave", status:"stopped", message:$m}')" \
+    >/dev/null || true
+  remove_pulse_local_state "$PULSE_ID"
 }
 
 migrate_legacy_agent_registration() {
@@ -2329,16 +2367,23 @@ cmd_join() {
   _reset_revoke_streak "$PULSE_ID"
 
   install_self
-  write_env
   prune_orphan_configs
+  # Conflict check uses claim PORT_FORWARDS in memory — before writing env / starting tunnel.
   # Only wipe *other* pulses on revoke — never the one we just claimed mid-join.
   SKIP_REVOKE_FOR_PULSE="$PULSE_ID" verify_registrations_with_panel
-  check_local_forward_conflicts
+  if ! check_local_forward_conflicts; then
+    release_failed_join_claim "local forward port conflict"
+    die "join aborted — fix the port conflict above, then Tokens → re-join Iran"
+  fi
+  # Trap so engine/config failures after claim do not leave a ghost «Iran connected».
+  trap 'release_failed_join_claim "join aborted"' ERR
+  write_env
   ensure_engine
   apply_tunnel_config "$(echo "$claim" | jq -r '.tunnel_toml // .backpack_toml // empty')"
   write_env
   install_agent_systemd
   _reset_revoke_streak "$PULSE_ID"
+  trap - ERR
 
   api POST "/api/hpx_pulse/agent/ack" \
     "$(jq -nc '{command:"start", status:"running", message:"HPX Pulse joined"}')" >/dev/null || true

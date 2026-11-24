@@ -97,3 +97,6 @@ def test_agent_script_has_multi_tunnel_isolation_guards():
     assert "multi-tunnel Sync race" in script
     assert "leaving command queued for retry" in script
     assert "never ack before results land" in script
+    assert "stale forward claim" in script
+    assert "release_failed_join_claim" in script
+    assert "is_port_listening" in script

@@ -621,7 +621,11 @@ class UserHostCoefficient(Base, IdMixin):
     """Per-user override of a host's usage_coefficient."""
 
     __tablename__ = "user_host_coefficients"
-    __table_args__ = (UniqueConstraint("user_id", "host_id", name="uq_user_host_coefficients_user_host"),)
+    __table_args__ = (
+        UniqueConstraint("user_id", "host_id", name="uq_user_host_coefficients_user_host"),
+        Index("ix_user_host_coefficients_user_id", "user_id"),
+        Index("ix_user_host_coefficients_host_id", "host_id"),
+    )
 
     user_id: Mapped[int] = fk_id_column("users.id", ondelete="CASCADE")
     host_id: Mapped[int] = fk_id_column("hosts.id", ondelete="CASCADE")

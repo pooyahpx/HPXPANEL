@@ -23,6 +23,12 @@ export const THEME_DEFAULTS: Record<string, { name: string; tag: string; descrip
   rift: { name: 'Rift', tag: 'Cinematic', description: 'Near-black with a coral-orange accent: asymmetric hero, sharp edges, condensed display type and a bold status band.' },
   clay: { name: 'Clay', tag: 'Soft 3D', description: 'Claymorphism: chunky soft cards, warm apricot ground, playful Fredoka type and a trust-blue CTA.' },
   cipher: { name: 'Cipher', tag: 'Trust shield', description: 'Swiss minimal VPN ops: deep navy, connected green accent, Space Grotesk headlines and crisp geometric spacing.' },
+  prism: {
+    name: 'Prism',
+    tag: 'Glass orbit',
+    description:
+      'Brand-new glassmorphism portal: frosted panels, orbital usage ring, Plus Jakarta Sans, trust-blue + orange CTA — nothing like the pixel/Swiss skins.',
+  },
 }
 
 export const themeText = (t: TFunction, theme: string, field: 'name' | 'tag' | 'description'): string =>

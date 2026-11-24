@@ -9,6 +9,7 @@ from app.services.external_config_probe import (
     ExternalConfigProbeResponse,
     probe_external_config,
 )
+from app.services.mother_config_usage import MotherConfigUsageResponse, compute_mother_config_usage
 from app.utils import responses
 
 from .authentication import require_permission
@@ -46,3 +47,16 @@ async def probe_subscription_external_config(
 ):
     """Live TCP ping + light speed probe for a mother/external share link."""
     return await probe_external_config(body)
+
+
+@router.get(
+    "/subscription/external-configs/usage",
+    response_model=MotherConfigUsageResponse,
+)
+async def get_mother_config_usage(
+    db: AsyncSession = Depends(get_db),
+    _=Depends(require_permission("settings", "read")),
+):
+    """Panel-side consumption: who can receive mother configs and volume used."""
+    settings = await settings_operator.get_settings(db)
+    return await compute_mother_config_usage(db, settings.subscription if settings else None)

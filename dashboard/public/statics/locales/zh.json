@@ -4373,6 +4373,11 @@
         "name": "Cipher",
         "tag": "信任盾",
         "description": "瑞士极简 VPN 风格：深蓝海军色、连通绿点缀、Space Grotesk 标题与清晰几何留白。"
+      },
+      "prism": {
+        "name": "Prism",
+        "tag": "玻璃轨道",
+        "description": "全新玻璃拟态门户：磨砂面板、轨道用量环、Plus Jakarta Sans、信任蓝 + 橙色 CTA —— 与像素/瑞士皮肤完全不同。"
       }
     },
     "mode": {

@@ -398,12 +398,12 @@ export default function SubscriptionSettings() {
               </p>
               <p className="text-muted-foreground text-xs leading-relaxed">
                 {t('settings.motherConfigs.movedHint', {
-                  defaultValue: 'Custom / foreign share links live in their own settings category — with live ping & speed test.',
+                  defaultValue: 'Custom / foreign share links have their own sidebar page — with live ping & speed test.',
                 })}
               </p>
             </div>
             <Button asChild type="button" size="sm" variant="outline" className="cursor-pointer shrink-0">
-              <Link to="/settings/mother-configs">
+              <Link to="/mother-configs">
                 {t('settings.motherConfigs.open', { defaultValue: 'Open mother configs' })}
               </Link>
             </Button>

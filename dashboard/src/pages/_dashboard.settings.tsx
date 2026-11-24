@@ -3,7 +3,7 @@ import { SectorTabBar, type SectorTab } from '@/components/layout/sector-tab-bar
 import { useAdmin } from '@/hooks/use-admin'
 import { getGetGeneralSettingsQueryKey, getGetSettingsQueryKey, useGetSettings, useModifySettings } from '@/service/api'
 import { useQueryClient } from '@tanstack/react-query'
-import { Bell, Database, Fingerprint, HardDriveDownload, Link2, ListTodo, Palette, Settings as SettingsIcon, ShieldCheck, Webhook } from 'lucide-react'
+import { Bell, Database, Fingerprint, HardDriveDownload, ListTodo, Palette, Settings as SettingsIcon, ShieldCheck, Webhook } from 'lucide-react'
 import { createContext, useCallback, useContext, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Outlet, useLocation, useNavigate } from 'react-router'
@@ -33,7 +33,6 @@ const allTabs: SectorTab[] = [
   { id: 'general', label: 'settings.general.title', icon: SettingsIcon, url: '/settings/general' },
   { id: 'notifications', label: 'settings.notifications.title', icon: Bell, url: '/settings/notifications' },
   { id: 'subscriptions', label: 'settings.subscriptions.title', icon: ListTodo, url: '/settings/subscriptions' },
-  { id: 'motherConfigs', label: 'settings.motherConfigs.title', icon: Link2, url: '/settings/mother-configs' },
   { id: 'hwid', label: 'settings.hwid.title', icon: Fingerprint, url: '/settings/hwid' },
   { id: 'webhook', label: 'settings.webhook.title', icon: Webhook, url: '/settings/webhook' },
   { id: 'cleanup', label: 'settings.cleanup.title', icon: Database, url: '/settings/cleanup' },
@@ -161,7 +160,6 @@ export default function Settings() {
           }
           break
         case 'subscriptions':
-        case 'motherConfigs':
           if (data.subscription) {
             // Wrap subscription data in the expected format
             filteredData = {

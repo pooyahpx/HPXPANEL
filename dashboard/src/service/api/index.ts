@@ -4054,6 +4054,8 @@ export interface CreateHost {
   use_sni_as_host?: boolean
   vless_route?: CreateHostVlessRoute
   priority: number
+  /** Traffic multiplier for this config/host (1 = normal). */
+  usage_coefficient?: number
   status?: CreateHostStatus
   ech_config_list?: CreateHostEchConfigList
   ech_query_strategy?: CreateHostEchQueryStrategy
@@ -4618,6 +4620,8 @@ export interface BaseHost {
   use_sni_as_host?: boolean
   vless_route?: BaseHostVlessRoute
   priority: number
+  /** Traffic multiplier for this config/host (1 = normal). */
+  usage_coefficient?: number
   status?: BaseHostStatus
   ech_config_list?: BaseHostEchConfigList
   ech_query_strategy?: BaseHostEchQueryStrategy
@@ -4626,6 +4630,53 @@ export interface BaseHost {
   wireguard_overrides?: BaseHostWireguardOverrides
   subscription_templates?: BaseHostSubscriptionTemplates
   final_mask_settings?: BaseHostFinalMaskSettings
+}
+
+export interface UserHostCoefficientItem {
+  user_id: number
+  username: string
+  usage_coefficient: number
+}
+
+export interface UserHostCoefficientUpsert {
+  username: string
+  usage_coefficient: number
+}
+
+export interface ApplyHostCoefficientRequest {
+  usage_coefficient?: number | null
+}
+
+export interface ApplyHostCoefficientResponse {
+  host_id: number
+  usage_coefficient: number
+  users_updated: number
+}
+
+export const getHostUserCoefficients = (hostId: number, signal?: AbortSignal) => {
+  return orvalFetcher<UserHostCoefficientItem[]>({ url: `/api/host/${hostId}/coefficients`, method: 'GET', signal })
+}
+
+export const upsertHostUserCoefficient = (hostId: number, body: UserHostCoefficientUpsert) => {
+  return orvalFetcher<UserHostCoefficientItem>({
+    url: `/api/host/${hostId}/coefficients`,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    data: body,
+  })
+}
+
+export const deleteHostUserCoefficient = (hostId: number, username: string) => {
+  return orvalFetcher<void>({ url: `/api/host/${hostId}/coefficients/${encodeURIComponent(username)}`, method: 'DELETE' })
+}
+
+export const applyHostCoefficientToAll = (hostId: number, body: ApplyHostCoefficientRequest = {}) => {
+  return orvalFetcher<ApplyHostCoefficientResponse>({
+    url: `/api/host/${hostId}/coefficients/apply-all`,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    data: body,
+  })
 }
 
 export type ApplicationDescription = { [key: string]: string }

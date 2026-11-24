@@ -201,6 +201,7 @@ export default function HostsList({
       use_sni_as_host: host.use_sni_as_host || false,
       vless_route: host.vless_route || '',
       priority: host.priority || 0,
+      usage_coefficient: host.usage_coefficient && host.usage_coefficient > 0 ? host.usage_coefficient : 1,
       is_disabled: host.is_disabled || false,
       ech_config_list: host.ech_config_list || undefined,
       ech_query_strategy: host.ech_query_strategy || undefined,
@@ -391,6 +392,7 @@ export default function HostsList({
         use_sni_as_host: host.use_sni_as_host || false,
         vless_route: host.vless_route || undefined,
         priority: newPriority,
+        usage_coefficient: host.usage_coefficient && host.usage_coefficient > 0 ? host.usage_coefficient : 1,
         ech_config_list: host.ech_config_list,
         ech_query_strategy: host.ech_query_strategy || undefined,
         pinned_peer_cert_sha256: host.pinned_peer_cert_sha256 || undefined,
@@ -595,6 +597,7 @@ export default function HostsList({
         use_sni_as_host: host.use_sni_as_host || false,
         vless_route: host.vless_route || undefined,
         priority: index, // New priority based on position
+        usage_coefficient: host.usage_coefficient && host.usage_coefficient > 0 ? host.usage_coefficient : 1,
         ech_config_list: host.ech_config_list,
         ech_query_strategy: host.ech_query_strategy || undefined,
         pinned_peer_cert_sha256: host.pinned_peer_cert_sha256 || undefined,
@@ -1084,6 +1087,7 @@ export default function HostsList({
           }}
           form={form}
           editingHost={!!editingHost}
+          hostId={editingHost?.id}
           inboundDetails={inbounds}
           isLoadingInbounds={isLoadingInbounds}
           preserveCreateValues={preserveCreateValues}

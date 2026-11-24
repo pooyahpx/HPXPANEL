@@ -1,8 +1,20 @@
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.db import AsyncSession, get_db
+from app.db.crud import host_coefficient as host_coeff_crud
+from app.db.crud.user import get_user
 from app.models.admin import AdminDetails
-from app.models.host import BaseHost, BulkHostsActionResponse, BulkHostSelection, CreateHost, RemoveHostsResponse
+from app.models.host import (
+    ApplyHostCoefficientRequest,
+    ApplyHostCoefficientResponse,
+    BaseHost,
+    BulkHostsActionResponse,
+    BulkHostSelection,
+    CreateHost,
+    RemoveHostsResponse,
+    UserHostCoefficientItem,
+    UserHostCoefficientUpsert,
+)
 from app.operation import OperatorType
 from app.operation.host import HostOperation
 from app.services.host_stealth_presets import HostStealthPreset, HostStealthPresetsResponse, list_host_stealth_presets
@@ -30,14 +42,105 @@ async def get_host_stealth_preset(
     preset_id: str,
     _: AdminDetails = Depends(require_permission("hosts", "read")),
 ):
-    from fastapi import HTTPException
-
     from app.services.host_stealth_presets import get_host_stealth_preset as _get
 
     preset = _get(preset_id)
     if preset is None:
         raise HTTPException(status_code=404, detail="Stealth preset not found")
     return preset
+
+
+@router.get(
+    "/{host_id}/coefficients",
+    response_model=list[UserHostCoefficientItem],
+    responses={404: responses._404},
+)
+async def list_host_user_coefficients(
+    host_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: AdminDetails = Depends(require_permission("hosts", "read")),
+):
+    """List per-user traffic coefficient overrides for a host/config."""
+    host = await host_coeff_crud.get_host_by_id(db, host_id)
+    if host is None:
+        raise HTTPException(status_code=404, detail="Host not found")
+    rows = await host_coeff_crud.list_user_host_coefficients_with_usernames(db, host_id)
+    return [
+        UserHostCoefficientItem(user_id=row.user_id, username=username, usage_coefficient=row.usage_coefficient)
+        for row, username in rows
+    ]
+
+
+@router.put(
+    "/{host_id}/coefficients",
+    response_model=UserHostCoefficientItem,
+    responses={404: responses._404},
+)
+async def upsert_host_user_coefficient(
+    host_id: int,
+    body: UserHostCoefficientUpsert,
+    db: AsyncSession = Depends(get_db),
+    _: AdminDetails = Depends(require_permission("hosts", "update")),
+):
+    """Set a per-user traffic coefficient override for this host/config."""
+    host = await host_coeff_crud.get_host_by_id(db, host_id)
+    if host is None:
+        raise HTTPException(status_code=404, detail="Host not found")
+    user = await get_user(db, body.username)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    row = await host_coeff_crud.upsert_user_host_coefficient(
+        db, user_id=user.id, host_id=host_id, usage_coefficient=body.usage_coefficient
+    )
+    return UserHostCoefficientItem(
+        user_id=user.id, username=user.username, usage_coefficient=row.usage_coefficient
+    )
+
+
+@router.delete(
+    "/{host_id}/coefficients/{username}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={404: responses._404},
+)
+async def delete_host_user_coefficient(
+    host_id: int,
+    username: str,
+    db: AsyncSession = Depends(get_db),
+    _: AdminDetails = Depends(require_permission("hosts", "update")),
+):
+    """Remove a per-user override (falls back to the host's global coefficient)."""
+    host = await host_coeff_crud.get_host_by_id(db, host_id)
+    if host is None:
+        raise HTTPException(status_code=404, detail="Host not found")
+    user = await get_user(db, username)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    deleted = await host_coeff_crud.delete_user_host_coefficient(db, user_id=user.id, host_id=host_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Coefficient override not found")
+    return {}
+
+
+@router.post(
+    "/{host_id}/coefficients/apply-all",
+    response_model=ApplyHostCoefficientResponse,
+    responses={404: responses._404},
+)
+async def apply_host_coefficient_to_all(
+    host_id: int,
+    body: ApplyHostCoefficientRequest,
+    db: AsyncSession = Depends(get_db),
+    _: AdminDetails = Depends(require_permission("hosts", "update")),
+):
+    """Push this config's coefficient to every user who can access it (per-user overrides)."""
+    host = await host_coeff_crud.get_host_by_id(db, host_id)
+    if host is None:
+        raise HTTPException(status_code=404, detail="Host not found")
+    coeff = float(body.usage_coefficient if body.usage_coefficient is not None else (host.usage_coefficient or 1.0))
+    count = await host_coeff_crud.apply_host_coefficient_to_all_users(
+        db, host=host, usage_coefficient=coeff
+    )
+    return ApplyHostCoefficientResponse(host_id=host_id, usage_coefficient=coeff, users_updated=count)
 
 
 @router.get("/{host_id}", response_model=BaseHost)

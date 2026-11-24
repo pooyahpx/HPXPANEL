@@ -62,6 +62,8 @@ export interface HostFormValues {
   use_sni_as_host: boolean
   vless_route?: string
   priority: number
+  /** Traffic multiplier for this config/host (1 = normal). */
+  usage_coefficient: number
   ech_config_list?: string
   ech_query_strategy?: 'none' | 'half' | 'full'
   pinned_peer_cert_sha256?: string
@@ -351,6 +353,7 @@ export const HostFormSchema = z.object({
   use_sni_as_host: z.boolean().default(false),
   vless_route: z.union([z.literal(''), z.string().regex(/^[0-9a-fA-F]{4}$/, 'VLESS route must be exactly 4 hex characters')]).optional(),
   priority: z.number().default(0),
+  usage_coefficient: z.number().gt(0).default(1),
   is_disabled: z.boolean().default(false),
   ech_config_list: z.string().optional(),
   ech_query_strategy: z.enum(['none', 'half', 'full']).optional(),
@@ -489,6 +492,7 @@ export const hostFormDefaultValues: HostFormValues = {
   use_sni_as_host: false,
   vless_route: '',
   priority: 0,
+  usage_coefficient: 1,
   ech_config_list: undefined,
   ech_query_strategy: undefined,
   pinned_peer_cert_sha256: undefined,

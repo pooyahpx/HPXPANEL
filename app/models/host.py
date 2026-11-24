@@ -532,6 +532,11 @@ class BaseHost(BaseModel):
     wireguard_overrides: WireGuardHostOverrides | None = None
     subscription_templates: SubscriptionTemplates | None = None
     final_mask_settings: FinalMask | None = None
+    usage_coefficient: float = Field(
+        default=1.0,
+        gt=0,
+        description="Traffic multiplier for this config/host. Example: 10 means counted ≈ real×10.",
+    )
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -604,6 +609,33 @@ class BulkHostsActionResponse(BaseModel):
 
     hosts: list[str]
     count: int
+
+
+class UserHostCoefficientItem(BaseModel):
+    user_id: int
+    username: str
+    usage_coefficient: float = Field(gt=0)
+
+
+class UserHostCoefficientUpsert(BaseModel):
+    username: str = Field(min_length=1, max_length=128)
+    usage_coefficient: float = Field(gt=0, default=1.0)
+
+
+class ApplyHostCoefficientRequest(BaseModel):
+    """Apply this host's coefficient (or an override) to every user who can access it."""
+
+    usage_coefficient: float | None = Field(
+        default=None,
+        gt=0,
+        description="If omitted, uses the host's current usage_coefficient.",
+    )
+
+
+class ApplyHostCoefficientResponse(BaseModel):
+    host_id: int
+    usage_coefficient: float
+    users_updated: int
 
 
 class HostListQuery(BaseModel):

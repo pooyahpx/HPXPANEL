@@ -1,5 +1,6 @@
 import PageHeader from '@/components/layout/page-header'
 import { Form } from '@/components/ui/form'
+import { MotherConfigUsagePanel } from '@/features/subscriptions/components/mother-config-usage-panel'
 import { SubscriptionExternalConfigsSection } from '@/features/subscriptions/components/subscription-external-configs-section'
 import { SubscriptionFormActions } from '@/features/subscriptions/components/subscription-form-actions'
 import { SubscriptionSettingsSkeleton } from '@/features/subscriptions/components/subscription-settings-skeleton'
@@ -171,6 +172,7 @@ export default function MotherConfigsPage() {
         <div className="w-full">
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="space-y-6 p-4 sm:space-y-8 sm:py-6 lg:py-8">
+              <MotherConfigUsagePanel />
               <div className="from-emerald-500/10 via-background to-sky-500/5 relative overflow-hidden rounded-2xl border border-white/5 bg-gradient-to-br p-4 sm:p-6">
                 <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgb(var(--mesh-a)/0.35),transparent_55%)]" />
                 <div className="relative">

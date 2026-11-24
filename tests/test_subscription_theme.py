@@ -42,6 +42,7 @@ def test_subscription_accepts_every_known_theme():
         "rift",
         "clay",
         "cipher",
+        "prism",
     }
     for theme in SUB_THEMES:
         assert _subscription(sub_theme=theme).sub_theme == theme
@@ -206,7 +207,13 @@ def test_new_themes_clay_and_cipher_are_allowed():
     assert _subscription(sub_theme="cipher").sub_theme == "cipher"
 
 
-@pytest.mark.parametrize("theme", ["ember", "folio", "harbor", "lumen", "rift", "clay", "cipher"])
+def test_new_theme_prism_is_allowed():
+    assert "prism" in SUB_THEMES
+    assert _subscription(sub_theme="PRISM").sub_theme == "prism"
+    assert _subscription(sub_theme="prism").sub_theme == "prism"
+
+
+@pytest.mark.parametrize("theme", ["ember", "folio", "harbor", "lumen", "rift", "clay", "cipher", "prism"])
 def test_new_themes_have_css_and_distinct_layouts(theme):
     html = render_template(TEMPLATE, _context(sub_theme=theme))
     assert f'<html lang="en" data-skin="{theme}">' in html
@@ -229,8 +236,19 @@ def test_new_theme_fonts_are_loaded():
         "family=Space+Grotesk",
         "family=Outfit",
         "family=Manrope",
+        "family=Plus+Jakarta+Sans",
     ):
         assert family in html
+
+
+def test_prism_theme_has_glass_and_orbit_markers():
+    html = render_template(TEMPLATE, _context(sub_theme="prism"))
+    assert 'data-skin="prism"' in html
+    assert "backdrop-filter:blur" in html
+    assert "prism-orbit" in html
+    assert "Plus Jakarta Sans" in html
+    assert '[data-skin="prism"] .status-hero' in html
+    assert '[data-skin="prism"] .gauge' in html
 
 
 @pytest.mark.parametrize("theme", ["ember", "folio", "harbor"])

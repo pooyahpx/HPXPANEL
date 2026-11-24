@@ -501,6 +501,55 @@ function CipherMock({ p, skin, surface, button }: MockCtx) {
   )
 }
 
+/** Prism: glassmorphism orbit — frosted panels + usage ring + orange CTA. */
+function PrismMock({ p, skin, surface, button }: MockCtx) {
+  return (
+    <>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1.5">
+          <span
+            className="grid size-3.5 place-items-center rounded-md text-[5px] font-black text-white"
+            style={{ background: `linear-gradient(145deg, ${p.primary}, ${p.accent})` }}
+          >
+            P
+          </span>
+          <span className="text-[8px] font-extrabold tracking-tight">Prism</span>
+        </div>
+        <span className="rounded-full px-1.5 py-px text-[5px] font-bold uppercase" style={{ border: `1px solid ${p.border}`, color: p.accent }}>
+          orbit
+        </span>
+      </div>
+      <div className="mt-1.5 text-[12px] leading-none" style={skin.titleStyle}>
+        Glass portal
+      </div>
+      <div className="mt-2 grid grid-cols-[1.1fr_0.9fr] gap-2">
+        <div className="flex flex-col items-center justify-center gap-1 p-2" style={surface}>
+          <Ring size={42} hole={28} pct={72} color={p.primary} track={p.muted} bg={p.bg}>
+            <span style={{ color: p.primary }}>72%</span>
+          </Ring>
+          <span className="text-[6px] font-bold tracking-widest uppercase" style={{ color: p.ok }}>
+            live
+          </span>
+        </div>
+        <div className="flex flex-col justify-between gap-1.5">
+          {['Data', 'Days', 'Links'].map(label => (
+            <div key={label} className="flex items-center justify-between px-2 py-1" style={surface}>
+              <span className="text-[6px] font-bold tracking-wider uppercase opacity-60">{label}</span>
+              <Bar w={18} h={3} color={p.primary} radius={99} />
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="mt-2 flex items-center gap-1.5 rounded-full px-2 py-1" style={surface}>
+        <Bar w="100%" h={3} color={p.muted} radius={99} className="flex-1" />
+        <span className="rounded-full px-2 py-0.5 text-[6px] font-extrabold" style={{ ...button, background: p.accent }}>
+          Copy
+        </span>
+      </div>
+    </>
+  )
+}
+
 const MOCKS: Record<SubTheme, ComponentType<MockCtx>> = {
   terminal: TerminalMock,
   aurora: AuroraMock,
@@ -514,6 +563,7 @@ const MOCKS: Record<SubTheme, ComponentType<MockCtx>> = {
   rift: RiftMock,
   clay: ClayMock,
   cipher: CipherMock,
+  prism: PrismMock,
 }
 
 /** CSS-only miniature of the public subscription page; every skin has a different composition. */

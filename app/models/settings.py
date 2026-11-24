@@ -323,6 +323,7 @@ SUB_THEMES: tuple[str, ...] = (
     "rift",
     "clay",
     "cipher",
+    "prism",
 )
 SUB_THEME_MODES: tuple[str, ...] = ("dark", "light")
 DEFAULT_SUB_THEME = "terminal"

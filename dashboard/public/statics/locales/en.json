@@ -887,7 +887,26 @@
       "runSpeed": "Speed",
       "runBoth": "Ping + Speed",
       "open": "Open mother configs",
-      "movedHint": "Custom / foreign share links live in their own settings category — with live ping & speed test."
+      "movedHint": "Custom / foreign share links live in their own settings category — with live ping & speed test.",
+      "usageTitle": "Mother config consumption",
+      "usageLive": "Live panel volume",
+      "usageHint": "Shows who can still receive mother links (by status + remaining volume) and how much of limited plans is already used on this panel.",
+      "usageLoadFailed": "Failed to load consumption",
+      "usageEligible": "Eligible users",
+      "usageEligibleHint": "Active/on-hold with remaining volume",
+      "usageExhausted": "Volume exhausted",
+      "usageExhaustedHint": "Gated when “Respect user volume” is on",
+      "usageUsed": "Used traffic",
+      "usageRemaining": "{{remaining}} remaining on limited plans",
+      "usagePct": "Limited plan fill",
+      "usagePctHint": "Across users with a data limit",
+      "usageActive": "Active",
+      "usageUnlimited": "Unlimited",
+      "usageConfigs": "Enabled configs",
+      "usageColEligible": "Eligible",
+      "usageColQuota": "Quota gate",
+      "usageColStatus": "Status gate",
+      "usageAlwaysOn": "Always on for active users"
     },
     "subscriptions": {
       "title": "Subscriptions",
@@ -4803,6 +4822,11 @@
         "name": "Cipher",
         "tag": "Trust shield",
         "description": "Swiss minimal VPN ops: deep navy, connected green accent, Space Grotesk headlines and crisp geometric spacing."
+      },
+      "prism": {
+        "name": "Prism",
+        "tag": "Glass orbit",
+        "description": "Brand-new glassmorphism portal: frosted panels, orbital usage ring, Plus Jakarta Sans, trust-blue + orange CTA — nothing like the pixel/Swiss skins."
       }
     },
     "mode": {

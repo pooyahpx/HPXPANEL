@@ -4318,6 +4318,11 @@
         "name": "Cipher",
         "tag": "Щит доверия",
         "description": "Швейцарский минимализм для VPN: глубокий navy, зелёный акцент, заголовки Space Grotesk и чёткая сетка."
+      },
+      "prism": {
+        "name": "Prism",
+        "tag": "Стеклянная орбита",
+        "description": "Новый glassmorphism-портал: матовые панели, орбитальное кольцо расхода, Plus Jakarta Sans, trust-blue + оранжевый CTA — не похож на pixel/Swiss скины."
       }
     },
     "mode": {

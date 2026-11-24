@@ -57,6 +57,8 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 type JoinCommandSet = {
+  iranToken?: string
+  abroadToken?: string
   /** Set after an edit/regenerate that disconnected agents — they must rejoin with these tokens. */
   warning?: string
   iran?: string
@@ -776,6 +778,48 @@ export default function HpxPulseList() {
               })}
             </p>
           </div>
+          {(joinCommands.iranToken || joinCommands.abroadToken) && (
+            <div className="grid gap-2 sm:grid-cols-2">
+              {joinCommands.iranToken ? (
+                <div className="space-y-1.5">
+                  <p className="text-[10px] font-medium uppercase tracking-wide text-sky-600 dark:text-sky-400">
+                    {t('hpxPulse.iranJoinToken', { defaultValue: 'Iran join token' })}
+                  </p>
+                  <pre className="bg-muted/80 overflow-x-auto rounded-lg border p-2 font-mono text-[11px]" dir="ltr">
+                    {joinCommands.iranToken}
+                  </pre>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 cursor-pointer gap-1.5"
+                    onClick={() => copy(joinCommands.iranToken!, 'Iran token')}
+                  >
+                    <Copy className="size-3" />
+                    {t('copy', { defaultValue: 'Copy' })}
+                  </Button>
+                </div>
+              ) : null}
+              {joinCommands.abroadToken ? (
+                <div className="space-y-1.5">
+                  <p className="text-[10px] font-medium uppercase tracking-wide text-sky-600 dark:text-sky-400">
+                    {t('hpxPulse.abroadJoinToken', { defaultValue: 'Abroad join token' })}
+                  </p>
+                  <pre className="bg-muted/80 overflow-x-auto rounded-lg border p-2 font-mono text-[11px]" dir="ltr">
+                    {joinCommands.abroadToken}
+                  </pre>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 cursor-pointer gap-1.5"
+                    onClick={() => copy(joinCommands.abroadToken!, 'Abroad token')}
+                  >
+                    <Copy className="size-3" />
+                    {t('copy', { defaultValue: 'Copy' })}
+                  </Button>
+                </div>
+              ) : null}
+            </div>
+          )}
           {joinCommands.iran && (
             <JoinCommandBlock
               label="Iran"
@@ -940,6 +984,8 @@ export default function HpxPulseList() {
                           'Config changed — the running tunnel is disconnecting. Run the new join commands below on both servers (old tokens no longer work).',
                       })
                     : undefined,
+                  iranToken: res.iran_join_token ?? undefined,
+                  abroadToken: res.abroad_join_token ?? undefined,
                   iran: res.iran_join_command ?? undefined,
                   iranAlt: res.iran_join_command_alt ?? undefined,
                   abroad: res.abroad_join_command ?? undefined,
@@ -960,6 +1006,8 @@ export default function HpxPulseList() {
         editingPulse={editingPulse ? (data?.pulses?.find(p => p.id === editingPulse.id) ?? editingPulse) : null}
         onCreated={res => {
           setJoinCommands({
+            iranToken: res.iran_join_token ?? undefined,
+            abroadToken: res.abroad_join_token ?? undefined,
             iran: res.iran_join_command ?? undefined,
             iranAlt: res.iran_join_command_alt ?? undefined,
             abroad: res.abroad_join_command ?? undefined,
@@ -975,6 +1023,8 @@ export default function HpxPulseList() {
                 defaultValue:
                   'Config changed — the running tunnel is disconnecting. Run the new join commands below on both servers (old tokens no longer work).',
               }),
+              iranToken: res.iran_join_token ?? undefined,
+              abroadToken: res.abroad_join_token ?? undefined,
               iran: res.iran_join_command ?? undefined,
               iranAlt: res.iran_join_command_alt ?? undefined,
               abroad: res.abroad_join_command ?? undefined,

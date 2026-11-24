@@ -65,6 +65,7 @@ from app.services.hpx_pulse.diagnose import (
     diagnose_summary,
 )
 from app.services.hpx_pulse.engine_mirror import agent_assets_base, engine_version
+from app.services.hpx_pulse.port_guard import find_iran_port_conflicts, merge_peer_forward_ports
 from app.services.hpx_pulse.tcp_autofix import extreme_profile_update, should_autofix_tcp_extreme
 from app.services.hpx_pulse.traffic import (
     build_pulse_usage_share,
@@ -119,6 +120,8 @@ from app.utils.crypto import decrypt_secret, encrypt_secret, hash_api_key
 from app.utils.helpers import resolve_panel_base_url
 
 JOIN_TOKEN_TTL_HOURS = 24
+# Speed-test UI polls every 3s; expire queued path_ping so it cannot spin forever.
+PATH_PING_QUEUED_TTL_SEC = 90
 
 
 async def _panel_urls_for_agents(panel_url: str | None) -> tuple[str | None, str | None]:
@@ -314,9 +317,7 @@ def _to_response(db_pulse: HpxPulse) -> HpxPulseResponse:
         "priority": db_pulse.priority,
         "last_failover_at": db_pulse.last_failover_at,
         "created_at": db_pulse.created_at,
-        "path_ping": (
-            (db_pulse.diag_report or {}).get("path_ping") if isinstance(db_pulse.diag_report, dict) else None
-        ),
+        "path_ping": _expire_path_ping_in_memory(db_pulse),
         "bytes_up": int(getattr(db_pulse, "bytes_up", 0) or 0),
         "bytes_down": int(getattr(db_pulse, "bytes_down", 0) or 0),
     }
@@ -340,18 +341,85 @@ def _changed_hard_keys(db_pulse: HpxPulse, update_data: dict) -> set[str]:
     return changed
 
 
-def _can_queue_command(db_pulse: HpxPulse, side: str) -> bool:
-    """A claimed agent can take a new command unless a `leave` is still waiting for its ack."""
+def _command_kind(cmd: str | None) -> str:
+    c = (cmd or "").strip().lower()
+    if not c:
+        return "idle"
+    if c == "leave" or c.startswith("leave"):
+        return "leave"
+    if c.startswith(("pp:", "path-ping")):
+        return "path_ping"
+    return "other"
+
+
+def _can_queue_command(db_pulse: HpxPulse, side: str, *, incoming: str | None = None) -> bool:
+    """A claimed agent can take a new command unless a higher-priority command is pending.
+
+    Priority: leave > path_ping > other.
+    Sync/Diagnose must not clobber an in-flight speed test (`pp:*`).
+    """
     key = db_pulse.iran_agent_key_hash if side == "iran" else db_pulse.abroad_agent_key_hash
-    cmd = db_pulse.iran_agent_command if side == "iran" else db_pulse.abroad_agent_command
-    return bool(key) and (cmd or "").strip().lower() != "leave"
+    if not key:
+        return False
+    current = db_pulse.iran_agent_command if side == "iran" else db_pulse.abroad_agent_command
+    current_kind = _command_kind(current)
+    if current_kind == "leave":
+        return False
+    if current_kind == "path_ping":
+        return _command_kind(incoming) in {"leave", "path_ping"}
+    return True
 
 
 def _is_leaving(db_pulse: HpxPulse) -> bool:
     return "leave" in {
-        (db_pulse.iran_agent_command or "").strip().lower(),
-        (db_pulse.abroad_agent_command or "").strip().lower(),
+        _command_kind(db_pulse.iran_agent_command),
+        _command_kind(db_pulse.abroad_agent_command),
     }
+
+
+def _path_ping_payload(db_pulse: HpxPulse) -> dict | None:
+    report = db_pulse.diag_report if isinstance(db_pulse.diag_report, dict) else None
+    if not report:
+        return None
+    pp = report.get("path_ping")
+    return dict(pp) if isinstance(pp, dict) else None
+
+
+def _expire_path_ping_in_memory(db_pulse: HpxPulse) -> dict | None:
+    """Return path_ping for API responses, marking stale queued samples as timed out."""
+    pp = _path_ping_payload(db_pulse)
+    if not pp or pp.get("status") != "queued":
+        return pp
+    try:
+        ts = int(pp.get("ts") or 0)
+    except (TypeError, ValueError):
+        ts = 0
+    if not ts:
+        return pp
+    age = int(dt.now(UTC).timestamp()) - ts
+    if age <= PATH_PING_QUEUED_TTL_SEC:
+        return pp
+    expired = {
+        **pp,
+        "status": "error",
+        "detail": f"timed out after {PATH_PING_QUEUED_TTL_SEC}s waiting for agent samples",
+    }
+    return expired
+
+
+async def _persist_expired_path_ping(db: AsyncSession, db_pulse: HpxPulse) -> HpxPulse:
+    """Persist timed-out path_ping and clear leftover pp:* commands so Sync can run again."""
+    expired = _expire_path_ping_in_memory(db_pulse)
+    current = _path_ping_payload(db_pulse)
+    if not expired or not current or current.get("status") != "queued" or expired.get("status") != "error":
+        return db_pulse
+    existing = db_pulse.diag_report if isinstance(db_pulse.diag_report, dict) else {}
+    update: dict = {"diag_report": {**existing, "path_ping": expired}}
+    if _command_kind(db_pulse.iran_agent_command) == "path_ping":
+        update["iran_agent_command"] = None
+    if _command_kind(db_pulse.abroad_agent_command) == "path_ping":
+        update["abroad_agent_command"] = None
+    return await update_hpx_pulse(db, db_pulse, update)
 
 
 def _desired_status(db_pulse: HpxPulse) -> str:
@@ -487,14 +555,7 @@ class HpxPulseOperation(BaseOperation):
         peer_forward_ports: dict[str, set[int]] = {}
         try:
             peers, _ = await get_hpx_pulses(db, offset=0, limit=100)
-            for peer in peers:
-                if peer.id == db_pulse.id:
-                    continue
-                pip = (peer.iran_public_ip or "").strip()
-                if not pip:
-                    continue
-                peer_iran_ips.add(pip)
-                peer_forward_ports.setdefault(pip, set()).update(forward_listen_ports(peer.port_forwards))
+            peer_iran_ips, peer_forward_ports = merge_peer_forward_ports(peers, exclude_pulse_id=db_pulse.id)
         except Exception as exc:
             logger.debug("pulse edit peer scan skipped: %s", exc)
 
@@ -548,8 +609,16 @@ class HpxPulseOperation(BaseOperation):
             await self.raise_error(message="Pulse name already exists", code=409)
 
         same_iran_warning = ""
+        peers, _ = await get_hpx_pulses(db, offset=0, limit=200)
+        conflicts = find_iran_port_conflicts(
+            iran_ip=model.iran_public_ip,
+            control_port=model.control_port,
+            port_forwards=model.port_forwards,
+            peers=peers,
+        )
+        if conflicts:
+            await self.raise_error(message=conflicts[0], code=409)
         if model.iran_public_ip:
-            peers, _ = await get_hpx_pulses(db, offset=0, limit=50)
             for peer in peers:
                 if peer.iran_public_ip == model.iran_public_ip and peer.iran_agent_key_hash:
                     same_iran_warning = (
@@ -635,13 +704,29 @@ class HpxPulseOperation(BaseOperation):
         _ = admin
         await _reap_pending_deletes(db)
         rows, total = await get_hpx_pulses(db, offset=offset, limit=limit, name=name)
-        return HpxPulsesResponse(pulses=[_to_response(r) for r in rows], total=total)
+        refreshed: list[HpxPulse] = []
+        dirty = False
+        for row in rows:
+            before = (_path_ping_payload(row) or {}).get("status")
+            next_row = await _persist_expired_path_ping(db, row)
+            after = (_path_ping_payload(next_row) or {}).get("status")
+            if before != after:
+                dirty = True
+            refreshed.append(next_row)
+        if dirty:
+            await db.commit()
+        return HpxPulsesResponse(pulses=[_to_response(r) for r in refreshed], total=total)
 
     async def get_pulse(self, db: AsyncSession, *, admin: AdminDetails, pulse_id: int) -> HpxPulseResponse:
         _ = admin
         db_pulse = await get_hpx_pulse_by_id(db, pulse_id)
         if db_pulse is None:
             await self.raise_error(message="Pulse not found", code=404)
+        before = (_path_ping_payload(db_pulse) or {}).get("status")
+        db_pulse = await _persist_expired_path_ping(db, db_pulse)
+        after = (_path_ping_payload(db_pulse) or {}).get("status")
+        if before != after:
+            await db.commit()
         return _to_response(db_pulse)
 
     async def delete_pulse(self, db: AsyncSession, *, admin: AdminDetails, pulse_id: int) -> HpxPulseActionResponse:
@@ -699,6 +784,16 @@ class HpxPulseOperation(BaseOperation):
                 db, db_pulse, panel_url=resolved_panel
             )
             message = "Join tokens regenerated"
+        # Guarantee both sides ship a command that embeds the fresh token (no silent blanks).
+        for side_name, token, primary, alt in (
+            ("Iran", iran_t, iran_c, iran_c_alt),
+            ("Abroad", abroad_t, abroad_c, abroad_c_alt),
+        ):
+            if not token or token not in (primary or "") or token not in (alt or ""):
+                await self.raise_error(
+                    message=f"{side_name} join token/command incomplete — regenerate again",
+                    code=500,
+                )
         await db.commit()
         return HpxPulseActionResponse(
             pulse=_to_response(db_pulse),
@@ -725,15 +820,19 @@ class HpxPulseOperation(BaseOperation):
             "message": "Sync requested — agents will refresh tunnel config",
             "last_status_change": dt.now(UTC),
         }
-        if _can_queue_command(db_pulse, "iran"):
+        if _can_queue_command(db_pulse, "iran", incoming="restart"):
             update["iran_agent_command"] = "restart"
-        if _can_queue_command(db_pulse, "abroad"):
+        if _can_queue_command(db_pulse, "abroad", incoming="restart"):
             update["abroad_agent_command"] = "restart"
+        if "iran_agent_command" not in update and "abroad_agent_command" not in update:
+            update["message"] = (
+                "Sync deferred — agent is busy (leave or speed test in progress). Try again shortly."
+            )
         db_pulse = await update_hpx_pulse(db, db_pulse, update)
         await db.commit()
         return HpxPulseActionResponse(
             pulse=_to_response(db_pulse),
-            message="Sync queued for connected agents",
+            message=update.get("message") or "Sync queued for connected agents",
         )
 
     async def diagnose_pulse(
@@ -767,14 +866,7 @@ class HpxPulseOperation(BaseOperation):
             peer_forward_ports: dict[str, set[int]] = {}
             try:
                 peers, _ = await get_hpx_pulses(db, offset=0, limit=100)
-                for peer in peers:
-                    if peer.id == db_pulse.id:
-                        continue
-                    pip = (peer.iran_public_ip or "").strip()
-                    if not pip:
-                        continue
-                    peer_iran_ips.add(pip)
-                    peer_forward_ports[pip] = forward_listen_ports(peer.port_forwards)
+                peer_iran_ips, peer_forward_ports = merge_peer_forward_ports(peers, exclude_pulse_id=db_pulse.id)
             except Exception as exc:
                 logger.debug("diagnose peer pulse scan skipped: %s", exc)
 
@@ -837,10 +929,10 @@ class HpxPulseOperation(BaseOperation):
                 fix_notes.append(f"profile → {extreme_id} (TCP Extreme mss=1000)")
 
         probe_queued = False
-        if _can_queue_command(db_pulse, "iran"):
+        if _can_queue_command(db_pulse, "iran", incoming=agent_cmd):
             update["iran_agent_command"] = agent_cmd
             probe_queued = True
-        if _can_queue_command(db_pulse, "abroad"):
+        if _can_queue_command(db_pulse, "abroad", incoming=agent_cmd):
             update["abroad_agent_command"] = agent_cmd
             probe_queued = True
         if apply_fix and fix_notes:
@@ -952,15 +1044,26 @@ class HpxPulseOperation(BaseOperation):
             "message": f"Path ping queued ({model.proto.upper()} ×{model.count} → Iran {target})",
         }
         queued = False
-        if db_pulse.abroad_agent_key_hash:
+        if db_pulse.abroad_agent_key_hash and _can_queue_command(db_pulse, "abroad", incoming=cmd):
             update["abroad_agent_command"] = cmd
             queued = True
-        elif db_pulse.iran_agent_key_hash:
+        elif db_pulse.iran_agent_key_hash and _can_queue_command(db_pulse, "iran", incoming=cmd):
             # Fallback: Iran probes itself (less useful) — prefer abroad.
             update["iran_agent_command"] = cmd
             pending["from"] = "iran"
             update["diag_report"] = {**existing, "path_ping": pending}
             queued = True
+
+        if not queued:
+            # Don't leave a permanent "queued" spinner when the agent cannot take the command.
+            pending["status"] = "error"
+            pending["detail"] = (
+                "Agent busy (leave pending) or not joined — finish Tokens/rejoin, then retry"
+                if (db_pulse.abroad_agent_key_hash or db_pulse.iran_agent_key_hash)
+                else "No agents joined — Tokens → join abroad (preferred) then Path Ping again"
+            )
+            update["diag_report"] = {**existing, "path_ping": pending}
+            update["message"] = pending["detail"]
 
         db_pulse = await update_hpx_pulse(db, db_pulse, update)
         await db.commit()
@@ -973,7 +1076,7 @@ class HpxPulseOperation(BaseOperation):
         elif queued:
             hint = "Abroad agent will sample Iran path in ~5–15s — keep this panel open"
         else:
-            hint = "No agents joined — Tokens → join abroad (preferred) then Path Ping again"
+            hint = pending.get("detail") or "Could not queue path ping"
         return HpxPulsePathPingResponse(
             pulse_id=db_pulse.id,
             name=db_pulse.name,
@@ -1041,6 +1144,21 @@ class HpxPulseOperation(BaseOperation):
         except ValueError as exc:
             await self.raise_error(message=str(exc), code=422)
 
+        final_iran = update_data.get("iran_public_ip", db_pulse.iran_public_ip)
+        final_control = update_data.get("control_port", db_pulse.control_port)
+        final_forwards = update_data.get("port_forwards", db_pulse.port_forwards)
+        if any(k in update_data for k in ("iran_public_ip", "control_port", "port_forwards")):
+            peers, _ = await get_hpx_pulses(db, offset=0, limit=200)
+            conflicts = find_iran_port_conflicts(
+                iran_ip=final_iran,
+                control_port=final_control,
+                port_forwards=final_forwards,
+                peers=peers,
+                exclude_pulse_id=db_pulse.id,
+            )
+            if conflicts:
+                await self.raise_error(message=conflicts[0], code=409)
+
         if model.goal is not None:
             advise_req = PulseAdviseRequest(goal=model.goal, cpu_cores=1, ram_mb=1024)
             advice = advise(
@@ -1085,9 +1203,9 @@ class HpxPulseOperation(BaseOperation):
         }
         needs_agent_restart = bool(changed_keys - soft_keys)
         if needs_agent_restart:
-            if _can_queue_command(db_pulse, "iran"):
+            if _can_queue_command(db_pulse, "iran", incoming="restart"):
                 update_data.setdefault("iran_agent_command", "restart")
-            if _can_queue_command(db_pulse, "abroad"):
+            if _can_queue_command(db_pulse, "abroad", incoming="restart"):
                 update_data.setdefault("abroad_agent_command", "restart")
             update_data.setdefault("message", "Config updated — agents syncing")
             update_data["last_status_change"] = dt.now(UTC)
@@ -1353,6 +1471,12 @@ class HpxPulseOperation(BaseOperation):
             path_ping = incoming.get("path_ping")
             if isinstance(path_ping, dict):
                 merged["path_ping"] = path_ping
+                # If results arrived but ack was lost, clear the leftover pp:* so Sync works.
+                if path_ping.get("status") in {"done", "error"}:
+                    if side == "abroad" and _command_kind(db_pulse.abroad_agent_command) == "path_ping":
+                        update_data["abroad_agent_command"] = None
+                    if side == "iran" and _command_kind(db_pulse.iran_agent_command) == "path_ping":
+                        update_data["iran_agent_command"] = None
             elif isinstance(existing.get("path_ping"), dict):
                 merged["path_ping"] = existing["path_ping"]
             update_data["diag_report"] = merged

@@ -243,9 +243,10 @@ export default function PathPingPanel({
   const runRef = useRef<HTMLButtonElement>(null)
   const pathPing = pulse.path_ping
   const queued = pathPing?.status === 'queued'
-  const busy = Boolean(loading || queued)
+  const [clientTimedOut, setClientTimedOut] = useState(false)
+  const busy = Boolean(loading || (queued && !clientTimedOut))
   const done = pathPing?.status === 'done'
-  const failed = pathPing?.status === 'error'
+  const failed = pathPing?.status === 'error' || clientTimedOut
   const quality = speedQuality(pathPing)
   const hasResult = done || failed || (pathPing?.replies?.length ?? 0) > 0
   const noAgent = !pulse.abroad_claimed && !pulse.iran_claimed
@@ -256,6 +257,17 @@ export default function PathPingPanel({
     const id = window.setTimeout(() => runRef.current?.focus({ preventScroll: true }), 250)
     return () => window.clearTimeout(id)
   }, [focusSignal])
+
+  useEffect(() => {
+    // Client-side safety net — server also expires queued samples after ~90s.
+    if (!queued) {
+      setClientTimedOut(false)
+      return
+    }
+    setClientTimedOut(false)
+    const id = window.setTimeout(() => setClientTimedOut(true), 75_000)
+    return () => window.clearTimeout(id)
+  }, [queued, pathPing?.ts])
 
   return (
     <div
@@ -382,7 +394,11 @@ export default function PathPingPanel({
       {failed ? (
         <p className="text-destructive text-xs">
           {t('hpxPulse.speedTest.failed', { defaultValue: 'Speed test failed' })}
-          {pathPing?.detail ? `: ${pathPing.detail}` : ''}
+          {clientTimedOut
+            ? `: ${t('hpxPulse.speedTest.timeout', { defaultValue: 'timed out waiting for agent — Sync then try again' })}`
+            : pathPing?.detail
+              ? `: ${pathPing.detail}`
+              : ''}
         </p>
       ) : null}
 

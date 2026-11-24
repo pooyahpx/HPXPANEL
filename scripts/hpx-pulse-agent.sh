@@ -2034,7 +2034,9 @@ handle_path_ping_command() {
   diag="$(jq -nc --argjson pp "$result" --arg side "${PULSE_SIDE:-abroad}" --argjson ts "$(date +%s)" \
     '{path_ping:$pp, side:$side, ts:$ts}')"
 
-  api_request POST "/api/hpx_pulse/agent/heartbeat" \
+  # CRITICAL: never ack before results land — a failed heartbeat + successful ack
+  # leaves the panel forever stuck on status=queued with the command already cleared.
+  if api_request POST "/api/hpx_pulse/agent/heartbeat" \
     "$(jq -nc \
       --arg s "running" \
       --arg h "$(hostname -f 2>/dev/null || hostname)" \
@@ -2042,10 +2044,12 @@ handle_path_ping_command() {
       --argjson d "$diag" \
       --argjson lm "$lat_json" \
       '{status:$s, host:$h, tunnel_running:true, iface_up:true, latency_ms:(if $lm==null then null else ($lm|tonumber) end), message:$m, diag:$d}')" \
-    >/dev/null || warn "path-ping heartbeat failed"
-
-  api POST "/api/hpx_pulse/agent/ack" \
-    "$(jq -nc --arg c "$raw" '{command:$c, status:"running", message:"path-ping posted"}')" >/dev/null || true
+    >/dev/null; then
+    api POST "/api/hpx_pulse/agent/ack" \
+      "$(jq -nc --arg c "$raw" '{command:$c, status:"running", message:"path-ping posted"}')" >/dev/null || true
+  else
+    warn "path-ping heartbeat failed — leaving command queued for retry (panel will not get stuck)"
+  fi
 }
 
 maybe_handle_diagnose_command() {
@@ -2101,7 +2105,8 @@ measure_icmp_ms() {
 }
 
 first_forward_listen_port() {
-  echo "${PORT_FORWARDS:-}" | tr -d '[]"' | cut -d',' -f1 | cut -d'=' -f1 | tr -d ' '
+  # PORT_FORWARDS may be JSON (["2082=127.0.0.1:2082"]) or CSV — always take THIS pulse's first listen.
+  echo "${PORT_FORWARDS:-}" | tr -d '[]"' | tr ',' '\n' | sed '/^[[:space:]]*$/d' | head -1 | cut -d'=' -f1 | tr -d ' '
 }
 
 # Absolute traffic counters for the panel (diffed server-side into lifetime + samples).

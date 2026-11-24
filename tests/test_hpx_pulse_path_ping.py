@@ -1,6 +1,23 @@
 """Path-ping request/response models for Pulse live TCP/UDP samples."""
 
+from datetime import UTC, datetime as dt
+
 from app.models.hpx_pulse import HpxPulsePathPingRequest, HpxPulsePathPingResponse
+from app.operation.hpx_pulse import (
+    PATH_PING_QUEUED_TTL_SEC,
+    _can_queue_command,
+    _command_kind,
+    _expire_path_ping_in_memory,
+)
+
+
+class _Pulse:
+    def __init__(self, **kwargs):
+        self.iran_agent_key_hash = kwargs.get("iran_agent_key_hash")
+        self.abroad_agent_key_hash = kwargs.get("abroad_agent_key_hash")
+        self.iran_agent_command = kwargs.get("iran_agent_command")
+        self.abroad_agent_command = kwargs.get("abroad_agent_command")
+        self.diag_report = kwargs.get("diag_report")
 
 
 def test_path_ping_request_defaults():
@@ -9,6 +26,29 @@ def test_path_ping_request_defaults():
     assert req.count == 4
     # Forward is default — control probes reset reverse/stealth tunnels.
     assert req.target == "forward"
+
+
+def test_command_kind_path_ping():
+    assert _command_kind("pp:t:4:f") == "path_ping"
+    assert _command_kind("path-ping:tcp:4:forward") == "path_ping"
+    assert _command_kind("leave") == "leave"
+    assert _command_kind("restart") == "other"
+
+
+def test_sync_cannot_clobber_path_ping():
+    pulse = _Pulse(abroad_agent_key_hash="x", abroad_agent_command="pp:t:4:f")
+    assert not _can_queue_command(pulse, "abroad", incoming="restart")
+    assert not _can_queue_command(pulse, "abroad", incoming="diagnose")
+    assert _can_queue_command(pulse, "abroad", incoming="pp:u:4:f")
+    assert _can_queue_command(pulse, "abroad", incoming="leave")
+
+
+def test_path_ping_queued_expires():
+    stale_ts = int(dt.now(UTC).timestamp()) - PATH_PING_QUEUED_TTL_SEC - 5
+    pulse = _Pulse(diag_report={"path_ping": {"status": "queued", "ts": stale_ts, "replies": []}})
+    expired = _expire_path_ping_in_memory(pulse)
+    assert expired["status"] == "error"
+    assert "timed out" in expired["detail"]
 
 
 def test_path_ping_compact_command_fits_legacy_column():

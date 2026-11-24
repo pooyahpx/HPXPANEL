@@ -95,3 +95,5 @@ def test_agent_script_has_multi_tunnel_isolation_guards():
     assert "tcp_base_mss" not in script or "Do not set global tcp_base_mss" in script
     assert "siblings untouched" in script
     assert "multi-tunnel Sync race" in script
+    assert "leaving command queued for retry" in script
+    assert "never ack before results land" in script

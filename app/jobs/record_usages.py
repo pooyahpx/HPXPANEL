@@ -611,6 +611,27 @@ async def apply_user_usage_coefficients(users_usage: list) -> list:
     ]
 
 
+async def apply_host_usage_coefficients(users_usage: list) -> list:
+    """Multiply usage by the strongest host/config coefficient the user can access.
+
+    Uses each host's ``usage_coefficient`` unless a per-user override exists.
+    """
+    if not users_usage:
+        return []
+    from app.db.crud.host_coefficient import load_effective_host_coefficients_for_users
+
+    uids = {int(item["uid"]) for item in users_usage}
+    async with GetDB() as db:
+        coeffs = await load_effective_host_coefficients_for_users(db, uids)
+    return [
+        {
+            "uid": int(item["uid"]),
+            "value": int(item["value"] * coeffs.get(int(item["uid"]), 1.0)),
+        }
+        for item in users_usage
+    ]
+
+
 async def calculate_admin_usage(users_usage: list) -> tuple[dict, set[int]]:
     if not users_usage:
         return {}, set()
@@ -746,6 +767,8 @@ async def _record_user_usages_impl():
 
         # Per-user traffic coefficient (e.g. 20GB plan × coeff 10 ≈ 2GB real traffic)
         users_usage = await apply_user_usage_coefficients(users_usage)
+        # Per-host/config coefficient (host default + optional per-user override)
+        users_usage = await apply_host_usage_coefficients(users_usage)
 
         admin_usage, valid_user_ids = await calculate_admin_usage(users_usage)
         if not valid_user_ids:
@@ -801,9 +824,10 @@ async def _record_user_usages_impl():
             total_records = sum(len(params) for params in filtered_node_params.values())
             logger.debug(f"Recorded {total_records} node user usage records across {len(filtered_node_params)} nodes")
 
+            from sqlalchemy.orm import selectinload
+
             from app.db.crud.user_group_quota import record_group_quota_usage
             from app.node.sync import sync_users
-            from sqlalchemy.orm import selectinload
 
             async with GetDB() as db:
                 users_to_sync = await record_group_quota_usage(

@@ -24,6 +24,7 @@ import { useTranslation } from 'react-i18next'
 import { hostFormDefaultValues, type HostFormValues } from '@/features/hosts/forms/host-form'
 import { LoaderButton } from '@/components/ui/loader-button'
 import { FinalMaskSettings } from '../components/finalmask-settings'
+import { HostCoefficientOverrides } from '../components/host-coefficient-overrides'
 
 // Predefined sessionIDTable aliases recognized by Xray 26.6.22+.
 const SESSION_ID_TABLE_PRESETS = ['ALPHABET', 'Alphabet', 'BASE36', 'Base62', 'HEX', 'alphabet', 'base36', 'hex', 'number']
@@ -101,6 +102,8 @@ interface HostModalProps {
   onOpenChange: (open: boolean) => void
   onSubmit: (data: HostFormValues) => Promise<{ status: number }>
   editingHost?: boolean
+  /** Present when editing an existing host — enables per-user coefficient overrides. */
+  hostId?: number
   form: UseFormReturn<HostFormValues>
   inboundDetails?: Array<{ tag: string; protocol: string }>
   isLoadingInbounds?: boolean
@@ -315,7 +318,7 @@ const ArrayInput = memo<ArrayInputProps>(({ field, placeholder, label, infoConte
 
 ArrayInput.displayName = 'ArrayInput'
 
-const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSubmit, editingHost, form, inboundDetails, isLoadingInbounds = false, preserveCreateValues = false }) => {
+const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSubmit, editingHost, hostId, form, inboundDetails, isLoadingInbounds = false, preserveCreateValues = false }) => {
   const [openSection, setOpenSection] = useState<string | undefined>(undefined)
   const [wireguardOpenSection, setWireguardOpenSection] = useState<string | undefined>(undefined)
   const [isTransportOpen, setIsTransportOpen] = useState(false)
@@ -1160,6 +1163,52 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                   />
                 </div>
               </div>
+
+              <FormField
+                control={form.control}
+                name="usage_coefficient"
+                render={({ field }) => (
+                  <FormItem>
+                    <div className="flex items-center gap-2">
+                      <FormLabel>{t('hostsDialog.coefficient.label', { defaultValue: 'Traffic coefficient' })}</FormLabel>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button type="button" variant="ghost" size="icon" className="h-4 w-4 cursor-pointer p-0 hover:bg-transparent">
+                            <Info className="text-muted-foreground h-4 w-4" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[min(90vw,20rem)] p-3 sm:w-80" side={infoPopoverSide} align={infoPopoverAlign} sideOffset={5}>
+                          <p className="text-muted-foreground text-[11px]">
+                            {t('hostsDialog.coefficient.info', {
+                              defaultValue: 'Multiplier for this config only. Example: 10 means counted traffic ≈ real × 10. Default 1 = normal.',
+                            })}
+                          </p>
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        min={0.01}
+                        step="any"
+                        placeholder="1"
+                        isError={!!form.formState.errors.usage_coefficient}
+                        {...field}
+                        value={field.value ?? 1}
+                        onChange={e => {
+                          const val = e.target.value
+                          field.onChange(val === '' ? 1 : Number.parseFloat(val))
+                        }}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {editingHost && hostId ? (
+                <HostCoefficientOverrides hostId={hostId} hostCoefficient={Number(form.watch('usage_coefficient') || 1)} />
+              ) : null}
 
               {!isInboundModeResolved ? (
                 <div className="mb-6 rounded-sm border px-4 py-6">

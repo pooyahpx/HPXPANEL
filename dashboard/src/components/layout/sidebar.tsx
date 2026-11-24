@@ -39,6 +39,7 @@ import {
   Paintbrush,
   Activity,
   LifeBuoy,
+  Link2,
   ListTodo,
   Lock,
   Logs,
@@ -264,6 +265,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               title: 'telegramBot.title',
               url: '/telegram',
               icon: Send,
+            },
+            {
+              title: 'settings.motherConfigs.title',
+              url: '/mother-configs',
+              icon: Link2,
             },
           ]
         : []),

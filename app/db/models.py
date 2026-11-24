@@ -613,6 +613,19 @@ class ProxyHost(Base, IdMixin):
     wireguard_overrides: Mapped[dict[str, Any] | None] = mapped_column(JSON(none_as_null=True), default=None)
     subscription_templates: Mapped[dict[str, Any] | None] = mapped_column(JSON(none_as_null=True), default=None)
     final_mask_settings: Mapped[dict[str, Any] | None] = mapped_column(JSON(none_as_null=True), default=None)
+    # Traffic multiplier for this host/config (1.0 = normal). Per-user overrides live in UserHostCoefficient.
+    usage_coefficient: Mapped[float] = mapped_column(Float, server_default=text("1.0"), default=1)
+
+
+class UserHostCoefficient(Base, IdMixin):
+    """Per-user override of a host's usage_coefficient."""
+
+    __tablename__ = "user_host_coefficients"
+    __table_args__ = (UniqueConstraint("user_id", "host_id", name="uq_user_host_coefficients_user_host"),)
+
+    user_id: Mapped[int] = fk_id_column("users.id", ondelete="CASCADE")
+    host_id: Mapped[int] = fk_id_column("hosts.id", ondelete="CASCADE")
+    usage_coefficient: Mapped[float] = mapped_column(Float, server_default=text("1.0"), default=1)
 
 
 class System(Base, IdMixin):

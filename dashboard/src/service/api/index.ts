@@ -1549,6 +1549,8 @@ export interface ExternalConfig {
   enabled?: boolean
   /** When true, only users with remaining volume on this panel receive the link */
   respect_user_quota?: boolean
+  /** When true, rewrite UUID/password to each local user so traffic meters on this panel */
+  personalize?: boolean
 }
 
 export interface Subscription {

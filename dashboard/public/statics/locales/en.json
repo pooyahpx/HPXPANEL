@@ -906,7 +906,13 @@
       "usageColEligible": "Eligible",
       "usageColQuota": "Quota gate",
       "usageColStatus": "Status gate",
-      "usageAlwaysOn": "Always on for active users"
+      "usageAlwaysOn": "Always on for active users",
+      "usageOnline": "Online now",
+      "usageColOnline": "Online",
+      "personalize": "Bind local user UUID",
+      "personalizeHint": "On = each user connects with their own UUID so volume & online count on this panel (mother server must have the same clients / be a Node). Off = shared freeloader UUID (volume cannot be metered).",
+      "personalizeOn": "Bound UUID",
+      "personalizeOff": "Shared UUID"
     },
     "subscriptions": {
       "title": "Subscriptions",

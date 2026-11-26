@@ -17,19 +17,23 @@ export type MotherConfigUsage = {
   eligible_for_quota_gated: number
   exhausted_volume: number
   unlimited_users: number
+  online_users: number
   used_traffic_bytes: number
   data_limit_bytes: number
   remaining_bytes: number
   usage_pct: number
   enabled_configs: number
   total_configs: number
+  personalized_configs: number
   configs: Array<{
     name: string
     enabled: boolean
     respect_user_quota: boolean
+    personalize: boolean
     eligible_users: number
     gated_by_quota: number
     gated_by_status: number
+    online_users: number
   }>
 }
 
@@ -116,7 +120,7 @@ export function MotherConfigUsagePanel() {
             <p className="text-muted-foreground max-w-2xl text-xs leading-relaxed">
               {t('settings.motherConfigs.usageHint', {
                 defaultValue:
-                  'Shows who can still receive mother links (by status + remaining volume) and how much of limited plans is already used on this panel.',
+                  'Eligible + online users for mother configs. With “Bind local user UUID” on, traffic on a mother Node counts against each user’s volume.',
               })}
             </p>
           </div>
@@ -166,11 +170,18 @@ export function MotherConfigUsagePanel() {
           />
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div className="bg-background/40 flex items-center gap-2 rounded-xl border px-3 py-2 text-xs">
             <Users className="text-muted-foreground size-3.5" />
             <span className="text-muted-foreground">{t('settings.motherConfigs.usageActive', { defaultValue: 'Active' })}</span>
             <span className="ms-auto font-mono font-semibold">{loading ? '—' : data?.active_users ?? 0}</span>
+          </div>
+          <div className="bg-background/40 flex items-center gap-2 rounded-xl border border-emerald-500/20 px-3 py-2 text-xs">
+            <Activity className="size-3.5 text-emerald-500" />
+            <span className="text-muted-foreground">{t('settings.motherConfigs.usageOnline', { defaultValue: 'Online now' })}</span>
+            <span className="ms-auto font-mono font-semibold text-emerald-600 dark:text-emerald-400">
+              {loading ? '—' : data?.online_users ?? 0}
+            </span>
           </div>
           <div className="bg-background/40 flex items-center gap-2 rounded-xl border px-3 py-2 text-xs">
             <Zap className="text-muted-foreground size-3.5" />
@@ -188,9 +199,10 @@ export function MotherConfigUsagePanel() {
 
         {!loading && data && data.configs.length > 0 ? (
           <div className="overflow-hidden rounded-xl border">
-            <div className="bg-muted/40 text-muted-foreground grid grid-cols-[minmax(0,1.4fr)_repeat(3,minmax(0,0.7fr))] gap-2 px-3 py-2 text-[10px] font-semibold tracking-wide uppercase">
+            <div className="bg-muted/40 text-muted-foreground grid grid-cols-[minmax(0,1.5fr)_repeat(4,minmax(0,0.55fr))] gap-2 px-3 py-2 text-[10px] font-semibold tracking-wide uppercase">
               <span>{t('settings.motherConfigs.name', { defaultValue: 'Display name' })}</span>
               <span className="text-end">{t('settings.motherConfigs.usageColEligible', { defaultValue: 'Eligible' })}</span>
+              <span className="text-end">{t('settings.motherConfigs.usageColOnline', { defaultValue: 'Online' })}</span>
               <span className="text-end">{t('settings.motherConfigs.usageColQuota', { defaultValue: 'Quota gate' })}</span>
               <span className="text-end">{t('settings.motherConfigs.usageColStatus', { defaultValue: 'Status gate' })}</span>
             </div>
@@ -198,19 +210,28 @@ export function MotherConfigUsagePanel() {
               {data.configs.map((cfg, i) => (
                 <li
                   key={`${cfg.name}-${i}`}
-                  className={cn('grid grid-cols-[minmax(0,1.4fr)_repeat(3,minmax(0,0.7fr))] items-center gap-2 px-3 py-2.5 text-sm', !cfg.enabled && 'opacity-50')}
+                  className={cn(
+                    'grid grid-cols-[minmax(0,1.5fr)_repeat(4,minmax(0,0.55fr))] items-center gap-2 px-3 py-2.5 text-sm',
+                    !cfg.enabled && 'opacity-50',
+                  )}
                 >
                   <div className="min-w-0">
                     <p className="truncate font-medium">{cfg.name || t('settings.motherConfigs.unnamed', { defaultValue: 'Untitled config' })}</p>
                     <p className="text-muted-foreground text-[11px]">
-                      {cfg.enabled
-                        ? cfg.respect_user_quota
-                          ? t('settings.motherConfigs.respectQuota', { defaultValue: 'Respect user volume' })
-                          : t('settings.motherConfigs.usageAlwaysOn', { defaultValue: 'Always on for active users' })
-                        : t('disabled', { defaultValue: 'Disabled' })}
+                      {!cfg.enabled
+                        ? t('disabled', { defaultValue: 'Disabled' })
+                        : [
+                            cfg.personalize
+                              ? t('settings.motherConfigs.personalizeOn', { defaultValue: 'Bound UUID' })
+                              : t('settings.motherConfigs.personalizeOff', { defaultValue: 'Shared UUID' }),
+                            cfg.respect_user_quota
+                              ? t('settings.motherConfigs.respectQuota', { defaultValue: 'Respect user volume' })
+                              : t('settings.motherConfigs.usageAlwaysOn', { defaultValue: 'Always on for active users' }),
+                          ].join(' · ')}
                     </p>
                   </div>
                   <span className="text-end font-mono tabular-nums">{cfg.eligible_users}</span>
+                  <span className="text-end font-mono tabular-nums text-emerald-600 dark:text-emerald-400">{cfg.online_users}</span>
                   <span className="text-end font-mono tabular-nums text-amber-600 dark:text-amber-400">{cfg.gated_by_quota}</span>
                   <span className="text-end font-mono tabular-nums text-rose-600 dark:text-rose-400">{cfg.gated_by_status}</span>
                 </li>

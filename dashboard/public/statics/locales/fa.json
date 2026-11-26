@@ -434,7 +434,13 @@
       "usageColEligible": "واجد شرایط",
       "usageColQuota": "گیت حجم",
       "usageColStatus": "گیت وضعیت",
-      "usageAlwaysOn": "همیشه برای یوزرهای فعال"
+      "usageAlwaysOn": "همیشه برای یوزرهای فعال",
+      "usageOnline": "آنلاین الان",
+      "usageColOnline": "آنلاین",
+      "personalize": "اتصال با UUID یوزر پنل",
+      "personalizeHint": "روشن = هر یوزر با UUID خودش وصل می‌شود تا حجم و آنلاین روی همین پنل ثبت شود (سرور مادر باید همان کلاینت‌ها را داشته باشد / Node باشد). خاموش = UUID مشترک (حجم متر نمی‌شود).",
+      "personalizeOn": "UUID بایند",
+      "personalizeOff": "UUID مشترک"
     },
     "subscriptions": {
       "title": "اشتراک‌ها",

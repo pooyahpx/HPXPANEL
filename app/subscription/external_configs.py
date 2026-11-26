@@ -6,6 +6,8 @@ from urllib.parse import quote
 
 from config import subscription_env_settings
 
+from app.subscription.mother_personalize import personalize_share_link
+
 EXTERNAL_LINK_SCHEMES = (
     "vless://",
     "vmess://",
@@ -39,6 +41,9 @@ def normalize_external_link(link: str, name: str | None = None) -> str:
     label = (name or "").strip()
     if not label:
         return cleaned
+    # vmess payloads embed the remark — leave them alone here
+    if cleaned.lower().startswith("vmess://"):
+        return cleaned
     base = cleaned.rsplit("#", 1)[0]
     return f"{base}#{quote(label)}"
 
@@ -68,37 +73,50 @@ def user_may_receive_external_configs(user, *, respect_quota: bool = True) -> bo
     return user_has_remaining_quota(user)
 
 
-def _item_respects_quota(item) -> bool:
+def _item_flag(item, key: str, default: bool = True) -> bool:
     if isinstance(item, dict):
-        return bool(item.get("respect_user_quota", True))
-    return bool(getattr(item, "respect_user_quota", True))
+        return bool(item.get(key, default))
+    return bool(getattr(item, key, default))
+
+
+def _item_respects_quota(item) -> bool:
+    # Shared (non-personalized) mother links must always respect local volume,
+    # otherwise exhausted users keep a freeloader UUID forever.
+    if not _item_flag(item, "personalize", True):
+        return True
+    return _item_flag(item, "respect_user_quota", True)
 
 
 def collect_external_config_links(sub_settings, user=None) -> list[str]:
     """Enabled mother configs from settings + legacy EXTERNAL_CONFIG env.
 
-    When ``user`` is provided, configs with ``respect_user_quota`` (default True)
-    are only included while that user is active/on_hold and still has remaining
-    volume on this panel — so a shared remote UUID is not offered to exhausted
-    accounts.
+    When ``user`` is provided:
+    - configs with ``respect_user_quota`` (default True) are only included while
+      that user is active/on_hold and still has remaining volume on this panel
+    - configs with ``personalize`` (default True) rewrite UUID/password to the
+      local user's credentials so traffic maps to this panel when mother is a Node
     """
     links: list[str] = []
     seen: set[str] = set()
 
-    def _add(raw: str, name: str | None = None) -> None:
-        normalized = normalize_external_link(raw, name)
-        if not normalized or not is_share_link(normalized):
+    def _add(raw: str, name: str | None = None, *, personalize: bool = True) -> None:
+        candidate = (raw or "").strip()
+        if not candidate:
             return
-        key = normalized.rsplit("#", 1)[0]
+        if user is not None and personalize:
+            candidate = personalize_share_link(candidate, user, name=name)
+        else:
+            candidate = normalize_external_link(candidate, name)
+        if not candidate or not is_share_link(candidate):
+            return
+        key = candidate.rsplit("#", 1)[0]
         if key in seen:
             return
         seen.add(key)
-        links.append(normalized)
+        links.append(candidate)
 
     for item in getattr(sub_settings, "external_configs", None) or []:
-        enabled = getattr(item, "enabled", True)
-        if isinstance(item, dict):
-            enabled = item.get("enabled", True)
+        enabled = _item_flag(item, "enabled", True)
         if enabled is False:
             continue
         if user is not None and not user_may_receive_external_configs(
@@ -107,12 +125,13 @@ def collect_external_config_links(sub_settings, user=None) -> list[str]:
             continue
         link = getattr(item, "link", None) or (item.get("link") if isinstance(item, dict) else None)
         name = getattr(item, "name", None) or (item.get("name") if isinstance(item, dict) else None)
+        personalize = _item_flag(item, "personalize", True)
         if link:
-            _add(str(link), str(name) if name else None)
+            _add(str(link), str(name) if name else None, personalize=personalize)
 
-    # Legacy env link always respects user quota when a user is in context.
+    # Legacy env link always respects user quota + personalizes when a user is in context.
     env_link = (subscription_env_settings.external_config or "").strip()
     if env_link and (user is None or user_may_receive_external_configs(user, respect_quota=True)):
-        _add(env_link)
+        _add(env_link, personalize=user is not None)
 
     return links

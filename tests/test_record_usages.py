@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock
 
@@ -179,7 +180,7 @@ async def test_record_user_usages_updates_users_and_admins(monkeypatch: pytest.M
     }
 
     async def fake_get_users_stats(node: DummyNode):
-        return stats_map[node.node_id]
+        return stats_map[node.node_id], 0
 
     monkeypatch.setattr(record_usages, "get_users_stats", fake_get_users_stats)
     monkeypatch.setattr(record_usages.usage_settings, "disable_recording_node_usage", False)
@@ -249,7 +250,7 @@ async def test_record_user_usages_limits_overused_admin(monkeypatch: pytest.Monk
     )
 
     async def fake_get_users_stats(_: DummyNode):
-        return [{"uid": str(user_id), "value": 150}]
+        return [{"uid": str(user_id), "value": 150}], 0
 
     remove_users = AsyncMock()
     monkeypatch.setattr(record_usages, "get_users_stats", fake_get_users_stats)
@@ -353,7 +354,7 @@ async def test_record_user_usages_returns_when_no_usage(monkeypatch: pytest.Monk
     monkeypatch.setattr(record_usages.node_manager, "get_healthy_nodes", AsyncMock(return_value=nodes))
 
     async def fake_get_users_stats(_: DummyNode):
-        return []
+        return [], 0
 
     monkeypatch.setattr(record_usages, "get_users_stats", fake_get_users_stats)
     monkeypatch.setattr(record_usages.usage_settings, "disable_recording_node_usage", False)
@@ -369,6 +370,85 @@ async def test_record_user_usages_returns_when_no_usage(monkeypatch: pytest.Monk
 
         node_user_usage = await session.execute(select(NodeUserUsage.id))
         assert node_user_usage.first() is None
+
+
+def test_process_users_stats_response_captures_orphaned_bytes():
+    class Stat:
+        def __init__(self, name, value):
+            self.name = name
+            self.value = value
+
+    class Response:
+        def __init__(self, stats):
+            self.stats = stats
+
+    response = Response(
+        [
+            Stat("42", 100),
+            Stat("mother-uuid-email", 250),
+            Stat("another-shared", 50),
+            Stat("7", 0),  # filtered by attrgetter value truthiness
+        ]
+    )
+    params, invalid, orphaned = record_usages._process_users_stats_response(response)
+    assert params == [{"uid": 42, "value": 100}]
+    assert set(invalid) == {"mother-uuid-email", "another-shared"}
+    assert orphaned == 300
+
+
+@pytest.mark.asyncio
+async def test_record_user_usages_meters_orphaned_mother_traffic(monkeypatch: pytest.MonkeyPatch, session_factory):
+    async with session_factory() as session:
+        admin = Admin(username="mother-admin", hashed_password="secret", role_id=3)
+        session.add(admin)
+        await session.flush()
+        admin_id = admin.id
+        user = User(
+            username="mother-user",
+            admin_id=admin_id,
+            data_limit=10_000,
+            used_traffic=0,
+            proxy_settings=ProxyTable().dict(no_obj=True),
+        )
+        node = Node(
+            name="mother-node",
+            address="mother.example",
+            port=1000,
+            api_port=1001,
+            server_ca="ca1",
+            api_key="key1",
+            core_config_id=None,
+        )
+        session.add_all([user, node])
+        await session.flush()
+        node_id = node.id
+        await session.commit()
+
+    monkeypatch.setattr(
+        record_usages.node_manager,
+        "get_healthy_nodes",
+        AsyncMock(return_value=[(node_id, DummyNode(node_id))]),
+    )
+
+    async def fake_get_users_stats(_: DummyNode):
+        return [], 600
+
+    apply_orphaned = AsyncMock(return_value=600)
+    monkeypatch.setattr(record_usages, "get_users_stats", fake_get_users_stats)
+    monkeypatch.setattr(record_usages.usage_settings, "disable_recording_node_usage", True)
+    monkeypatch.setattr(
+        "app.services.mother_usage_meter.apply_orphaned_mother_traffic",
+        apply_orphaned,
+    )
+    monkeypatch.setattr(
+        "app.settings.subscription_settings",
+        AsyncMock(return_value=SimpleNamespace(external_configs=[])),
+    )
+
+    await record_usages.record_user_usages()
+
+    apply_orphaned.assert_awaited_once()
+    assert apply_orphaned.await_args.kwargs["orphaned_by_node"] == {node_id: 600}
 
 
 @pytest.mark.asyncio

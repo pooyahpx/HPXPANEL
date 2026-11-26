@@ -495,7 +495,8 @@ def _process_users_stats_response(stats_response):
     """
     Process stats response (CPU-bound operation) - runs in thread pool.
     Pure function designed for thread-safe execution.
-    Returns tuple: (validated_params, invalid_uids) for logging outside thread.
+    Returns: (validated_params, invalid_uids, orphaned_bytes)
+    Orphaned bytes are traffic under non-integer emails (shared mother UUIDs, etc.).
     """
     params = defaultdict(int)
     for stat in filter(attrgetter("value"), stats_response.stats):
@@ -503,19 +504,24 @@ def _process_users_stats_response(stats_response):
 
     validated_params = []
     invalid_uids = []
+    orphaned_bytes = 0
     for uid, value in params.items():
         try:
             validated_params.append({"uid": int(uid), "value": value})
-        except ValueError, TypeError:
+        except (ValueError, TypeError):
             invalid_uids.append(uid)
+            try:
+                orphaned_bytes += int(value or 0)
+            except (TypeError, ValueError):
+                pass
 
-    return validated_params, invalid_uids
+    return validated_params, invalid_uids, orphaned_bytes
 
 
-async def get_users_stats(node: PasarGuardNode):
+async def get_users_stats(node: PasarGuardNode) -> tuple[list, int]:
     """
     Get user stats from node using thread pool for CPU-bound processing.
-    This distributes the heavy data processing workload across cores.
+    Returns (validated_params, orphaned_bytes).
     """
     try:
         # I/O operation: fetch stats from node (async, non-blocking)
@@ -525,21 +531,24 @@ async def get_users_stats(node: PasarGuardNode):
         # CPU-bound operation: process stats in thread pool to utilize multiple cores
         loop = asyncio.get_running_loop()
         thread_pool = await _get_thread_pool()
-        validated_params, invalid_uids = await loop.run_in_executor(
+        validated_params, invalid_uids, orphaned_bytes = await loop.run_in_executor(
             thread_pool, _process_users_stats_response, stats_response
         )
 
         if invalid_uids:
-            for uid in invalid_uids:
-                logger.warning("Skipping invalid UID: %s", uid)
+            logger.info(
+                "Captured %s bytes from %s non-local UID(s) on node (mother/shared clients)",
+                orphaned_bytes,
+                len(invalid_uids),
+            )
 
-        return validated_params
+        return validated_params, int(orphaned_bytes or 0)
     except NodeAPIError as e:
         logger.error("Failed to get users stats, error: %s", e.detail)
-        return []
+        return [], 0
     except Exception as e:
         logger.error("Failed to get users stats, unknown error: %s", e)
-        return []
+        return [], 0
 
 
 def _process_outbounds_stats_response(stats_response):
@@ -752,62 +761,88 @@ async def _record_user_usages_impl():
         # Gather stats directly - asyncio.gather accepts coroutines, no need for create_task
         stats_results = await asyncio.gather(*[get_users_stats(node) for _, node in nodes], return_exceptions=True)
         api_params = {}
+        orphaned_by_node: dict[int, int] = {}
         for i, result in enumerate(stats_results):
             node_id = nodes[i][0]
             if isinstance(result, Exception):
                 logger.warning(f"Failed to get stats for node {node_id}: {result}")
                 api_params[node_id] = []
             else:
-                api_params[node_id] = result
+                params, orphaned_bytes = result
+                api_params[node_id] = params
+                coeff = float(usage_coefficient.get(node_id, 1.0) or 1.0)
+                if orphaned_bytes > 0 and coeff > 0:
+                    orphaned_by_node[node_id] = int(orphaned_bytes * coeff)
 
         users_usage = await calculate_users_usage(api_params, usage_coefficient)
-        if not users_usage:
+        admin_usage: dict[int, int] = {}
+        valid_user_ids: set[int] = set()
+        valid_users_usage: list[dict] = []
+
+        # Per-user traffic coefficient (e.g. 20GB plan × coeff 10 ≈ 2GB real traffic)
+        if users_usage:
+            users_usage = await apply_user_usage_coefficients(users_usage)
+            # Per-host/config coefficient (host default + optional per-user override)
+            users_usage = await apply_host_usage_coefficients(users_usage)
+
+            admin_usage, valid_user_ids = await calculate_admin_usage(users_usage)
+            if not valid_user_ids:
+                logger.warning("Skipping user usage recording; no matching users found for received stats")
+            else:
+                # Filter valid users - only include users with actual non-zero traffic
+                valid_users_usage = [
+                    usage for usage in users_usage if int(usage["uid"]) in valid_user_ids and usage["value"] > 0
+                ]
+
+                # Update User table with concurrency control
+                if valid_users_usage:
+                    user_stmt = (
+                        update(User)
+                        .where(User.id == bindparam("uid"))
+                        .values(used_traffic=User.used_traffic + bindparam("value"), online_at=dt.now(UTC))
+                        .execution_options(synchronize_session=False)
+                    )
+                    async with JOB_SEM:
+                        await safe_execute(user_stmt, valid_users_usage)
+                    logger.debug(f"Updated {len(valid_users_usage)} users")
+
+                # Update Admin table with concurrency control
+                if admin_usage:
+                    admin_data = [{"admin_id": aid, "value": val} for aid, val in admin_usage.items()]
+                    admin_stmt = (
+                        update(Admin)
+                        .where(Admin.id == bindparam("admin_id"))
+                        .values(used_traffic=Admin.used_traffic + bindparam("value"))
+                        .execution_options(synchronize_session=False)
+                    )
+                    async with JOB_SEM:
+                        await safe_execute(admin_stmt, admin_data)
+                    logger.debug(f"Updated {len(admin_data)} admins")
+                    try:
+                        await enforce_admin_limits_now(logger=logger)
+                    except Exception:
+                        logger.exception("Failed to enforce admin limits after usage recording")
+
+        # Shared mother UUID traffic (non-integer Xray emails) → local user quotas
+        if orphaned_by_node:
+            try:
+                from app.services.mother_usage_meter import apply_orphaned_mother_traffic
+                from app.settings import subscription_settings
+
+                sub = await subscription_settings()
+                async with GetDB() as db:
+                    await apply_orphaned_mother_traffic(
+                        db,
+                        subscription=sub,
+                        orphaned_by_node=orphaned_by_node,
+                    )
+            except Exception:
+                logger.exception("Failed to meter shared mother UUID traffic")
+
+        if not users_usage and not orphaned_by_node:
             logger.debug("No user usage to record")
             return
 
-        # Per-user traffic coefficient (e.g. 20GB plan × coeff 10 ≈ 2GB real traffic)
-        users_usage = await apply_user_usage_coefficients(users_usage)
-        # Per-host/config coefficient (host default + optional per-user override)
-        users_usage = await apply_host_usage_coefficients(users_usage)
-
-        admin_usage, valid_user_ids = await calculate_admin_usage(users_usage)
-        if not valid_user_ids:
-            logger.warning("Skipping user usage recording; no matching users found for received stats")
-            return
-
-        # Filter valid users - only include users with actual non-zero traffic
-        valid_users_usage = [
-            usage for usage in users_usage if int(usage["uid"]) in valid_user_ids and usage["value"] > 0
-        ]
-
-        # Update User table with concurrency control
-        if valid_users_usage:
-            user_stmt = (
-                update(User)
-                .where(User.id == bindparam("uid"))
-                .values(used_traffic=User.used_traffic + bindparam("value"), online_at=dt.now(UTC))
-                .execution_options(synchronize_session=False)
-            )
-            async with JOB_SEM:
-                await safe_execute(user_stmt, valid_users_usage)
-            logger.debug(f"Updated {len(valid_users_usage)} users")
-
-        # Update Admin table with concurrency control
-        if admin_usage:
-            admin_data = [{"admin_id": aid, "value": val} for aid, val in admin_usage.items()]
-            admin_stmt = (
-                update(Admin)
-                .where(Admin.id == bindparam("admin_id"))
-                .values(used_traffic=Admin.used_traffic + bindparam("value"))
-                .execution_options(synchronize_session=False)
-            )
-            async with JOB_SEM:
-                await safe_execute(admin_stmt, admin_data)
-            logger.debug(f"Updated {len(admin_data)} admins")
-            try:
-                await enforce_admin_limits_now(logger=logger)
-            except Exception:
-                logger.exception("Failed to enforce admin limits after usage recording")
         if usage_settings.disable_recording_node_usage:
             return
 
@@ -849,7 +884,8 @@ async def _record_user_usages_impl():
         logger.info(
             f"User usage recording completed in {job_duration:.2f}s: "
             f"{len(valid_users_usage)} users, {len(admin_usage)} admins, "
-            f"{len(filtered_node_params)} nodes"
+            f"{len(filtered_node_params)} nodes, "
+            f"orphaned_nodes={len(orphaned_by_node)}"
         )
 
     except Exception:

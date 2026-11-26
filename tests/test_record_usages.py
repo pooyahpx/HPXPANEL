@@ -421,7 +421,7 @@ async def test_record_user_usages_meters_orphaned_mother_traffic(monkeypatch: py
         )
         session.add_all([user, node])
         await session.flush()
-        user_id, node_id = user.id, node.id
+        node_id = node.id
         await session.commit()
 
     monkeypatch.setattr(

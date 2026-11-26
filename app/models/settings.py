@@ -338,10 +338,10 @@ class ExternalConfig(BaseModel):
     enabled: bool = Field(default=True)
     # When True (default), only users with remaining volume on THIS panel get the link.
     respect_user_quota: bool = Field(default=True)
-    # When True (default), rewrite UUID/password to each local user's credentials so
-    # traffic/online map to this panel when the mother server has the same clients
-    # (e.g. mother IP is a Node of this panel). Shared freeloader UUID mode = False.
-    personalize: bool = Field(default=True)
+    # When True, rewrite UUID/password to each local user's credentials so traffic
+    # maps to this panel — ONLY if mother has those same clients / is a Node.
+    # Default False keeps shared freeloader mother links working.
+    personalize: bool = Field(default=False)
 
     @field_validator("name", mode="before")
     @classmethod

@@ -191,21 +191,31 @@ function ExternalConfigCard({
           control={form.control}
           name={`external_configs.${index}.personalize`}
           render={({ field }) => (
-            <FormItem className="bg-emerald-500/5 flex flex-row items-center justify-between gap-3 rounded-xl border border-emerald-500/20 px-3 py-2.5">
-              <div className="space-y-0.5">
-                <FormLabel className="text-xs font-medium sm:text-sm">
-                  {t('settings.motherConfigs.personalize', { defaultValue: 'Bind local user UUID' })}
-                </FormLabel>
-                <FormDescription className="text-[11px] leading-snug">
-                  {t('settings.motherConfigs.personalizeHint', {
-                    defaultValue:
-                      'On = each user connects with their own UUID so volume & online count on this panel (mother server must have the same clients / be a Node). Off = shared freeloader UUID (volume cannot be metered).',
-                  })}
-                </FormDescription>
+            <FormItem className="bg-amber-500/5 flex flex-col gap-2 rounded-xl border border-amber-500/25 px-3 py-2.5">
+              <div className="flex flex-row items-center justify-between gap-3">
+                <div className="space-y-0.5">
+                  <FormLabel className="text-xs font-medium sm:text-sm">
+                    {t('settings.motherConfigs.personalize', { defaultValue: 'Bind local user UUID' })}
+                  </FormLabel>
+                  <FormDescription className="text-[11px] leading-snug">
+                    {t('settings.motherConfigs.personalizeHint', {
+                      defaultValue:
+                        'Keep OFF for normal mother share links (shared UUID). Turn ON only if the mother server is a Node of this panel / has the same user clients — otherwise configs will not connect.',
+                    })}
+                  </FormDescription>
+                </div>
+                <FormControl>
+                  <Switch checked={field.value === true} onCheckedChange={field.onChange} className="cursor-pointer" />
+                </FormControl>
               </div>
-              <FormControl>
-                <Switch checked={field.value !== false} onCheckedChange={field.onChange} className="cursor-pointer" />
-              </FormControl>
+              {field.value === true ? (
+                <p className="text-[11px] leading-snug text-amber-700 dark:text-amber-300">
+                  {t('settings.motherConfigs.personalizeWarn', {
+                    defaultValue:
+                      'Warning: UUID is rewritten per user. If mother is a foreign freeloader link, turn this OFF or users cannot connect (panel ping can still succeed).',
+                  })}
+                </p>
+              ) : null}
             </FormItem>
           )}
         />
@@ -366,7 +376,7 @@ export function SubscriptionExternalConfigsSection({ form, standalone = false }:
           variant="outline"
           size="sm"
           className="cursor-pointer shrink-0"
-          onClick={() => append({ name: '', link: '', enabled: true, respect_user_quota: true, personalize: true })}
+          onClick={() => append({ name: '', link: '', enabled: true, respect_user_quota: true, personalize: false })}
         >
           <Plus className="size-4" />
           {t('settings.motherConfigs.add', { defaultValue: 'Add mother config' })}

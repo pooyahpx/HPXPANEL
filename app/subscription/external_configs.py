@@ -82,7 +82,7 @@ def _item_flag(item, key: str, default: bool = True) -> bool:
 def _item_respects_quota(item) -> bool:
     # Shared (non-personalized) mother links must always respect local volume,
     # otherwise exhausted users keep a freeloader UUID forever.
-    if not _item_flag(item, "personalize", True):
+    if not _item_flag(item, "personalize", False):
         return True
     return _item_flag(item, "respect_user_quota", True)
 
@@ -93,13 +93,13 @@ def collect_external_config_links(sub_settings, user=None) -> list[str]:
     When ``user`` is provided:
     - configs with ``respect_user_quota`` (default True) are only included while
       that user is active/on_hold and still has remaining volume on this panel
-    - configs with ``personalize`` (default True) rewrite UUID/password to the
-      local user's credentials so traffic maps to this panel when mother is a Node
+    - configs with ``personalize`` (default False) rewrite UUID/password to the
+      local user's credentials — only enable when mother is a Node / same clients
     """
     links: list[str] = []
     seen: set[str] = set()
 
-    def _add(raw: str, name: str | None = None, *, personalize: bool = True) -> None:
+    def _add(raw: str, name: str | None = None, *, personalize: bool = False) -> None:
         candidate = (raw or "").strip()
         if not candidate:
             return
@@ -125,13 +125,13 @@ def collect_external_config_links(sub_settings, user=None) -> list[str]:
             continue
         link = getattr(item, "link", None) or (item.get("link") if isinstance(item, dict) else None)
         name = getattr(item, "name", None) or (item.get("name") if isinstance(item, dict) else None)
-        personalize = _item_flag(item, "personalize", True)
+        personalize = _item_flag(item, "personalize", False)
         if link:
             _add(str(link), str(name) if name else None, personalize=personalize)
 
-    # Legacy env link always respects user quota + personalizes when a user is in context.
+    # Legacy env link always respects user quota; never personalize (shared UUID).
     env_link = (subscription_env_settings.external_config or "").strip()
     if env_link and (user is None or user_may_receive_external_configs(user, respect_quota=True)):
-        _add(env_link, personalize=user is not None)
+        _add(env_link, personalize=False)
 
     return links

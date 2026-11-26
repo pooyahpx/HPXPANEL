@@ -19,7 +19,7 @@ class MotherConfigItemUsage(BaseModel):
     name: str = ""
     enabled: bool = True
     respect_user_quota: bool = True
-    personalize: bool = True
+    personalize: bool = False
     host: str | None = None
     matched_node_ids: list[int] = Field(default_factory=list)
     eligible_users: int = 0
@@ -91,7 +91,7 @@ def _item_fields(item) -> tuple[str, bool, bool, bool, str | None, int | None]:
             str(item.get("name") or ""),
             bool(item.get("enabled", True)),
             bool(item.get("respect_user_quota", True)),
-            bool(item.get("personalize", True)),
+            bool(item.get("personalize", False)),
             item.get("link"),
             int(node_id) if node_id is not None else None,
         )
@@ -100,7 +100,7 @@ def _item_fields(item) -> tuple[str, bool, bool, bool, str | None, int | None]:
         str(getattr(item, "name", "") or ""),
         bool(getattr(item, "enabled", True)),
         bool(getattr(item, "respect_user_quota", True)),
-        bool(getattr(item, "personalize", True)),
+        bool(getattr(item, "personalize", False)),
         getattr(item, "link", None),
         int(node_id) if node_id is not None else None,
     )

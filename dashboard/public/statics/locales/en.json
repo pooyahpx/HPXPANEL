@@ -910,9 +910,10 @@
       "usageOnline": "Online on mother",
       "usageColOnline": "On mother",
       "personalize": "Bind local user UUID",
-      "personalizeHint": "On = each user connects with their own UUID so volume & online count on this panel (mother server must have the same clients / be a Node). Off = shared freeloader UUID (volume cannot be metered).",
+      "personalizeHint": "Keep OFF for normal mother share links. Turn ON only if mother is a Node of this panel / has the same user clients — otherwise users cannot connect.",
       "personalizeOn": "Bound UUID",
-      "personalizeOff": "Shared UUID"
+      "personalizeOff": "Shared UUID",
+      "personalizeWarn": "Warning: UUID is rewritten per user. If mother is a foreign freeloader link, turn this OFF or users cannot connect (panel ping can still succeed)."
     },
     "subscriptions": {
       "title": "Subscriptions",

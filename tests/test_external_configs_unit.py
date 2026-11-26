@@ -167,3 +167,22 @@ def test_personalize_false_keeps_shared_uuid(monkeypatch):
     )
     links = collect_external_config_links(settings, user=user)
     assert links == ["vless://shared-uuid@host:443?encryption=none#Shared"]
+
+
+def test_personalize_defaults_off_for_missing_field(monkeypatch):
+    """Missing personalize must not rewrite UUID (keeps freeloader mothers working)."""
+    monkeypatch.setattr(
+        "app.subscription.external_configs.subscription_env_settings",
+        SimpleNamespace(external_config=""),
+    )
+    cfg = ExternalConfig(name="Mother", link="vless://mother-uuid@host:443?encryption=none#m", enabled=True)
+    assert cfg.personalize is False
+    settings = SimpleNamespace(external_configs=[cfg])
+    user = SimpleNamespace(
+        status="active",
+        data_limit=None,
+        used_traffic=0,
+        proxy_settings=SimpleNamespace(vless=SimpleNamespace(id="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")),
+    )
+    links = collect_external_config_links(settings, user=user)
+    assert links[0].startswith("vless://mother-uuid@host:443")

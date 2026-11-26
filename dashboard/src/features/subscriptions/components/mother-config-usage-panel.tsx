@@ -120,7 +120,7 @@ export function MotherConfigUsagePanel() {
             <p className="text-muted-foreground max-w-2xl text-xs leading-relaxed">
               {t('settings.motherConfigs.usageHint', {
                 defaultValue:
-                  'Eligible + online users for mother configs. With “Bind local user UUID” on, traffic on a mother Node counts against each user’s volume.',
+                  'Online counts only users with recent traffic on a Node whose address matches the mother link host — not general panel online.',
               })}
             </p>
           </div>
@@ -178,7 +178,9 @@ export function MotherConfigUsagePanel() {
           </div>
           <div className="bg-background/40 flex items-center gap-2 rounded-xl border border-emerald-500/20 px-3 py-2 text-xs">
             <Activity className="size-3.5 text-emerald-500" />
-            <span className="text-muted-foreground">{t('settings.motherConfigs.usageOnline', { defaultValue: 'Online now' })}</span>
+            <span className="text-muted-foreground">
+              {t('settings.motherConfigs.usageOnline', { defaultValue: 'Online on mother' })}
+            </span>
             <span className="ms-auto font-mono font-semibold text-emerald-600 dark:text-emerald-400">
               {loading ? '—' : data?.online_users ?? 0}
             </span>

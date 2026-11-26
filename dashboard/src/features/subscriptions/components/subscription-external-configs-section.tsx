@@ -189,6 +189,28 @@ function ExternalConfigCard({
         />
         <FormField
           control={form.control}
+          name={`external_configs.${index}.personalize`}
+          render={({ field }) => (
+            <FormItem className="bg-emerald-500/5 flex flex-row items-center justify-between gap-3 rounded-xl border border-emerald-500/20 px-3 py-2.5">
+              <div className="space-y-0.5">
+                <FormLabel className="text-xs font-medium sm:text-sm">
+                  {t('settings.motherConfigs.personalize', { defaultValue: 'Bind local user UUID' })}
+                </FormLabel>
+                <FormDescription className="text-[11px] leading-snug">
+                  {t('settings.motherConfigs.personalizeHint', {
+                    defaultValue:
+                      'On = each user connects with their own UUID so volume & online count on this panel (mother server must have the same clients / be a Node). Off = shared freeloader UUID (volume cannot be metered).',
+                  })}
+                </FormDescription>
+              </div>
+              <FormControl>
+                <Switch checked={field.value !== false} onCheckedChange={field.onChange} className="cursor-pointer" />
+              </FormControl>
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
           name={`external_configs.${index}.respect_user_quota`}
           render={({ field }) => (
             <FormItem className="bg-muted/20 flex flex-row items-center justify-between gap-3 rounded-xl border px-3 py-2.5">
@@ -198,7 +220,8 @@ function ExternalConfigCard({
                 </FormLabel>
                 <FormDescription className="text-[11px] leading-snug">
                   {t('settings.motherConfigs.respectQuotaHint', {
-                    defaultValue: 'Off = every active user gets it. On = only users with remaining traffic.',
+                    defaultValue:
+                      'Off = every active user gets it (only when Bind UUID is on). Shared freeloader mode always respects volume.',
                   })}
                 </FormDescription>
               </div>
@@ -343,7 +366,7 @@ export function SubscriptionExternalConfigsSection({ form, standalone = false }:
           variant="outline"
           size="sm"
           className="cursor-pointer shrink-0"
-          onClick={() => append({ name: '', link: '', enabled: true, respect_user_quota: true })}
+          onClick={() => append({ name: '', link: '', enabled: true, respect_user_quota: true, personalize: true })}
         >
           <Plus className="size-4" />
           {t('settings.motherConfigs.add', { defaultValue: 'Add mother config' })}

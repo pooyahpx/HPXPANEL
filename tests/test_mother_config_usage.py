@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime as dt, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -21,12 +22,13 @@ class _Result:
 
 @pytest.mark.asyncio
 async def test_compute_mother_config_usage_aggregates_eligibility():
+    now = dt.now(UTC)
     rows = [
-        ("active", 1000, 200),  # eligible limited
-        ("active", 1000, 1000),  # exhausted
-        ("on_hold", None, 50),  # unlimited eligible
-        ("expired", 500, 10),  # status gated
-        ("disabled", 0, 0),  # status gated
+        ("active", 1000, 200, now),  # eligible limited + online
+        ("active", 1000, 1000, None),  # exhausted
+        ("on_hold", None, 50, now - timedelta(minutes=10)),  # unlimited eligible, offline
+        ("expired", 500, 10, None),  # status gated
+        ("disabled", 0, 0, None),  # status gated
     ]
     db = AsyncMock()
     db.execute = AsyncMock(return_value=_Result(rows))
@@ -34,7 +36,13 @@ async def test_compute_mother_config_usage_aggregates_eligibility():
     subscription = SimpleNamespace(
         external_configs=[
             ExternalConfig(name="Mother A", link="vless://mother-a-example", enabled=True, respect_user_quota=True),
-            ExternalConfig(name="Mother B", link="vless://mother-b-example", enabled=True, respect_user_quota=False),
+            ExternalConfig(
+                name="Mother B",
+                link="vless://mother-b-example",
+                enabled=True,
+                respect_user_quota=False,
+                personalize=True,
+            ),
             ExternalConfig(name="Off", link="vless://mother-c-example", enabled=False, respect_user_quota=True),
         ]
     )
@@ -49,16 +57,19 @@ async def test_compute_mother_config_usage_aggregates_eligibility():
     assert out.eligible_for_quota_gated == 2  # limited remaining + unlimited
     assert out.exhausted_volume == 1
     assert out.unlimited_users == 1
+    assert out.online_users == 1
     assert out.used_traffic_bytes == 200 + 1000 + 50 + 10 + 0
     assert out.data_limit_bytes == 1000 + 1000 + 500
     assert out.remaining_bytes == 800  # only limited eligible remaining
     assert out.usage_pct == 20.0  # 200/1000
     assert out.enabled_configs == 2
     assert out.total_configs == 3
+    assert out.personalized_configs == 2
 
     a, b, off = out.configs
     assert a.name == "Mother A"
     assert a.eligible_users == 2
+    assert a.online_users == 1
     assert a.gated_by_quota == 1
     assert a.gated_by_status == 2
 
@@ -80,3 +91,4 @@ async def test_compute_mother_config_usage_empty_subscription():
     assert out.configs == []
     assert out.enabled_configs == 0
     assert out.usage_pct == 0.0
+    assert out.online_users == 0

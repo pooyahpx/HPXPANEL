@@ -128,6 +128,7 @@ export const externalConfigSchema = z.object({
     ),
   enabled: z.boolean().default(true),
   respect_user_quota: z.boolean().default(true),
+  personalize: z.boolean().default(true),
 })
 
 export const subscriptionSchema = z.object({

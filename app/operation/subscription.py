@@ -553,6 +553,14 @@ class SubscriptionOperation(BaseOperation):
 
             # Update user subscription info
             await user_sub_update(db, db_user.id, user_agent, ip=ip, hwid=x_hwid)
+            # Shared freeloader mothers never hit local Xray — treat client sub polls as presence
+            if not is_browser_request:
+                try:
+                    from app.services.mother_usage_meter import touch_mother_soft_online
+
+                    await touch_mother_soft_online(db, user_id=db_user.id, subscription=sub_settings)
+                except Exception:
+                    pass
             conf, media_type = await self.fetch_config(user, client_type)
 
             # If disable_sub_template is True and it's a browser request, use inline to view instead of download

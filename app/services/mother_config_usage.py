@@ -8,11 +8,14 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import Node, NodeUserUsage, User, UserStatus
+from app.db.models import Node, NodeUserUsage, User, UserStatus, UserSubscriptionUpdate
 from app.models.settings import ExternalConfig, Subscription
 from app.services.copilot.proxy_uri import ProxyUriParseError, parse_proxy_link
 
-_ONLINE_WINDOW = timedelta(minutes=2)
+# NodeUserUsage is stored in 10-minute buckets — window must cover the current bucket.
+_NODE_USAGE_ONLINE_WINDOW = timedelta(minutes=15)
+# Soft presence for foreign (unmatched) shared mothers via subscription client polls.
+_SUB_SOFT_ONLINE_WINDOW = timedelta(minutes=15)
 
 
 class MotherConfigItemUsage(BaseModel):
@@ -25,7 +28,7 @@ class MotherConfigItemUsage(BaseModel):
     eligible_users: int = 0
     gated_by_quota: int = 0
     gated_by_status: int = 0
-    # Users with recent traffic on mother-matched nodes only (not general panel online)
+    # Recent presence on this mother (node usage and/or soft sub polls)
     online_users: int = 0
 
 
@@ -39,7 +42,6 @@ class MotherConfigUsageResponse(BaseModel):
     eligible_for_quota_gated: int = 0
     exhausted_volume: int = 0
     unlimited_users: int = 0
-    # Distinct eligible users with traffic on any mother-matched node in the last 2 minutes
     online_users: int = 0
     used_traffic_bytes: int = 0
     data_limit_bytes: int = 0
@@ -50,6 +52,10 @@ class MotherConfigUsageResponse(BaseModel):
     total_configs: int = 0
     personalized_configs: int = 0
     matched_node_ids: list[int] = Field(default_factory=list)
+    # True when at least one enabled mother host maps to a panel Node
+    has_matched_nodes: bool = False
+    # True when soft (subscription-poll) presence is used for unmatched shared mothers
+    soft_online: bool = False
 
 
 def _fmt_status(status: UserStatus | str | None) -> str:
@@ -144,6 +150,16 @@ async def _online_users_by_node(
     return by_node
 
 
+async def _recent_sub_user_ids(db: AsyncSession, *, since: dt) -> set[int]:
+    """Users whose clients recently polled the subscription URL."""
+    stmt = (
+        select(UserSubscriptionUpdate.user_id)
+        .where(UserSubscriptionUpdate.created_at >= since)
+        .distinct()
+    )
+    return {int(uid) for (uid,) in (await db.execute(stmt)).all() if uid is not None}
+
+
 def _users_on_nodes(by_node: dict[int, set[int]], node_ids: set[int]) -> set[int]:
     out: set[int] = set()
     for nid in node_ids:
@@ -156,15 +172,17 @@ async def compute_mother_config_usage(
 ) -> MotherConfigUsageResponse:
     """Aggregate panel-side consumption for mother / external configs.
 
-    Online counts are scoped to traffic on nodes that match each mother link host
-    (or an explicit ``node_id``), never general ``User.online_at``.
+    Online sources (in order of preference per config):
+    1. Recent NodeUserUsage on mother-matched panel nodes (Bind ON or shared+metered)
+    2. Soft presence: recent subscription client polls (shared UUID foreign mothers)
     """
     configs = list(getattr(subscription, "external_configs", None) or [])
     rows = (
         await db.execute(select(User.id, User.status, User.data_limit, User.used_traffic))
     ).all()
     now = dt.now(UTC)
-    since = now - _ONLINE_WINDOW
+    node_since = now - _NODE_USAGE_ONLINE_WINDOW
+    soft_since = now - _SUB_SOFT_ONLINE_WINDOW
 
     total = len(rows)
     by_status = {"active": 0, "on_hold": 0, "limited": 0, "expired": 0, "disabled": 0}
@@ -209,8 +227,7 @@ async def compute_mother_config_usage(
 
     nodes_by_host = await _load_nodes_by_host(db)
     all_matched_node_ids: set[int] = set()
-    # Only personalized configs can contribute to mother-online (shared UUID is unattributable)
-    personalized_matched_node_ids: set[int] = set()
+    needs_soft_online = False
     config_node_map: list[tuple[tuple, set[int], str | None]] = []
 
     for item in configs:
@@ -222,14 +239,19 @@ async def compute_mother_config_usage(
         if host and host in nodes_by_host:
             matched.update(nodes_by_host[host])
         all_matched_node_ids |= matched
-        if enabled and personalize:
-            personalized_matched_node_ids |= matched
+        # Shared foreign mother → fall back to subscription-poll soft presence
+        if enabled and not personalize and not matched:
+            needs_soft_online = True
         config_node_map.append(((name, enabled, respect, personalize, host), matched, host))
 
-    online_by_node = await _online_users_by_node(db, all_matched_node_ids, since=since)
-    all_mother_online_users = _users_on_nodes(online_by_node, personalized_matched_node_ids)
+    online_by_node = await _online_users_by_node(db, all_matched_node_ids, since=node_since)
+    soft_users: set[int] = set()
+    if needs_soft_online:
+        soft_users = await _recent_sub_user_ids(db, since=soft_since)
 
+    global_online: set[int] = set()
     item_usages: list[MotherConfigItemUsage] = []
+
     for (name, enabled, respect, personalize, host), matched, _host in config_node_map:
         effective_respect = True if not personalize else respect
         if not enabled:
@@ -250,12 +272,15 @@ async def compute_mother_config_usage(
             continue
 
         pool = eligible_ids if effective_respect else status_only_ids
-        # Shared freeloader UUID never maps to local node stats → online stays 0
-        if not personalize or not matched:
-            online_count = 0
+        if matched:
+            online_set = pool & _users_on_nodes(online_by_node, matched)
+        elif not personalize:
+            # Foreign shared UUID: approximate from recent subscription client polls
+            online_set = pool & soft_users
         else:
-            online_count = len(pool & _users_on_nodes(online_by_node, matched))
+            online_set = set()
 
+        global_online |= online_set
         item_usages.append(
             MotherConfigItemUsage(
                 name=name,
@@ -267,12 +292,9 @@ async def compute_mother_config_usage(
                 eligible_users=len(pool),
                 gated_by_quota=exhausted if effective_respect else 0,
                 gated_by_status=gated_by_status,
-                online_users=online_count,
+                online_users=len(online_set),
             )
         )
-
-    # Global mother online = distinct eligible users on personalized mother-matched nodes
-    global_online = len(eligible_ids & all_mother_online_users) if personalized_matched_node_ids else 0
 
     return MotherConfigUsageResponse(
         total_users=total,
@@ -284,7 +306,7 @@ async def compute_mother_config_usage(
         eligible_for_quota_gated=len(eligible_ids),
         exhausted_volume=exhausted,
         unlimited_users=unlimited,
-        online_users=global_online,
+        online_users=len(global_online),
         used_traffic_bytes=int(used_sum),
         data_limit_bytes=int(limit_sum),
         remaining_bytes=int(remaining_sum),
@@ -294,4 +316,6 @@ async def compute_mother_config_usage(
         total_configs=len(item_usages),
         personalized_configs=sum(1 for c in item_usages if c.enabled and c.personalize),
         matched_node_ids=sorted(all_matched_node_ids),
+        has_matched_nodes=bool(all_matched_node_ids),
+        soft_online=needs_soft_online,
     )

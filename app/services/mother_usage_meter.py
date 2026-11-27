@@ -14,7 +14,7 @@ from datetime import UTC, datetime as dt, timedelta
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import Admin, Node, User, UserStatus
+from app.db.models import Admin, Node, NodeUserUsage, User, UserStatus
 from app.models.settings import ExternalConfig, Subscription
 from app.services.mother_config_usage import mother_link_host
 
@@ -22,6 +22,13 @@ logger = logging.getLogger(__name__)
 
 # Prefer users seen online recently when splitting shared mother traffic
 _RECENT_ONLINE_WINDOW = timedelta(minutes=5)
+
+
+def _usage_time_bucket(now: dt | None = None) -> dt:
+    """Match record_usages 10-minute NodeUserUsage buckets."""
+    if now is None:
+        now = dt.now(UTC)
+    return now.replace(minute=(now.minute // 10) * 10, second=0, microsecond=0)
 
 
 def _normalize_host(value: str | None) -> str:
@@ -112,8 +119,9 @@ async def distribute_bytes_to_users(
     *,
     user_ids: list[int],
     total_bytes: int,
+    node_ids: set[int] | None = None,
 ) -> int:
-    """Split ``total_bytes`` across ``user_ids`` (used_traffic + online_at + admin). Returns applied bytes."""
+    """Split ``total_bytes`` across ``user_ids`` (used_traffic + online_at + admin + NodeUserUsage)."""
     total_bytes = int(total_bytes or 0)
     if total_bytes <= 0 or not user_ids:
         return 0
@@ -122,6 +130,8 @@ async def distribute_bytes_to_users(
     base = total_bytes // n
     rem = total_bytes % n
     now = dt.now(UTC)
+    bucket = _usage_time_bucket(now)
+    nodes = sorted({int(n) for n in (node_ids or set())})
 
     # Load admin_id map
     rows = (await db.execute(select(User.id, User.admin_id).where(User.id.in_(user_ids)))).all()
@@ -134,14 +144,41 @@ async def distribute_bytes_to_users(
         if share <= 0:
             continue
         await db.execute(
-            update(User)
-            .where(User.id == uid)
-            .values(used_traffic=User.used_traffic + share, online_at=now)
+            update(User).where(User.id == uid).values(used_traffic=User.used_traffic + share, online_at=now)
         )
         applied += share
         admin_id = admin_by_user.get(uid)
         if admin_id:
             admin_delta[int(admin_id)] = admin_delta.get(int(admin_id), 0) + share
+
+        # Attribute presence to mother-matched nodes so mother online UI can see them
+        if nodes:
+            per_node = share // len(nodes)
+            node_rem = share % len(nodes)
+            for j, node_id in enumerate(nodes):
+                node_share = per_node + (1 if j < node_rem else 0)
+                if node_share <= 0:
+                    continue
+                existing = (
+                    await db.execute(
+                        select(NodeUserUsage).where(
+                            NodeUserUsage.created_at == bucket,
+                            NodeUserUsage.user_id == uid,
+                            NodeUserUsage.node_id == node_id,
+                        )
+                    )
+                ).scalar_one_or_none()
+                if existing is not None:
+                    existing.used_traffic = int(existing.used_traffic or 0) + node_share
+                else:
+                    db.add(
+                        NodeUserUsage(
+                            created_at=bucket,
+                            user_id=uid,
+                            node_id=node_id,
+                            used_traffic=node_share,
+                        )
+                    )
 
     for admin_id, value in admin_delta.items():
         await db.execute(
@@ -150,6 +187,42 @@ async def distribute_bytes_to_users(
 
     await db.commit()
     return applied
+
+
+async def touch_mother_soft_online(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    subscription: Subscription | None,
+) -> bool:
+    """Mark a user online when their client polls the sub and shared mother configs are active.
+
+    Foreign freeloader mothers never hit local Xray stats; subscription polls are the
+    only local presence signal. Returns True if online_at was updated.
+    """
+    configs = list(getattr(subscription, "external_configs", None) or [])
+    has_shared = False
+    for item in configs:
+        enabled, personalize, _respect, _link = _cfg_fields(item)
+        if enabled and not personalize:
+            has_shared = True
+            break
+    if not has_shared:
+        return False
+
+    now = dt.now(UTC)
+    result = await db.execute(
+        update(User)
+        .where(
+            User.id == user_id,
+            User.status.in_([UserStatus.active, UserStatus.on_hold]),
+        )
+        .values(online_at=now)
+    )
+    if result.rowcount:
+        await db.commit()
+        return True
+    return False
 
 
 async def apply_orphaned_mother_traffic(
@@ -171,9 +244,14 @@ async def apply_orphaned_mother_traffic(
         return 0
 
     pool = 0
+    active_nodes: set[int] = set()
     for node_id, raw in orphaned_by_node.items():
-        if int(node_id) in mother_nodes:
-            pool += max(0, int(raw or 0))
+        nid = int(node_id)
+        if nid in mother_nodes:
+            value = max(0, int(raw or 0))
+            if value > 0:
+                pool += value
+                active_nodes.add(nid)
 
     if pool <= 0:
         return 0
@@ -183,12 +261,17 @@ async def apply_orphaned_mother_traffic(
         logger.debug("Orphan mother traffic %s bytes but no eligible users", pool)
         return 0
 
-    applied = await distribute_bytes_to_users(db, user_ids=user_ids, total_bytes=pool)
+    applied = await distribute_bytes_to_users(
+        db,
+        user_ids=user_ids,
+        total_bytes=pool,
+        node_ids=active_nodes or mother_nodes,
+    )
     if applied:
         logger.info(
             "Metered %s bytes of shared mother traffic across %s eligible users (nodes=%s)",
             applied,
             len(user_ids),
-            sorted(mother_nodes),
+            sorted(active_nodes or mother_nodes),
         )
     return applied

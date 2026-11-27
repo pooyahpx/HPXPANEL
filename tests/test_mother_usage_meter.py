@@ -126,6 +126,50 @@ async def test_distribute_bytes_to_users_splits_and_updates_admins():
 
 
 @pytest.mark.asyncio
+async def test_touch_mother_soft_online_updates_when_shared_enabled():
+    class _UpdateResult:
+        rowcount = 1
+
+    class _TouchDB(_DB):
+        async def execute(self, _stmt):
+            self.execute_calls += 1
+            return _UpdateResult()
+
+    db = _TouchDB([])
+    subscription = SimpleNamespace(
+        external_configs=[
+            ExternalConfig(
+                name="Shared",
+                link="vless://u@foreign.example:443#x",
+                enabled=True,
+                personalize=False,
+            )
+        ]
+    )
+    ok = await meter.touch_mother_soft_online(db, user_id=7, subscription=subscription)
+    assert ok is True
+    assert db.commits == 1
+
+
+@pytest.mark.asyncio
+async def test_touch_mother_soft_online_skips_when_only_bound():
+    db = _DB([])
+    subscription = SimpleNamespace(
+        external_configs=[
+            ExternalConfig(
+                name="Bound",
+                link="vless://u@host.example:443#x",
+                enabled=True,
+                personalize=True,
+            )
+        ]
+    )
+    ok = await meter.touch_mother_soft_online(db, user_id=7, subscription=subscription)
+    assert ok is False
+    assert db.commits == 0
+
+
+@pytest.mark.asyncio
 async def test_apply_orphaned_mother_traffic_distributes_pool(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(
         meter,

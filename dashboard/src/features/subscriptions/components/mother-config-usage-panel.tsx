@@ -25,11 +25,15 @@ export type MotherConfigUsage = {
   enabled_configs: number
   total_configs: number
   personalized_configs: number
+  has_matched_nodes?: boolean
+  soft_online?: boolean
   configs: Array<{
     name: string
     enabled: boolean
     respect_user_quota: boolean
     personalize: boolean
+    host?: string | null
+    matched_node_ids?: number[]
     eligible_users: number
     gated_by_quota: number
     gated_by_status: number
@@ -120,9 +124,17 @@ export function MotherConfigUsagePanel() {
             <p className="text-muted-foreground max-w-2xl text-xs leading-relaxed">
               {t('settings.motherConfigs.usageHint', {
                 defaultValue:
-                  'Online counts only users with recent traffic on a Node whose address matches the mother link host — not general panel online.',
+                  'Online = recent traffic on a Node matching the mother host. Shared foreign mothers fall back to client subscription polls.',
               })}
             </p>
+            {!loading && data?.soft_online ? (
+              <p className="text-amber-600 dark:text-amber-400 max-w-2xl text-[11px] leading-relaxed">
+                {t('settings.motherConfigs.usageSoftOnlineHint', {
+                  defaultValue:
+                    'Some mother hosts are not panel Nodes — online is estimated from subscription client refreshes. For exact volume metering, set Node.address to the mother hostname (or Bind UUID if the mother has the same clients).',
+                })}
+              </p>
+            ) : null}
           </div>
           <Button type="button" size="sm" variant="outline" className="cursor-pointer h-8 gap-1.5" onClick={() => void load()} disabled={loading}>
             <RefreshCw className={cn('size-3.5', loading && 'animate-spin')} />

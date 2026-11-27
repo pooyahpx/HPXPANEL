@@ -90,6 +90,8 @@ async def test_compute_mother_config_usage_aggregates_eligibility():
     assert out.unlimited_users == 1
     assert out.online_users == 1  # only user 1 on matched mother nodes + eligible
     assert out.matched_node_ids == [10, 11]
+    assert out.has_matched_nodes is True
+    assert out.soft_online is False
     assert out.enabled_configs == 2
     assert out.total_configs == 3
 
@@ -113,10 +115,11 @@ async def test_compute_mother_config_usage_aggregates_eligibility():
 
 
 @pytest.mark.asyncio
-async def test_shared_uuid_reports_zero_mother_online():
+async def test_shared_uuid_counts_matched_node_usage():
+    """Bind UUID off still shows online when mother host matches a Node with usage."""
     user_rows = _Result([(1, "active", None, 0)])
     node_rows = _Result([(10, "mooz.example")])
-    usage_rows = _Result([(10, 1)])  # would look online, but personalize=false
+    usage_rows = _Result([(10, 1)])
     db = _DB([user_rows, node_rows, usage_rows])
     subscription = SimpleNamespace(
         external_configs=[
@@ -129,16 +132,41 @@ async def test_shared_uuid_reports_zero_mother_online():
         ]
     )
     out = await compute_mother_config_usage(db, subscription)
-    assert out.online_users == 0
-    assert out.configs[0].online_users == 0
+    assert out.online_users == 1
+    assert out.configs[0].online_users == 1
+    assert out.soft_online is False
+
+
+@pytest.mark.asyncio
+async def test_foreign_shared_uses_soft_sub_presence():
+    """Foreign shared mother (no Node match) uses recent subscription polls."""
+    user_rows = _Result([(1, "active", None, 0), (2, "active", None, 0)])
+    node_rows = _Result([(10, "local-node.example")])
+    # no node usage query (no matched nodes) → soft sub query next
+    soft_rows = _Result([(1,)])
+    db = _DB([user_rows, node_rows, soft_rows])
+    subscription = SimpleNamespace(
+        external_configs=[
+            ExternalConfig(
+                name="Foreign Shared",
+                link="vless://x@foreign-mother.shop:2082?encryption=none#f",
+                enabled=True,
+                personalize=False,
+            )
+        ]
+    )
+    out = await compute_mother_config_usage(db, subscription)
+    assert out.matched_node_ids == []
+    assert out.soft_online is True
+    assert out.online_users == 1
+    assert out.configs[0].online_users == 1
 
 
 @pytest.mark.asyncio
 async def test_general_online_without_mother_node_match_is_zero():
-    """Panel-online users must NOT inflate mother online when host ≠ any Node.address."""
+    """Personalized foreign mother with no Node match stays at 0 (no soft fallback)."""
     user_rows = _Result([(1, "active", None, 0)])
     node_rows = _Result([(10, "local-node.example")])
-    # no mother-matched nodes → no usage query
     db = _DB([user_rows, node_rows])
     subscription = SimpleNamespace(
         external_configs=[
@@ -155,6 +183,7 @@ async def test_general_online_without_mother_node_match_is_zero():
     assert out.online_users == 0
     assert out.configs[0].online_users == 0
     assert out.configs[0].host == "foreign-mother.shop"
+    assert out.soft_online is False
 
 
 @pytest.mark.asyncio
